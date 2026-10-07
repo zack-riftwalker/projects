@@ -6169,7 +6169,7 @@ G.VOICE = {
     role: null, ws: null, open: false, peer: false, building: false, tools: null,
     q: [], ev: [], inbox: [], rAll: {}, rAck: 0, rHas: false, fxSeq: 0, fxAck: 0,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
-    cap: null, ping: 0, tickN: 0, fxKeys: new Map(), status: 'offline', code: '', gs: {},
+    cap: null, ping: 0, tickN: 0, fxKeys: new Map(), epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
   };
   const r2 = (v) => Math.round(v * 100) / 100;
   const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey']);
@@ -6268,7 +6268,7 @@ G.VOICE = {
   coop.initLevel = (L, start) => {
     L._tiles0 = L.tiles.slice();
     if (coop.role === 'host' && coop.peer && coop.open) {
-      L.net = 'host';
+      L.net = 'host'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
       const p2 = new Player(L, start.x - 8, start.y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
       L.p2 = p2; L.partner = p2; L.reviveQ = [];
       coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
@@ -6278,7 +6278,7 @@ G.VOICE = {
       const me = new Player(L, start.x - 8, start.y); me.blue = true;
       const tools = Object.assign({}, coop.tools || me.tools, { agents: false });
       me.tools = tools; remote.tools = tools;
-      L.player = L.me = me; L.partner = remote; L.p1 = remote;
+      L.player = L.me = me; L.partner = remote; L.p1 = remote; L._ep = coop.startEpoch;
       L.crumble = new HookMap(); coop.hookCr = true;
       L.breakTile = function (tx, ty) { send({ t: 'bt', tx, ty }); return false; };
       coop.gs = {};
@@ -6338,7 +6338,7 @@ G.VOICE = {
       p2[k] = v;
     }
   }
-  function sendFx(d) { coop.fxSeq++; for (const k in d) coop.fxKeys.set(k, coop.fxSeq); send({ t: 'fx', d, q: coop.fxSeq }); }
+  function sendFx(d) { coop.fxSeq++; for (const k in d) coop.fxKeys.set(k, coop.fxSeq); send({ t: 'fx', d, q: coop.fxSeq, e: coop.epoch }); }
   coop.hostTick = (L, dt) => {
     const p2 = L.p2; if (!p2 || !coop.peer) return;
     ensureIds(L);
@@ -6409,7 +6409,7 @@ G.VOICE = {
 
   function sendSnap(L) {
     const N = L._net || (L._net = { e: {}, i: {}, p: {}, seq: 0 });
-    const me = L.me, p2 = L.p2, s = { t: 's', n: ++N.seq };
+    const me = L.me, p2 = L.p2, s = { t: 's', n: ++N.seq, e: coop.epoch };
     s.tm = r2(L.time); s.ly = L.liquidY; s.rs = L.rising ? 1 : 0; s.ck = r2(L.clock); s.tk = L.tokens; s.ht = L.hits; s.ci = L.cpIndex;
     s.cp = L.cps.map((c) => (c.on ? 1 : 0)); s.ex = L.exit && L.exit.done ? 1 : 0; s.sk = L.sparks;
     const T0 = L._tiles0, tl = [];
@@ -6504,7 +6504,10 @@ G.VOICE = {
     if (!L._tiles0) return;
     ensureIds(L);
     while (coop.q.length) {
-      const m = coop.q.shift();
+      const m = coop.q[0];
+      if (m.e < L._ep) { coop.q.shift(); continue; }      // belongs to an earlier level
+      if (m.e > L._ep) break;                              // belongs to the next level: keep it for that scene
+      coop.q.shift();
       if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m);
     }
     L.trauma = Math.max(0, L.trauma - dt * 2.2);
@@ -6606,7 +6609,7 @@ G.VOICE = {
         coop.hostOn = !!m.on; ui.render();
         if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
       }
-      else if (m.t === 'start') { coop.q.length = 0; coop.startMsg = m; coop.leaveMsg = false; }
+      else if (m.t === 'start') { coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's' || m.t === 'fx') { if (coop.q.length < 400) coop.q.push(m); }
     }
@@ -6648,7 +6651,7 @@ G.VOICE = {
     }
     if (coop.role === 'guest' && coop.open && !G.transitioning()) {
       if (coop.startMsg) {
-        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools;
+        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools; coop.startEpoch = m.e || 0;
         G.go(() => { coop.building = true; try { return G.Scenes.play(m.id, m.snap); } finally { coop.building = false; } }, { speed: 3.2 });
       } else if (coop.leaveMsg) { coop.leaveMsg = false; if (G.scene.L) G.go(() => wait(), { speed: 3.2 }); }
     }
@@ -6660,7 +6663,7 @@ G.VOICE = {
     if (s && s.draw && !s._cn) { const d = s.draw; s._cn = 1; s.draw = function (g, ug) { d.call(this, g, ug); drawNotice(ug); }; }
     oSet.call(this, s);
     if (coop.role === 'host' && coop.open && coop.peer) {
-      if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools });
+      if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools, e: coop.epoch });
       else if (old && old.L && !s.L) send({ t: 'leave' });
     }
   };
