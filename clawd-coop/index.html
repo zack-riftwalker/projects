@@ -6292,7 +6292,7 @@ G.VOICE = {
   };
   coop.aimAt = (L, e) => {
     const a = L.me, b = L.p2;
-    if (!b || b.dead) return a;
+    if (!b || b.dead || b.away) return a;
     if (a.dead) return b;
     const cx = e.x + (e.w || 0) / 2, cy = e.y + (e.h || 0) / 2;
     return Math.hypot(a.x - cx, a.y - cy) <= Math.hypot(b.x - cx, b.y - cy) ? a : b;
@@ -6348,6 +6348,7 @@ G.VOICE = {
     }
     if (coop.rHas) applyRemote(L);
     p2.frozen = L.me.frozen; p2.celebrate = L.me.celebrate;
+    if (p2.away) p2.inv = 1;                       // a partner whose tab is in the background cannot be hurt
     if (p2.inv > 0) p2.inv -= dt;
     if (p2.hurtT > 0) p2.hurtT -= dt;
     if (p2.gone) { p2.goneT -= dt; if (p2.goneT <= 0) { p2.gone = false; p2.inv = 1.4; L.ring(p2.x + 5, p2.y + 5, 2, 18, '#6aa8ff', 0.3); } }
@@ -6410,6 +6411,7 @@ G.VOICE = {
   function sendSnap(L) {
     const N = L._net || (L._net = { e: {}, i: {}, p: {}, seq: 0 });
     const me = L.me, p2 = L.p2, s = { t: 's', n: ++N.seq, e: coop.epoch };
+    if (coop.kfNext) { s.kf = 1; coop.kfNext = false; }
     s.tm = r2(L.time); s.ly = L.liquidY; s.rs = L.rising ? 1 : 0; s.ck = r2(L.clock); s.tk = L.tokens; s.ht = L.hits; s.ci = L.cpIndex;
     s.cp = L.cps.map((c) => (c.on ? 1 : 0)); s.ex = L.exit && L.exit.done ? 1 : 0; s.sk = L.sparks;
     const T0 = L._tiles0, tl = [];
@@ -6457,7 +6459,8 @@ G.VOICE = {
   G.speak = function (cap, id, fb) { rec(['V', id]); return oSpeak.apply(this, arguments); };
 
   // ---------- guest side ----------
-  function applySnap(L, s) {
+  function applySnap(L, s, quiet) {
+    if (s.kf) coop.needFull = false;
     if (s.tm !== undefined) { if (L._tm === undefined || Math.abs(s.tm - L.time) > 0.3) L.time = s.tm; else L.time += (s.tm - L.time) * 0.15; L._tm = 1; }
     if (s.ly === null) L.liquidY = null; else if (s.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - s.ly) > 60 ? s.ly : L.liquidY + (s.ly - L.liquidY) * 0.5;
     L.rising = !!s.rs; L.clock = s.ck; L.tokens = s.tk; L.hits = s.ht; L.cpIndex = s.ci;
@@ -6493,7 +6496,7 @@ G.VOICE = {
     if (s.p) mergeTop(L.partner, s.p, true);
     if (s.ph) Object.assign(L.me, s.ph);
     if (s.hs) coop.hostState = s.hs;
-    if (s.ev) for (const e of s.ev) {
+    if (s.ev && !quiet) for (const e of s.ev) {
       if (e[0] === 'L') { if (typeof L[e[1]] === 'function') L[e[1]].apply(L, e.slice(2)); }
       else if (e[0] === 'S') oSfx.call(A, e[1], e[2]);
       else if (e[0] === 'M') oMus.call(A, e[1], e[2]);
@@ -6503,13 +6506,18 @@ G.VOICE = {
   coop.guestUpdate = (L, dt) => {
     if (!L._tiles0) return;
     ensureIds(L);
+    const ms = [];
     while (coop.q.length) {
       const m = coop.q[0];
       if (m.e < L._ep) { coop.q.shift(); continue; }      // belongs to an earlier level
       if (m.e > L._ep) break;                              // belongs to the next level: keep it for that scene
-      coop.q.shift();
-      if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m);
+      coop.q.shift(); ms.push(m);
     }
+    // after a long backlog only the newest snapshot may play its sounds and effects
+    let lastS = -1, nS = 0; ms.forEach((m, i) => { if (m.t === 's') { lastS = i; nS++; } });
+    ms.forEach((m, i) => { if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m, nS > 3 && i !== lastS); });
+    // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
+    if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); send({ t: 'full', e: L._ep }); }
     L.trauma = Math.max(0, L.trauma - dt * 2.2);
     if (L.flash > 0) L.flash = Math.max(0, L.flash - dt * 3);
     L.time += dt;
@@ -6564,9 +6572,11 @@ G.VOICE = {
   coop.drawPartner = (g, L, cx, cy) => {
     const q = L.partner;
     if (q.dead || q.gone) return;
+    if (q.away) g.globalAlpha = 0.4;
     q.draw(g, cx, cy);
+    g.globalAlpha = 1;
     const px = Math.round(q.x + q.w / 2) - cx, py = Math.round(q.y) - cy;
-    G.text(g, L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
+    G.text(g, q.away ? 'away' : L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
   };
   coop.drawPartnerHud = (ug, L, hudY, dy) => {
     const q = L.partner, S = G.SPR, on = L.net === 'host' ? G.tint(S.pip, '#6aa8ff') : S.pip;
@@ -6593,6 +6603,8 @@ G.VOICE = {
     G.text(ug, n.text, W / 2, 30, '#ffd9d9', { align: 'c' }); ug.globalAlpha = 1;
   };
   coop.waitScene = wait;
+  // dropped fx messages must still be acknowledged, or the host would keep treating those fields as its own
+  function qDrop(list) { for (const m of list) if (m.t === 'fx') coop.fxAck = Math.max(coop.fxAck, m.q); }
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
@@ -6604,6 +6616,8 @@ G.VOICE = {
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
       else if (m.t === 'cr' || m.t === 'bt') coop.inbox.push(m);
+      else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) { L._net = null; coop.kfNext = true; } }
+      else if (m.t === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!m.on; }
     } else {
       if (m.t === 'host') {
         coop.hostOn = !!m.on; ui.render();
@@ -6611,7 +6625,10 @@ G.VOICE = {
       }
       else if (m.t === 'start') { coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
-      else if (m.t === 's' || m.t === 'fx') { if (coop.q.length < 400) coop.q.push(m); }
+      else if (m.t === 's' || m.t === 'fx') {
+        coop.q.push(m);
+        if (coop.q.length > 400) { qDrop(coop.q.splice(0, coop.q.length - 400)); coop.needFull = true; }   // keep the newest, ask for a keyframe
+      }
     }
   }
   coop.connect = (role, code) => {
@@ -6642,6 +6659,16 @@ G.VOICE = {
     coop.role = null; coop.status = 'offline'; ui.render();
   };
 
+  // a background tab stops rendering: tell the host, and resync from a keyframe when it comes back
+  document.addEventListener('visibilitychange', () => {
+    if (coop.role !== 'guest' || !coop.open) return;
+    if (document.hidden) send({ t: 'away', on: true });
+    else {
+      const L = G.scene && G.scene.L;
+      if (L && L.net === 'guest') { qDrop(coop.q); coop.q = coop.q.filter((m) => m.e > L._ep); coop.needFull = true; coop.lastFull = 0; }
+      send({ t: 'away', on: false });
+    }
+  });
   const oStep = G.step;
   G.step = function (n, quiet) {
     if (coop.notice && (coop.notice.t -= n / 60) <= 0) coop.notice = null;
