@@ -242,7 +242,8 @@ S['p2-freeze'] = async () => {
       const still = hs[i][1] === hs[i - 1][1] && moving(hs[i][0]);
       if (still) { if (runStart === null) runStart = hs[i - 1][0]; worst = Math.max(worst, hs[i][0] - runStart); } else runStart = null;
     }
-    return R(worst <= 60, 'longest P2 freeze while guest moving: ' + worst + ' ms (want <= 60) [lag=' + (T.sim.SIM_LAG || process.env.SIM_LAG || '60') + ']', { worst });
+    let gap = 0, over = 0; for (let i = 1; i < hs.length; i++) { const d = hs[i][0] - hs[i - 1][0]; gap = Math.max(gap, d); if (d > 40) over++; }
+    return R(worst <= 60, '[host rAF max gap ' + gap + ' ms, >40ms frames ' + over + '/' + hs.length + '] longest P2 freeze while guest moving: ' + worst + ' ms (want <= 60) [lag=' + (T.sim.SIM_LAG || process.env.SIM_LAG || '60') + ']', { worst });
   } finally { await T.close(); }
 };
 S['bandwidth'] = async () => {
