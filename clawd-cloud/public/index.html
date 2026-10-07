@@ -7232,7 +7232,7 @@ G.VOICE = {
   });
   // short on-screen message ("host disconnected"), drawn over whatever scene is showing
   const drawNotice = (ug) => {
-    if (coop.reconnecting) { const t = 'reconnecting' + '.'.repeat(1 + ((G.time * 2) | 0) % 3); const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), H - 22, w, 15, '#17131f', '#ffd27a', '#0d0a12'); G.text(ug, t, W / 2, H - 18, '#ffd27a', { align: 'c' }); }
+    if (coop.reconnecting || coop.hostLag) { const t = (coop.hostLag && !coop.reconnecting ? 'host reconnecting' : 'reconnecting') + '.'.repeat(1 + ((G.time * 2) | 0) % 3); const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), H - 22, w, 15, '#17131f', '#ffd27a', '#0d0a12'); G.text(ug, t, W / 2, H - 18, '#ffd27a', { align: 'c' }); }
     const n = coop.notice; if (!n) return;
     const w = G.textW(n.text) + 16; ug.globalAlpha = Math.min(1, n.t * 3);
     G.panel(ug, Math.round((W - w) / 2), 26, w, 15, '#17131f', '#ffb3b3', '#0d0a12');
@@ -7251,7 +7251,8 @@ G.VOICE = {
     }
     if ((m.t === 's' || m.t === 'st' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
     if (coop.role === 'host') {
-      if (m.t === 'peer') {
+      if (m.t === 'code') { coop.code = m.v; ui.showCode(); }
+      else if (m.t === 'peer') {
         const sc = G.scene;
         if (m.lag) { coop.peerLag = true; ui.render(); return; }                          // the friend's line dropped: they have 15 s to come back
         coop.peerLag = false;
@@ -7268,7 +7269,14 @@ G.VOICE = {
       }
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
     } else {
-      if (m.t === 'host') {
+      if (m.t === 'host' && m.lag) {                                                      // the host's line dropped: it has 15 s to come back
+        const L = G.scene && G.scene.L; if (L && L.net === 'guest' && L.partner) L.partner.lagging = true;
+        coop.hostLag = true; coop.say('host reconnecting...'); ui.render();
+      }
+      else if (m.t === 'host') {
+        const L = G.scene && G.scene.L; coop.hostLag = false;
+        if (L && L.net === 'guest' && L.partner) L.partner.lagging = false;
+        if (m.on && m.resume) { coop.needFull = true; coop.lastFull = 0; coop.say('host is back'); }
         coop.hostOn = !!m.on; ui.render();
         if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
       }
@@ -7286,30 +7294,38 @@ G.VOICE = {
   }
   // A guest whose line drops keeps its level and tries again (0.5 s, 1 s, 2 s ... 15 s). The relay keeps its seat for 15 s and hands back
   // the same token, so the host never sees it leave: the fight goes on where it was and nothing is restarted.
-  const FATAL = new Set([4000, 4001, 4002, 4004, 4005, 4010]);
+  // the host key lives in this browser only (localStorage may be blocked: then it is asked for every time)
+  const hostKey = (set) => {
+    try { if (set === null) localStorage.removeItem('clawd.hostKey'); else if (set !== undefined) localStorage.setItem('clawd.hostKey', set); else return localStorage.getItem('clawd.hostKey') || ''; } catch (e) { /* blocked */ }
+    return '';
+  };
+  coop.hostKey = hostKey;
+  const FATAL = new Set([4000, 4001, 4002, 4003, 4005, 4010]);       // 4011 (silent line) is not fatal: reconnect
+  // The host does the same (the relay keeps its seat for 15 s): its level, partner and unacknowledged events stay where they are.
   function reconnect() {
     clearTimeout(coop.rcT);
-    const n = coop.rc = (coop.rc || 0) + 1, delay = Math.min(15000, 500 * Math.pow(2, n - 1));
+    const role = coop.role, n = coop.rc = (coop.rc || 0) + 1, delay = Math.min(15000, 500 * Math.pow(2, n - 1));
     coop.reconnecting = true; ui.render();
-    coop.rcT = setTimeout(() => { if (coop.reconnecting) coop.connect('guest', coop.lastCode, true); }, delay);
+    coop.rcT = setTimeout(() => { if (coop.reconnecting) coop.connect(role, coop.lastCode, true); }, delay);
   }
   coop.connect = (role, code, resume) => {
     if (coop.ws) { coop.ws.onclose = null; try { coop.ws.close(); } catch (e) {} }
     clearInterval(coop.pgT);
-    if (!resume) { coop.token = null; coop.rc = 0; coop.reconnecting = false; clearTimeout(coop.rcT); }
-    coop.lastCode = code; coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = resume ? 'reconnecting...' : 'connecting...'; ui.render();
-    const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || '') + (resume && coop.token ? '&token=' + coop.token : ''));
+    if (!resume) { coop.token = null; coop.rc = 0; coop.reconnecting = false; clearTimeout(coop.rcT); coop.hostUp = false; }
+    coop.lastCode = code; coop.hostLag = false; coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = resume ? 'reconnecting...' : 'connecting...'; ui.render();
+    const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + (role === 'host' ? '&key=' + encodeURIComponent(code || '') + (resume ? '&resume=1' : '') : '&code=' + encodeURIComponent(code || '') + (resume && coop.token ? '&token=' + coop.token : '')));
     ws.onopen = () => {
       coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected';
-      if (resume) { coop.reconnecting = false; coop.rc = 0; coop.needFull = true; coop.lastFull = 0; coop.say('back online'); } else coop.resetNet();
+      if (resume) { coop.reconnecting = false; coop.rc = 0; if (role === 'guest') { coop.needFull = true; coop.lastFull = 0; } coop.say('back online'); } else coop.resetNet();
+      if (role === 'host') coop.hostUp = true;
       ui.render();
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
-      if (role === 'host') coop.fetchCfg();
+      if (role === 'host' && !resume) coop.fetchCfg();
       if (role === 'guest' && !resume) G.go(() => wait(), { speed: 3 });
       coop.lastMsgAt = performance.now();
       coop.pgT = setInterval(() => {
         // the relay sends a heartbeat every 2 s: 6 s of total silence means the line is dead even if the socket still looks open
-        if (role === 'guest' && performance.now() - coop.lastMsgAt > 6000) { const h = ws.onclose; ws.onclose = null; try { ws.close(); } catch (e) { /* */ } if (h) h.call(ws, { code: 1006 }); return; }
+        if (performance.now() - coop.lastMsgAt > 6000) { const h = ws.onclose; ws.onclose = null; try { ws.close(); } catch (e) { /* */ } if (h) h.call(ws, { code: 1006 }); return; }
         send({ t: 'pg', ts: performance.now() });
       }, 2000);
       // when the game loop is not running (background tab, pause) events still need a carrier
@@ -7321,10 +7337,17 @@ G.VOICE = {
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
       clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false; coop.ping = 0;
-      coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
+      coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4003 ? 'wrong host key' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
       const L = G.scene && G.scene.L;
-      if (L && L.net === 'host') coop.partnerLost(L);
-      else if (coop.role === 'guest') {
+      if (coop.role === 'host') {
+        // a host whose line drops keeps its world and its partner (the relay holds both seats for 15 s) and tries again with the saved key
+        if (coop.hostUp && !FATAL.has(ev.code)) {
+          if (L && L.net === 'host' && L.p2) L.p2.lagging = true;
+          coop.say('connection lost - reconnecting'); reconnect(); ui.render(); return;
+        }
+        if (ev.code === 4003) hostKey(null);
+        if (L && L.net === 'host') coop.partnerLost(L);
+      } else if (coop.role === 'guest') {
         if (coop.token && !FATAL.has(ev.code)) { coop.say('connection lost - reconnecting'); reconnect(); ui.render(); return; }
         if (L && L.net === 'guest') coop.kick = 'map'; else if (G.scene && G.scene.isWait) coop.kick = 'map'; coop.say('connection lost');
       }
@@ -7342,7 +7365,7 @@ G.VOICE = {
   }).catch(() => {});
   coop.disconnect = () => {
     const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
-    coop.ws = null; coop.token = null; coop.reconnecting = false; clearTimeout(coop.rcT); if (w) w.close(4010, 'bye'); clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false;
+    coop.ws = null; coop.token = null; coop.hostUp = false; coop.hostLag = false; coop.reconnecting = false; clearTimeout(coop.rcT); if (w) w.close(4010, 'bye'); clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false;
     if (L && L.net === 'host') coop.partnerLost(L);
     else if (wasGuest && ((L && L.net === 'guest') || (G.scene && G.scene.isWait))) coop.kick = 'map';
     coop.role = null; coop.status = 'offline'; ui.render();
@@ -7387,8 +7410,10 @@ G.VOICE = {
 
   // ---------- tiny overlay UI ----------
   const ui = {
+    showCode() { /* replaced when the panel exists */ },
     render() {
       if (!this.btn) return;
+      this.showCode();
       const on = coop.open;
       // the dot shows the connection quality: green < 120 ms, yellow < 250 ms, red above (yellow while the host waits for a friend)
       const dot = !on ? '' : coop.role === 'host' && !coop.peer ? '#ffd27a' : !coop.ping ? '#7fe08a' : coop.ping < 120 ? '#7fe08a' : coop.ping < 250 ? '#ffd27a' : '#ff6b6b';
@@ -7396,7 +7421,8 @@ G.VOICE = {
       this.btn.style.color = '#fff';
       let s = coop.status;
       if (coop.role === 'host' && on) s = coop.peer ? 'friend connected - pick a level' : 'waiting for your friend (give them the link and code)';
-      if (coop.role === 'guest' && on) s = coop.hostOn ? 'connected to host' : 'host is not online yet';
+      if (coop.role === 'guest' && on) s = coop.hostLag ? 'host reconnecting...' : coop.hostOn ? 'connected to host' : 'host is not online yet';
+      if (coop.reconnecting && !on) s = 'reconnecting...';
       this.stat.textContent = s;
       if (this.net) {
         const N = coop.net, now = performance.now(); coop.stallLog = coop.stallLog.filter((t) => now - t < 60000);
@@ -7417,8 +7443,9 @@ G.VOICE = {
     const btn = document.createElement('button'); btn.id = 'coopBtn'; btn.textContent = '2P'; btn.style.color = '#fff';
     const panel = document.createElement('div'); panel.id = 'coopP';
     panel.innerHTML = '<div style="color:#6aa8ff;font-weight:bold">CO-OP (2 players)</div><div id="cStat" style="margin:6px 0;color:#bbb">offline</div><div id="cNet" style="display:none;margin:4px 0;color:#8d8798;font-size:11px;line-height:1.5"></div>' +
-      '<div id="cRow"><button id="cHost">Host</button> <span>or</span><br><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
-      '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b></div>' +
+      '<div id="cRow"><span id="cHostWrap"><button id="cHost">Host</button> <span>or</span><br></span><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
+      '<div id="cKeyRow" style="display:none;margin:4px 0">host key<br><input id="cKey" type="password" autocomplete="off" style="width:120px"><button id="cKeyOk">OK</button></div>' +
+      '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b> <button id="cNew" title="new code (the friend is disconnected)">new code</button></div>' +
       '<div id="cDiff" style="display:none;margin:6px 0;border-top:1px solid #333;padding-top:6px"><div style="color:#ffd27a">difficulty <span id="cLock" style="color:#888"></span></div>' +
       '<select id="cPre"><option>easy</option><option>normal</option><option>coop</option><option>hard</option><option>nightmare</option><option>custom</option></select>' +
       '<div>boss HP <b id="cBv"></b><input id="cB" type="range" min="0" max="100" step="10" style="width:100%"></div>' +
@@ -7442,14 +7469,22 @@ G.VOICE = {
     ui.btn = btn; ui.panel = panel; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
     for (const el of [btn, panel]) for (const ev of ['keydown', 'keyup', 'pointerdown']) el.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; });
-    const host = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-    panel.querySelector('#cHost').style.display = host ? '' : 'none';
+    // only people who know the host key may host: the button shows up when a key is saved in this browser or the link ends in ?host
+    const canHost = !!hostKey() || /[?&]host\b/.test(location.search);
+    panel.querySelector('#cHostWrap').style.display = canHost ? '' : 'none';
+    ui.showCode = () => { panel.querySelector('#cShow').textContent = coop.code || ''; };
+    const startHost = (k) => { panel.querySelector('#cKeyRow').style.display = 'none'; coop.connect('host', k); };
     panel.querySelector('#cHost').addEventListener('click', () => {
-      fetch('/code').then((r) => r.text()).then((c) => { panel.querySelector('#cShow').textContent = c; coop.connect('host', c); });
+      const k = hostKey();
+      if (k) startHost(k); else { panel.querySelector('#cKeyRow').style.display = ''; panel.querySelector('#cKey').focus(); }       // first time: ask for the key (not prompt(): blocked on some phones)
     });
+    const keyOk = () => { const k = panel.querySelector('#cKey').value.trim(); if (!k) return; hostKey(k); panel.querySelector('#cKey').value = ''; startHost(k); };
+    panel.querySelector('#cKeyOk').addEventListener('click', keyOk);
+    panel.querySelector('#cKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') keyOk(); });
+    panel.querySelector('#cNew').addEventListener('click', () => send({ t: 'newcode' }));      // plain send(), not gsend(): not a game message
     panel.querySelector('#cJoin').addEventListener('click', () => coop.connect('guest', panel.querySelector('#cCode').value.trim()));
     ui.off.addEventListener('click', () => coop.disconnect());
-    if (!host) { panel.style.display = 'block'; }
+    if (!canHost) { panel.style.display = 'block'; }
     ui.render();
   }
 })();

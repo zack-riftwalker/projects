@@ -120,18 +120,18 @@ export class Room {
       // the real host is back (its old line is dead or about to be): the key proves who it is
       old.replaced = true; old.gone = true; this.socks.delete(old); try { old.ws.close(4000, 'replaced'); } catch (e) { /* gone */ }
     }
-    const wasGrace = this.hostGrace || !!old;
+    const away = this.hostGrace || !!old;
     if (this.hostGrace) { clearTimeout(this.hostGraceTimer); this.hostGrace = false; }
     this.host = s;
     this.send(s, { t: 'code', v: this.currentCode() });
-    if (resume && wasGrace) {
-      this.send(this.guest, { t: 'host', on: true, resume: true });
-      this.send(s, this.guest ? { t: 'peer', on: true, resume: true } : this.graceOn ? { t: 'peer', lag: true } : { t: 'peer', on: false, resume: true });
-    } else {
-      if (wasGrace) this.send(this.guest, { t: 'host', on: false });     // a fresh host (page reload): the guest starts over
-      this.send(this.guest, { t: 'host', on: true, resume: resume || undefined });
-      this.send(s, this.guest ? { t: 'peer', on: true, resume: resume || undefined } : this.graceOn ? { t: 'peer', lag: true } : { t: 'peer', on: false, resume: resume || undefined });
-    }
+    // "held": the host comes back inside its grace time, so the guest still has its level and nothing restarts.
+    // Otherwise (first connect, page reload, grace over, object restarted) the normal "friend joins" path runs.
+    const held = away && resume;
+    if (away && !resume) this.send(this.guest, { t: 'host', on: false });            // a fresh host (page reload): the guest starts over
+    this.send(this.guest, held ? { t: 'host', on: true, resume: true } : { t: 'host', on: true });
+    const peer = this.guest ? { t: 'peer', on: true } : this.graceOn ? { t: 'peer', lag: true } : { t: 'peer', on: false };
+    if (held && this.guest) peer.resume = true;
+    this.send(s, peer);
     console.log('host connected');
   }
   joinGuest(s, q) {
