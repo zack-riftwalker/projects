@@ -2947,10 +2947,10 @@ G.VOICE = {
       if (p.atkT > 0 && p.atkLive) {
         const box = p.atkBox();
         for (const e of this.ents) {
-          if (e.dead || e.hitId === p.atkId || e.noHit) continue;
+          if (e.dead || e[p.hitKey] === p.atkId || e.noHit) continue;
           for (const b of e.hurtboxes()) {
             if (!G.overlap(box, b)) continue;
-            e.hitId = p.atkId;
+            e[p.hitKey] = p.atkId;
             const res = e.hit(p.atkDmg, p.atkDir === 'f' ? p.atkFace : 0, p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, 'swipe', b);
             if (res) p.onHit(e, res, b);
             break;
@@ -2972,7 +2972,7 @@ G.VOICE = {
         for (const b of e.harmboxes()) {
           if (!G.overlap(hb, b)) continue;
           if (p.dashT > 0 && e.dashable !== false) {
-            if (e.dashId !== p.dashId) { e.dashId = p.dashId; const res = e.hit(1, p.dashDx || p.face, 0, 'dash', b); if (res) { this.stop(0.05); this.shake(0.2); } }
+            if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; const res = e.hit(1, p.dashDx || p.face, 0, 'dash', b); if (res) { this.stop(0.05); this.shake(0.2); } }
           } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
             const res = e.hit(1, 0, 1, 'stomp', b);
             p.y = b.y - p.h; p.bounce(1);
@@ -3279,6 +3279,7 @@ G.VOICE = {
   class Player {
     constructor(L, x, y) {
       this.L = L; this.x = x; this.y = y; this.w = 10; this.h = 10; this.vx = 0; this.vy = 0; this.face = 1;
+      this.hitKey = 'hitId'; this.dashKey = 'dashId';        // per-player marks on enemies, so two players never mask each other's hits
       this.tools = G.save.data.tools;
       this.maxHp = 5; this.hp = this.maxHp;
       this.onGround = false; this.coyote = 0; this.jumpBuf = 0; this.jumping = false;
@@ -6171,7 +6172,7 @@ G.VOICE = {
     cap: null, ping: 0, tickN: 0, status: 'offline', code: '', gs: {},
   };
   const r2 = (v) => Math.round(v * 100) / 100;
-  const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools']);
+  const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey']);
   const SM = ['x', 'y', 'cx', 'cy', 'hx', 'hy'];
   const HOSTOWN = new Set(['hp', 'maxHp', 'inv', 'hurtT', 'dead', 'gone', 'goneT', 'frozen', 'celebrate', 'auto', 'grace', 'meter', 'remote', 'blue']);
   const isPlain = (v) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null; };
@@ -6268,7 +6269,7 @@ G.VOICE = {
     L._tiles0 = L.tiles.slice();
     if (coop.role === 'host' && coop.peer && coop.open) {
       L.net = 'host';
-      const p2 = new Player(L, start.x - 8, start.y); p2.remote = true; p2.blue = true;
+      const p2 = new Player(L, start.x - 8, start.y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
       L.p2 = p2; L.partner = p2; L.reviveQ = [];
       coop.rAll = {}; coop.rHas = false; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = [];
     } else if (coop.role === 'guest' && coop.building) {
@@ -6330,7 +6331,6 @@ G.VOICE = {
       let v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
-      if (k === 'atkId' || k === 'dashId') v += 1e6;
       if ((k === 'x' || k === 'y') && typeof p2[k] === 'number') { const off = (sm[k] || 0) + p2[k] - v; sm[k] = Math.abs(off) > 40 ? 0 : off; }
       p2[k] = v;
     }
