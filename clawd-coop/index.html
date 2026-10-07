@@ -5902,14 +5902,14 @@ G.VOICE = {
           else if (gpause) {
             if (I.pressed.down) { sel = (sel + 1) % 3; A.sfx('uiMove'); }
             if (I.pressed.up) { sel = (sel + 2) % 3; A.sfx('uiMove'); }
-            if (I.pressed.pause || ((I.pressed.jump || I.pressed.attack || I.pressed.start) && sel === 0)) { gpause = false; G.coop.send({ t: 'pz', on: false, e: L._ep }); A.sfx('pause'); }
+            if (I.pressed.pause || ((I.pressed.jump || I.pressed.attack || I.pressed.start) && sel === 0)) { gpause = false; G.coop.rel('pz', { on: false }); A.sfx('pause'); }
             else if (I.pressed.jump || I.pressed.attack || I.pressed.start) {
               A.sfx('uiOk');
               if (sel === 1) opts = Options(() => { opts = null; });
               else { gpause = false; G.coop.disconnect(); }
             }
           } else if ((state === 'play' || state === 'paused') && (I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) {
-            gpause = true; sel = 0; G.coop.send({ t: 'pz', on: true, e: L._ep }); A.sfx('pause');
+            gpause = true; sel = 0; G.coop.rel('pz', { on: true }); A.sfx('pause');
           }
           const wantFz = state === 'paused' || gpause;
           if (wantFz && !fz) { fz = true; frozenBefore = p.frozen; p.frozen = true; } else if (!wantFz && fz) { fz = false; p.frozen = frozenBefore; }
@@ -6301,6 +6301,7 @@ G.VOICE = {
     q: [], ev: [], inbox: [], rAll: {}, rAck: 0, rHas: false, fxSeq: 0, fxAck: 0,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
     cap: null, ping: 0, tickN: 0, fxKeys: new Map(), epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
+    relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
   };
   const r2 = (v) => Math.round(v * 100) / 100;
   const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey', '_scaled', '_diff', 'dropN']);
@@ -6394,8 +6395,45 @@ G.VOICE = {
   const send = (o) => { if (coop.ws && coop.ws.readyState === 1) coop.ws.send(JSON.stringify(o)); };
   coop.send = send;
 
+  // ---------- protocol envelope + two event channels ----------
+  // Every game message carries {e: epoch, n: sequence, ra: ack}. Two kinds of events ride along:
+  //  * reliable events ({i,k,...}) are kept and re-sent inside every message until the other side acknowledges them (ra);
+  //    the receiver applies each id once and in order. Used for everything that must never be lost (hits, deaths, tile breaks, pause...).
+  //  * cosmetic events (sound, particles, shake) are stamped with the host clock; the guest drops them when they are older than 300 ms.
+  const R = coop.R = { out: [], seq: 0, hi: 0, resend: 220 };
+  const curEpoch = () => (coop.role === 'host' ? coop.epoch : (G.scene && G.scene.L && G.scene.L._ep !== undefined ? G.scene.L._ep : coop.startEpoch));
+  coop.rel = (k, f) => { R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
+  coop.resetNet = () => { R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
+  // game message out: stamps the envelope and attaches every unacknowledged reliable event that is due
+  function gsend(o) {
+    o.n = ++coop.txN; if (o.e === undefined) o.e = curEpoch(); o.ra = R.hi;
+    if (R.out.length) {
+      const now = performance.now();
+      if (R.out.some((x) => now - x.at > R.resend)) { o.r = R.out.map((x) => x.ev); for (const x of R.out) x.at = now; }
+    } else o.u = 1;                                   // nothing that must arrive: the relay may drop this message when the line is clogged
+    coop.relWake = false;
+    send(o);
+  }
+  coop.gsend = gsend;
+  // game message in: acknowledgements, reliable events (once, in order), loss accounting
+  function rx(m) {
+    if (coop.dbg.dropRx && Math.random() < coop.dbg.dropRx) return false;       // test hook: pretend this message was lost
+    if (m.ra !== undefined) while (R.out.length && R.out[0].ev.i <= m.ra) R.out.shift();
+    if (m.r) for (const ev of m.r) if (ev.i === R.hi + 1) { R.hi = ev.i; coop.onRel(ev, m); }
+    if (m.n !== undefined) { if (m.n > coop.rxN + 1 && coop.rxN) coop.lost += m.n - coop.rxN - 1; if (m.n > coop.rxN) coop.rxN = m.n; }
+    return true;
+  }
+  coop.onRel = (ev, m) => {
+    if (ev.k === 'test') { coop.testLog.push(ev.n); return; }
+    if (coop.role === 'host') {
+      if (ev.k === 'bt' || ev.k === 'cr') coop.inbox.push(Object.assign({ t: ev.k, e: m.e }, ev));
+      else if (ev.k === 'pz') { const sc = G.scene; if (m.e === coop.epoch && sc && sc.pauseFor) sc.pauseFor(!!ev.on, 'P2'); }
+      else if (ev.k === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!ev.on; }
+    } else coop.relQ.push({ ev, e: m.e });
+  };
+
   // ---------- level setup ----------
-  class HookMap extends Map { set(k, v) { if (coop.hookCr) send({ t: 'cr', i: k, v }); return super.set(k, v); } }
+  class HookMap extends Map { set(k, v) { if (coop.hookCr) coop.rel('cr', { i: k, v }); return super.set(k, v); } }
   function hostSetup(L, x, y) {
     L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
     const p2 = new Player(L, x, y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
@@ -6442,7 +6480,7 @@ G.VOICE = {
         this.tiles[i] = G.TILE.E; this._predBroken.set(i, this.time + 1);
         this.burst(tx * 16 + 8, ty * 16 + 8, 12, ['#8d8798', '#c3bccd', '#4c4658'], 90, 300);
         this.shake(0.3); A.sfx('brk');
-        send({ t: 'bt', tx, ty });
+        coop.rel('bt', { tx, ty });
         return true;
       };
       coop.gs = {};
@@ -6461,7 +6499,7 @@ G.VOICE = {
     if (coop.pT > 0) return;
     coop.pT = 0.25;
     if (L._net) L._net.hs = null;                  // the first snapshot after resuming must carry the state again
-    send({ t: 'hs', hs: coop.hostState, e: coop.epoch });
+    gsend({ t: 'hs', hs: coop.hostState });
   };
   coop.aimAt = (L, e) => {
     const a = L.me, b = L.p2;
@@ -6511,7 +6549,7 @@ G.VOICE = {
       p2[k] = v;
     }
   }
-  function sendFx(d) { coop.fxSeq++; for (const k in d) coop.fxKeys.set(k, coop.fxSeq); send({ t: 'fx', d, q: coop.fxSeq, e: coop.epoch }); }
+  function sendFx(d) { coop.fxSeq++; for (const k in d) coop.fxKeys.set(k, coop.fxSeq); gsend({ t: 'fx', d, q: coop.fxSeq }); }
   coop.hostTick = (L, dt) => {
     const p2 = L.p2; if (!p2 || !coop.peer) return;
     ensureIds(L);
@@ -6584,9 +6622,9 @@ G.VOICE = {
 
   function sendSnap(L) {
     const N = L._net || (L._net = { e: {}, i: {}, p: {}, seq: 0 });
-    const me = L.me, p2 = L.p2, s = { t: 's', n: ++N.seq, e: coop.epoch };
+    const me = L.me, p2 = L.p2, s = { t: 's', sn: ++N.seq };
     if (coop.kfNext) { s.kf = 1; coop.kfNext = false; }
-    s.tm = r2(L.time); s.ly = L.liquidY; s.rs = L.rising ? 1 : 0; s.ck = r2(L.clock); s.tk = L.tokens; s.ht = L.hits; s.ci = L.cpIndex;
+    s.tm = r2(G.time); s.lt = r2(L.time); s.ly = L.liquidY; s.rs = L.rising ? 1 : 0; s.ck = r2(L.clock); s.tk = L.tokens; s.ht = L.hits; s.ci = L.cpIndex;
     s.cp = L.cps.map((c) => (c.on ? 1 : 0)); s.ex = L.exit && L.exit.done ? 1 : 0; s.sk = L.sparks;
     const T0 = L._tiles0, tl = [];
     for (let i = 0; i < T0.length; i++) if (L.tiles[i] !== T0[i]) tl.push(i, L.tiles[i]);
@@ -6618,7 +6656,7 @@ G.VOICE = {
     k = JSON.stringify(ph); if (k !== N.ph) { N.ph = k; s.ph = ph; }
     k = JSON.stringify(coop.hostState); if (k !== N.hs) { N.hs = k; s.hs = coop.hostState; }
     if (coop.ev.length) { s.ev = coop.ev.slice(0, 60); coop.ev = []; }
-    send(s);
+    gsend(s);
   }
 
   // events from the host (effects, sounds, voice) are relayed to the guest. Each carries who caused it ('p1' host player,
@@ -6668,7 +6706,7 @@ G.VOICE = {
   // ---------- guest side ----------
   function applySnap(L, s, quiet) {
     if (s.kf) coop.needFull = false;
-    if (s.tm !== undefined) { if (L._tm === undefined || Math.abs(s.tm - L.time) > 0.3) L.time = s.tm; else L.time += (s.tm - L.time) * 0.15; L._tm = 1; }
+    if (s.lt !== undefined) { if (L._tm === undefined || Math.abs(s.lt - L.time) > 0.3) L.time = s.lt; else L.time += (s.lt - L.time) * 0.15; L._tm = 1; }
     if (s.ly === null) L.liquidY = null; else if (s.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - s.ly) > 60 ? s.ly : L.liquidY + (s.ly - L.liquidY) * 0.5;
     L.rising = !!s.rs; L.clock = s.ck; L.tokens = s.tk; L.hits = s.ht; L.cpIndex = s.ci;
     s.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
@@ -6721,6 +6759,7 @@ G.VOICE = {
       else if (e[0] === 'V' && coop.cap) oSpeak(coop.cap, e[1]);
     }
   }
+  coop.guestRel = (L, ev) => { /* host -> guest reliable events are added with the features that use them */ };
   coop.guestUpdate = (L, dt) => {
     if (!L._tiles0) return;
     ensureIds(L);
@@ -6731,11 +6770,12 @@ G.VOICE = {
       if (m.e > L._ep) break;                              // belongs to the next level: keep it for that scene
       coop.q.shift(); ms.push(m);
     }
-    // after a long backlog only the newest snapshot may play its sounds and effects
-    let lastS = -1, nS = 0; ms.forEach((m, i) => { if (m.t === 's') { lastS = i; nS++; } });
-    ms.forEach((m, i) => { if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m, nS > 3 && i !== lastS); });
+    // sounds and effects older than 300 ms (a backlog after a stall) are not played
+    const nowMs = performance.now();
+    ms.forEach((m) => { if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m, coop.latestTm - m.tm + (nowMs - coop.latestAt) / 1000 > 0.3); });
+    while (coop.relQ.length) { const r = coop.relQ[0]; if (r.e > L._ep) break; coop.relQ.shift(); if (r.e === L._ep) coop.guestRel(L, r.ev); }
     // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
-    if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); send({ t: 'full', e: L._ep }); }
+    if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); gsend({ t: 'full', e: L._ep }); }
     L.trauma = Math.max(0, L.trauma - dt * 2.2);
     if (L.flash > 0) L.flash = Math.max(0, L.flash - dt * 3);
     L.time += dt;
@@ -6782,8 +6822,8 @@ G.VOICE = {
     // my state -> host, 30 times a second
     if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
       const d = deltaDump(coop.gs, 'me', p);
-      if (d) send({ t: 'st', d, a: coop.fxAck });
-      else if (coop.gTick % 30 === 0) send({ t: 'st', d: {}, a: coop.fxAck });
+      if (d) gsend({ t: 'st', d, a: coop.fxAck });
+      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, a: coop.fxAck });
     }
   };
 
@@ -6835,17 +6875,15 @@ G.VOICE = {
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
+    if ((m.t === 's' || m.t === 'st' || m.t === 'fx' || m.t === 'hs' || m.t === 'full') && !rx(m)) return;
     if (coop.role === 'host') {
       if (m.t === 'peer') {
-        coop.peer = !!m.on; ui.render(); if (m.on) coop.sendCfg();
+        coop.peer = !!m.on; ui.render(); if (m.on) { coop.resetNet(); coop.sendCfg(); }
         const sc = G.scene;
         if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
-      else if (m.t === 'cr' || m.t === 'bt') coop.inbox.push(m);
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) { L._net = null; coop.kfNext = true; } }
-      else if (m.t === 'pz') { const sc = G.scene; if (m.e === coop.epoch && sc && sc.pauseFor) sc.pauseFor(!!m.on, 'P2'); }
-      else if (m.t === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!m.on; }
     } else {
       if (m.t === 'host') {
         coop.hostOn = !!m.on; ui.render();
@@ -6856,6 +6894,7 @@ G.VOICE = {
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's' || m.t === 'fx') {
+        if (m.t === 's') { coop.latestTm = m.tm; coop.latestAt = performance.now(); }
         coop.q.push(m);
         if (coop.q.length > 400) { qDrop(coop.q.splice(0, coop.q.length - 400)); coop.needFull = true; }   // keep the newest, ask for a keyframe
       }
@@ -6867,7 +6906,7 @@ G.VOICE = {
     coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = 'connecting...'; ui.render();
     const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || ''));
     ws.onopen = () => {
-      coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected'; ui.render();
+      coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected'; coop.resetNet(); ui.render();
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
       if (role === 'host') coop.fetchCfg();
       if (role === 'guest') G.go(() => wait(), { speed: 3 });
@@ -6904,11 +6943,11 @@ G.VOICE = {
   // a background tab stops rendering: tell the host, and resync from a keyframe when it comes back
   document.addEventListener('visibilitychange', () => {
     if (coop.role !== 'guest' || !coop.open) return;
-    if (document.hidden) send({ t: 'away', on: true });
+    if (document.hidden) coop.rel('away', { on: true });
     else {
       const L = G.scene && G.scene.L;
       if (L && L.net === 'guest') { qDrop(coop.q); coop.q = coop.q.filter((m) => m.e > L._ep); coop.needFull = true; coop.lastFull = 0; }
-      send({ t: 'away', on: false });
+      coop.rel('away', { on: false });
     }
   });
   const oStep = G.step;

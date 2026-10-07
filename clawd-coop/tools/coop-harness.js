@@ -215,12 +215,12 @@ S['bt-spam'] = async () => {
   const T = await openPair();
   try {
     await startLevel(T, '1-1'); await sleep(1000);
-    const a = await counters(T.guest);
+    const a = await counters(T.guest), seq0 = await T.guest.evaluate(() => (G.coop.R ? G.coop.R.seq : 0));
     await T.guest.evaluate(() => { const L = G.scene.L, p = L.me; p.tools.bash = true; p.y -= 30; p.dashT = 0.15; p.dashDx = 1; p.dashDy = 0; });
     await sleep(500);
-    const b = await counters(T.guest);
-    const n = (b.tx.t.bt ? b.tx.t.bt.n : 0) - (a.tx.t.bt ? a.tx.t.bt.n : 0);
-    return R(n === 0, 'bt messages=' + n + ' (want 0)');
+    const b = await counters(T.guest), seq1 = await T.guest.evaluate(() => (G.coop.R ? G.coop.R.seq : 0));
+    const n = (b.tx.t.bt ? b.tx.t.bt.n : 0) - (a.tx.t.bt ? a.tx.t.bt.n : 0) + (seq1 - seq0);   // old "bt" messages + new reliable events
+    return R(n === 0, 'tile-break messages/events=' + n + ' (want 0)');
   } finally { await T.close(); }
 };
 S['p2-freeze'] = async () => {
