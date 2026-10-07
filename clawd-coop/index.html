@@ -6312,7 +6312,7 @@ G.VOICE = {
   const G = window.G, Level = G.Level, Player = G.Player, W = G.W, H = G.H, A = G.audio;
   const coop = G.coop = {
     role: null, ws: null, open: false, peer: false, building: false, tools: null,
-    skipped: 0, stalls: [], stallLog: [], lastStamp: undefined, lastRx: 0, mute: 0, quiet: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
+    pred: new Map(), skipped: 0, stalls: [], stallLog: [], lastStamp: undefined, lastRx: 0, mute: 0, quiet: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
     cap: null, ping: 0, tickN: 0, epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
     relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
@@ -6494,6 +6494,7 @@ G.VOICE = {
       me.tools = tools; remote.tools = tools;
       L.player = L.me = me; L.partner = remote; L.p1 = remote; L._ep = coop.startEpoch;
       L.crumble = new HookMap(); coop.hookCr = true;
+      L.stop = function (t) { this.hitstop = Math.max(this.hitstop, Math.min(t, 0.03)); };       // my own hits freeze my screen for a moment (30 ms)
       // cracked walls: the guest breaks the tile at once (prediction) and tells the host, which owns the real world
       // a tile that vanished/appeared under or inside me must not trap me: hold it open for as long as I overlap it
       L._myHold = new Set();
@@ -6615,7 +6616,8 @@ G.VOICE = {
     e[key] = ev.atk;
     const b = ev.bi >= 0 && boxes[ev.bi] ? boxes[ev.bi] : best;
     const dmg = ev.how === 'swipe' ? G.clamp(+ev.dmg || 1, 1, 2) : ev.how === 'dash' ? 1 : Math.max(1, e.hp);
-    asP2(L, () => e.hit(dmg, +ev.dx || 0, +ev.dy || 0, ev.how, b));
+    L._atk = (ev.how === 'swipe' ? 'w' : ev.how[0]) + ev.atk;
+    try { asP2(L, () => e.hit(dmg, +ev.dx || 0, +ev.dy || 0, ev.how, b)); } finally { L._atk = 0; }
   }
   // the partner took damage / fell in spikes / died on its own screen: show it here too
   function hostMirror(L, ev) {
@@ -6791,13 +6793,14 @@ G.VOICE = {
   // 'p2' partner, 'all' world) as its last element, so shakes/flashes/loud sounds of one player do not hit the other's screen.
   const rec = (a) => { if (coop.role === 'host' && coop.peer && coop.open && !coop.mute && coop.ev.length < 80) coop.ev.push(a); };
   const ctxNow = () => { const L = G.scene && G.scene.L; return (L && L._ctx) || 'all'; };
+  const tagOf = (L) => ((L._ctx || 'all') + (L._atk ? '#' + L._atk : ''));          // 'p2#s12': an echo of the partner's swing no. 12
   const near2 = (L) => (L.p2 && L.me ? Math.hypot(L.me.x - L.p2.x, L.me.y - L.p2.y) : 0);
   const hear = (d) => G.clamp(1 - d / 320, 0.25, 1);                 // how loud the other player's actions are
   for (const n of ['burst', 'ring', 'spark', 'pop', 'explode', 'dust', 'shake', 'flashScreen']) {
     const o = Level.prototype[n];
     Level.prototype[n] = function (...a) {
       if (this.net === 'host') {
-        if (!(coop.inExplode && (n === 'ring' || n === 'burst'))) rec(['L', n].concat(a, this._ctx || 'all'));   // explode already carries its rings/bursts
+        if (!(coop.inExplode && (n === 'ring' || n === 'burst'))) rec(['L', n].concat(a, tagOf(this)));   // explode already carries its rings/bursts
         if ((n === 'shake' || n === 'flashScreen') && this._ctx === 'p2') return;                              // the partner's hits shake the partner only
         if (n === 'explode') { coop.inExplode = true; try { return o.apply(this, a); } finally { coop.inExplode = false; } }
       }
@@ -6812,7 +6815,7 @@ G.VOICE = {
     if (coop.quiet) return;                                   // a hazard the guest runs itself: the host's sound is not relayed for it either
     if (coop.role === 'host' && !UI_SFX.has(name)) {
       const L = G.scene && G.scene.L, ctx = ctxNow();
-      rec(['S', name, o, ctx]);
+      rec(['S', name, o, L ? tagOf(L) : ctx]);
       if (ctx === 'p2' && L && L.net === 'host') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(near2(L)) });
     }
     return oSfx.call(this, name, o);
@@ -6974,16 +6977,19 @@ G.VOICE = {
     if (S.ph) Object.assign(L.me, S.ph);
     if (S.hs) coop.hostState = S.hs;
   }
+  const ECHO = new Set(['hit', 'clang', 'squish', 'bossHit']);
   function playEvents(L, evs) {
     for (const e of evs) {
       if (e[0] === 'L') {
-        const ctx = e[e.length - 1];
+        const ctx = String(e[e.length - 1]).split('#')[0];
         if ((e[1] === 'shake' || e[1] === 'flashScreen') && ctx === 'p1') continue;       // the host player's hits do not shake my screen
         if (typeof L[e[1]] === 'function') L[e[1]].apply(L, e.slice(2, -1));
       }
       else if (e[0] === 'S') {
         let o = e[2];
-        if (e[3] === 'p1') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(Math.hypot(L.me.x - L.partner.x, L.me.y - L.partner.y)) });
+        const tag = String(e[3]).split('#');
+        if (tag[1] && coop.pred.has(tag[1]) && ECHO.has(e[1])) continue;                     // my own screen already played this hit sound
+        if (tag[0] === 'p1') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(Math.hypot(L.me.x - L.partner.x, L.me.y - L.partner.y)) });
         oSfx.call(A, e[1], o);
       }
       else if (e[0] === 'M') oMus.call(A, e[1], e[2]);
@@ -7021,6 +7027,8 @@ G.VOICE = {
   };
   // ---------- the guest runs its own body: fights, hurts and hazards are decided here, at once, against what this screen shows ----------
   // Damage dealt is only *announced* (reliable 'hit' event); the host owns the creatures and applies it after checking it makes sense.
+  // remember which hits this screen already showed, so the host's echo of the same hit is not played a second time
+  function predicted(key) { const now = performance.now(); coop.pred.set(key, now + 2000); if (coop.pred.size > 40) for (const [k, t] of coop.pred) if (t < now) coop.pred.delete(k); }
   function guestCombat(L, p) {
     if (p.dead || p.gone) return;
     if (L.boss && (L.boss.dying || L.boss.dead)) p.inv = Math.max(p.inv, 99);       // the boss is going down: nothing hurts any more
@@ -7036,7 +7044,9 @@ G.VOICE = {
           e[p.hitKey] = p.atkId;
           if (canHit(e) && (!e.isBoss || b.head !== undefined || !e.heads)) {
             coop.rel('hit', { eid: e._id, how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi });
-            p.onHit(e, b.armor ? 'block' : 'hit', b);                              // my own reactions: recoil, pogo, sparks
+            predicted('w' + p.atkId);
+            if (!b.armor) A.sfx('hit');                                                // sound at the moment of contact, not a round trip later
+            p.onHit(e, b.armor ? 'block' : 'hit', b);                              // my own reactions: recoil, pogo, sparks, a 30 ms hitstop
           }
           break;
         }
@@ -7056,9 +7066,10 @@ G.VOICE = {
       for (const b of e.harmboxes()) {
         if (!G.overlap(hb, b)) continue;
         if (p.dashT > 0 && e.dashable !== false) {
-          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); L.stop(0.05); L.shake(0.2); } }
+          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); predicted('d' + p.dashId); A.sfx('hit'); L.spark(Math.max(b.x, Math.min(p.x + 5, b.x + b.w)), Math.max(b.y, Math.min(p.y + 5, b.y + b.h)), '#fff3e4', 6); L.stop(0.05); L.shake(0.2); } }
         } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
           coop.rel('hit', { eid: e._id, how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
+          predicted('s' + p._stompN); A.sfx('squish'); L.spark(p.x + 5, b.y, '#fff3e4', 6);
           p.y = b.y - p.h; p.bounce(1); L.stop(0.05);
         } else if (p.grace <= 0) p.hurt(e.dmg || 1, b.x + b.w / 2);
         break;
@@ -7104,8 +7115,8 @@ G.VOICE = {
         if ((tt === T.CRUMBLE || tt === T.BLINK_A || tt === T.BLINK_B) && !Level.prototype.solid.call(L, tx, ty)) L._myHold.add(ty * L.w + tx);
       }
     }
-    p.update(dt);
-    guestCombat(L, p);
+    if (L.hitstop > 0) L.hitstop -= dt;
+    else { p.update(dt); guestCombat(L, p); }
     const hb = p.hurtbox();
     for (const sp of L.springs) { if (sp.t > 0) sp.t -= dt; if (p.vy >= 0 && G.overlap(hb, sp) && p.dashT <= 0 && !p.dead) p.spring(sp); }
     L.sign = null;

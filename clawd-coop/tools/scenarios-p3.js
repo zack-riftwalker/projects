@@ -258,4 +258,33 @@ module.exports = (S, h) => {
       return R(max < base * 2 + 150, 'bare round trip ' + base + ' ms; last 20 s: median ' + med + ' ms, max ' + max + ' ms (want < ' + (base * 2 + 150) + '); host skipped ' + drops + ' sends; ping every 10 s: ' + hist.filter((_, i) => i % 10 === 9).join(','));
     } finally { await T.close(); }
   };
+
+  // the guest's own swing is felt at the moment of contact (sound, spark, 30 ms hitstop), and the host's echo is not played again
+  S['hitfeel'] = async () => {
+    const T = await openPair({ env: process.env.SIM_LAG ? {} : { SIM_LAG: '150' } });
+    try {
+      await startLevel(T, '1-1'); await sleep(1000);
+      await T.host.evaluate(() => { const L = G.scene.L; L.ents.length = 0; });
+      const bug = await T.host.evaluate(() => {
+        const L = G.scene.L, p = L.p2, e = new G.Enemies.Bug(L, 0, 0, false);
+        e.update = () => {}; e.hp = 6; e.x = p.x + 16; e.y = p.y + p.h - e.h; e.vx = e.vy = 0; L.ents.push(e); G.coop.hostTick(L, 0);
+        window.__bug = e; window.__thit = 0; window.__hp0 = e.hp;
+        const iv = setInterval(() => { if (e.hp < window.__hp0 && !window.__thit) { window.__thit = performance.now() + performance.timeOrigin; clearInterval(iv); } }, 4);
+        return { id: e._id };
+      });
+      await T.guest.waitForFunction((id) => G.scene.L.ents.some((e) => e._id === id), bug.id, { timeout: 5000 });
+      await sleep(600);
+      await T.guest.evaluate(() => {
+        const L = G.scene.L, p = L.me; window.__sfx = {}; window.__tsfx = 0; window.__stop = 0;
+        const o = G.audio.sfx; G.audio.sfx = function (n, a) { window.__sfx[n] = (window.__sfx[n] || 0) + 1; if (n === 'hit' && !window.__tsfx) window.__tsfx = performance.now() + performance.timeOrigin; return o.call(this, n, a); };
+        const f = () => { if (L.hitstop > 0) window.__stop = Math.max(window.__stop, L.hitstop); requestAnimationFrame(f); }; f();
+        p.face = 1;
+      });
+      await h.key(T.guest, 'KeyX', true); await sleep(60); await h.key(T.guest, 'KeyX', false);
+      await sleep(1500);
+      const g = await T.guest.evaluate(() => ({ sfx: window.__sfx, t: window.__tsfx, stop: window.__stop })), th = await T.host.evaluate(() => window.__thit);
+      const early = th - g.t;
+      return R((g.sfx.hit || 0) === 1 && early > 100 && g.stop > 0 && g.stop <= 0.031, 'hit sound played ' + (g.sfx.hit || 0) + 'x on the guest (want 1), ' + early.toFixed(0) + ' ms before the host applied the damage (want > 100), guest hitstop ' + g.stop.toFixed(3) + ' s (want 0..0.03)');
+    } finally { await T.close(); }
+  };
 };
