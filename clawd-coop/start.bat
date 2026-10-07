@@ -10,6 +10,11 @@ if %errorlevel%==0 (
 ) else (
   echo cloudflared not found - online play needs it: winget install Cloudflare.cloudflared
 )
+rem Optional co-op difficulty defaults (remove 'rem' to use). LOCK=1 stops the host changing them.
+rem set BOSS_HP=50
+rem set NPC_HITS=1
+rem set NPC_MULT=125
+rem set LOCK=1
 rem the server opens the browser itself once it is listening, and is restarted if it ever stops
 :loop
 node server.js

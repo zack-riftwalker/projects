@@ -216,7 +216,8 @@
     seen: {},               // cutscenes / world cards / boss intros
     node: 0,                // cursor on the map
     deaths: 0, tokens: 0, finished: false,
-    opt: { music: 0.7, sfx: 0.8, voice: 1, shake: 1, min: 0 },
+    opt: { music: 0.7, sfx: 0.8, voice: 1, shake: 1, min: 0, diffPreset: 'normal', bossPct: 0, npcExtra: 0, npcMult: 100 },
+    coopDiff: { preset: 'coop', bossPct: 50, npcExtra: 0, npcMult: 100 },     // the difficulty profile used while hosting a co-op game
   });
   G.save = {
     data: fresh(),
@@ -225,12 +226,12 @@
         const raw = localStorage.getItem(SAVE_KEY);
         if (raw) {
           const d = JSON.parse(raw), f = fresh();
-          this.data = Object.assign(f, d, { tools: Object.assign(f.tools, d.tools), opt: Object.assign(f.opt, d.opt) });
+          this.data = Object.assign(f, d, { tools: Object.assign(f.tools, d.tools), opt: Object.assign(f.opt, d.opt), coopDiff: Object.assign(f.coopDiff, d.coopDiff) });
         }
       } catch (e) { /* private mode etc. - play without saving */ }
     },
     write() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
-    reset() { const opt = this.data.opt; this.data = fresh(); this.data.opt = opt; this.write(); },
+    reset() { const opt = this.data.opt, coopDiff = this.data.coopDiff; this.data = fresh(); this.data.opt = opt; this.data.coopDiff = coopDiff; this.write(); },
     sparkCount() { let n = 0; for (const k in this.data.sparks) for (const s of this.data.sparks[k]) if (s) n++; return n; },
   };
 })();
@@ -2858,6 +2859,10 @@ G.VOICE = {
     // ---------- update ----------
     update(dt) {
       if (this.net === 'guest') return G.coop.guestUpdate(this, dt);
+      if (G.diff) {                                   // new creatures (also runtime spawns) get the difficulty settings exactly once
+        const cfg = this._diff === undefined ? (this._diff = G.diff.cfgFor(this)) : this._diff;
+        if (cfg && !cfg.neutral) for (const e of this.ents) if (!e._scaled) G.diff.scale(e, cfg);
+      }
       this.trauma = Math.max(0, this.trauma - dt * 2.2);
       if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 3);
       if (this.hitstop > 0) { this.hitstop -= dt; return; }
@@ -2985,7 +2990,7 @@ G.VOICE = {
           if (p.dashT > 0 && e.dashable !== false) {
             if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; const res = e.hit(1, p.dashDx || p.face, 0, 'dash', b); if (res) { this.stop(0.05); this.shake(0.2); } }
           } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
-            const res = e.hit(1, 0, 1, 'stomp', b);
+            const res = e.hit(Math.max(1, e.hp), 0, 1, 'stomp', b);       // a stomp always kills in one hit, however tough the enemy has become
             p.y = b.y - p.h; p.bounce(1);
             if (res) { this.stop(0.05); }
           } else if (p.grace <= 0) p.hurt(e.dmg || 1, b.x + b.w / 2);
@@ -4000,7 +4005,7 @@ G.VOICE = {
       super(L, 0, 0, w, h);
       this.x = x - w / 2; this.y = y - h;
       this.hp = this.maxHp = hp; this.active = false; this.passive = true; this.always = true; this.keep = true;
-      this.stompable = false; this.isBoss = true; this.phase = 1; this.st = 'wait'; this.st_t = 0; this.n = 0; this.kb = 0; this.dying = false; this.dieT = 0;
+      this.stompable = false; this.isBoss = true; this.dropN = 24; this.phase = 1; this.st = 'wait'; this.st_t = 0; this.n = 0; this.kb = 0; this.dying = false; this.dieT = 0;
     }
     set(st, t) { this.st = st; this.st_t = t || 0; this.n = 0; }
     start() { this.active = true; this.passive = false; this.set('idle', 1); }
@@ -4030,7 +4035,7 @@ G.VOICE = {
       if (this.dieT >= dur && !this.gone) {
         this.gone = true; this.dead = true; this.keep = true;
         this.L.explode(this.cx, this.cy, 46, cols); this.L.flashScreen(1); this.L.shake(1); G.audio.sfx('bigExplode');
-        this.L.drop(this.cx, this.cy, 24);
+        this.L.drop(this.cx, this.cy, this.dropN);
         this.L.events.push('bossDead');
         return true;
       }
@@ -4238,7 +4243,7 @@ G.VOICE = {
       if (this.dying) {
         this.dieT += dt;
         if (Math.random() < 0.3) { const h = G.pick(this.heads); L.explode(h.x + G.rand(-14, 14), h.y + G.rand(-10, 10), G.rand(8, 14), ['#fff', '#4ec9b0', '#e05a8a']); G.audio.sfx('explode', { vol: 0.5 }); }
-        if (this.dieT > 2.2 && !this.gone) { this.gone = true; this.dead = true; L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); for (const h of this.heads) L.explode(h.x, h.y, 34, ['#fff', h.def.hi, h.def.main]); L.drop(W / 2, 100, 24); L.events.push('bossDead'); }
+        if (this.dieT > 2.2 && !this.gone) { this.gone = true; this.dead = true; L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); for (const h of this.heads) L.explode(h.x, h.y, 34, ['#fff', h.def.hi, h.def.main]); L.drop(W / 2, 100, this.dropN); L.events.push('bossDead'); }
         for (const h of this.heads) { h.vy += 500 * dt; h.y = Math.min(FLOOR - 10, h.y + h.vy * dt); }
         return;
       }
@@ -4499,7 +4504,7 @@ G.VOICE = {
         this.dieT += dt;
         const k = Math.floor(this.dieT / 0.14);
         if (k !== this.lastK && k < this.N) { this.lastK = k; const s = this.segPos(this.N - 1 - k); L.explode(s.x, s.y, 12, ['#fff', '#f3d58a', '#c2924a']); G.audio.sfx('explode', { vol: 0.6 }); L.shake(0.3); this.popped = k + 1; }
-        if (this.dieT > this.N * 0.14 + 0.6 && !this.gone) { this.gone = true; this.dead = true; L.explode(this.hx, this.hy, 40, ['#fff', '#f3d58a', '#ff7a59']); L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); L.drop(this.hx, this.hy, 24); L.events.push('bossDead'); }
+        if (this.dieT > this.N * 0.14 + 0.6 && !this.gone) { this.gone = true; this.dead = true; L.explode(this.hx, this.hy, 40, ['#fff', '#f3d58a', '#ff7a59']); L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); L.drop(this.hx, this.hy, this.dropN); L.events.push('bossDead'); }
         return;
       }
       if (!this.active) { this.path = 'coil'; }
@@ -5561,8 +5566,28 @@ G.VOICE = {
       { k: 'music', label: 'music' }, { k: 'sfx', label: 'sound' }, { k: 'voice', label: 'voices' },
       { k: 'min', label: 'minimum graphics', toggle: true }, { k: 'shake', label: 'screen shake', toggle: true }, { k: 'full', label: 'fullscreen', act: true },
     ];
+    // difficulty (solo). In a co-op game the host's co-op profile is used instead, so these rows are not shown then.
+    const range = (a, b, st) => { const r = []; for (let v = a; v <= b; v += st) r.push(v); return r; };
+    const hasDiff = !(G.coop && G.coop.open);
+    if (hasDiff) {
+      const at = items.findIndex((i) => i.k === 'full');
+      items.splice(at, 0,
+        { k: 'diffPreset', label: 'difficulty', choice: ['easy', 'normal', 'coop', 'hard', 'nightmare', 'custom'], fmt: (v) => v, wrap: true },
+        { k: 'bossPct', label: 'boss HP', choice: [0].concat(range(10, 100, 10)), fmt: (v) => (v ? '+' + v + '%' : 'off') },
+        { k: 'npcExtra', label: 'enemy hits', choice: range(0, 5, 1), fmt: (v) => '+' + v },
+        { k: 'npcMult', label: 'enemy HP', choice: range(100, 300, 25), fmt: (v) => v + '%' });
+    }
     if (canErase) items.push({ k: 'erase', label: 'erase save', act: true });
     items.push({ k: 'back', label: 'back', act: true });
+    const rh = items.length > 9 ? 11 : 14;
+    const cycle = (it, o, dir) => {
+      const c = it.choice; let i = c.indexOf(o[it.k]);
+      if (i < 0) { i = 0; for (let j = 0; j < c.length; j++) if (Math.abs(c[j] - o[it.k]) < Math.abs(c[i] - o[it.k])) i = j; }
+      i = it.wrap ? (i + dir + c.length) % c.length : G.clamp(i + dir, 0, c.length - 1);
+      o[it.k] = c[i];
+      if (it.k === 'diffPreset') { if (o.diffPreset !== 'custom') Object.assign(o, G.diff.PRESETS[o.diffPreset]); } else o.diffPreset = 'custom';   // editing a number leaves the preset
+      A.sfx('uiMove');
+    };
     let sel = 0, armed = false;
     return {
       update() {
@@ -5570,6 +5595,11 @@ G.VOICE = {
         if (I.pressed.down) { sel = (sel + 1) % items.length; A.sfx('uiMove'); armed = false; }
         if (I.pressed.up) { sel = (sel + items.length - 1) % items.length; A.sfx('uiMove'); armed = false; }
         const dir = (I.pressed.right ? 1 : 0) - (I.pressed.left ? 1 : 0);
+        if (it.choice) {
+          if (dir) cycle(it, o, dir); else if (I.ok) cycle(it, o, 1);
+          else if (I.back) { G.save.write(); A.sfx('uiBack'); onClose(); }
+          return;
+        }
         if (dir && !it.act) {
           if (it.toggle) o[it.k] = o[it.k] ? 0 : 1; else o[it.k] = G.clamp(Math.round((o[it.k] + dir * 0.1) * 10) / 10, 0, 1);
           A.applyVolume(); if (it.k === 'min') G.applyMin(); A.sfx(it.k === 'voice' ? 'textSys' : 'uiMove');
@@ -5582,17 +5612,19 @@ G.VOICE = {
         } else if (I.back) { G.save.write(); A.sfx('uiBack'); onClose(); }
       },
       draw(ug) {
-        const pw = 196, ph = items.length * 14 + 30, x = (W - pw) / 2, y = (H - ph) / 2;
+        const pw = 196, ph = items.length * rh + 30 + (hasDiff ? 10 : 0), x = (W - pw) / 2, y = (H - ph) / 2;
         ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
         G.panel(ug, x, y, pw, ph, '#17131f', C.paper, '#0d0a12');
         G.text(ug, 'OPTIONS', x + 10, y + 8, C.clawd, { sp: 2 });
         items.forEach((it, i) => {
-          const yy = y + 26 + i * 14, on = i === sel, o = SV().opt;
-          if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(x + 4, yy - 3, pw - 8, 13); G.text(ug, '▸', x + 8, yy, C.clawd); }
+          const yy = y + 26 + i * rh, on = i === sel, o = SV().opt;
+          if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(x + 4, yy - 3, pw - 8, rh - 1); G.text(ug, '▸', x + 8, yy, C.clawd); }
           G.text(ug, it.k === 'erase' && armed && on ? 'really? press again' : it.label, x + 18, yy, on ? C.paper : C.dim);
-          if (!it.act && !it.toggle) for (let b = 0; b < 10; b++) { ug.fillStyle = b < Math.round(o[it.k] * 10) ? (on ? C.clawd : '#8a5a48') : '#3a3346'; ug.fillRect(x + pw - 74 + b * 6, yy + 1, 4, 6); }
+          if (it.choice) G.text(ug, it.fmt(o[it.k]), x + pw - 14, yy, on ? C.paper : C.dim, { align: 'r' });
+          else if (!it.act && !it.toggle) for (let b = 0; b < 10; b++) { ug.fillStyle = b < Math.round(o[it.k] * 10) ? (on ? C.clawd : '#8a5a48') : '#3a3346'; ug.fillRect(x + pw - 74 + b * 6, yy + 1, 4, 6); }
           else if (it.toggle) G.text(ug, o[it.k] ? 'on' : 'off', x + pw - 14, yy, o[it.k] ? C.ok : C.dim, { align: 'r' });
         });
+        if (hasDiff) G.text(ug, 'difficulty applies from the next level / restart', W / 2, y + ph - 11, '#6b6578', { tiny: true, align: 'c' });
       },
     };
   }
@@ -5982,6 +6014,7 @@ G.VOICE = {
           G.panel(ug, Math.round(-w + (w + 6) * k), 30, w, 15, '#17131f', '#3a3346');
           ug.fillStyle = th.accent; ug.fillRect(Math.round(-w + (w + 6) * k) + 2, 31, 2, 13);
           G.text(ug, label, Math.round(-w + (w + 6) * k) + 9, 34, C.paper);
+          if (L.net && G.coop.diffLine) G.text(ug, G.coop.diffLine, Math.round(-w + (w + 6) * k) + 9, 49, '#ffd27a', { tiny: true });
         }
         // sign bubbles
         if (L.sign && state === 'play') {
@@ -6212,6 +6245,53 @@ G.VOICE = {
 </script>
 
 <script>
+// js/diff.js - difficulty: one central place that makes enemies and bosses tougher (solo settings and the co-op profile)
+(function () {
+  'use strict';
+  const G = window.G;
+  const PRESETS = {
+    easy: { bossPct: 0, npcExtra: 0, npcMult: 100 }, normal: { bossPct: 0, npcExtra: 0, npcMult: 100 }, coop: { bossPct: 50, npcExtra: 0, npcMult: 100 },
+    hard: { bossPct: 80, npcExtra: 1, npcMult: 100 }, nightmare: { bossPct: 100, npcExtra: 2, npcMult: 150 },
+  };
+  const clean = (c) => { const o = { bossPct: G.clamp(Math.round(+c.bossPct || 0), 0, 100), npcExtra: G.clamp(Math.round(+c.npcExtra || 0), 0, 5), npcMult: G.clamp(Math.round(+c.npcMult || 100), 100, 300) }; o.neutral = !o.bossPct && !o.npcExtra && o.npcMult === 100; return o; };
+  const diff = G.diff = {
+    PRESETS, clean,
+    solo: () => clean(G.save.data.opt),
+    // which settings apply to this level? null = none (the guest does not scale anything, the host's numbers arrive with the creatures)
+    cfgFor(L) {
+      if (L.net === 'guest') return null;
+      return clean(L.net === 'host' && G.coop ? G.coop.diffCfg() : G.save.data.opt);
+    },
+    // idempotent: every creature is scaled once
+    scale(e, cfg) {
+      if (e._scaled) return;
+      e._scaled = true;
+      if (e.noHit || typeof e.hp !== 'number') return;
+      if (e.isBoss) {
+        const k = 1 + cfg.bossPct / 100;
+        if (k === 1) return;
+        e.hp = e.maxHp = Math.round(e.maxHp * k);
+        if (e.heads) for (const h of e.heads) h.hp = Math.round(h.hp * k);          // merge conflict: the boss hp is the sum of its heads
+        e.dropN = Math.round(e.dropN * k);
+      } else {
+        const base = e.hp;
+        e.hp = Math.ceil(base * cfg.npcMult / 100) + cfg.npcExtra;
+        if (e.loot > 0 && base > 0) e.loot = Math.round(e.loot * e.hp / base);       // tougher creatures drop more tokens
+      }
+    },
+    label(c) {
+      if (!c || c.neutral) return '';
+      const a = [];
+      if (c.bossPct) a.push('BOSS +' + c.bossPct + '%');
+      if (c.npcExtra) a.push('ENEMIES +' + c.npcExtra + (c.npcExtra > 1 ? ' hits' : ' hit'));
+      if (c.npcMult > 100) a.push('ENEMY HP x' + (c.npcMult / 100));
+      return a.join(' \u00b7 ');
+    },
+  };
+})();
+</script>
+
+<script>
 // js/coop.js - online 2-player: host-authoritative, state replication over a WebSocket relay
 (function () {
   'use strict';
@@ -6223,7 +6303,7 @@ G.VOICE = {
     cap: null, ping: 0, tickN: 0, fxKeys: new Map(), epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
   };
   const r2 = (v) => Math.round(v * 100) / 100;
-  const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey']);
+  const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey', '_scaled', '_diff', 'dropN']);
   const SM = ['x', 'y', 'cx', 'cy', 'hx', 'hy'];
   const HOSTOWN = new Set(['hp', 'maxHp', 'inv', 'hurtT', 'dead', 'gone', 'goneT', 'frozen', 'celebrate', 'auto', 'grace', 'meter', 'remote', 'blue']);
   const isPlain = (v) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null; };
@@ -6321,6 +6401,7 @@ G.VOICE = {
     const p2 = new Player(L, x, y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
     p2.tools = Object.assign({}, G.save.data.tools, { agents: false });     // the partner has no sub-agent meter (for now): no "subagents ready" pop, no meter effects
     L.p2 = p2; L.partner = p2; L.reviveQ = [];
+    coop.diffLine = G.diff.label(G.diff.clean(coop.diffCfg()));
     coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
   }
   // a partner joins a level that is already running: no restart, they get the live state
@@ -6329,8 +6410,14 @@ G.VOICE = {
     hostSetup(L, L.me.x - 8, L.me.y);
     ensureIds(L);
     L._net = null;
-    send({ t: 'start', id: L.id, snap: L.snapshot(), tools: G.save.data.tools, e: coop.epoch, join: true, spawn: { x: L.me.x, y: L.me.y } });
+    send({ t: 'start', id: L.id, snap: L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()), join: true, spawn: { x: L.me.x, y: L.me.y } });
   };
+  // ---------- difficulty profile of this co-op game ----------
+  coop.srv = null;                                            // numbers from the server (BOSS_HP / NPC_HITS / NPC_MULT / LOCK), host only
+  coop.diffCfg = () => (coop.srv && coop.srv.lock ? G.diff.clean(Object.assign({}, G.save.data.coopDiff, G.diffPick(coop.srv))) : G.save.data.coopDiff);
+  G.diffPick = (o) => { const r = {}; for (const k of ['bossPct', 'npcExtra', 'npcMult']) if (o[k] !== null && o[k] !== undefined) r[k] = o[k]; return r; };
+  coop.diffLine = '';
+  coop.sendCfg = () => { const d = G.diff.clean(coop.diffCfg()); coop.diffLine = G.diff.label(d); if (coop.role === 'host' && coop.open && coop.peer) send({ t: 'cfg', diff: d }); };
   coop.initLevel = (L, start) => {
     L._tiles0 = L.tiles.slice();
     if (coop.role === 'host' && coop.peer && coop.open) {
@@ -6732,6 +6819,7 @@ G.VOICE = {
       G.text(ug, 'CO-OP', W / 2, H / 2 - 22, '#6aa8ff', { align: 'c', scale: 2 });
       G.text(ug, coop.hostOn ? 'waiting for the host to start a level' + '.'.repeat(1 + ((this.t * 2) | 0) % 3) : 'host is offline', W / 2, H / 2 + 2, '#fff3e4', { align: 'c' });
       G.text(ug, coop.ping ? 'ping ' + coop.ping + ' ms' : '', W / 2, H / 2 + 16, '#8d8798', { align: 'c', tiny: true });
+      if (coop.diffLine) G.text(ug, coop.diffLine, W / 2, H / 2 + 28, '#ffd27a', { align: 'c', tiny: true });
     },
   });
   // short on-screen message ("host disconnected"), drawn over whatever scene is showing
@@ -6749,7 +6837,7 @@ G.VOICE = {
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
     if (coop.role === 'host') {
       if (m.t === 'peer') {
-        coop.peer = !!m.on; ui.render();
+        coop.peer = !!m.on; ui.render(); if (m.on) coop.sendCfg();
         const sc = G.scene;
         if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
@@ -6765,6 +6853,7 @@ G.VOICE = {
       }
       else if (m.t === 'start') { coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) coop.hostState = m.hs; }
+      else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's' || m.t === 'fx') {
         coop.q.push(m);
@@ -6780,6 +6869,7 @@ G.VOICE = {
     ws.onopen = () => {
       coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected'; ui.render();
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
+      if (role === 'host') coop.fetchCfg();
       if (role === 'guest') G.go(() => wait(), { speed: 3 });
       coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
     };
@@ -6794,6 +6884,15 @@ G.VOICE = {
       coop.role = null; ui.render();
     };
   };
+  coop.fetchCfg = () => fetch('/config').then((r) => r.json()).then((c) => {
+    coop.srv = c;
+    const d = G.diffPick(c);
+    if (Object.keys(d).length) {
+      const cd = G.save.data.coopDiff; Object.assign(cd, d);
+      cd.preset = Object.keys(G.diff.PRESETS).find((k) => ['bossPct', 'npcExtra', 'npcMult'].every((f) => G.diff.PRESETS[k][f] === cd[f])) || 'custom';
+    }
+    ui.renderDiff(); coop.sendCfg();
+  }).catch(() => {});
   coop.disconnect = () => {
     const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
     coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); coop.open = false; coop.peer = false;
@@ -6822,7 +6921,7 @@ G.VOICE = {
     }
     if (coop.role === 'guest' && coop.open && !G.transitioning()) {
       if (coop.startMsg) {
-        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools; coop.startEpoch = m.e || 0; coop.startSpawn = m.spawn || null;
+        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools; coop.startEpoch = m.e || 0; coop.startSpawn = m.spawn || null; coop.diffLine = G.diff.label(m.diff);
         G.go(() => { coop.building = true; try { return G.Scenes.play(m.id, m.snap); } finally { coop.building = false; } }, { speed: 3.2 });
       } else if (coop.leaveMsg) { coop.leaveMsg = false; if (G.scene.L) G.go(() => wait(), { speed: 3.2 }); }
     }
@@ -6834,7 +6933,7 @@ G.VOICE = {
     if (s && s.draw && !s._cn) { const d = s.draw; s._cn = 1; s.draw = function (g, ug) { d.call(this, g, ug); drawNotice(ug); }; }
     oSet.call(this, s);
     if (coop.role === 'host' && coop.open && coop.peer) {
-      if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools, e: coop.epoch });
+      if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()) });
       else if (old && old.L && !s.L) send({ t: 'leave' });
     }
   };
@@ -6855,6 +6954,7 @@ G.VOICE = {
       this.hostRow.style.display = on ? 'none' : '';
       this.codeBox.style.display = on && coop.role === 'host' ? '' : 'none';
       this.off.style.display = on ? '' : 'none';
+      if (this.diffBox) { this.diffBox.style.display = on && coop.role === 'host' && coop.peer ? '' : 'none'; if (this.renderDiff) this.renderDiff(); }
     },
   };
   if (/^https?:$/.test(location.protocol)) {
@@ -6865,8 +6965,26 @@ G.VOICE = {
     const panel = document.createElement('div'); panel.id = 'coopP';
     panel.innerHTML = '<div style="color:#6aa8ff;font-weight:bold">CO-OP (2 players)</div><div id="cStat" style="margin:6px 0;color:#bbb">offline</div>' +
       '<div id="cRow"><button id="cHost">Host</button> <span>or</span><br><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
-      '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b></div><button id="cOff" style="display:none">Disconnect</button>';
+      '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b></div>' +
+      '<div id="cDiff" style="display:none;margin:6px 0;border-top:1px solid #333;padding-top:6px"><div style="color:#ffd27a">difficulty <span id="cLock" style="color:#888"></span></div>' +
+      '<select id="cPre"><option>easy</option><option>normal</option><option>coop</option><option>hard</option><option>nightmare</option><option>custom</option></select>' +
+      '<div>boss HP <b id="cBv"></b><input id="cB" type="range" min="0" max="100" step="10" style="width:100%"></div>' +
+      '<div>enemy hits <b id="cEv"></b><input id="cE" type="range" min="0" max="5" step="1" style="width:100%"></div>' +
+      '<div>enemy HP <b id="cMv"></b><input id="cM" type="range" min="100" max="300" step="25" style="width:100%"></div></div>' +
+      '<button id="cOff" style="display:none">Disconnect</button>';
     document.body.appendChild(btn); document.body.appendChild(panel);
+    ui.diffBox = panel.querySelector('#cDiff');
+    const $ = (id) => panel.querySelector(id), cd = () => G.save.data.coopDiff;
+    ui.renderDiff = () => {
+      const d = cd(), lock = !!(coop.srv && coop.srv.lock), eff = G.diff.clean(coop.diffCfg());
+      $('#cPre').value = lock ? 'custom' : d.preset; $('#cB').value = eff.bossPct; $('#cE').value = eff.npcExtra; $('#cM').value = eff.npcMult;
+      $('#cBv').textContent = eff.bossPct ? '+' + eff.bossPct + '%' : 'off'; $('#cEv').textContent = '+' + eff.npcExtra; $('#cMv').textContent = eff.npcMult + '%';
+      for (const id of ['#cPre', '#cB', '#cE', '#cM']) $(id).disabled = lock;
+      $('#cLock').textContent = lock ? '(locked by the server)' : '';
+    };
+    const edit = () => { const d = cd(); d.bossPct = +$('#cB').value; d.npcExtra = +$('#cE').value; d.npcMult = +$('#cM').value; d.preset = 'custom'; G.save.write(); ui.renderDiff(); coop.sendCfg(); };
+    for (const id of ['#cB', '#cE', '#cM']) $(id).addEventListener('input', edit);
+    $('#cPre').addEventListener('change', () => { const d = cd(), v = $('#cPre').value; d.preset = v; if (G.diff.PRESETS[v]) Object.assign(d, G.diff.PRESETS[v]); G.save.write(); ui.renderDiff(); coop.sendCfg(); });
     ui.btn = btn; ui.panel = panel; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
     for (const el of [btn, panel]) for (const ev of ['keydown', 'keyup', 'pointerdown']) el.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; });

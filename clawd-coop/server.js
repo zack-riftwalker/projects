@@ -6,6 +6,11 @@ const ROOT = __dirname;
 const CODE = process.env.CODE || String(Math.floor(100000 + Math.random() * 900000));   // 6 digits
 const MIME = { '.html': 'text/html; charset=utf-8', '.mp3': 'audio/mpeg', '.js': 'text/javascript', '.png': 'image/png', '.json': 'application/json' };
 
+// co-op difficulty defaults: env vars BOSS_HP, NPC_HITS, NPC_MULT (+ LOCK=1 to forbid changes) or an optional coop-config.json
+let file = {}; try { file = JSON.parse(fs.readFileSync(path.join(ROOT, 'coop-config.json'), 'utf8')); } catch (e) { /* none */ }
+const pick = (env, key) => { const v = process.env[env] !== undefined && process.env[env] !== '' ? process.env[env] : file[key]; return v === undefined || v === null || !Number.isFinite(+v) ? null : +v; };
+const COOP = { bossPct: pick('BOSS_HP', 'bossPct'), npcExtra: pick('NPC_HITS', 'npcExtra'), npcMult: pick('NPC_MULT', 'npcMult'), lock: process.env.LOCK === '1' || file.lock === true };
+
 // a request that came through the tunnel carries proxy headers; a local one does not
 const isLocal = (req) => {
   const a = req.socket.remoteAddress || '';
@@ -46,6 +51,10 @@ const server = http.createServer((req, res) => {
   if (u === '/code') {
     if (!isLocal(req)) { res.writeHead(403); return res.end('no'); }
     res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(CODE);
+  }
+  if (u === '/config') {
+    if (!isLocal(req)) { res.writeHead(403); return res.end('no'); }
+    res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COOP));
   }
   if (u === '/') u = '/index.html';
   if (u !== '/index.html' && !VOICE.test(u)) { res.writeHead(404); return res.end('not found'); }
