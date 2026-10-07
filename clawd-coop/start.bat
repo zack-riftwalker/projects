@@ -10,6 +10,9 @@ if %errorlevel%==0 (
 ) else (
   echo cloudflared not found - online play needs it: winget install Cloudflare.cloudflared
 )
-start "" http://localhost:3000
+rem the server opens the browser itself once it is listening, and is restarted if it ever stops
+:loop
 node server.js
-pause
+echo server stopped, restarting in 2 seconds (close this window to quit)...
+timeout /t 2 /nobreak >nul
+goto loop

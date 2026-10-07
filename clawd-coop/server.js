@@ -13,22 +13,24 @@ const isLocal = (req) => {
   return loop && !req.headers['cf-connecting-ip'] && !req.headers['x-forwarded-for'];
 };
 
+// only these paths are ever served: no directory traversal is possible
+const VOICE = /^\/assets\/voice\/[a-z0-9_]+\.mp3$/;
 const server = http.createServer((req, res) => {
-  let u = decodeURIComponent(req.url.split('?')[0]);
+  let u;
+  try { u = decodeURIComponent(req.url.split('?')[0]); } catch (e) { res.writeHead(400); return res.end('bad request'); }
   if (u === '/code') {
     if (!isLocal(req)) { res.writeHead(403); return res.end('no'); }
     res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(CODE);
   }
   if (u === '/') u = '/index.html';
-  if (u !== '/index.html' && !u.startsWith('/assets/')) { res.writeHead(404); return res.end('not found'); }
-  const f = path.join(ROOT, path.normalize(u));
-  if (!f.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
-  fs.readFile(f, (err, data) => {
+  if (u !== '/index.html' && !VOICE.test(u)) { res.writeHead(404); return res.end('not found'); }
+  fs.readFile(path.join(ROOT, u.slice(1)), (err, data) => {
     if (err) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(u)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 });
+server.on('clientError', (e, sock) => { try { sock.destroy(); } catch (x) { /* gone */ } });
 
 // ---------- network simulator (off unless a SIM_* env var is set) ----------
 // SIM_LAG ms one-way delay, SIM_JITTER +-ms, SIM_STALL_PCT % chance a direction freezes for SIM_STALL_MS (TCP head-of-line blocking),
@@ -61,10 +63,12 @@ function relayTo(l, to, text) {
 }
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 512 * 1024, perMessageDeflate: { threshold: 200 } });
+wss.on('error', (e) => console.log('wss error: ' + e.message));
 let host = null, guest = null;
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
 wss.on('connection', (ws, req) => {
+  ws.on('error', (e) => console.log('socket error: ' + e.message));
   const q = new URL(req.url, 'http://x').searchParams, role = q.get('role');
   if (role === 'host') {
     if (!isLocal(req)) return ws.close(4001, 'host must be local');
@@ -91,6 +95,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+process.on('uncaughtException', (e) => console.log('uncaught: ' + (e && e.stack || e)));
 server.listen(PORT, () => {
   console.log('\n==============================');
   console.log(' CLAWD co-op server running');
@@ -98,4 +103,6 @@ server.listen(PORT, () => {
   console.log(' Friend code: ' + CODE);
   if (SIM_ON) console.log(' NETWORK SIMULATOR ON: lag ' + SIM.lag + '\u00b1' + SIM.jit + 'ms' + (SIM.stallPct ? ', stall ' + SIM.stallPct + '% x ' + SIM.stallMs + 'ms' : '') + (SIM.bw ? ', bw ' + SIM.bw + ' B/s' : ''));
   console.log('==============================\n');
+  // open the game in the browser once the server is really listening (Windows only; NO_OPEN=1 disables)
+  if (process.platform === 'win32' && !process.env.NO_OPEN) require('child_process').exec('start "" http://localhost:' + PORT);
 });
