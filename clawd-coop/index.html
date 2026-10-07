@@ -2865,7 +2865,7 @@ G.VOICE = {
       }
       this.trauma = Math.max(0, this.trauma - dt * 2.2);
       if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 3);
-      if (this.hitstop > 0) { this.hitstop -= dt; return; }
+      if (this.hitstop > 0) { this.hitstop -= dt; if (this.net === 'host') G.coop.hostIdle(this); return; }     // the world holds still, the partner does not
       this.time += dt;
       const p = this.player;
       if (!p.dead && !this.frozen) this.clock += dt;
@@ -2959,6 +2959,29 @@ G.VOICE = {
     interact() {
       const p = this.player;
       if (p.dead || p.gone) return;
+      this.interactCombat(p);
+      this.interactGoals(p);
+    }
+    // what is under a player's feet that hurts: false, true (spikes), 'liq' or 'pit'
+    hazardAt(p) {
+      const x0 = Math.floor((p.x + 1) / T), x1 = Math.floor((p.x + p.w - 1) / T), y0 = Math.floor((p.y + 1) / T), y1 = Math.floor((p.y + p.h - 1) / T);
+      let hz = false;
+      for (let ty = y0; ty <= y1 && !hz; ty++) for (let tx = x0; tx <= x1; tx++) {
+        const t = this.tile(tx, ty);
+        if (t === SPIKE_U) { if (p.y + p.h > ty * T + 9 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
+        else if (t === SPIKE_D) { if (p.y < ty * T + 7 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
+        else if (t === LIQ) { if (p.y + p.h > ty * T + 6) hz = 'liq'; }
+      }
+      if (this.liquidY !== null && p.y + p.h > this.liquidY + 5) hz = 'liq';
+      if (p.y > this.ph + 24) hz = 'pit';
+      return hz;
+    }
+    // give hit points back; in co-op the partner owns its own hit points, so it is told instead
+    heal(q, n, safe) {
+      if (this.net === 'host' && q === this.p2) { G.coop.healP2(n, safe); return; }
+      q.hp = Math.min(q.maxHp, q.hp + n);
+    }
+    interactCombat(p) {
       // claw
       if (p.atkT > 0 && p.atkLive) {
         const box = p.atkBox();
@@ -2998,31 +3021,22 @@ G.VOICE = {
         }
       }
       // spikes, liquid, pits
-      if (p.inv <= 0 || true) {
-        const x0 = Math.floor((p.x + 1) / T), x1 = Math.floor((p.x + p.w - 1) / T), y0 = Math.floor((p.y + 1) / T), y1 = Math.floor((p.y + p.h - 1) / T);
-        let hz = false;
-        for (let ty = y0; ty <= y1 && !hz; ty++) for (let tx = x0; tx <= x1; tx++) {
-          const t = this.tile(tx, ty);
-          if (t === SPIKE_U) { if (p.y + p.h > ty * T + 9 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
-          else if (t === SPIKE_D) { if (p.y < ty * T + 7 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
-          else if (t === LIQ) { if (p.y + p.h > ty * T + 6) hz = 'liq'; }
-        }
-        if (this.liquidY !== null && p.y + p.h > this.liquidY + 5) hz = 'liq';
-        if (p.y > this.ph + 24) hz = 'pit';
-        if (hz) { if (hz === 'liq') { this.burst(p.x + 5, p.y + 8, 12, [this.th.liq, this.th.liqHi], 110, 300); G.audio.sfx('splash'); } p.hazard(); }
-      }
+      const hz = this.hazardAt(p);
+      if (hz) { if (hz === 'liq') { this.burst(p.x + 5, p.y + 8, 12, [this.th.liq, this.th.liqHi], 110, 300); G.audio.sfx('splash'); } p.hazard(); }
       // springs
       for (const s of this.springs) if (p.vy >= 0 && G.overlap(hb, s) && p.dashT <= 0 && !p.remote) p.spring(s);
+    }
+    interactGoals(p) {
       // checkpoints + exit + signs
       this.cps.forEach((c, i) => {
         const inR = Math.abs(p.x + p.w / 2 - c.x) < 12 && p.y + p.h > c.y - 34 && p.y < c.y;
         if (c.on && inR && this.net === 'host' && p === this.p2 && !c.healed2) {       // first visit of the partner to an active checkpoint
-          c.healed2 = true; p.hp = Math.max(p.hp, p.maxHp); p.setSafe(c.x - 5, c.y - p.h); this.pop(p.x + 5, p.y - 12, 'committed ✓', C.okHi, true);
+          c.healed2 = true; this.heal(p, 99, { x: c.x - 5, y: c.y - p.h }); p.setSafe(c.x - 5, c.y - p.h); this.pop(p.x + 5, p.y - 12, 'committed ✓', C.okHi, true);
         }
         if (!c.on && inR) {
           for (const o of this.cps) o.on = false;
-          c.on = true; this.cpIndex = i; p.hp = Math.max(p.hp, p.maxHp); p.setSafe(c.x - 5, c.y - p.h);
-          if (this.net === 'host') { c.healed2 = true; for (const q of [this.me, this.p2]) if (q && !q.dead) q.hp = Math.max(q.hp, q.maxHp); }
+          c.on = true; this.cpIndex = i; this.heal(p, 99, { x: c.x - 5, y: c.y - p.h }); p.setSafe(c.x - 5, c.y - p.h);
+          if (this.net === 'host') { c.healed2 = true; for (const q of [this.me, this.p2]) if (q && !q.dead && q !== p) this.heal(q, 99); }
           this.ring(c.x, c.y - 22, 3, 26, C.ok, 0.4); this.burst(c.x, c.y - 22, 14, [C.ok, C.okHi, '#fff'], 100, 100, { glow: 1 });
           this.pop(c.x, c.y - 36, 'committed ✓', C.okHi, true);
           G.audio.sfx('checkpoint');
@@ -3067,7 +3081,7 @@ G.VOICE = {
         this.tokens++; p.addMeter(it.loose ? 2 : 3);
         this.spark(it.x, it.y, C.goldHi, 4); G.audio.sfx('token');
         // every 25 tokens buys back a pip
-        if (this.tokens % 25 === 0 && p.hp < p.maxHp) { p.hp++; this.pop(p.x + 5, p.y - 12, '25 tokens: +1', C.goldHi, true); G.audio.sfx('heal'); }
+        if (this.tokens % 25 === 0 && p.hp < p.maxHp) { this.heal(p, 1); this.pop(p.x + 5, p.y - 12, '25 tokens: +1', C.goldHi, true); G.audio.sfx('heal'); }
       } else if (it.kind === 'spark') {
         this.sparks[it.idx] = true;
         this.ring(it.x, it.y, 2, 30, C.clawdHi, 0.5); this.burst(it.x, it.y, 18, [C.clawd, C.clawdHi, '#fff3e4'], 130, 60, { glow: 1 });
@@ -3075,7 +3089,7 @@ G.VOICE = {
         this.stop(0.07); G.audio.sfx('spark'); p.addMeter(25);
         this.events.push('spark');
       } else if (it.kind === 'coffee') {
-        if (p.hp < p.maxHp) p.hp++;
+        if (p.hp < p.maxHp) this.heal(p, 1);
         this.pop(it.x, it.y - 10, '+1 coffee', C.paper); this.burst(it.x, it.y, 8, [C.paper, C.clawd], 70, 100);
         G.audio.sfx('heal');
       }
@@ -6298,15 +6312,16 @@ G.VOICE = {
   const G = window.G, Level = G.Level, Player = G.Player, W = G.W, H = G.H, A = G.audio;
   const coop = G.coop = {
     role: null, ws: null, open: false, peer: false, building: false, tools: null,
-    q: [], ev: [], inbox: [], rAll: {}, rAck: 0, rHas: false, fxSeq: 0, fxAck: 0,
+    mute: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
-    cap: null, ping: 0, tickN: 0, fxKeys: new Map(), epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
+    cap: null, ping: 0, tickN: 0, epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
     relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
   };
   const r2 = (v) => Math.round(v * 100) / 100;
   const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey', '_scaled', '_diff', 'dropN']);
   const SM = ['x', 'y', 'cx', 'cy', 'hx', 'hy'];
-  const HOSTOWN = new Set(['hp', 'maxHp', 'inv', 'hurtT', 'dead', 'gone', 'goneT', 'frozen', 'celebrate', 'auto', 'grace', 'meter', 'remote', 'blue']);
+  // the level (host) decides these for the partner; everything else about the partner's body is the partner's own
+  const HOSTOWN = new Set(['frozen', 'celebrate', 'auto', 'remote', 'blue', 'away']);
   const isPlain = (v) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null; };
 
   // ---------- generic state dump / merge ----------
@@ -6377,8 +6392,9 @@ G.VOICE = {
     merge(obj, d, fix);
     for (const [t, k, path] of fix) { let o = obj; if (path) for (const s of path.split('.')) o = o == null ? o : o[s]; if (o != null) t[k] = o; }
   }
-  function deltaDump(store, id, obj) {
+  function deltaDump(store, id, obj, skip) {
     const d = dump(obj, 0, new Map([[obj, '']]), '');
+    if (skip) for (const k of skip) delete d[k];
     const last = store[id] || (store[id] = {});
     const out = {}; let n = 0;
     for (const k in d) { const s = JSON.stringify(d[k]); if (last[k] !== s) { last[k] = s; out[k] = d[k]; n++; } }
@@ -6426,7 +6442,7 @@ G.VOICE = {
   coop.onRel = (ev, m) => {
     if (ev.k === 'test') { coop.testLog.push(ev.n); return; }
     if (coop.role === 'host') {
-      if (ev.k === 'bt' || ev.k === 'cr') coop.inbox.push(Object.assign({ t: ev.k, e: m.e }, ev));
+      if (ev.k === 'bt' || ev.k === 'cr' || ev.k === 'hit' || ev.k === 'hurt' || ev.k === 'hazard' || ev.k === 'die') coop.inbox.push(Object.assign({ t: ev.k, e: m.e }, ev));
       else if (ev.k === 'pz') { const sc = G.scene; if (m.e === coop.epoch && sc && sc.pauseFor) sc.pauseFor(!!ev.on, 'P2'); }
       else if (ev.k === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!ev.on; }
     } else coop.relQ.push({ ev, e: m.e });
@@ -6440,7 +6456,7 @@ G.VOICE = {
     p2.tools = Object.assign({}, G.save.data.tools, { agents: false });     // the partner has no sub-agent meter (for now): no "subagents ready" pop, no meter effects
     L.p2 = p2; L.partner = p2; L.reviveQ = [];
     coop.diffLine = G.diff.label(G.diff.clean(coop.diffCfg()));
-    coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
+    coop.rAll = {}; coop.rHas = false; coop.ev = [];
   }
   // a partner joins a level that is already running: no restart, they get the live state
   coop.attachPartner = (L) => {
@@ -6483,8 +6499,13 @@ G.VOICE = {
         coop.rel('bt', { tx, ty });
         return true;
       };
+      // my hit points and my death are mine: whatever happens to my body is announced to the host
+      const hurt0 = me.hurt, haz0 = me.hazard, die0 = me.die;
+      me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) coop.rel('hurt', { x, y, d }); return r; };
+      me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
+      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
       coop.gs = {};
-      coop.gTick = 0; coop.fxAck = 0;
+      coop.gTick = 0;
     }
   };
   // ids are handed out in construction order, so a partner who joins later builds the same ids from the same level definition
@@ -6534,35 +6555,66 @@ G.VOICE = {
     for (const p of [L.me, L.p2]) if (p && Math.abs(e.x + (e.w || 0) / 2 - p.x) < 320 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < 260) return true;
     return false;
   };
+  // the partner's body is the partner's own: position, speed, attacks, hit points. Take it over as reported.
   function applyRemote(L) {
     const p2 = L.p2, d = coop.rAll;
     const sm = p2._sm || (p2._sm = {});
     for (const k in d) {
       if (HOSTOWN.has(k)) continue;
-      // a field the host changed itself stays host-owned only until the guest has acknowledged that change
-      const fk = coop.fxKeys.get(k);
-      if (fk !== undefined) { if (fk > coop.rAck) continue; coop.fxKeys.delete(k); }
-      let v = d[k];
+      const v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
       if ((k === 'x' || k === 'y') && typeof p2[k] === 'number') { const off = (sm[k] || 0) + p2[k] - v; sm[k] = Math.abs(off) > 40 ? 0 : off; }
       p2[k] = v;
     }
   }
-  function sendFx(d) { coop.fxSeq++; for (const k in d) coop.fxKeys.set(k, coop.fxSeq); gsend({ t: 'fx', d, q: coop.fxSeq }); }
+  const entById = (L, id) => { for (const e of L.ents) if (e._id === id) return e; return null; };
+  // run something the partner did (or that happened to the partner) so the host world shows it; nothing is sent back for it
+  const asP2 = (L, f) => { const c = L._ctx, pl = L.player; L._ctx = 'p2'; L.player = L.p2; coop.mute++; try { return f(); } finally { L._ctx = c; L.player = pl; coop.mute--; } };
+  // the partner says it hit something: check it is plausible, then apply the damage to the real creature
+  function hostHit(L, ev) {
+    const p2 = L.p2, e = entById(L, ev.eid);
+    if (!e || e.dead || e.noHit || (ev.how !== 'swipe' && ev.how !== 'dash' && ev.how !== 'stomp')) return;
+    const key = ev.how === 'swipe' ? p2.hitKey : ev.how === 'dash' ? p2.dashKey : 'stompId2';
+    if (e[key] === ev.atk) return;                                   // each attack hurts a creature once
+    if (ev.how === 'stomp' && !e.stompable) return;
+    const boxes = e.hurtboxes(); if (!boxes.length) return;
+    const cx = p2.x + p2.w / 2, cy = p2.y + p2.h / 2;
+    let best = boxes[0], bd = 1e9;
+    for (const b of boxes) { const d = Math.hypot(Math.max(b.x - cx, 0, cx - (b.x + b.w)), Math.max(b.y - cy, 0, cy - (b.y + b.h))); if (d < bd) { bd = d; best = b; } }
+    if (bd > 64 + Math.abs(e.vx || 0) * 0.3 + Math.abs(p2.vx || 0) * 0.3) return;      // the partner is nowhere near it
+    e[key] = ev.atk;
+    const b = ev.bi >= 0 && boxes[ev.bi] ? boxes[ev.bi] : best;
+    const dmg = ev.how === 'swipe' ? G.clamp(+ev.dmg || 1, 1, 2) : ev.how === 'dash' ? 1 : Math.max(1, e.hp);
+    asP2(L, () => e.hit(dmg, +ev.dx || 0, +ev.dy || 0, ev.how, b));
+  }
+  // the partner took damage / fell in spikes / died on its own screen: show it here too
+  function hostMirror(L, ev) {
+    const p2 = L.p2;
+    if (ev.t === 'hurt') {
+      L.hits++;
+      if (!p2.dead) asP2(L, () => { L.burst(ev.x + 5, ev.y + 5, 8, ['#6aa8ff', '#cfe3ff', '#fff'], 120, 300); A.sfx('hurt'); });
+    } else if (ev.t === 'hazard') {
+      L.hits++;
+      asP2(L, () => { const ox = p2.x, oy = p2.y; p2.x = ev.x; p2.y = ev.y; p2.scatter(0, 0); p2.x = ox; p2.y = oy; A.sfx('hurt'); });
+      if (L.rise && L.rising) L.liquidY += 72;                      // the tide backs off a little, same as for the host player
+    } else if (ev.t === 'die') {
+      if (p2.dead) return;
+      asP2(L, () => { p2.x = ev.x; p2.y = ev.y; p2.die(!!ev.silent); });
+    }
+  }
   coop.hostTick = (L, dt) => {
     const p2 = L.p2; if (!p2 || !coop.peer) return;
     ensureIds(L);
     for (const m of coop.inbox.splice(0)) {
+      if (m.e !== coop.epoch) continue;                          // belongs to another level
       if (m.t === 'cr') { if (!L.crumble.has(m.i)) L.crumble.set(m.i, m.v); }
       else if (m.t === 'bt') L.breakTile(m.tx, m.ty);
+      else if (m.t === 'hit') hostHit(L, m);
+      else hostMirror(L, m);
     }
     if (coop.rHas) applyRemote(L);
     p2.frozen = L.me.frozen; p2.celebrate = L.me.celebrate;
-    if (p2.away) p2.inv = 1;                       // a partner whose tab is in the background cannot be hurt
-    if (p2.inv > 0) p2.inv -= dt;
-    if (p2.hurtT > 0) p2.hurtT -= dt;
-    if (p2.gone) { p2.goneT -= dt; if (p2.goneT <= 0) { p2.gone = false; p2.inv = 1.4; L.ring(p2.x + 5, p2.y + 5, 2, 18, '#6aa8ff', 0.3); } }
     // revive the fallen partner after a few seconds
     for (let i = L.reviveQ.length - 1; i >= 0; i--) {
       const q = L.reviveQ[i]; q.t -= dt;
@@ -6570,28 +6622,25 @@ G.VOICE = {
       L.reviveQ.splice(i, 1);
       const other = q.p === L.me ? p2 : L.me;
       if (!q.p.dead || other.dead) continue;
-      const before = prim(q.p);
       q.p.dead = false; q.p.hp = Math.min(3, q.p.maxHp); q.p.x = other.x; q.p.y = other.y - 2; q.p.vx = q.p.vy = 0; q.p.inv = 2; q.p.gone = false; q.p.hurtT = 0;
       L.ring(q.p.x + 5, q.p.y + 5, 2, 26, '#6aa8ff', 0.4); L.pop(q.p.x + 5, q.p.y - 12, 'revived', '#cfe3ff', true);
-      if (q.p === p2) { const d = primDiff(before, p2); if (d) sendFx(d); }
+      if (q.p === p2) coop.rel('revive', { x: p2.x, y: p2.y, hp: p2.hp });          // its body is its own: tell it
     }
     if (++coop.tickN % 4 === 0) sendSnap(L);
   };
-  function withFx(L, fn) {
-    const p2 = L.p2, before = prim(p2), ctx = L._ctx;
-    L.player = p2; L._ctx = 'p2';
-    try { fn(); } finally { L.player = L.me; L._ctx = ctx; }
-    const d = primDiff(before, p2);
-    if (d) sendFx(d);
-  }
+  coop.hostIdle = (L) => { if (L.p2 && coop.peer && coop.rHas) applyRemote(L); };
+  // hit points for the partner (checkpoint, coffee, 25 tokens): it owns them, so it is told how many to add
+  coop.healP2 = (n, safe) => coop.rel('heal', { n, safe: safe || null });
   const oInteract = Level.prototype.interact, oItems = Level.prototype.updateItems, oProjs = Level.prototype.updateProjs;
   const asP1 = (L, f) => { if (L.net !== 'host') return f(); const c = L._ctx; L._ctx = 'p1'; try { return f(); } finally { L._ctx = c; } };
+  // the partner's checkpoints, exit and pickups are decided here (the host owns the world); its fights and hazards are its own
+  const asPartner = (L, f) => { const c = L._ctx, pl = L.player, sign = L.sign; L.player = L.p2; L._ctx = 'p2'; try { return f(); } finally { L.player = pl; L._ctx = c; L.sign = sign; } };
   Level.prototype.interact = function (dt) {
     asP1(this, () => oInteract.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
-    const sign = this.sign;
-    withFx(this, () => oInteract.call(this, dt));
-    this.sign = sign;
+    const p2 = this.p2;
+    if (p2.dead || p2.gone) return;
+    asPartner(this, () => this.interactGoals(p2));
   };
   Level.prototype.updateItems = function (dt) {
     asP1(this, () => oItems.call(this, dt));
@@ -6602,20 +6651,23 @@ G.VOICE = {
     for (const it of this.items) {
       if (it.dead) continue;
       const r = it.kind === 'spark' ? 11 : 9;
-      if (Math.abs(pcx - it.x) < r + 3 && Math.abs(pcy - it.y) < r && (!it.loose || it.t > 0.2)) withFx(this, () => this.collect(it));
+      if (Math.abs(pcx - it.x) < r + 3 && Math.abs(pcy - it.y) < r && (!it.loose || it.t > 0.2)) asPartner(this, () => this.collect(it));
     }
   };
+  // (temporary until projectiles are simulated on the guest) a projectile that reaches the partner is announced to it
   Level.prototype.updateProjs = function (dt) {
     asP1(this, () => oProjs.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
     const p2 = this.p2;
-    if (p2.dead || p2.gone) return;
+    if (p2.dead || p2.gone || p2.away) return;
     const hb = p2.hurtbox();
     for (const q of this.projs) {
       if (q.dead || q.friendly) continue;
       if (q.x + q.r > hb.x && q.x - q.r < hb.x + hb.w && q.y + q.r > hb.y && q.y - q.r < hb.y + hb.h) {
-        if (p2.dashT > 0) continue;
-        withFx(this, () => { if (p2.hurt(q.dmg, q.x) && !q.pierce) { q.dead = true; this.spark(q.x, q.y, q.col, 5); } });
+        if (p2.dashT > 0 || p2.inv > 0 || (q._ouchT || 0) > this.time) continue;
+        q._ouchT = this.time + 0.4;
+        coop.rel('ouch', { d: q.dmg, sx: q.x });
+        if (!q.pierce) { q.dead = true; this.spark(q.x, q.y, q.col, 5); }
       }
     }
   };
@@ -6643,7 +6695,7 @@ G.VOICE = {
     for (const it of L.items) { S.ii.push(it._id); S.items.set(it._id, { f: dump(it, 0, new Map([[it, '']]), '') }); }
     for (const q of L.projs) if (!q.dead && S.pj.length < 40) S.pj.push(dump(q, 0, new Map([[q, '']]), ''));
     S.p = dump(L.me, 0, new Map([[L.me, '']]), '');
-    S.ph = { hp: p2.hp, maxHp: p2.maxHp, inv: r2(p2.inv), hurtT: r2(p2.hurtT), dead: p2.dead, gone: p2.gone, goneT: r2(p2.goneT), frozen: p2.frozen, celebrate: p2.celebrate };
+    S.ph = { frozen: p2.frozen, celebrate: p2.celebrate };        // the rest of the partner's body belongs to the partner
     S.hs = coop.hostState;
     return S;
   }
@@ -6675,7 +6727,7 @@ G.VOICE = {
 
   // events from the host (effects, sounds, voice) are relayed to the guest. Each carries who caused it ('p1' host player,
   // 'p2' partner, 'all' world) as its last element, so shakes/flashes/loud sounds of one player do not hit the other's screen.
-  const rec = (a) => { if (coop.role === 'host' && coop.peer && coop.open && coop.ev.length < 80) coop.ev.push(a); };
+  const rec = (a) => { if (coop.role === 'host' && coop.peer && coop.open && !coop.mute && coop.ev.length < 80) coop.ev.push(a); };
   const ctxNow = () => { const L = G.scene && G.scene.L; return (L && L._ctx) || 'all'; };
   const near2 = (L) => (L.p2 && L.me ? Math.hypot(L.me.x - L.p2.x, L.me.y - L.p2.y) : 0);
   const hear = (d) => G.clamp(1 - d / 320, 0.25, 1);                 // how loud the other player's actions are
@@ -6794,7 +6846,54 @@ G.VOICE = {
       else if (e[0] === 'V' && coop.cap) oSpeak(coop.cap, e[1]);
     }
   }
-  coop.guestRel = (L, ev) => { /* host -> guest reliable events are added with the features that use them */ };
+  // reliable events from the host about my body
+  coop.guestRel = (L, ev) => {
+    const p = L.me;
+    if (ev.k === 'heal') { p.hp = Math.min(p.maxHp, p.hp + ev.n); if (ev.safe) p.setSafe(ev.safe.x, ev.safe.y); }
+    else if (ev.k === 'revive') { p.dead = false; p.hp = ev.hp; p.x = ev.x; p.y = ev.y; p.vx = p.vy = 0; p.inv = 2; p.gone = false; p.hurtT = 0; }
+    else if (ev.k === 'ouch') p.hurt(ev.d, ev.sx);                // (temporary) a projectile reached me
+  };
+  // ---------- the guest runs its own body: fights, hurts and hazards are decided here, at once, against what this screen shows ----------
+  // Damage dealt is only *announced* (reliable 'hit' event); the host owns the creatures and applies it after checking it makes sense.
+  function guestCombat(L, p) {
+    if (p.dead || p.gone) return;
+    if (L.boss && (L.boss.dying || L.boss.dead)) p.inv = Math.max(p.inv, 99);       // the boss is going down: nothing hurts any more
+    const canHit = (e) => !(e.isBoss && (!e.active || e.dying));
+    if (p.atkT > 0 && p.atkLive) {
+      const box = p.atkBox();
+      for (const e of L.ents) {
+        if (e.dead || e[p.hitKey] === p.atkId || e.noHit) continue;
+        const hbs = e.hurtboxes();
+        for (let bi = 0; bi < hbs.length; bi++) {
+          const b = hbs[bi];
+          if (!G.overlap(box, b)) continue;
+          e[p.hitKey] = p.atkId;
+          if (canHit(e) && (!e.isBoss || b.head !== undefined || !e.heads)) {
+            coop.rel('hit', { eid: e._id, how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi });
+            p.onHit(e, b.armor ? 'block' : 'hit', b);                              // my own reactions: recoil, pogo, sparks
+          }
+          break;
+        }
+      }
+      for (const s of L.springs) if (p.atkDir === 'd' && G.overlap(box, s)) p.spring(s);
+    }
+    const hb = p.hurtbox();
+    for (const e of L.ents) {
+      if (e.dead || e.passive) continue;
+      for (const b of e.harmboxes()) {
+        if (!G.overlap(hb, b)) continue;
+        if (p.dashT > 0 && e.dashable !== false) {
+          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); L.stop(0.05); L.shake(0.2); } }
+        } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
+          coop.rel('hit', { eid: e._id, how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
+          p.y = b.y - p.h; p.bounce(1); L.stop(0.05);
+        } else if (p.grace <= 0) p.hurt(e.dmg || 1, b.x + b.w / 2);
+        break;
+      }
+    }
+    const hz = L.hazardAt(p);
+    if (hz) { if (hz === 'liq') { L.burst(p.x + 5, p.y + 8, 12, [L.th.liq, L.th.liqHi], 110, 300); A.sfx('splash'); } p.hazard(); }
+  }
   coop.guestUpdate = (L, dt) => {
     if (!L._tiles0) return;
     ensureIds(L);
@@ -6807,7 +6906,7 @@ G.VOICE = {
     }
     // sounds and effects older than 300 ms (a backlog after a stall) are not played
     const nowMs = performance.now();
-    ms.forEach((m) => { if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m, coop.latestTm - m.tm + (nowMs - coop.latestAt) / 1000 > 0.3); });
+    ms.forEach((m) => { if (m.t === 's') applySnap(L, m, coop.latestTm - m.tm + (nowMs - coop.latestAt) / 1000 > 0.3); });
     while (coop.relQ.length) { const r = coop.relQ[0]; if (r.e > L._ep) break; coop.relQ.shift(); if (r.e === L._ep) coop.guestRel(L, r.ev); }
     // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
     if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); gsend({ t: 'full', e: L._ep }); }
@@ -6831,6 +6930,7 @@ G.VOICE = {
       }
     }
     p.update(dt);
+    guestCombat(L, p);
     const hb = p.hurtbox();
     for (const sp of L.springs) { if (sp.t > 0) sp.t -= dt; if (p.vy >= 0 && G.overlap(hb, sp) && p.dashT <= 0 && !p.dead) p.spring(sp); }
     L.sign = null;
@@ -6856,10 +6956,10 @@ G.VOICE = {
     if (!L.cam.frozen) L.updateCam(dt);
     // my state -> host, 30 times a second
     if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
-      const d = deltaDump(coop.gs, 'me', p);
+      const d = deltaDump(coop.gs, 'me', p, HOSTOWN);
       const sa = L._rg ? L._rg.last : 0;
-      if (d) gsend({ t: 'st', d, a: coop.fxAck, sa });
-      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, a: coop.fxAck, sa });
+      if (d) gsend({ t: 'st', d, sa });
+      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, sa });
     }
   };
 
@@ -6906,12 +7006,11 @@ G.VOICE = {
     G.text(ug, n.text, W / 2, 30, '#ffd9d9', { align: 'c' }); ug.globalAlpha = 1;
   };
   coop.waitScene = wait;
-  // dropped fx messages must still be acknowledged, or the host would keep treating those fields as its own
-  function qDrop(list) { for (const m of list) if (m.t === 'fx') coop.fxAck = Math.max(coop.fxAck, m.q); }
+  function qDrop() { /* dropped snapshots need no acknowledgement: the next one is built against the last one the guest really applied */ }
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
-    if ((m.t === 's' || m.t === 'st' || m.t === 'fx' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
+    if ((m.t === 's' || m.t === 'st' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
     if (coop.role === 'host') {
       if (m.t === 'peer') {
         coop.peer = !!m.on; ui.render(); if (m.on) { coop.resetNet(); coop.sendCfg(); }
@@ -6919,7 +7018,7 @@ G.VOICE = {
         if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') {
-        Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true;
+        Object.assign(coop.rAll, m.d); coop.rHas = true;
         const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
       }
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
@@ -6932,8 +7031,8 @@ G.VOICE = {
       else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) coop.hostState = m.hs; }
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
-      else if (m.t === 's' || m.t === 'fx') {
-        if (m.t === 's') { coop.latestTm = m.tm; coop.latestAt = performance.now(); }
+      else if (m.t === 's') {
+        coop.latestTm = m.tm; coop.latestAt = performance.now();
         coop.q.push(m);
         if (coop.q.length > 400) { qDrop(coop.q.splice(0, coop.q.length - 400)); coop.needFull = true; }   // keep the newest, ask for a keyframe
       }
