@@ -125,6 +125,7 @@ module.exports = (S, h) => {
       const [hq, gq] = [await T.host.evaluate(() => ({ x: window.__q1.x, dead: window.__q1.dead })), await T.guest.evaluate(() => { const q = G.scene.L.projs.find((q) => q.pid === 1); return q ? { x: q.x } : null; })];
       const flightOk = gq && Math.abs(gq.x - hq.x) < 25;
       // 2) one flies into the guest: it loses exactly one hit point, the host's projectile is gone
+      await T.host.evaluate(() => { G.scene.L.me.inv = 99; });       // the host player stands next to the partner: it must not catch the shot
       const hp0 = await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.hp = p.maxHp; p.dashT = 0; return p.hp; });
       await T.host.evaluate(() => { const L = G.scene.L, p = L.p2; window.__q2 = L.shoot(p.x - 60, p.y + 5, 120, 0, { kind: 'orb', col: '#ff5d5d', r: 3, life: 4, tile: false }); });
       await sleep(1500);
@@ -138,6 +139,34 @@ module.exports = (S, h) => {
       const q3dead = await T.host.evaluate(() => window.__q3.dead), q3x = await T.host.evaluate(() => window.__q3.x - G.scene.L.p2.x);
       const ok = flightOk && hp1 === hp0 - 1 && q2dead && q3dead;
       return R(ok, 'flight: host x ' + hq.x.toFixed(0) + ' guest x ' + (gq ? gq.x.toFixed(0) : 'missing') + '; hit: guest hp ' + hp0 + ' -> ' + hp1 + ' (want -1), host projectile gone=' + q2dead + '; cut by claw: host projectile gone=' + q3dead);
+    } finally { await T.close(); }
+  };
+
+  // a walking creature must look smooth on the guest: no frame-to-frame jump above 3 px, no freeze followed by a lurch
+  S['smooth'] = async () => {
+    const env = process.env.SIM_LAG ? {} : { SIM_LAG: '150', SIM_JITTER: '60', SIM_STALL_PCT: '5' };
+    const T = await openPair({ env });
+    try {
+      await startLevel(T, '1-1'); await sleep(1000);
+      const id = await T.host.evaluate(() => {
+        const L = G.scene.L; L.ents.length = 0;
+        const p = L.me; const e = new G.Enemies.Bug(L, 0, 0, false); e.x = p.x + 30; e.y = p.y + p.h - e.h; e.speed = 40; L.ents.push(e); G.coop.hostTick(L, 0);
+        // keep it walking in a corridor around the players (turn at fixed limits, never hurt anyone)
+        const x0 = p.x + 20; window.__bugIv = setInterval(() => { const q = L.ents[0]; if (!q) return; q.dmg = 0; if (q.x > x0 + 140) q.face = -1; if (q.x < x0) q.face = 1; }, 30);
+        return e._id;
+      });
+      await T.guest.waitForFunction((id) => G.scene.L.ents.some((e) => e._id === id), id, { timeout: 8000 });
+      await sleep(1500);
+      await T.guest.evaluate((id) => { window.__sm = []; const f = () => { const e = G.scene.L.ents.find((x) => x._id === id); if (e) window.__sm.push([performance.now(), e.x]); window.__smraf = requestAnimationFrame(f); }; f(); }, id);
+      await sleep(6000);
+      const xs = await T.guest.evaluate(() => { cancelAnimationFrame(window.__smraf); return window.__sm; });
+      let maxD = 0, lurch = 0, prevD = null;
+      for (let i = 1; i < xs.length; i++) {
+        const d = Math.abs(xs[i][1] - xs[i - 1][1]); maxD = Math.max(maxD, d);
+        if (prevD === 0 && d > 6) lurch++;
+        prevD = d;
+      }
+      return R(maxD <= 3 && lurch === 0, 'walking bug, ' + xs.length + ' frames at lag ' + (T.sim.SIM_LAG || process.env.SIM_LAG || '150') + ': max per-frame step ' + maxD.toFixed(2) + ' px (want <= 3), freeze-then-lurch frames ' + lurch + ' (want 0)');
     } finally { await T.close(); }
   };
 };

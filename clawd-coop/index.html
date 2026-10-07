@@ -3180,7 +3180,7 @@ G.VOICE = {
       if (this.partner) G.coop.drawPartner(g, this, cx, cy);
       for (const e of this.ents) if (!e.dead && e.front) e.draw(g, cx, cy);
       // projectiles
-      for (const q of this.projs) if (!q.dead) this.drawProj(g, q, cx, cy);
+      for (const q of this.projs) if (!q.dead && !(q.wait > 0)) this.drawProj(g, q, cx, cy);
       // particles
       for (const q of this.fx) {
         const x = Math.round(q.x) - cx, y = Math.round(q.y) - cy, u = q.life / q.max;
@@ -6319,7 +6319,6 @@ G.VOICE = {
   };
   const r2 = (v) => Math.round(v * 100) / 100;
   const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey', '_scaled', '_diff', 'dropN']);
-  const SM = ['x', 'y', 'cx', 'cy', 'hx', 'hy'];
   // the level (host) decides these for the partner; everything else about the partner's body is the partner's own
   const HOSTOWN = new Set(['frozen', 'celebrate', 'auto', 'remote', 'blue', 'away']);
   const isPlain = (v) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null; };
@@ -6383,11 +6382,7 @@ G.VOICE = {
       } else a[i] = x;
     }
   }
-  function mergeTop(obj, d, smooth) {
-    if (smooth) {
-      const sm = obj._sm || (obj._sm = {});
-      for (const k of SM) if (typeof d[k] === 'number' && typeof obj[k] === 'number') { const off = (sm[k] || 0) + obj[k] - d[k]; sm[k] = Math.abs(off) > 40 ? 0 : off; }
-    }
+  function mergeTop(obj, d) {
     const fix = [];
     merge(obj, d, fix);
     for (const [t, k, path] of fix) { let o = obj; if (path) for (const s of path.split('.')) o = o == null ? o : o[s]; if (o != null) t[k] = o; }
@@ -6456,7 +6451,7 @@ G.VOICE = {
     p2.tools = Object.assign({}, G.save.data.tools, { agents: false });     // the partner has no sub-agent meter (for now): no "subagents ready" pop, no meter effects
     L.p2 = p2; L.partner = p2; L.reviveQ = [];
     coop.diffLine = G.diff.label(G.diff.clean(coop.diffCfg()));
-    coop.rAll = {}; coop.rHas = false; coop.ev = [];
+    coop.rAll = {}; coop.rHas = false; coop.ev = []; coop.pbReset();
   }
   // a partner joins a level that is already running: no restart, they get the live state
   coop.attachPartner = (L) => {
@@ -6555,18 +6550,36 @@ G.VOICE = {
     for (const p of [L.me, L.p2]) if (p && Math.abs(e.x + (e.w || 0) / 2 - p.x) < 320 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < 260) return true;
     return false;
   };
-  // the partner's body is the partner's own: position, speed, attacks, hit points. Take it over as reported.
+  // the partner's body is the partner's own: speed, attacks, hit points are taken over as reported;
+  // its position is shown a few frames in the past, blended between two reports, so it moves smoothly whatever the line does
+  const pb = { list: [], off: null, jit: 0.01, D: 0.06, last: 0 };
+  coop.pbReset = () => { pb.list = []; pb.off = null; pb.jit = 0.01; pb.D = 0.06; pb.last = 0; };
+  function pNote(gt, at) {
+    const now = at / 1000, d = now - gt;
+    if (pb.off === null) pb.off = d;
+    else { const dev = d - pb.off; if (dev < 0) pb.off = d; else { pb.off += dev * 0.02; if (gt - pb.last <= 0.1) pb.jit += (Math.min(dev, 0.5) - pb.jit) * 0.1; } }
+    pb.last = gt; pb.D += (G.clamp(0.033 + 2 * pb.jit, 0.05, 0.25) - pb.D) * 0.05;
+    coop.pDelay = pb.D;
+    const r = coop.rAll; pb.list.push({ gt, x: r.x, y: r.y, vx: r.vx, vy: r.vy }); if (pb.list.length > 40) pb.list.shift();
+  }
   function applyRemote(L) {
     const p2 = L.p2, d = coop.rAll;
-    const sm = p2._sm || (p2._sm = {});
     for (const k in d) {
-      if (HOSTOWN.has(k)) continue;
+      if (HOSTOWN.has(k) || k === 'x' || k === 'y') continue;
       const v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
-      if ((k === 'x' || k === 'y') && typeof p2[k] === 'number') { const off = (sm[k] || 0) + p2[k] - v; sm[k] = Math.abs(off) > 40 ? 0 : off; }
       p2[k] = v;
     }
+    if (pb.off === null || !pb.list.length) { if (typeof d.x === 'number') { p2.x = d.x; p2.y = d.y; } return; }
+    const rt = performance.now() / 1000 - pb.off - pb.D;
+    let A = null, B = null;
+    for (let i = pb.list.length - 1; i >= 0; i--) if (pb.list[i].gt <= rt) { A = pb.list[i]; B = pb.list[i + 1] || null; break; }
+    if (!A) A = pb.list[0];
+    const u = B ? G.clamp((rt - A.gt) / (B.gt - A.gt), 0, 1) : 0, ex = B ? 0 : G.clamp(rt - A.gt, 0, 0.25);
+    const at = (k, vk) => { const v = A[k]; if (typeof v !== 'number') return null; if (B && typeof B[k] === 'number') return Math.abs(B[k] - v) > 60 ? v : v + (B[k] - v) * u; return v + (A[vk] || 0) * ex; };
+    const nx = at('x', 'vx'), ny = at('y', 'vy');
+    if (nx !== null) p2.x = nx; if (ny !== null) p2.y = ny;
   }
   const entById = (L, id) => { for (const e of L.ents) if (e._id === id) return e; return null; };
   // run something the partner did (or that happened to the partner) so the host world shows it; nothing is sent back for it
@@ -6801,18 +6814,72 @@ G.VOICE = {
     if (S.ii) { const keep = new Set(S.ii); for (const id of S.items.keys()) if (!keep.has(id)) S.items.delete(id); }
     return S;
   }
-  function applySnap(L, s, quiet) {
-    const g = L._rg || (L._rg = { ring: new Map(), last: 0, applied: null });
-    if (s.sn <= g.last) return;                                   // older than what is already shown
+  // ---------- the guest shows the host's world a little in the past, so motion can be interpolated between two snapshots ----------
+  // The delay D follows the line: one snapshot interval plus twice the measured jitter (0.08 .. 0.3 s). If the newest snapshot is older
+  // than the render time the entity keeps going at its last speed for at most 0.25 s, then holds.
+  function noteArrival(g, S, at) {
+    const now = at / 1000, d = now - S.tm;
+    if (g.off === null) g.off = d;
+    else {
+      const dev = d - g.off;
+      if (dev < 0) g.off = d; else { g.off += dev * 0.02; g.jit += (Math.min(dev, 0.5) - g.jit) * 0.1; }
+      const dt = S.tm - g.lastTm; if (dt > 0 && dt < 0.5) g.si += (dt - g.si) * 0.1;
+    }
+    g.lastTm = S.tm;
+    g.list.push(S); if (g.list.length > 40) g.list.shift();
+    g.D += (G.clamp(g.si + 2 * g.jit, 0.08, 0.3) - g.D) * 0.05;
+    coop.delay = g.D; coop.jitter = g.jit;
+  }
+  const NESTPOS = new Set(['x', 'y', 'top', 'a', 'hx', 'hy']);
+  const POSK = ['x', 'y', 'hx', 'hy', 'bx', 'by'];
+  // numbers that mean "where" inside nested state (boss heads, fists, cursors...) are blended in place
+  function lerpInto(t, a, b, u) {
+    if (Array.isArray(a)) { for (let i = 0; i < a.length; i++) { const ai = a[i]; if (ai && typeof ai === 'object' && t[i] && typeof t[i] === 'object') lerpInto(t[i], ai, b && b[i], u); } return; }
+    for (const k in a) {
+      const av = a[k];
+      if (typeof av === 'number') { if (NESTPOS.has(k) && typeof t[k] === 'number') { const bv = b && typeof b[k] === 'number' ? b[k] : av; t[k] = Math.abs(bv - av) > 60 ? av : av + (bv - av) * u; } }
+      else if (av && typeof av === 'object' && t[k] && typeof t[k] === 'object') lerpInto(t[k], av, b && b[k], u);
+    }
+  }
+  // seg = seconds between the two snapshots, dt = this frame. After a stall the target can be far ahead of what is on screen:
+  // it is then caught up at a limited speed (a bit faster than the thing really moves) instead of lurching.
+  function posInto(o, fa, fb, u, ex, seg, dt) {
+    for (const k of POSK) {
+      const v = fa[k]; if (typeof v !== 'number') continue;
+      let r = v, sp = 0;
+      if (fb && typeof fb[k] === 'number') { if (Math.abs(fb[k] - v) > 60) r = v; else { r = v + (fb[k] - v) * u; sp = Math.abs(fb[k] - v) / (seg || 0.066); } }      // a jump (teleport, wrap-around) is not blended
+      else { const vel = k === 'x' ? fa.vx : k === 'y' ? fa.vy : 0; if (typeof vel === 'number') { sp = Math.abs(vel); if (ex > 0) r += vel * ex; } }
+      const rr = o._rp || (o._rp = {}), last = rr[k];
+      if (last !== undefined && Math.abs(r - last) <= 60) { const lim = Math.max(3, sp * dt * 2.2 + 1.5); if (r - last > lim) r = last + lim; else if (last - r > lim) r = last - lim; }
+      rr[k] = r; o[k] = r;
+    }
+    for (const k in fa) { const v = fa[k]; if (v !== null && typeof v === 'object' && o[k] && typeof o[k] === 'object') lerpInto(o[k], v, fb && fb[k], u); }
+  }
+  function renderTimeline(L) {
+    const g = L._rg; if (!g || g.off === null || !g.list.length) return;
+    const rt = (g.rt = performance.now() / 1000 - g.off - g.D);
+    let A = null, B = null;
+    for (let i = g.list.length - 1; i >= 0; i--) if (g.list[i].tm <= rt) { A = g.list[i]; B = g.list[i + 1] || null; break; }
+    if (!A) A = g.list[0];
+    if (g.shown !== A) { showState(L, A, g.shown); g.shown = A; }
+    const u = B ? G.clamp((rt - A.tm) / (B.tm - A.tm), 0, 1) : 0, ex = B ? 0 : G.clamp(rt - A.tm, 0, 0.25);
+    const seg = B ? B.tm - A.tm : 0.066, fdt = g.dt || 1 / 60;
+    for (const e of L.ents) { const a = A.ents.get(e._id); if (a) { const b = B && B.ents.get(e._id); posInto(e, a.f, b && b.f, u, ex, seg, fdt); } }
+    for (const it of L.items) { const a = A.items.get(it._id); if (a) { const b = B && B.items.get(it._id); posInto(it, a.f, b && b.f, u, ex, seg, fdt); } }
+    if (A.p) posInto(L.partner, A.p, B && B.p, u, ex, seg, fdt);
+    while (g.evq.length && g.evq[0].tm <= rt) { const q = g.evq.shift(); if (rt - q.tm <= 0.3) playEvents(L, q.ev); }      // sounds/effects belong to their moment; old ones are dropped
+  }
+  function applySnap(L, s) {
+    const g = L._rg || (L._rg = { ring: new Map(), last: 0, shown: null, list: [], off: null, jit: 0.02, si: 0.066, D: 0.12, lastTm: 0, evq: [], rt: 0 });
+    if (s.sn <= g.last) return;                                   // older than what is already known
     let B = EMPTY;
     if (s.b) { B = g.ring.get(s.b); if (!B) { coop.needFull = true; return; } }   // baseline unknown: ask for a keyframe
     const S = applyDelta(B, s);
     g.ring.set(s.sn, S); g.ring.delete(s.sn - 32); g.last = s.sn;
     if (s.kf) coop.needFull = false;
-    showState(L, S, g.applied);
+    noteArrival(g, S, s._at || performance.now());
     if (s.pjk) syncProjs(L, s.pjk, s.tm);
-    g.applied = S;
-    if (s.ev && !quiet) playEvents(L, s.ev);
+    if (s.ev) g.evq.push({ tm: s.tm, ev: s.ev });
   }
   function showState(L, S, prev) {
     const w = S.w;
@@ -6837,16 +6904,16 @@ G.VOICE = {
         try { e = new C(L, u.f.x || 0, u.f.y || 0, !!u.f.small); } catch (err) { continue; }
         e._id = id; L.ents.push(e);
       }
-      mergeTop(e, u.f, true);
+      mergeTop(e, u.f);
     }
     const ki = new Set(S.ii); L.items = L.items.filter((it) => ki.has(it._id));
     const imap = new Map(); for (const it of L.items) imap.set(it._id, it);
     for (const [id, u] of S.items) {
       let it = imap.get(id);
       if (!it) { it = { _id: id }; L.items.push(it); }
-      mergeTop(it, u.f, false);
+      mergeTop(it, u.f);
     }
-    if (S.p) mergeTop(L.partner, S.p, true);
+    if (S.p) mergeTop(L.partner, S.p);
     if (S.ph) Object.assign(L.me, S.ph);
     if (S.hs) coop.hostState = S.hs;
   }
@@ -6867,8 +6934,8 @@ G.VOICE = {
     }
   }
   // ---------- guest projectiles ----------
-  const hostNow = () => coop.latestTm + (performance.now() - coop.latestAt) / 1000;
   function stepProj(L, q, dt) {
+    if (q.wait > 0) { q.wait -= dt; return; }
     q.t = (q.t || 0) + dt; q.life -= dt; q.vy += (q.g || 0) * dt; q.x += q.vx * dt; q.y += q.vy * dt;
     if (q.life <= 0 || q.y > L.ph + 60 || q.x < -60 || q.x > L.pw + 60) { q.dead = true; return; }
     if (q.tile && L.solidAt(q.x, q.y)) { q.dead = true; return; }        // the host shows the splash/spark (cosmetic event)
@@ -6876,8 +6943,10 @@ G.VOICE = {
   }
   function newProj(L, d, tm) {
     const q = Object.assign({ x: 0, y: 0, vx: 0, vy: 0, r: 3, kind: 'orb', col: '#ff5d5d', life: 4, g: 0, dmg: 1, t: 0, tile: false, cut: false, pierce: false, friendly: false }, d);
-    let age = Math.min(0.5, Math.max(0, hostNow() - tm));                 // it has been flying for a while by the time the news arrives
-    for (; age > 0 && !q.dead; age -= 1 / 60) stepProj(L, q, Math.min(1 / 60, age));
+    // it has been flying for a while by the time the news arrives: catch up to what the screen shows now (or wait if it is not due yet)
+    const g = L._rg, age = g && g.off !== null ? performance.now() / 1000 - g.off - g.D - tm : 0;
+    if (age < 0) q.wait = -age;
+    for (let a = Math.min(0.5, age); a > 0 && !q.dead; a -= 1 / 60) stepProj(L, q, Math.min(1 / 60, a));
     return q;
   }
   // a keyframe lists every live projectile: add the ones I missed, drop the ones that are gone
@@ -6952,8 +7021,9 @@ G.VOICE = {
       coop.q.shift(); ms.push(m);
     }
     // sounds and effects older than 300 ms (a backlog after a stall) are not played
-    const nowMs = performance.now();
-    ms.forEach((m) => { if (m.t === 's') applySnap(L, m, coop.latestTm - m.tm + (nowMs - coop.latestAt) / 1000 > 0.3); });
+    ms.forEach((m) => { if (m.t === 's') applySnap(L, m); });
+    if (L._rg) L._rg.dt = dt;
+    renderTimeline(L);
     while (coop.relQ.length) { const r = coop.relQ[0]; if (r.e > L._ep) break; coop.relQ.shift(); if (r.e === L._ep) coop.guestRel(L, r.ev); }
     // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
     if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); gsend({ t: 'full', e: L._ep }); }
@@ -6982,16 +7052,11 @@ G.VOICE = {
     for (const sp of L.springs) { if (sp.t > 0) sp.t -= dt; if (p.vy >= 0 && G.overlap(hb, sp) && p.dashT <= 0 && !p.dead) p.spring(sp); }
     L.sign = null;
     for (const sg of L.signs) if (Math.abs(p.x + p.w / 2 - sg.x) < 26 && Math.abs(p.y + p.h - sg.y) < 30) L.sign = sg;
-    // smoothing offsets decay
-    const f = Math.exp(-dt * 20);
-    const decay = (o) => { const sm = o._sm; if (!sm) return; for (const k in sm) { sm[k] *= f; if (Math.abs(sm[k]) < 0.05) delete sm[k]; } };
-    for (const e of L.ents) decay(e);
-    decay(L.partner);
     for (const q of L.projs) {
       if (q.dead) continue;
       stepProj(L, q, dt);
       const hb2 = p.hurtbox();
-      if (!q.dead && !q.friendly && !p.dead && !p.gone && q.x + q.r > hb2.x && q.x - q.r < hb2.x + hb2.w && q.y + q.r > hb2.y && q.y - q.r < hb2.y + hb2.h && p.dashT <= 0) {
+      if (!q.dead && !(q.wait > 0) && !q.friendly && !p.dead && !p.gone && q.x + q.r > hb2.x && q.x - q.r < hb2.x + hb2.w && q.y + q.r > hb2.y && q.y - q.r < hb2.y + hb2.h && p.dashT <= 0) {
         if (p.hurt(q.dmg, q.x) && !q.pierce) { q.dead = true; L.spark(q.x, q.y, q.col, 5); coop.rel('projHit', { pid: q.pid }); }
       }
     }
@@ -7013,19 +7078,12 @@ G.VOICE = {
     if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
       const d = deltaDump(coop.gs, 'me', p, HOSTOWN);
       const sa = L._rg ? L._rg.last : 0;
-      if (d) gsend({ t: 'st', d, sa });
-      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, sa });
+      const gt = r2(performance.now() / 1000);
+      if (d) gsend({ t: 'st', d, sa, gt });
+      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, sa, gt });
     }
   };
 
-  // smoothing offsets applied only while drawing
-  const oDraw = Level.prototype.draw;
-  Level.prototype.draw = function (g) {
-    if (!this.net) return oDraw.call(this, g);
-    const objs = this.net === 'guest' ? this.ents.concat([this.partner]) : [this.partner];
-    for (const o of objs) if (o && o._sm) for (const k in o._sm) o[k] += o._sm[k];
-    try { return oDraw.call(this, g); } finally { for (const o of objs) if (o && o._sm) for (const k in o._sm) o[k] -= o._sm[k]; }
-  };
   coop.drawPartner = (g, L, cx, cy) => {
     const q = L.partner;
     if (q.dead || q.gone) return;
@@ -7074,6 +7132,7 @@ G.VOICE = {
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') {
         Object.assign(coop.rAll, m.d); coop.rHas = true;
+        if (m.gt !== undefined) pNote(m.gt, performance.now());
         const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
       }
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
@@ -7087,7 +7146,7 @@ G.VOICE = {
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's') {
-        coop.latestTm = m.tm; coop.latestAt = performance.now();
+        coop.latestTm = m.tm; coop.latestAt = m._at = performance.now();
         coop.q.push(m);
         if (coop.q.length > 400) { qDrop(coop.q.splice(0, coop.q.length - 400)); coop.needFull = true; }   // keep the newest, ask for a keyframe
       }
