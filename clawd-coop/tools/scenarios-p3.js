@@ -20,4 +20,23 @@ module.exports = (S, h) => {
       return R(inOrder && pending === 0, 'host received ' + log.length + '/100 events ' + (inOrder ? 'once each, in order' : 'WRONG: ' + log.slice(0, 20).join(',')) + '; still unacknowledged on the guest: ' + pending);
     } finally { await T.close(); }
   };
+
+  // half of the host's snapshots never reach the guest for 6 s (kills, token pickups, a broken wall happen meanwhile);
+  // afterwards the guest must show exactly the host's world again
+  S['lossy'] = async () => {
+    const T = await openPair();
+    try {
+      await startLevel(T, '2-1'); await sleep(1200);
+      await T.guest.evaluate(() => { G.coop.dbg.dropRx = 0.5; });
+      // while snapshots are being lost: the host kills enemies, collects things, breaks a cracked wall
+      await T.host.evaluate(() => { const L = G.scene.L; window.__kills = []; for (const e of L.ents.filter((x) => !x.isBoss && !x.noHit).slice(0, 3)) { window.__kills.push(e._id); e.hit(99, 0, 0, 'swipe'); } L.tokens += 5; const t = L.tiles.indexOf(G.TILE.CRACK); if (t >= 0) L.breakTile(t % L.w, (t / L.w) | 0); });
+      await sleep(6000);
+      await T.guest.evaluate(() => { G.coop.dbg.dropRx = 0; });
+      await sleep(2000);
+      const snap = (p) => p.evaluate(() => { const L = G.scene.L; return { ids: L.ents.filter((e) => !e.dead).map((e) => e._id).sort((a, b) => a - b).join(','), tokens: L.tokens, tiles: Array.from(L.tiles).join('').length + ':' + L.tiles.reduce((a, v, i) => a + v * (i % 97 + 1), 0), items: L.items.filter((i) => !i.dead).length }; });
+      const [hs, gs] = [await snap(T.host), await snap(T.guest)];
+      const ok = hs.ids === gs.ids && hs.tokens === gs.tokens && hs.tiles === gs.tiles && hs.items === gs.items;
+      return R(ok, 'host ' + JSON.stringify(hs) + ' guest ' + JSON.stringify(gs));
+    } finally { await T.close(); }
+  };
 };

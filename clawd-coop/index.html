@@ -6411,7 +6411,7 @@ G.VOICE = {
       const now = performance.now();
       if (R.out.some((x) => now - x.at > R.resend)) { o.r = R.out.map((x) => x.ev); for (const x of R.out) x.at = now; }
     } else o.u = 1;                                   // nothing that must arrive: the relay may drop this message when the line is clogged
-    coop.relWake = false;
+    coop.relWake = false; coop.lastTx = performance.now();
     send(o);
   }
   coop.gsend = gsend;
@@ -6620,41 +6620,55 @@ G.VOICE = {
     }
   };
 
-  function sendSnap(L) {
-    const N = L._net || (L._net = { e: {}, i: {}, p: {}, seq: 0 });
-    const me = L.me, p2 = L.p2, s = { t: 's', sn: ++N.seq };
-    if (coop.kfNext) { s.kf = 1; coop.kfNext = false; }
-    s.tm = r2(G.time); s.lt = r2(L.time); s.ly = L.liquidY; s.rs = L.rising ? 1 : 0; s.ck = r2(L.clock); s.tk = L.tokens; s.ht = L.hits; s.ci = L.cpIndex;
-    s.cp = L.cps.map((c) => (c.on ? 1 : 0)); s.ex = L.exit && L.exit.done ? 1 : 0; s.sk = L.sparks;
+  // ---------- snapshots: full state, sent as a delta against a baseline the guest has acknowledged ----------
+  // The host rebuilds the complete state S each time and keeps the last 32 in a ring. The guest tells the host which snapshot it
+  // last applied (`sa`); the next snapshot only contains what differs from that one (`b`). If the guest's baseline is missing or too old,
+  // or every 5 s, a keyframe (`b: 0`, everything) is sent instead. Any message can therefore be lost or skipped without a desync.
+  const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+  const EMPTY = { w: {}, ents: new Map(), items: new Map() };
+  function diffFields(bf, f) { let d = null; for (const k in f) if (!same(bf[k], f[k])) (d || (d = {}))[k] = f[k]; return d; }
+  function buildState(L) {
+    const p2 = L.p2, w = {};
+    w.lt = r2(L.time); w.ly = L.liquidY; w.rs = L.rising ? 1 : 0; w.ck = r2(L.clock); w.tk = L.tokens; w.ht = L.hits; w.ci = L.cpIndex;
+    w.cp = L.cps.map((c) => (c.on ? 1 : 0)); w.ex = L.exit && L.exit.done ? 1 : 0; w.sk = L.sparks.slice();
     const T0 = L._tiles0, tl = [];
     for (let i = 0; i < T0.length; i++) if (L.tiles[i] !== T0[i]) tl.push(i, L.tiles[i]);
-    let k = tl.join(','); if (k !== N.tl) { N.tl = k; s.tl = tl; }
     const cr = []; for (const [i, c] of L.crumble) cr.push(i, c.s, r2(c.t));
-    k = cr.join(','); if (k !== N.cr) { N.cr = k; s.cr = cr; }
-    const bh = Array.from(L.blinkHold); k = bh.join(','); if (k !== N.bh) { N.bh = k; s.bh = bh; }
-    const ids = [], eu = [];
+    const S = { tm: r2(G.time), w, tl, cr, bh: Array.from(L.blinkHold), ei: [], ii: [], ents: new Map(), items: new Map(), pj: [] };
     for (const e of L.ents) {
-      ids.push(e._id);
+      S.ei.push(e._id);
       if (!(e.always || e.isBoss || near(L, e))) continue;
-      const isNew = !(e._id in N.e), d = deltaDump(N.e, e._id, e);
-      if (isNew) eu.push({ i: e._id, c: e.constructor.name, d: d || {} }); else if (d) eu.push({ i: e._id, d });
+      S.ents.set(e._id, { c: e.constructor.name, f: dump(e, 0, new Map([[e, '']]), '') });
     }
-    k = ids.join(','); if (k !== N.ei) { N.ei = k; s.ei = ids; }
-    if (eu.length) s.eu = eu;
-    const iids = [], iu = [];
-    for (const it of L.items) {
-      iids.push(it._id);
-      const isNew = !(it._id in N.i), d = deltaDump(N.i, it._id, it);
-      if (isNew) iu.push({ i: it._id, d: d || {} }); else if (d) iu.push({ i: it._id, d });
-    }
-    k = iids.join(','); if (k !== N.ii) { N.ii = k; s.ii = iids; }
-    if (iu.length) s.iu = iu;
-    const pj = []; for (const q of L.projs) if (!q.dead && pj.length < 40) pj.push(dump(q, 0, new Map([[q, '']]), ''));
-    if (pj.length || N.pjn) { s.pj = pj; N.pjn = pj.length; }
-    const pd = deltaDump(N.p, 'me', me); if (pd) s.p = pd;
-    const ph = { hp: p2.hp, maxHp: p2.maxHp, inv: r2(p2.inv), hurtT: r2(p2.hurtT), dead: p2.dead, gone: p2.gone, goneT: r2(p2.goneT), frozen: p2.frozen, celebrate: p2.celebrate };
-    k = JSON.stringify(ph); if (k !== N.ph) { N.ph = k; s.ph = ph; }
-    k = JSON.stringify(coop.hostState); if (k !== N.hs) { N.hs = k; s.hs = coop.hostState; }
+    for (const it of L.items) { S.ii.push(it._id); S.items.set(it._id, { f: dump(it, 0, new Map([[it, '']]), '') }); }
+    for (const q of L.projs) if (!q.dead && S.pj.length < 40) S.pj.push(dump(q, 0, new Map([[q, '']]), ''));
+    S.p = dump(L.me, 0, new Map([[L.me, '']]), '');
+    S.ph = { hp: p2.hp, maxHp: p2.maxHp, inv: r2(p2.inv), hurtT: r2(p2.hurtT), dead: p2.dead, gone: p2.gone, goneT: r2(p2.goneT), frozen: p2.frozen, celebrate: p2.celebrate };
+    S.hs = coop.hostState;
+    return S;
+  }
+  function diffState(B, S) {
+    const d = { w: {} };
+    for (const k in S.w) if (!same(B.w[k], S.w[k])) d.w[k] = S.w[k];
+    for (const k of ['tl', 'cr', 'bh', 'ei', 'ii', 'pj', 'ph', 'hs']) if (!same(B[k], S[k])) d[k] = S[k];
+    const eu = [], iu = [];
+    for (const [id, e] of S.ents) { const be = B.ents.get(id); if (!be) eu.push({ i: id, c: e.c, d: e.f }); else { const df = diffFields(be.f, e.f); if (df) eu.push({ i: id, d: df }); } }
+    for (const [id, it] of S.items) { const bi = B.items.get(id); if (!bi) iu.push({ i: id, d: it.f }); else { const df = diffFields(bi.f, it.f); if (df) iu.push({ i: id, d: df }); } }
+    if (eu.length) d.eu = eu;
+    if (iu.length) d.iu = iu;
+    const pd = B.p ? diffFields(B.p, S.p) : S.p; if (pd) d.p = pd;
+    return d;
+  }
+  function sendSnap(L) {
+    const N = L._net || (L._net = { ring: new Map(), acked: 0, sn: 0, kfAt: -99 });
+    const S = buildState(L), sn = ++N.sn;
+    let B = N.acked ? N.ring.get(N.acked) : null;
+    const kf = !B || coop.kfNext || S.tm - N.kfAt > 5;
+    if (kf) { B = EMPTY; N.kfAt = S.tm; coop.kfNext = false; }
+    const d = diffState(B, S);
+    S.sn = sn; N.ring.set(sn, S); N.ring.delete(sn - 32);
+    const s = Object.assign({ t: 's', sn, b: kf ? 0 : N.acked, tm: S.tm }, d);
+    if (kf) s.kf = 1;
     if (coop.ev.length) { s.ev = coop.ev.slice(0, 60); coop.ev = []; }
     gsend(s);
   }
@@ -6704,47 +6718,68 @@ G.VOICE = {
   }
 
   // ---------- guest side ----------
+  // rebuild the full state S(n) = S(b) + delta, remember it, then show it
+  function applyDelta(B, s) {
+    const S = { sn: s.sn, tm: s.tm, w: Object.assign({}, B.w, s.w), tl: B.tl, cr: B.cr, bh: B.bh, ei: B.ei, ii: B.ii, pj: B.pj, ph: B.ph, hs: B.hs, p: B.p, ents: new Map(B.ents), items: new Map(B.items) };
+    for (const k of ['tl', 'cr', 'bh', 'ei', 'ii', 'pj', 'ph', 'hs']) if (s[k] !== undefined) S[k] = s[k];
+    if (s.eu) for (const u of s.eu) { const be = S.ents.get(u.i); S.ents.set(u.i, be ? { c: be.c, f: Object.assign({}, be.f, u.d) } : { c: u.c, f: u.d }); }
+    if (s.iu) for (const u of s.iu) { const bi = S.items.get(u.i); S.items.set(u.i, { f: bi ? Object.assign({}, bi.f, u.d) : u.d }); }
+    if (s.p) S.p = B.p ? Object.assign({}, B.p, s.p) : s.p;
+    if (S.ei) { const keep = new Set(S.ei); for (const id of S.ents.keys()) if (!keep.has(id)) S.ents.delete(id); }
+    if (S.ii) { const keep = new Set(S.ii); for (const id of S.items.keys()) if (!keep.has(id)) S.items.delete(id); }
+    return S;
+  }
   function applySnap(L, s, quiet) {
+    const g = L._rg || (L._rg = { ring: new Map(), last: 0, applied: null });
+    if (s.sn <= g.last) return;                                   // older than what is already shown
+    let B = EMPTY;
+    if (s.b) { B = g.ring.get(s.b); if (!B) { coop.needFull = true; return; } }   // baseline unknown: ask for a keyframe
+    const S = applyDelta(B, s);
+    g.ring.set(s.sn, S); g.ring.delete(s.sn - 32); g.last = s.sn;
     if (s.kf) coop.needFull = false;
-    if (s.lt !== undefined) { if (L._tm === undefined || Math.abs(s.lt - L.time) > 0.3) L.time = s.lt; else L.time += (s.lt - L.time) * 0.15; L._tm = 1; }
-    if (s.ly === null) L.liquidY = null; else if (s.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - s.ly) > 60 ? s.ly : L.liquidY + (s.ly - L.liquidY) * 0.5;
-    L.rising = !!s.rs; L.clock = s.ck; L.tokens = s.tk; L.hits = s.ht; L.cpIndex = s.ci;
-    s.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
-    if (L.exit) L.exit.done = !!s.ex;
-    if (s.sk) L.sparks = s.sk;
-    if (s.tl) {
-      L.tiles.set(L._tiles0); for (let i = 0; i < s.tl.length; i += 2) L.tiles[s.tl[i]] = s.tl[i + 1];
+    showState(L, S, g.applied);
+    g.applied = S;
+    if (s.ev && !quiet) playEvents(L, s.ev);
+  }
+  function showState(L, S, prev) {
+    const w = S.w;
+    if (w.lt !== undefined) { if (L._tm === undefined || Math.abs(w.lt - L.time) > 0.3) L.time = w.lt; else L.time += (w.lt - L.time) * 0.15; L._tm = 1; }
+    if (w.ly === null) L.liquidY = null; else if (w.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - w.ly) > 60 ? w.ly : L.liquidY + (w.ly - L.liquidY) * 0.5;
+    L.rising = !!w.rs; L.clock = w.ck; L.tokens = w.tk; L.hits = w.ht; L.cpIndex = w.ci;
+    if (w.cp) w.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
+    if (L.exit) L.exit.done = !!w.ex;
+    if (w.sk) L.sparks = w.sk.slice();
+    if (!prev || S.tl !== prev.tl) {
+      L.tiles.set(L._tiles0); for (let i = 0; i < S.tl.length; i += 2) L.tiles[S.tl[i]] = S.tl[i + 1];
       for (const [i, exp] of L._predBroken) { if (exp < L.time) L._predBroken.delete(i); else if (L.tiles[i] === G.TILE.CRACK) L.tiles[i] = G.TILE.E; }   // my own breaks the host has not confirmed yet
     }
-    if (s.cr) { Map.prototype.clear.call(L.crumble); for (let i = 0; i < s.cr.length; i += 3) Map.prototype.set.call(L.crumble, s.cr[i], { s: s.cr[i + 1], t: s.cr[i + 2] }); }
-    if (s.bh) L.blinkHold = new Set(s.bh);
-    if (s.ei) { const keep = new Set(s.ei); L.ents = L.ents.filter((e) => keep.has(e._id)); }
-    if (s.eu) {
-      const map = new Map(); for (const e of L.ents) map.set(e._id, e);
-      for (const u of s.eu) {
-        let e = map.get(u.i);
-        if (!e) {
-          const C = G.Enemies[u.c]; if (!C) continue;
-          try { e = new C(L, u.d.x || 0, u.d.y || 0, !!u.d.small); } catch (err) { continue; }
-          e._id = u.i; L.ents.push(e);
-        }
-        mergeTop(e, u.d, true);
+    if (!prev || S.cr !== prev.cr) { Map.prototype.clear.call(L.crumble); for (let i = 0; i < S.cr.length; i += 3) Map.prototype.set.call(L.crumble, S.cr[i], { s: S.cr[i + 1], t: S.cr[i + 2] }); }
+    if (!prev || S.bh !== prev.bh) L.blinkHold = new Set(S.bh);
+    const keep = new Set(S.ei); L.ents = L.ents.filter((e) => keep.has(e._id));
+    const map = new Map(); for (const e of L.ents) map.set(e._id, e);
+    for (const [id, u] of S.ents) {
+      let e = map.get(id);
+      if (!e) {
+        const C = G.Enemies[u.c]; if (!C) continue;
+        try { e = new C(L, u.f.x || 0, u.f.y || 0, !!u.f.small); } catch (err) { continue; }
+        e._id = id; L.ents.push(e);
       }
+      mergeTop(e, u.f, true);
     }
-    if (s.ii) { const keep = new Set(s.ii); L.items = L.items.filter((it) => keep.has(it._id)); }
-    if (s.iu) {
-      const map = new Map(); for (const it of L.items) map.set(it._id, it);
-      for (const u of s.iu) {
-        let it = map.get(u.i);
-        if (!it) { it = { _id: u.i }; L.items.push(it); }
-        mergeTop(it, u.d, false);
-      }
+    const ki = new Set(S.ii); L.items = L.items.filter((it) => ki.has(it._id));
+    const imap = new Map(); for (const it of L.items) imap.set(it._id, it);
+    for (const [id, u] of S.items) {
+      let it = imap.get(id);
+      if (!it) { it = { _id: id }; L.items.push(it); }
+      mergeTop(it, u.f, false);
     }
-    if (s.pj) L.projs = s.pj;
-    if (s.p) mergeTop(L.partner, s.p, true);
-    if (s.ph) Object.assign(L.me, s.ph);
-    if (s.hs) coop.hostState = s.hs;
-    if (s.ev && !quiet) for (const e of s.ev) {
+    L.projs = S.pj.map((q) => Object.assign({}, q));
+    if (S.p) mergeTop(L.partner, S.p, true);
+    if (S.ph) Object.assign(L.me, S.ph);
+    if (S.hs) coop.hostState = S.hs;
+  }
+  function playEvents(L, evs) {
+    for (const e of evs) {
       if (e[0] === 'L') {
         const ctx = e[e.length - 1];
         if ((e[1] === 'shake' || e[1] === 'flashScreen') && ctx === 'p1') continue;       // the host player's hits do not shake my screen
@@ -6822,8 +6857,9 @@ G.VOICE = {
     // my state -> host, 30 times a second
     if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
       const d = deltaDump(coop.gs, 'me', p);
-      if (d) gsend({ t: 'st', d, a: coop.fxAck });
-      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, a: coop.fxAck });
+      const sa = L._rg ? L._rg.last : 0;
+      if (d) gsend({ t: 'st', d, a: coop.fxAck, sa });
+      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, a: coop.fxAck, sa });
     }
   };
 
@@ -6875,15 +6911,18 @@ G.VOICE = {
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
-    if ((m.t === 's' || m.t === 'st' || m.t === 'fx' || m.t === 'hs' || m.t === 'full') && !rx(m)) return;
+    if ((m.t === 's' || m.t === 'st' || m.t === 'fx' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
     if (coop.role === 'host') {
       if (m.t === 'peer') {
         coop.peer = !!m.on; ui.render(); if (m.on) { coop.resetNet(); coop.sendCfg(); }
         const sc = G.scene;
         if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
-      } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
-      else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) { L._net = null; coop.kfNext = true; } }
+      } else if (m.t === 'st') {
+        Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true;
+        const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
+      }
+      else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
     } else {
       if (m.t === 'host') {
         coop.hostOn = !!m.on; ui.render();
@@ -6911,11 +6950,14 @@ G.VOICE = {
       if (role === 'host') coop.fetchCfg();
       if (role === 'guest') G.go(() => wait(), { speed: 3 });
       coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
+      // when the game loop is not running (background tab, pause) events still need a carrier
+      clearInterval(coop.kaT);
+      coop.kaT = setInterval(() => { if (R.out.length && performance.now() - (coop.lastTx || 0) > R.resend) gsend({ t: 'ack' }); }, 150);
     };
     ws.onmessage = (ev) => { try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
-      clearInterval(coop.pgT); coop.open = false; coop.peer = false; coop.ping = 0;
+      clearInterval(coop.pgT); clearInterval(coop.kaT); coop.open = false; coop.peer = false; coop.ping = 0;
       coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
       const L = G.scene && G.scene.L;
       if (L && L.net === 'host') coop.partnerLost(L);
@@ -6934,7 +6976,7 @@ G.VOICE = {
   }).catch(() => {});
   coop.disconnect = () => {
     const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
-    coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); coop.open = false; coop.peer = false;
+    coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); clearInterval(coop.kaT); coop.open = false; coop.peer = false;
     if (L && L.net === 'host') coop.partnerLost(L);
     else if (wasGuest && ((L && L.net === 'guest') || (G.scene && G.scene.isWait))) coop.kick = 'map';
     coop.role = null; coop.status = 'offline'; ui.render();
