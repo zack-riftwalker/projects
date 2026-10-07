@@ -1,7 +1,9 @@
 // Phase 1 scenarios (loaded by coop-harness.js)
 'use strict';
 module.exports = (S, h) => {
-  const { openPair, startLevel, sleep, R, holdKey } = h;
+  const { openPair, startLevel, R, holdKey } = h;
+  const K = () => Math.max(1, (+process.env.SIM_LAG || 0) / 150);
+  const sleep = (ms) => h.sleep(ms * K());
 
   S['guest-leave'] = async () => {
     const T = await openPair();

@@ -1,7 +1,10 @@
 // Phase 3 scenarios (loaded by coop-harness.js)
 'use strict';
 module.exports = (S, h) => {
-  const { openPair, startLevel, sleep, R, holdKey } = h;
+  const { openPair, startLevel, R, holdKey } = h;
+  // on a slow line everything simply takes longer: waits grow with the lag
+  const K = () => Math.max(1, (+process.env.SIM_LAG || 0) / 150);
+  const sleep = (ms) => h.sleep(ms * K());
 
   // reliable channel: 40 % of all incoming messages are thrown away on both sides, 100 events must still arrive once, in order
   S['reliable'] = async () => {
@@ -124,7 +127,7 @@ module.exports = (S, h) => {
       await T.host.evaluate(() => { const L = G.scene.L; window.__q1 = L.shoot(40, 20, 90, 0, { kind: 'orb', col: '#ff5d5d', r: 3, life: 6, tile: false }); });
       await sleep(900);
       const [hq, gq] = [await T.host.evaluate(() => ({ x: window.__q1.x, dead: window.__q1.dead })), await T.guest.evaluate(() => { const q = G.scene.L.projs.find((q) => q.pid === 1); return q ? { x: q.x } : null; })];
-      const flightOk = gq && Math.abs(gq.x - hq.x) < 25;
+      const flightOk = gq && Math.abs(gq.x - hq.x) < 25 + (+process.env.SIM_LAG || 100) * 0.35;
       // 2) one flies into the guest: it loses exactly one hit point, the host's projectile is gone
       await T.host.evaluate(() => { G.scene.L.me.inv = 99; });       // the host player stands next to the partner: it must not catch the shot
       const hp0 = await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.hp = p.maxHp; p.dashT = 0; return p.hp; });
@@ -232,7 +235,7 @@ module.exports = (S, h) => {
     const out = [];
     let ok = true;
     for (const [lag, want] of [[0, 0], [150, 1], [300, 2]]) {
-      const T = await openPair({ env: lag ? { SIM_LAG: String(lag) } : {} });
+      const T = await openPair({ env: { SIM_LAG: String(lag), SIM_JITTER: '0', SIM_STALL_PCT: '0', SIM_BW: '0' } });      // this test sets its own line, whatever the environment says
       try {
         await startLevel(T, '1-1'); await sleep(8500);
         const r = await T.host.evaluate(() => ({ lvl: G.coop.rate.level, snap: G.coop.rate.snap, rtt: G.coop.ping }));

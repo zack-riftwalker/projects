@@ -234,7 +234,7 @@ S['p2-freeze'] = async () => {
   try {
     await startLevel(T, '1-1'); await sleep(800);
     await T.host.evaluate(() => { const L = G.scene.L; L.ents.length = 0; });   // nobody disturbs the test
-    for (const p of [T.host, T.guest]) await p.evaluate(() => { window.__s = []; const f = () => { const L = G.scene.L; if (L) window.__s.push([Date.now(), (L.p2 || L.me).x, L.p2 ? 0 : L.me.vx]); window.__raf = requestAnimationFrame(f); }; f(); });
+    for (const p of [T.host, T.guest]) await p.evaluate(() => { window.__s = []; const f = () => { const L = G.scene.L; if (L) window.__s.push([Date.now(), (L.p2 || L.me).x, L.p2 ? 0 : L.me.vx, L.p2 ? performance.now() - G.coop.lastRx : 0]); window.__raf = requestAnimationFrame(f); }; f(); });
     // the guest keeps walking; the host fires a harmless shot at P2 every second
     const walk = (async () => { for (let i = 0; i < 8; i++) { await holdKey(T.guest, i % 2 ? 'ArrowLeft' : 'ArrowRight', 900); } })();
     const shots = (async () => { for (let i = 0; i < 6; i++) { await sleep(1200); await T.host.evaluate(() => { const L = G.scene.L, p = L.p2; L.shoot(p.x + 5, p.y + 5, 0, 0, { dmg: 0, life: 0.1, tile: false, cut: false, r: 4 }); }); } })();
@@ -245,7 +245,7 @@ S['p2-freeze'] = async () => {
     const moving = (t) => Math.abs(gAt(t - 100) - gAt(t - 200)) > 1.5 && Math.abs(gAt(t - 100, 2)) > 60 && Math.abs(gAt(t - 200, 2)) > 60;   // clearly running, not turning round or leaning on a wall
     let worst = 0, runStart = null, wAt = null;
     for (let i = 1; i < hs.length; i++) {
-      const still = hs[i][1] === hs[i - 1][1] && moving(hs[i][0]);
+      const still = hs[i][1] === hs[i - 1][1] && moving(hs[i][0]) && hs[i][3] < 130;       // a freeze while reports are arriving is ours; while the line itself is silent it is the line's
       if (still) { if (runStart === null) runStart = hs[i - 1][0]; if (hs[i][0] - runStart > worst) { worst = hs[i][0] - runStart; wAt = { x: hs[i][1].toFixed(1), gx: gAt(hs[i][0] - 100).toFixed(1), gvx: gAt(hs[i][0] - 100, 2).toFixed(0), gvx2: gAt(hs[i][0] - 200, 2).toFixed(0), t: hs[i][0] % 100000 }; } } else runStart = null;
     }
     let gap = 0, over = 0; for (let i = 1; i < hs.length; i++) { const d = hs[i][0] - hs[i - 1][0]; gap = Math.max(gap, d); if (d > 40) over++; }
@@ -264,7 +264,8 @@ S['bandwidth'] = async () => {
       const secs = 6;
       await T.host.evaluate(() => { G.coop.dbg.stat = {}; }); await T.guest.evaluate(() => { G.coop.dbg.stat = {}; });
       const [h0, g0] = [await counters(T.host), await counters(T.guest)];
-      await sleep(secs * 1000);
+      let mv = null; if (process.env.BW_MOVE) mv = (async () => { for (let i = 0; i < secs / 0.9; i++) await holdKey(T.guest, i % 2 ? 'ArrowLeft' : 'ArrowRight', 800); })();
+      await sleep(secs * 1000); if (mv) await mv;
       const [h1, g1] = [await counters(T.host), await counters(T.guest)];
       const dh = diffNet(h0, h1), dg = diffNet(g0, g1);
       const h2g = dh.tx / 1024 / secs, g2h = dg.tx / 1024 / secs;
