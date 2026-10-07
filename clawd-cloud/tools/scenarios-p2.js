@@ -77,7 +77,7 @@ module.exports = (S, h) => {
     } finally { await T.close(); }
   };
 
-  // LOCK=1: the server's numbers win and the host UI is disabled; /config is local only
+  // LOCK=1: the server's numbers win and the host UI is disabled; /config is public in the cloud (values are not secret)
   S['diff-lock'] = async () => {
     const T = await openPair({ env: { BOSS_HP: '100', NPC_HITS: '2', NPC_MULT: '150', LOCK: '1' } });
     try {
@@ -87,8 +87,8 @@ module.exports = (S, h) => {
       const hb = await T.host.evaluate(() => ({ max: G.scene.L.boss.maxHp, line: G.coop.diffLine }));
       await T.host.click('#coopBtn');
       const dis = await T.host.evaluate(() => document.querySelector('#cB').disabled && document.querySelector('#cPre').disabled);
-      const remote = await h.rawReq(T.srv.port, 'GET /config HTTP/1.1\r\nX-Forwarded-For: 1.2.3.4');
-      return R(hb.max === 52 && dis && /BOSS \+100%/.test(hb.line) && /403/.test(remote), 'locked boss maxHp ' + hb.max + ' (want 52), line "' + hb.line + '", inputs disabled=' + dis + ', /config via tunnel header -> ' + (remote.split('\r\n')[0]));
+      const cfg = await h.get(T.srv.port, '/config'); let c = null; try { c = JSON.parse(cfg.body.toString()); } catch (e) { /* */ }
+      return R(hb.max === 52 && dis && /BOSS \+100%/.test(hb.line) && cfg.status === 200 && c && c.lock === true && c.bossPct === 100 && c.npcExtra === 2 && c.npcMult === 150, 'locked boss maxHp ' + hb.max + ' (want 52), line "' + hb.line + '", inputs disabled=' + dis + ', /config (public in the cloud) -> ' + cfg.status + ' ' + cfg.body);
     } finally { await T.close(); }
   };
 };

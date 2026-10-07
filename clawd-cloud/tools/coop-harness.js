@@ -1,7 +1,8 @@
 // CLAWD co-op test harness (dev only, not shipped to players).
 //   node tools/coop-harness.js <scenario> [...]      run named scenarios
 //   node tools/coop-harness.js all                   run every scenario
-// env: SIM_LAG / SIM_JITTER / SIM_STALL_PCT / SIM_BW are passed through to the relay server.
+// env: SIM_LAG / SIM_JITTER / SIM_STALL_PCT / SIM_STALL_MS / SIM_BW are passed to the Worker as --var (dev simulator).
+// Every server is a fresh `wrangler dev` (real Worker + Durable Object) with its own --persist-to directory.
 'use strict';
 const path = require('path'), http = require('http'), net = require('net'), { spawn } = require('child_process'), { createRequire } = require('module');
 let pw;
@@ -14,21 +15,53 @@ let nextPort = 4100 + Math.floor(Math.random() * 400);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SIMV = ['SIM_LAG', 'SIM_JITTER', 'SIM_STALL_PCT', 'SIM_STALL_MS', 'SIM_BW'];
 
-// ---------------------------------------------------------------- server
+// ---------------------------------------------------------------- server (wrangler dev: the real Worker + Durable Object, locally)
+const fs = require('fs'), os = require('os');
+const WRANGLER = path.join(ROOT, 'node_modules', '.bin', 'wrangler');
+const live = new Set();
+const killTree = (proc, sig) => { try { process.kill(-proc.pid, sig); } catch (e) { try { proc.kill(sig); } catch (x) { /* gone */ } } };
+process.on('exit', () => { for (const srv of live) killTree(srv.proc, 'SIGKILL'); });
+for (const sg of ['SIGINT', 'SIGTERM']) process.on(sg, () => process.exit(130));
+// extra: vars for the Worker (CODE, HOST_KEY, GRACE_MS, SIM_*, BOSS_HP ...). null removes a default. Each server gets its own fresh --persist-to directory.
 async function startServer(extra) {
   const port = nextPort++;
-  const env = Object.assign({}, process.env, { PORT: String(port), CODE, NO_OPEN: '1' }, extra || {});
-  const proc = spawn('node', ['server.js'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  proc.stdout.on('data', (d) => { out += d; });
-  proc.stderr.on('data', (d) => { out += d; });
-  const srv = { port, proc, get out() { return out; }, dead: false };
-  proc.on('exit', () => { srv.dead = true; });
-  for (let i = 0; i < 60 && !/running/.test(out); i++) await sleep(100);
-  if (!/running/.test(out)) throw new Error('server did not start: ' + out);
-  srv.stop = async () => { if (!srv.dead) { proc.kill(); await sleep(100); } };
+  const vars = Object.assign({ CODE, HOST_KEY: 'test' }, extra || {});
+  const srv = { port, vars, persist: fs.mkdtempSync(path.join(os.tmpdir(), 'clawd-persist-')), dead: true, proc: null, text: '' };
+  Object.defineProperty(srv, 'out', { get: () => srv.text });
+  const launch = async () => {
+    const args = ['dev', '--port', String(port), '--ip', '127.0.0.1', '--inspector-port', String(port + 1000), '--persist-to', srv.persist];
+    for (const k of Object.keys(srv.vars)) if (srv.vars[k] !== null && srv.vars[k] !== undefined) args.push('--var', k + ':' + srv.vars[k]);
+    const proc = spawn(WRANGLER, args, { cwd: ROOT, detached: true, env: Object.assign({}, process.env, { WRANGLER_SEND_METRICS: 'false', NO_COLOR: '1' }), stdio: ['ignore', 'pipe', 'pipe'] });
+    srv.proc = proc; srv.dead = false; srv.text = '';
+    proc.stdout.on('data', (d) => { srv.text += d; }); proc.stderr.on('data', (d) => { srv.text += d; });
+    proc.on('exit', () => { if (srv.proc === proc) srv.dead = true; });
+    live.add(srv);
+    for (let i = 0; i < 1200 && !/Ready on/.test(srv.text) && !srv.dead; i++) await sleep(100);      // up to 120 s on a cold start
+    if (!/Ready on/.test(srv.text)) { killTree(proc, 'SIGKILL'); throw new Error('wrangler dev did not start: ' + srv.text.slice(-800)); }
+    for (let i = 0; i < 50; i++) { const r = await get(port, '/config'); if (r && r.status === 200) break; await sleep(100); }
+  };
+  const halt = async () => {
+    const proc = srv.proc; if (!proc || srv.dead) return;
+    const exited = new Promise((r) => proc.once('exit', r));
+    killTree(proc, 'SIGTERM');
+    await Promise.race([exited, sleep(2500)]);
+    killTree(proc, 'SIGKILL'); srv.dead = true; await sleep(150);
+  };
+  srv.stop = async () => { await halt(); live.delete(srv); try { fs.rmSync(srv.persist, { recursive: true, force: true }); } catch (e) { /* */ } };
+  srv.restart = async () => { await halt(); await launch(); };       // same port, same --persist-to: the Durable Object's storage survives
+  await launch();
   return srv;
 }
+// plain WebSocket client for the server scenarios; resolves with {code, msgs, ws}. opts.send is sent on open, opts.hold keeps the socket open for ms
+const wsTry = (port, query, opts) => new Promise((res) => {
+  opts = opts || {};
+  const ws = new WebSocket('ws://127.0.0.1:' + port + '/ws?' + query), msgs = []; let done = false;
+  const fin = (code) => { if (!done) { done = true; res({ code, msgs, ws }); } };
+  ws.onmessage = (e) => msgs.push(e.data);
+  ws.onopen = () => { if (opts.send) ws.send(opts.send); if (opts.hold) setTimeout(() => fin('open'), opts.hold); else if (opts.closeAfter !== undefined) setTimeout(() => { ws.close(); }, opts.closeAfter); };
+  ws.onclose = (e) => fin(e.code); ws.onerror = () => {};
+  setTimeout(() => fin('timeout'), opts.timeout || 4000);
+});
 const get = (port, p, headers) => new Promise((res) => {
   const r = http.get({ host: '127.0.0.1', port, path: p, headers: headers || {} }, (rs) => { const b = []; rs.on('data', (c) => b.push(c)); rs.on('end', () => res({ status: rs.statusCode, headers: rs.headers, body: Buffer.concat(b) })); });
   r.on('error', () => res(null)); r.setTimeout(2000, () => { r.destroy(); res(null); });
@@ -71,7 +104,7 @@ async function openPair(opts) {
   const T = { srv, browser, host, guest, errs, sim };
   T.close = async () => { try { await browser.close(); } catch (e) { /* */ } await srv.stop(); };
   if (opts.connect !== false) {
-    await host.evaluate((c) => G.coop.connect('host', c), CODE);
+    await host.evaluate((k) => G.coop.connect('host', k), 'test');
     await host.waitForFunction(() => G.coop.open);
     await guest.evaluate((c) => G.coop.connect('guest', c), CODE);
     await guest.waitForFunction(() => G.coop.open);
@@ -104,33 +137,31 @@ const S = {};   // scenarios
 S['crash-url'] = async () => {
   const srv = await startServer();
   try {
-    await rawReq(srv.port, 'GET /%E0%A4%A HTTP/1.1');
+    const raw = await rawReq(srv.port, 'GET /%E0%A4%A HTTP/1.1');
+    const st = +(/^HTTP\/1\.\d (\d+)/.exec(raw) || [])[1];
     await sleep(300);
-    const r = await get(srv.port, '/');
-    return R(r && r.status === 200 && !srv.dead, srv.dead ? 'server died' : 'server alive');
+    const r = await get(srv.port, '/'), g = await wsTry(srv.port, 'role=guest&code=' + CODE, { hold: 300 });
+    return R((st === 400 || st === 404) && r && r.status === 200 && g.code === 'open' && !srv.dead, 'bad url -> ' + st + '; room ' + (g.code === 'open' ? 'still works' : 'BROKEN (' + g.code + ')'));
   } finally { await srv.stop(); }
 };
 S['crash-big'] = async () => {
   const srv = await startServer();
-  const WebSocket = createRequire(path.join(ROOT, 'x.js'))('ws');
   try {
-    const code = await new Promise((res) => {
-      const ws = new WebSocket('ws://127.0.0.1:' + srv.port + '/ws?role=guest&code=' + CODE);
-      ws.on('open', () => ws.send(Buffer.alloc(600 * 1024, 97).toString()));
-      ws.on('close', (c) => res(c)); ws.on('error', () => {});
-      setTimeout(() => res('timeout'), 3000);
-    });
+    const big = await wsTry(srv.port, 'role=guest&code=' + CODE, { send: 'a'.repeat(600 * 1024) });
     await sleep(300);
-    const r = await get(srv.port, '/');
-    return R(r && r.status === 200 && !srv.dead && code === 1009, (srv.dead ? 'server died; ' : 'server alive; ') + 'close code ' + code);
+    const r = await get(srv.port, '/'), g = await wsTry(srv.port, 'role=guest&code=' + CODE, { hold: 300 });
+    return R(r && r.status === 200 && !srv.dead && big.code === 1009 && g.code === 'open', 'close code ' + big.code + '; room ' + (g.code === 'open' ? 'still works' : 'BROKEN (' + g.code + ')'));
   } finally { await srv.stop(); }
 };
 S['paths'] = async () => {
   const srv = await startServer();
   try {
-    const a = await get(srv.port, '/assets/../server.js'), b = await rawReq(srv.port, 'GET /assets/../server.js HTTP/1.1'), c = await get(srv.port, '/package.json'), d = await get(srv.port, '/assets/voice/nar_title.mp3'), e = await get(srv.port, '/');
-    const bad = /CLAWD co-op relay/.test(b);
-    return R(!bad && c && c.status === 404 && d && d.status === 200 && e && e.status === 200, 'traversal leaked=' + bad + ' package.json=' + (c && c.status) + ' mp3=' + (d && d.status) + ' index=' + (e && e.status));
+    const bad = ['/server.js', '/src/worker.js', '/wrangler.jsonc', '/.dev.vars', '/package.json', '/_headers', '/assets/../src/worker.js', '/%2e%2e/src/worker.js'];
+    const res = []; let leaked = false;
+    for (const p of bad) { const r = await get(srv.port, p); res.push(p + '=' + (r && r.status)); if (r && r.status === 200) leaked = true; if (r && /class Room/.test(r.body.toString())) leaked = true; }
+    const raw = await rawReq(srv.port, 'GET /assets/../src/worker.js HTTP/1.1'); if (/class Room/.test(raw)) leaked = true;
+    const d = await get(srv.port, '/assets/voice/nar_title.mp3'), e = await get(srv.port, '/');
+    return R(!leaked && d && d.status === 200 && e && e.status === 200, res.join(' ') + ' mp3=' + (d && d.status) + ' index=' + (e && e.status));
   } finally { await srv.stop(); }
 };
 
@@ -308,7 +339,7 @@ S['smoke'] = async () => {   // solo, no co-op: every level for 3 s with scripte
 };
 
 // scenarios for later phases are appended by tools/scenarios-*.js
-for (const f of ['scenarios-p1.js', 'scenarios-p2.js', 'scenarios-p3.js', 'scenarios-review.js']) { try { require('./' + f)(S, { startServer, get, rawReq, openPair, startLevel, counters, diffNet, key, holdKey, godmode, noGod, sleep, R, openPage, chromium, ROOT, CODE, createRequire }); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; } }
+for (const f of ['scenarios-p1.js', 'scenarios-p2.js', 'scenarios-p3.js', 'scenarios-review.js', 'scenarios-cloud.js']) { try { require('./' + f)(S, { startServer, wsTry, get, rawReq, openPair, startLevel, counters, diffNet, key, holdKey, godmode, noGod, sleep, R, openPage, chromium, ROOT, CODE, createRequire }); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; } }
 
 module.exports = { S, openPair, startLevel, sleep, counters, key, holdKey, godmode, startServer };
 if (require.main === module) (async () => {
@@ -323,5 +354,6 @@ if (require.main === module) (async () => {
     if (!r.pass) fails++;
   }
   console.log(fails ? fails + ' scenario(s) FAILED' : 'all scenarios passed');
+  for (const srv of live) killTree(srv.proc, 'SIGKILL');
   process.exit(fails ? 1 : 0);
 })();
