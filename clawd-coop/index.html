@@ -6010,6 +6010,7 @@ G.VOICE = {
           const jx = hpShake > 0 ? Math.round(Math.sin(t * 90 + i) * 1.5) : 0, low = p.hp === 1 && i === 0 && ((t * 4) | 0) % 2;
           ug.drawImage(i < p.hp ? (low ? G.tint(S.pip, '#ffffff') : p.blue ? G.tint(S.pip, '#6aa8ff') : S.pip) : S.pipOff, 6 + i * 9 + jx, hudY);
         }
+        if (L.net) { ug.fillStyle = '#0d0a12'; ug.fillRect(6 + p.maxHp * 9, hudY + 1, 6, 6); ug.fillStyle = G.coop.dotColor(false); ug.fillRect(6 + p.maxHp * 9 + 1, hudY + 2, 4, 4); }
         if (L.partner) G.coop.drawPartnerHud(ug, L, hudY, p.tools.agents ? 19 : 11);
         if (p.tools.agents) {
           const full = p.meter >= 100, act = p.agents.length > 0;
@@ -6574,8 +6575,8 @@ G.VOICE = {
   function pNote(gt, at) {
     const now = at / 1000, d = now - gt;
     if (pb.off === null) pb.off = d;
-    else { const dev = d - pb.off; if (dev < 0) pb.off = d; else { pb.off += dev * 0.02; if (gt - pb.last <= 0.1) pb.jit += (Math.min(dev, 0.5) - pb.jit) * 0.1; } }
-    pb.last = gt; pb.D += (G.clamp(0.033 + 2 * pb.jit, 0.05, 0.25) - pb.D) * 0.05;
+    else { const dev = d - pb.off; if (dev < 0) pb.off = d; else pb.off += dev * 0.02; if (gt - pb.last <= 0.1) pb.jit += (Math.min(Math.abs((now - pb.lastAt) - (gt - pb.last)), 0.5) - pb.jit) * 0.1; }
+    pb.last = gt; pb.lastAt = now; pb.D += (G.clamp(0.033 + 2 * pb.jit, 0.05, 0.25) - pb.D) * 0.05;
     coop.pDelay = pb.D;
     const r = coop.rAll; pb.list.push({ gt, x: r.x, y: r.y, vx: r.vx, vy: r.vy }); if (pb.list.length > 40) pb.list.shift();
   }
@@ -6861,10 +6862,12 @@ G.VOICE = {
     if (g.off === null) g.off = d;
     else {
       const dev = d - g.off;
-      if (dev < 0) g.off = d; else { g.off += dev * 0.02; g.jit += (Math.min(dev, 0.5) - g.jit) * 0.1; }
+      if (dev < 0) g.off = d; else g.off += dev * 0.02;
       const dt = S.tm - g.lastTm; if (dt > 0 && dt < 0.5) g.si += (dt - g.si) * 0.1;
+      // jitter: how far the gap between two arrivals is from the gap the sender made (immune to a slow-running host clock)
+      g.jit += (Math.min(Math.abs((now - g.lastAt) - dt), 0.5) - g.jit) * 0.1;
     }
-    g.lastTm = S.tm;
+    g.lastTm = S.tm; g.lastAt = now;
     g.list.push(S); if (g.list.length > 40) g.list.shift();
     g.D += (G.clamp(g.si + 2 * g.jit, 0.08, 0.3) - g.D) * 0.05;
     coop.delay = g.D; coop.jitter = g.jit;
@@ -6889,7 +6892,7 @@ G.VOICE = {
       if (fb && typeof fb[k] === 'number') { if (Math.abs(fb[k] - v) > 60) r = v; else { r = v + (fb[k] - v) * u; sp = Math.abs(fb[k] - v) / (seg || 0.066); } }      // a jump (teleport, wrap-around) is not blended
       else { const vel = k === 'x' ? fa.vx : k === 'y' ? fa.vy : 0; if (typeof vel === 'number') { sp = Math.abs(vel); if (ex > 0) r += vel * ex; } }
       const rr = o._rp || (o._rp = {}), last = rr[k];
-      if (last !== undefined && Math.abs(r - last) <= 60) { const lim = Math.max(3, sp * dt * 2.2 + 1.5); if (r - last > lim) r = last + lim; else if (last - r > lim) r = last - lim; }
+      if (last !== undefined && Math.abs(r - last) <= 60) { const lim = Math.max(1.4, sp * dt * 1.5 + 0.5); if (r - last > lim) r = last + lim; else if (last - r > lim) r = last - lim; }
       rr[k] = r; o[k] = r;
     }
     for (const k in fa) { const v = fa[k]; if (v !== null && typeof v === 'object' && o[k] && typeof o[k] === 'object') lerpInto(o[k], v, fb && fb[k], u); }
@@ -7169,10 +7172,17 @@ G.VOICE = {
     const px = Math.round(q.x + q.w / 2) - cx, py = Math.round(q.y) - cy;
     G.text(g, q.away ? 'away' : q.lagging ? 'lag' : L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
   };
+  // little dot beside each player's hit points: how good the line is (green < 120 ms and no stalls, yellow < 250 ms, red worse; grey = partner not answering)
+  coop.dotColor = (partner) => {
+    if (partner) { const q = G.scene && G.scene.L && G.scene.L.partner; if (q && (q.lagging || q.away)) return '#8d8798'; }
+    const rtt = coop.ping, st = coop.stalls.length;
+    return rtt < 120 && !st ? '#7fe08a' : rtt < 250 ? '#ffd27a' : '#ff6b6b';
+  };
   coop.drawPartnerHud = (ug, L, hudY, dy) => {
     const q = L.partner, S = G.SPR, on = L.net === 'host' ? G.tint(S.pip, '#6aa8ff') : S.pip;
     for (let i = 0; i < q.maxHp; i++) ug.drawImage(i < q.hp ? on : S.pipOff, 6 + i * 9, hudY + dy);
-    if (q.dead) G.text(ug, 'down...', 6 + q.maxHp * 9 + 2, hudY + dy, '#8d8798', { tiny: true });
+    ug.fillStyle = '#0d0a12'; ug.fillRect(6 + q.maxHp * 9, hudY + dy + 1, 6, 6); ug.fillStyle = coop.dotColor(true); ug.fillRect(6 + q.maxHp * 9 + 1, hudY + dy + 2, 4, 4);
+    if (q.dead) G.text(ug, 'down...', 6 + q.maxHp * 9 + 9, hudY + dy, '#8d8798', { tiny: true });
   };
 
   // ---------- line quality: measured every 2 s, rates follow it ----------
@@ -7369,6 +7379,12 @@ G.VOICE = {
       if (coop.role === 'host' && on) s = coop.peer ? 'friend connected - pick a level' : 'waiting for your friend (give them the link and code)';
       if (coop.role === 'guest' && on) s = coop.hostOn ? 'connected to host' : 'host is not online yet';
       this.stat.textContent = s;
+      if (this.net) {
+        const N = coop.net, now = performance.now(); coop.stallLog = coop.stallLog.filter((t) => now - t < 60000);
+        this.net.style.display = on && (coop.role === 'guest' || coop.peer) ? '' : 'none';
+        this.net.innerHTML = 'ping <b style="color:' + coop.dotColor(false) + '">' + (coop.ping || '-') + ' ms</b> &middot; jitter ' + N.jit + ' ms &middot; stalls ' + coop.stallLog.length + '/min<br>' +
+          'sending ' + N.hz + ' Hz (' + ['good', 'slow line', 'bad line'][N.level] + ') &middot; in ' + N.kbIn + ' / out ' + N.kbOut + ' KB/s';
+      }
       this.hostRow.style.display = on ? 'none' : '';
       this.codeBox.style.display = on && coop.role === 'host' ? '' : 'none';
       this.off.style.display = on ? '' : 'none';
@@ -7381,7 +7397,7 @@ G.VOICE = {
     document.head.appendChild(css);
     const btn = document.createElement('button'); btn.id = 'coopBtn'; btn.textContent = '2P'; btn.style.color = '#fff';
     const panel = document.createElement('div'); panel.id = 'coopP';
-    panel.innerHTML = '<div style="color:#6aa8ff;font-weight:bold">CO-OP (2 players)</div><div id="cStat" style="margin:6px 0;color:#bbb">offline</div>' +
+    panel.innerHTML = '<div style="color:#6aa8ff;font-weight:bold">CO-OP (2 players)</div><div id="cStat" style="margin:6px 0;color:#bbb">offline</div><div id="cNet" style="display:none;margin:4px 0;color:#8d8798;font-size:11px;line-height:1.5"></div>' +
       '<div id="cRow"><button id="cHost">Host</button> <span>or</span><br><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
       '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b></div>' +
       '<div id="cDiff" style="display:none;margin:6px 0;border-top:1px solid #333;padding-top:6px"><div style="color:#ffd27a">difficulty <span id="cLock" style="color:#888"></span></div>' +
@@ -7403,6 +7419,7 @@ G.VOICE = {
     const edit = () => { const d = cd(); d.bossPct = +$('#cB').value; d.npcExtra = +$('#cE').value; d.npcMult = +$('#cM').value; d.preset = 'custom'; G.save.write(); ui.renderDiff(); coop.sendCfg(); };
     for (const id of ['#cB', '#cE', '#cM']) $(id).addEventListener('input', edit);
     $('#cPre').addEventListener('change', () => { const d = cd(), v = $('#cPre').value; d.preset = v; if (G.diff.PRESETS[v]) Object.assign(d, G.diff.PRESETS[v]); G.save.write(); ui.renderDiff(); coop.sendCfg(); });
+    ui.net = panel.querySelector('#cNet');
     ui.btn = btn; ui.panel = panel; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
     for (const el of [btn, panel]) for (const ev of ['keydown', 'keyup', 'pointerdown']) el.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; });

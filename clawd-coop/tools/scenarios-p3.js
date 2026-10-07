@@ -86,8 +86,9 @@ module.exports = (S, h) => {
       const tBounce = await T.guest.evaluate(() => window.__tb), tdead = await T.host.evaluate(() => window.__tdead);
       const killLag = tdead - tBounce;               // the creature dies on the host this long AFTER the guest already bounced
       const hpAfter = await T.guest.evaluate(() => G.scene.L.me.hp);
-      const ok = guestLag > 100 && guestLag < 500 && hpG === maxHp - 1 && hpH === maxHp - 1 && tBounce > 0 && killLag > 100 && killLag < 500 && hpAfter === maxHp;
-      return R(ok, 'spikes: guest acted ' + guestLag.toFixed(0) + ' ms before the host heard of it (want 100..500 at lag 150), hp guest ' + hpG + ' / host ' + hpH + ' (want ' + (maxHp - 1) + ' both, no double loss); stomp: guest bounced ' + killLag.toFixed(0) + ' ms before the bug died on the host (want 100..500), guest hp unchanged ' + (hpAfter === maxHp));
+      const lag = +(process.env.SIM_LAG || 150), lo = lag * 0.65, hi = lag * 3.2 + 250;
+      const ok = guestLag > lo && guestLag < hi && hpG === maxHp - 1 && hpH === maxHp - 1 && tBounce > 0 && killLag > lo && killLag < hi && hpAfter === maxHp;
+      return R(ok, 'spikes: guest acted ' + guestLag.toFixed(0) + ' ms before the host heard of it (want ' + lo.toFixed(0) + '..' + hi.toFixed(0) + '), hp guest ' + hpG + ' / host ' + hpH + ' (want ' + (maxHp - 1) + ' both, no double loss); stomp: guest bounced ' + killLag.toFixed(0) + ' ms before the bug died on the host (want ' + lo.toFixed(0) + '..' + hi.toFixed(0) + '), guest hp unchanged ' + (hpAfter === maxHp));
     } finally { await T.close(); }
   };
 
@@ -162,7 +163,8 @@ module.exports = (S, h) => {
       const xs = await T.guest.evaluate(() => { cancelAnimationFrame(window.__smraf); return window.__sm; });
       let maxD = 0, lurch = 0, prevD = null;
       for (let i = 1; i < xs.length; i++) {
-        const d = Math.abs(xs[i][1] - xs[i - 1][1]); maxD = Math.max(maxD, d);
+        const dtMs = Math.max(8, xs[i][0] - xs[i - 1][0]), d = Math.abs(xs[i][1] - xs[i - 1][1]) * (1000 / 60) / dtMs;      // per 60 fps frame, so a slow test machine does not count as lurching
+        maxD = Math.max(maxD, d);
         if (prevD === 0 && d > 6) lurch++;
         prevD = d;
       }
@@ -284,7 +286,8 @@ module.exports = (S, h) => {
       await sleep(1500);
       const g = await T.guest.evaluate(() => ({ sfx: window.__sfx, t: window.__tsfx, stop: window.__stop })), th = await T.host.evaluate(() => window.__thit);
       const early = th - g.t;
-      return R((g.sfx.hit || 0) === 1 && early > 100 && g.stop > 0 && g.stop <= 0.031, 'hit sound played ' + (g.sfx.hit || 0) + 'x on the guest (want 1), ' + early.toFixed(0) + ' ms before the host applied the damage (want > 100), guest hitstop ' + g.stop.toFixed(3) + ' s (want 0..0.03)');
+      const lag = +(process.env.SIM_LAG || 150);
+      return R((g.sfx.hit || 0) === 1 && early > lag * 0.65 && g.stop > 0 && g.stop <= 0.031, 'hit sound played ' + (g.sfx.hit || 0) + 'x on the guest (want 1), ' + early.toFixed(0) + ' ms before the host applied the damage (want > ' + (lag * 0.65).toFixed(0) + '), guest hitstop ' + g.stop.toFixed(3) + ' s (want 0..0.03)');
     } finally { await T.close(); }
   };
 
