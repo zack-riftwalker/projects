@@ -6316,17 +6316,28 @@ G.VOICE = {
 
   // ---------- level setup ----------
   class HookMap extends Map { set(k, v) { if (coop.hookCr) send({ t: 'cr', i: k, v }); return super.set(k, v); } }
+  function hostSetup(L, x, y) {
+    L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
+    const p2 = new Player(L, x, y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
+    L.p2 = p2; L.partner = p2; L.reviveQ = [];
+    coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
+  }
+  // a partner joins a level that is already running: no restart, they get the live state
+  coop.attachPartner = (L) => {
+    if (L.net || !coop.peer || !coop.open) return;
+    hostSetup(L, L.me.x - 8, L.me.y);
+    ensureIds(L);
+    L._net = null;
+    send({ t: 'start', id: L.id, snap: L.snapshot(), tools: G.save.data.tools, e: coop.epoch, join: true, spawn: { x: L.me.x, y: L.me.y } });
+  };
   coop.initLevel = (L, start) => {
     L._tiles0 = L.tiles.slice();
     if (coop.role === 'host' && coop.peer && coop.open) {
-      L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
-      const p2 = new Player(L, start.x - 8, start.y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
-      L.p2 = p2; L.partner = p2; L.reviveQ = [];
-      coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
+      hostSetup(L, start.x - 8, start.y);
     } else if (coop.role === 'guest' && coop.building) {
       L.net = 'guest'; L._ctx = 'all';
       const remote = L.player; remote.remote = true;
-      const me = new Player(L, start.x - 8, start.y); me.blue = true;
+      const sp = coop.startSpawn, me = new Player(L, sp ? sp.x : start.x - 8, sp ? sp.y : start.y); me.blue = true;
       const tools = Object.assign({}, coop.tools || me.tools, { agents: false });
       me.tools = tools; remote.tools = tools;
       L.player = L.me = me; L.partner = remote; L.p1 = remote; L._ep = coop.startEpoch;
@@ -6350,7 +6361,8 @@ G.VOICE = {
       coop.gTick = 0; coop.fxAck = 0;
     }
   };
-  coop.playEnter = (L, cap) => { coop.cap = cap; if (L.net) ensureIds(L); };
+  // ids are handed out in construction order, so a partner who joins later builds the same ids from the same level definition
+  coop.playEnter = (L, cap) => { coop.cap = cap; ensureIds(L); };
   coop.setState = (st, fm, res) => {
     coop.hostState = { st, fm: fm || '', rs: st === 'clear' && res ? { rows: res.rows, best: res.best } : null };
   };
@@ -6738,7 +6750,7 @@ G.VOICE = {
       if (m.t === 'peer') {
         coop.peer = !!m.on; ui.render();
         const sc = G.scene;
-        if (m.on) { if (sc && sc.L && !sc.L.net) G.go(() => G.Scenes.play(sc.L.id, sc.L.def.boss ? null : sc.L.snapshot())); }
+        if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
       else if (m.t === 'cr' || m.t === 'bt') coop.inbox.push(m);
@@ -6800,13 +6812,14 @@ G.VOICE = {
   const oStep = G.step;
   G.step = function (n, quiet) {
     if (coop.notice && (coop.notice.t -= n / 60) <= 0) coop.notice = null;
+    if (coop.pendingAttach && !G.transitioning()) { coop.pendingAttach = false; const L = G.scene && G.scene.L; if (L && !L.net) coop.attachPartner(L); }
     if (coop.kick && !G.transitioning()) {
       const k = coop.kick; coop.kick = null;
       if (k === 'wait' && coop.open) G.go(() => wait(), { speed: 3.2 }); else G.go(() => G.Scenes.map(), { speed: 3.2 });
     }
     if (coop.role === 'guest' && coop.open && !G.transitioning()) {
       if (coop.startMsg) {
-        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools; coop.startEpoch = m.e || 0;
+        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools; coop.startEpoch = m.e || 0; coop.startSpawn = m.spawn || null;
         G.go(() => { coop.building = true; try { return G.Scenes.play(m.id, m.snap); } finally { coop.building = false; } }, { speed: 3.2 });
       } else if (coop.leaveMsg) { coop.leaveMsg = false; if (G.scene.L) G.go(() => wait(), { speed: 3.2 }); }
     }

@@ -168,4 +168,26 @@ module.exports = (S, h) => {
       return R(ok, 'host hurt -> guest flash ' + hostHurt_guest.flash.toFixed(2) + ' trauma ' + hostHurt_guest.trauma.toFixed(2) + ' (host flash ' + hostHurt_host.flash.toFixed(2) + '); partner hurt -> host flash ' + p2Hurt_host.flash.toFixed(2) + ' stop ' + p2Hurt_host.stop.toFixed(2) + ' trauma ' + p2Hurt_host.trauma.toFixed(2) + ' (guest flash ' + p2Hurt_guest.flash.toFixed(2) + ')');
     } finally { await T.close(); }
   };
+
+  // the friend joins while the host is already playing: the level is not restarted and the guest sees the live state
+  S['late-join'] = async () => {
+    const T = await openPair({ connect: false });
+    try {
+      await T.host.evaluate((c) => G.coop.connect('host', c), h.CODE); await T.host.waitForFunction(() => G.coop.open);
+      await T.host.evaluate(() => { for (const k of Object.keys(G.LEVELS)) G.save.data.seen['b' + k] = true; G.go(() => G.Scenes.play('1-1', null)); });
+      await T.host.waitForFunction(() => G.scene.L && !G.transitioning());
+      await sleep(5000);
+      const killed = await T.host.evaluate(() => { const L = G.scene.L; window.__L0 = L; const e = L.ents.find((x) => !x.isBoss && !x.dead); const id = e._id; e.hit(99, 0, 0, 'swipe'); L.me.x += 40; L.ents = L.ents.filter((x) => !x.dead); return id; });
+      await sleep(300);
+      await T.guest.evaluate((c) => G.coop.connect('guest', c), h.CODE);
+      await T.guest.waitForFunction((id) => G.scene.L && G.scene.L.net === 'guest' && !G.transitioning(), null, { timeout: 8000 });
+      await sleep(2000);
+      const same = await T.host.evaluate(() => G.scene.L === window.__L0 && G.scene.L.net === 'host');
+      const ids = (p) => p.evaluate(() => G.scene.L.ents.filter((e) => !e.dead).map((e) => e._id).sort((a, b) => a - b).join(','));
+      const [hi, gi] = [await ids(T.host), await ids(T.guest)];
+      const gpos = await T.guest.evaluate(() => [G.scene.L.me.x, G.scene.L.me.y]), hpos = await T.host.evaluate(() => [G.scene.L.me.x, G.scene.L.me.y]);
+      const absent = !gi.split(',').includes(String(killed));
+      return R(same && hi === gi && absent && Math.abs(gpos[0] - hpos[0]) < 40, 'level kept=' + same + ' ids equal=' + (hi === gi) + ' (host [' + hi + '] guest [' + gi + ']) killed #' + killed + ' absent on guest=' + absent + '; guest at ' + gpos.map(Math.round) + ' host at ' + hpos.map(Math.round));
+    } finally { await T.close(); }
+  };
 };
