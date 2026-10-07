@@ -6312,91 +6312,93 @@ G.VOICE = {
   const G = window.G, Level = G.Level, Player = G.Player, W = G.W, H = G.H, A = G.audio;
   const coop = G.coop = {
     role: null, ws: null, open: false, peer: false, building: false, tools: null,
-    mute: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
+    mute: 0, quiet: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
     cap: null, ping: 0, tickN: 0, epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
     relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
   };
   const r2 = (v) => Math.round(v * 100) / 100;
-  const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools', 'hitKey', 'dashKey', '_scaled', '_diff', 'dropN']);
   // the level (host) decides these for the partner; everything else about the partner's body is the partner's own
   const HOSTOWN = new Set(['frozen', 'celebrate', 'auto', 'remote', 'blue', 'away']);
-  const isPlain = (v) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null; };
 
-  // ---------- generic state dump / merge ----------
-  function dump(o, depth, seen, path) {
-    const out = {};
-    for (const k of Object.keys(o)) {
-      if (SKIP.has(k)) continue;
-      const v = o[k], t = typeof v;
-      if (t === 'number') { if (isFinite(v)) out[k] = Number.isInteger(v) ? v : r2(v); }
-      else if (t === 'string' || t === 'boolean' || v === null) out[k] = v;
-      else if (t === 'object') {
-        if (depth >= 3) continue;
-        if (seen.has(v)) { out[k] = { $r: seen.get(v) }; continue; }
-        const arr = Array.isArray(v);
-        if (!arr && !isPlain(v)) continue;
-        const pp = path ? path + '.' + k : k;
-        seen.set(v, pp);
-        out[k] = arr ? dumpArr(v, depth + 1, seen, pp) : dump(v, depth + 1, seen, pp);
-      }
-    }
-    return out;
+  // ---------- compact encoding ----------
+  // Every creature class lists the fields the OTHER screen needs to draw it and to touch it (bounding boxes, flags the fight logic reads).
+  // They travel in that fixed order as small integers: x4 for positions, x100 for timers, ... Nothing else is sent; the rest is rebuilt locally.
+  // types: p position (1/4 px)  v speed  t timer (1/100 s)  u coarse timer (1/10 s)  h hit points (1/10)  f fraction (1/100)  n integer
+  //        b flag  s short string  o object {keys}  a list of objects {keys}
+  const QM = { p: 4, v: 1, t: 100, u: 10, h: 10, f: 100, n: 1 };
+  const spec = (str) => str.split(' ').filter(Boolean).map((x) => { const [k, t, keys] = x.split(':'); return { k, t, keys: keys ? keys.split(',') : null }; });
+  const jq = (v) => (typeof v === 'number' ? Math.round(v * 4) / 4 : v && typeof v === 'object' ? (Array.isArray(v) ? v.map(jq) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, jq(x)]))) : v);
+  const pickKeys = (o, keys) => keys.map((k) => jq(o[k]));
+  const unpickKeys = (arr, keys) => { const o = {}; keys.forEach((k, i) => { if (arr[i] !== undefined && arr[i] !== null) o[k] = arr[i]; }); return o; };
+  function encOne(f, v) {
+    const t = f.t;
+    if (QM[t]) return typeof v === 'number' && isFinite(v) ? Math.round(v * QM[t]) : 0;
+    if (t === 'b') return v ? 1 : 0;
+    if (t === 's') return v === undefined || v === null ? '' : v;
+    if (t === 'o') return v ? pickKeys(v, f.keys) : 0;
+    if (t === 'a') return Array.isArray(v) ? v.slice(0, 16).map((x) => pickKeys(x, f.keys)) : [];
+    return 0;
   }
-  function dumpArr(a, depth, seen, path) {
-    const out = [];
-    for (let i = 0; i < a.length && i < 64; i++) {
-      const v = a[i], t = typeof v;
-      if (t === 'number') out.push(isFinite(v) ? (Number.isInteger(v) ? v : r2(v)) : 0);
-      else if (t === 'string' || t === 'boolean' || v === null) out.push(v);
-      else if (t === 'object') {
-        if (depth >= 3) { out.push(null); continue; }
-        if (seen.has(v)) { out.push({ $r: seen.get(v) }); continue; }
-        const arr = Array.isArray(v);
-        if (!arr && !isPlain(v)) { out.push(null); continue; }
-        const pp = path + '.' + i;
-        seen.set(v, pp);
-        out.push(arr ? dumpArr(v, depth + 1, seen, pp) : dump(v, depth + 1, seen, pp));
-      } else out.push(null);
-    }
-    return out;
+  function decOne(f, w) {
+    const t = f.t;
+    if (QM[t]) return w / QM[t];
+    if (t === 'b') return !!w;
+    if (t === 'o') return w ? unpickKeys(w, f.keys) : null;
+    if (t === 'a') return w.map((x) => unpickKeys(x, f.keys));
+    return w;
   }
-  function merge(t, d, fix) {
+  const encAll = (sp, o) => sp.map((f) => encOne(f, o[f.k]));
+  const decAll = (sp, vals) => { const o = {}; for (let i = 0; i < sp.length; i++) o[sp[i].k] = decOne(sp[i], vals[i]); return o; };
+
+  const ENT = 'x:p y:p vx:v vy:v face:n flash:t passive:b';
+  const BOSS = 'x:p y:p hp:h maxHp:h flash:t active:b passive:b phase:n st:s dying:b gone:b';
+  const NETSPEC = {
+    Bug: ENT, Typo: ENT + ' onGround:b wait:u', Flaky: ENT + ' st:s', Lint: 'x:p y:p flash:t', Logger: ENT + ' open:u', Mimic: ENT + ' awake:b onGround:b',
+    Noodle: ENT + ' st:s onGround:b', Slime: ENT + ' land:u onGround:b wait:u', Ghost: ENT + ' a:f shy:b', Racer: ENT + ' pause:u', Drone: ENT + ' aim:u',
+    Dripper: 'x:p y:p grow:t',
+    Null: BOSS + ' cur:o:x,y,a,mode marks:a:x,t aim:o:x,y dir:n',
+    Merge: BOSS + ' heads:a:x,y,st,open,flash,dead,aim,n',
+    Leak: BOSS + ' sq:f level:n floodY:p marks:a:x,t geyser:o:x,top,on',
+    Loop: 'hx:p hy:p ang:f hp:h maxHp:h flash:t tailFlash:t popped:n phase:n dying:b gone:b active:b passive:b',
+    Monolith: BOSS + ' open:f look:o:x,y crack:n beam:o:y,on boltN:n marks:a:x,t fists:a:x,y,st',
+  };
+  const NETC = Object.keys(NETSPEC);                                      // class -> number on the wire
+  const NSP = {}; for (const c of NETC) NSP[c] = spec(NETSPEC[c]);
+  const ITEMSP = spec('kind:s x:p y:p vx:v vy:v loose:b ghost:b dead:b ph:f idx:n');
+  // the body of a player, both directions (each side owns its own, the other side only looks at it)
+  const PLAYERSP = spec('x:p y:p vx:v vy:v face:n onGround:b dashT:t atkT:t atkDir:s atkFace:n hurtT:t inv:u gone:b goneT:u dead:b hp:n maxHp:n wallDir:n');
+  // hazards that only depend on the level clock are not sent at all: every screen runs them itself
+  const LOCALRUN = new Set(['Pendulum', 'Gear', 'FireJet']);
+  coop.netspec = NETSPEC; coop.localrun = LOCALRUN;                       // (read by the dev test that checks the lists are complete)
+  const CTORARG = { Bug: (e) => (e.spiky ? 1 : 0), Slime: (e) => (e.small ? 1 : 0), Lint: (e) => (e.v ? 1 : 0) };
+  const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+  // sparse list of what changed: [index, value, index, value, ...]
+  function sparse(prev, cur) { let d = null; for (let i = 0; i < cur.length; i++) if (!prev || !same(prev[i], cur[i])) (d || (d = [])).push(i, cur[i]); return d; }
+  function patch(base, d) { const v = base ? base.slice() : []; for (let i = 0; i < d.length; i += 2) v[d[i]] = d[i + 1]; return v; }
+  const fOf = (ent, sp, key, vals) => { const k = key || 'f'; return ent[k] || (ent[k] = decAll(sp, vals || ent.v)); };        // decoded fields, made once per state entry
+
+  // plain recursive merge of decoded values into a live object (keeps whatever else the object has, e.g. sprites)
+  function merge(t, d) {
     for (const k in d) {
       const v = d[k];
       if (v !== null && typeof v === 'object') {
-        if (v.$r !== undefined) { fix.push([t, k, v.$r]); continue; }
-        if (Array.isArray(v)) { let a = t[k]; if (!Array.isArray(a)) a = t[k] = []; mergeArr(a, v, fix); }
-        else { let o = t[k]; if (o === null || typeof o !== 'object') o = t[k] = {}; merge(o, v, fix); }
+        if (Array.isArray(v)) { let a = t[k]; if (!Array.isArray(a)) a = t[k] = []; mergeArr(a, v); }
+        else { let o = t[k]; if (o === null || typeof o !== 'object') o = t[k] = {}; merge(o, v); }
       } else t[k] = v;
     }
   }
-  function mergeArr(a, v, fix) {
+  function mergeArr(a, v) {
     a.length = v.length;
     for (let i = 0; i < v.length; i++) {
       const x = v[i];
       if (x !== null && typeof x === 'object') {
-        if (x.$r !== undefined) { fix.push([a, i, x.$r]); continue; }
-        if (Array.isArray(x)) { if (!Array.isArray(a[i])) a[i] = []; mergeArr(a[i], x, fix); }
-        else { if (a[i] === null || typeof a[i] !== 'object') a[i] = {}; merge(a[i], x, fix); }
+        if (Array.isArray(x)) { if (!Array.isArray(a[i])) a[i] = []; mergeArr(a[i], x); }
+        else { if (a[i] === null || typeof a[i] !== 'object') a[i] = {}; merge(a[i], x); }
       } else a[i] = x;
     }
   }
-  function mergeTop(obj, d) {
-    const fix = [];
-    merge(obj, d, fix);
-    for (const [t, k, path] of fix) { let o = obj; if (path) for (const s of path.split('.')) o = o == null ? o : o[s]; if (o != null) t[k] = o; }
-  }
-  function deltaDump(store, id, obj, skip) {
-    const d = dump(obj, 0, new Map([[obj, '']]), '');
-    if (skip) for (const k of skip) delete d[k];
-    const last = store[id] || (store[id] = {});
-    const out = {}; let n = 0;
-    for (const k in d) { const s = JSON.stringify(d[k]); if (last[k] !== s) { last[k] = s; out[k] = d[k]; n++; } }
-    return n ? out : null;
-  }
-  const prim = (o) => { const r = {}; for (const k of Object.keys(o)) { const v = o[k], t = typeof v; if (t === 'number' || t === 'boolean' || t === 'string') r[k] = v; } return r; };
-  function primDiff(before, o) { const d = {}; let n = 0; for (const k of Object.keys(o)) { const v = o[k], t = typeof v; if ((t === 'number' || t === 'boolean' || t === 'string') && before[k] !== v) { d[k] = typeof v === 'number' ? r2(v) : v; n++; } } return n ? d : null; }
+  const mergeTop = merge;
 
   function ensureIds(L) {
     if (L._eid === undefined) { L._eid = 0; L._iid = 0; }
@@ -6423,6 +6425,7 @@ G.VOICE = {
       if (R.out.some((x) => now - x.at > R.resend)) { o.r = R.out.map((x) => x.ev); for (const x of R.out) x.at = now; }
     } else o.u = 1;                                   // nothing that must arrive: the relay may drop this message when the line is clogged
     coop.relWake = false; coop.lastTx = performance.now();
+    if (coop.dbg.stat) { const st = coop.dbg.stat; for (const k in o) st[k] = (st[k] || 0) + JSON.stringify(o[k]).length + k.length + 4; }
     send(o);
   }
   coop.gsend = gsend;
@@ -6441,6 +6444,14 @@ G.VOICE = {
       else if (ev.k === 'pz') { const sc = G.scene; if (m.e === coop.epoch && sc && sc.pauseFor) sc.pauseFor(!!ev.on, 'P2'); }
       else if (ev.k === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!ev.on; }
     } else coop.relQ.push({ ev, e: m.e });
+  };
+
+  // hazards that run on both screens by themselves must not also be relayed as sounds/effects
+  const oSpawn = G.spawnEnemy;
+  G.spawnEnemy = (ch, x, y, L) => {
+    const e = oSpawn(ch, x, y, L);
+    if (e && LOCALRUN.has(e.constructor.name)) { const u = e.update; e.update = function (dt) { coop.mute++; try { return u.call(this, dt); } finally { coop.mute--; } }; }
+    return e;
   };
 
   // ---------- level setup ----------
@@ -6499,7 +6510,7 @@ G.VOICE = {
       me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) coop.rel('hurt', { x, y, d }); return r; };
       me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
       me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
-      coop.gs = {};
+      coop.gsPrev = null;
       coop.gTick = 0;
     }
   };
@@ -6629,6 +6640,7 @@ G.VOICE = {
     }
     if (coop.rHas) applyRemote(L);
     p2.frozen = L.me.frozen; p2.celebrate = L.me.celebrate;
+    tickBody(p2, dt);
     // revive the fallen partner after a few seconds
     for (let i = L.reviveQ.length - 1; i >= 0; i--) {
       const q = L.reviveQ[i]; q.t -= dt;
@@ -6708,51 +6720,63 @@ G.VOICE = {
   // The host rebuilds the complete state S each time and keeps the last 32 in a ring. The guest tells the host which snapshot it
   // last applied (`sa`); the next snapshot only contains what differs from that one (`b`). If the guest's baseline is missing or too old,
   // or every 5 s, a keyframe (`b: 0`, everything) is sent instead. Any message can therefore be lost or skipped without a desync.
-  const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
-  const EMPTY = { w: {}, ents: new Map(), items: new Map() };
-  function diffFields(bf, f) { let d = null; for (const k in f) if (!same(bf[k], f[k])) (d || (d = {}))[k] = f[k]; return d; }
-  function buildState(L) {
+  const EMPTY = { w: {}, ents: new Map(), items: new Map(), p: null };
+  const CLS = (e) => e.constructor.name;
+  function buildState(L, N) {
     const p2 = L.p2, w = {};
-    w.lt = r2(L.time); w.ly = L.liquidY; w.rs = L.rising ? 1 : 0; w.ck = r2(L.clock); w.tk = L.tokens; w.ht = L.hits; w.ci = L.cpIndex;
+    w.ly = L.liquidY; w.rs = L.rising ? 1 : 0; w.tk = L.tokens; w.ht = L.hits; w.ci = L.cpIndex;
     w.cp = L.cps.map((c) => (c.on ? 1 : 0)); w.ex = L.exit && L.exit.done ? 1 : 0; w.sk = L.sparks.slice();
     const T0 = L._tiles0, tl = [];
     for (let i = 0; i < T0.length; i++) if (L.tiles[i] !== T0[i]) tl.push(i, L.tiles[i]);
     const cr = []; for (const [i, c] of L.crumble) cr.push(i, c.s, r2(c.t));
     const S = { tm: r2(G.time), w, tl, cr, bh: Array.from(L.blinkHold), ei: [], ii: [], ents: new Map(), items: new Map(), pj: [] };
     for (const e of L.ents) {
+      const c = CLS(e);
+      if (LOCALRUN.has(c)) continue;
       S.ei.push(e._id);
       if (!(e.always || e.isBoss || near(L, e))) continue;
-      S.ents.set(e._id, { c: e.constructor.name, f: dump(e, 0, new Map([[e, '']]), '') });
+      S.ents.set(e._id, { c, a: CTORARG[c] ? CTORARG[c](e) : 0, v: encAll(NSP[c] || NSP.Bug, e) });
     }
-    for (const it of L.items) { S.ii.push(it._id); S.items.set(it._id, { f: dump(it, 0, new Map([[it, '']]), '') }); }
+    for (const it of L.items) { S.ii.push(it._id); S.items.set(it._id, { v: encAll(ITEMSP, it) }); }
     for (const q of L.projs) if (!q.dead && q.pid && S.pj.length < 60) S.pj.push(Object.assign({ pid: q.pid }, projData(q)));      // only sent with keyframes
-    S.p = dump(L.me, 0, new Map([[L.me, '']]), '');
+    S.p = encAll(PLAYERSP, L.me);
     S.ph = { frozen: p2.frozen, celebrate: p2.celebrate };        // the rest of the partner's body belongs to the partner
     S.hs = coop.hostState;
     return S;
   }
+  // the level clock and the run time only matter to the second: send them about once a second (and with every keyframe)
   function diffState(B, S) {
     const d = { w: {} };
     for (const k in S.w) if (!same(B.w[k], S.w[k])) d.w[k] = S.w[k];
     for (const k of ['tl', 'cr', 'bh', 'ei', 'ii', 'ph', 'hs']) if (!same(B[k], S[k])) d[k] = S[k];
-    const eu = [], iu = [];
-    for (const [id, e] of S.ents) { const be = B.ents.get(id); if (!be) eu.push({ i: id, c: e.c, d: e.f }); else { const df = diffFields(be.f, e.f); if (df) eu.push({ i: id, d: df }); } }
-    for (const [id, it] of S.items) { const bi = B.items.get(id); if (!bi) iu.push({ i: id, d: it.f }); else { const df = diffFields(bi.f, it.f); if (df) iu.push({ i: id, d: df }); } }
+    const en = [], eu = [], inn = [], iu = [];
+    for (const [id, e] of S.ents) {
+      const be = B.ents.get(id);
+      if (!be || be.c !== e.c) en.push([id, NETC.indexOf(e.c), e.a].concat(e.v));
+      else { const df = sparse(be.v, e.v); if (df) eu.push([id].concat(df)); }
+    }
+    for (const [id, it] of S.items) {
+      const bi = B.items.get(id);
+      if (!bi) inn.push([id].concat(it.v)); else { const df = sparse(bi.v, it.v); if (df) iu.push([id].concat(df)); }
+    }
+    if (en.length) d.en = en;
     if (eu.length) d.eu = eu;
+    if (inn.length) d.in = inn;
     if (iu.length) d.iu = iu;
-    const pd = B.p ? diffFields(B.p, S.p) : S.p; if (pd) d.p = pd;
+    const pd = sparse(B.p, S.p); if (pd) d.p = pd;
     return d;
   }
   function sendSnap(L) {
-    const N = L._net || (L._net = { ring: new Map(), acked: 0, sn: 0, kfAt: -99 });
-    const S = buildState(L), sn = ++N.sn;
+    const N = L._net || (L._net = { ring: new Map(), acked: 0, sn: 0, kfAt: -99, slowAt: -99 });
+    const S = buildState(L, N), sn = ++N.sn;
     let B = N.acked ? N.ring.get(N.acked) : null;
     const kf = !B || coop.kfNext || S.tm - N.kfAt > 5;
     if (kf) { B = EMPTY; N.kfAt = S.tm; coop.kfNext = false; }
     const d = diffState(B, S);
     if (kf) d.pjk = S.pj;
-    S.sn = sn; N.ring.set(sn, S); N.ring.delete(sn - 32);
     const s = Object.assign({ t: 's', sn, b: kf ? 0 : N.acked, tm: S.tm }, d);
+    if (kf || S.tm - N.slowAt >= 1) { s.lt = r2(L.time); N.slowAt = S.tm; }
+    S.sn = sn; N.ring.set(sn, S); N.ring.delete(sn - 32);
     if (kf) s.kf = 1;
     if (coop.ev.length) { s.ev = coop.ev.slice(0, 60); coop.ev = []; }
     gsend(s);
@@ -6780,6 +6804,7 @@ G.VOICE = {
   const oSfx = A.sfx, oMus = A.music, oSpeak = G.speak;
   const UI_SFX = new Set(['uiMove', 'uiOk', 'uiBack', 'pause', 'tick', 'tock']);
   A.sfx = function (name, o) {
+    if (coop.quiet) return;                                   // a hazard the guest runs itself: the host's sound is not relayed for it either
     if (coop.role === 'host' && !UI_SFX.has(name)) {
       const L = G.scene && G.scene.L, ctx = ctxNow();
       rec(['S', name, o, ctx]);
@@ -6805,11 +6830,13 @@ G.VOICE = {
   // ---------- guest side ----------
   // rebuild the full state S(n) = S(b) + delta, remember it, then show it
   function applyDelta(B, s) {
-    const S = { sn: s.sn, tm: s.tm, w: Object.assign({}, B.w, s.w), tl: B.tl, cr: B.cr, bh: B.bh, ei: B.ei, ii: B.ii, ph: B.ph, hs: B.hs, p: B.p, ents: new Map(B.ents), items: new Map(B.items) };
+    const S = { sn: s.sn, tm: s.tm, w: Object.assign({}, B.w, s.w), tl: B.tl, cr: B.cr, bh: B.bh, ei: B.ei, ii: B.ii, ph: B.ph, hs: B.hs, p: B.p, ents: new Map(B.ents), items: new Map(B.items), lt: s.lt };
     for (const k of ['tl', 'cr', 'bh', 'ei', 'ii', 'ph', 'hs']) if (s[k] !== undefined) S[k] = s[k];
-    if (s.eu) for (const u of s.eu) { const be = S.ents.get(u.i); S.ents.set(u.i, be ? { c: be.c, f: Object.assign({}, be.f, u.d) } : { c: u.c, f: u.d }); }
-    if (s.iu) for (const u of s.iu) { const bi = S.items.get(u.i); S.items.set(u.i, { f: bi ? Object.assign({}, bi.f, u.d) : u.d }); }
-    if (s.p) S.p = B.p ? Object.assign({}, B.p, s.p) : s.p;
+    if (s.en) for (const r of s.en) S.ents.set(r[0], { c: NETC[r[1]], a: r[2], v: r.slice(3) });
+    if (s.eu) for (const r of s.eu) { const be = S.ents.get(r[0]); if (be) S.ents.set(r[0], { c: be.c, a: be.a, v: patch(be.v, r.slice(1)) }); }
+    if (s.in) for (const r of s.in) S.items.set(r[0], { v: r.slice(1) });
+    if (s.iu) for (const r of s.iu) { const bi = S.items.get(r[0]); if (bi) S.items.set(r[0], { v: patch(bi.v, r.slice(1)) }); }
+    if (s.p) S.p = patch(B.p, s.p);
     if (S.ei) { const keep = new Set(S.ei); for (const id of S.ents.keys()) if (!keep.has(id)) S.ents.delete(id); }
     if (S.ii) { const keep = new Set(S.ii); for (const id of S.items.keys()) if (!keep.has(id)) S.items.delete(id); }
     return S;
@@ -6864,10 +6891,33 @@ G.VOICE = {
     if (g.shown !== A) { showState(L, A, g.shown); g.shown = A; }
     const u = B ? G.clamp((rt - A.tm) / (B.tm - A.tm), 0, 1) : 0, ex = B ? 0 : G.clamp(rt - A.tm, 0, 0.25);
     const seg = B ? B.tm - A.tm : 0.066, fdt = g.dt || 1 / 60;
-    for (const e of L.ents) { const a = A.ents.get(e._id); if (a) { const b = B && B.ents.get(e._id); posInto(e, a.f, b && b.f, u, ex, seg, fdt); } }
-    for (const it of L.items) { const a = A.items.get(it._id); if (a) { const b = B && B.items.get(it._id); posInto(it, a.f, b && b.f, u, ex, seg, fdt); } }
-    if (A.p) posInto(L.partner, A.p, B && B.p, u, ex, seg, fdt);
+    for (const e of L.ents) { const a = A.ents.get(e._id); if (a) { const b = B && B.ents.get(e._id); posInto(e, fOf(a, NSP[a.c] || NSP.Bug), b && fOf(b, NSP[b.c] || NSP.Bug), u, ex, seg, fdt); } }
+    for (const it of L.items) { const a = A.items.get(it._id); if (a) { const b = B && B.items.get(it._id); posInto(it, fOf(a, ITEMSP), b && fOf(b, ITEMSP), u, ex, seg, fdt); } }
+    if (A.p) posInto(L.partner, fOf(A, PLAYERSP, 'pf', A.p), B && B.p && fOf(B, PLAYERSP, 'pf', B.p), u, ex, seg, fdt);
     while (g.evq.length && g.evq[0].tm <= rt) { const q = g.evq.shift(); if (rt - q.tm <= 0.3) playEvents(L, q.ev); }      // sounds/effects belong to their moment; old ones are dropped
+  }
+  // things the host does not send are re-created here every frame
+  const TICK = {
+    Loop: (e) => { e.x = e.hx - 9; e.y = e.hy - 9; const h0 = e.hist[0]; if (G.dist(h0.x, h0.y, e.hx, e.hy) >= 2.2) { e.hist.unshift({ x: e.hx, y: e.hy }); e.hist.pop(); } },
+    Null: (e, dt) => {
+      const c = e.cur; if (c && c.mode === 'fly') e.trail.push({ x: c.x, y: c.y, a: c.a, life: 0.15 });
+      if (e.st === 'sweep') e.trail.push({ x: e.x, y: e.y, body: 1, life: 0.2 });
+      for (const q of e.trail) q.life -= dt; e.trail = e.trail.filter((q) => q.life > 0);
+    },
+  };
+  function tickBody(q, dt) {
+    q.t += dt; q.blinkT -= dt; if (q.blinkT < -0.12) q.blinkT = G.rand(1.5, 4.5);
+    if (q.onGround && Math.abs(q.vx) > 30) q.runT += dt * Math.abs(q.vx) / 118; else q.runT = 0;
+  }
+  function localTick(L, dt) {
+    for (const e of L.ents) {
+      const c = CLS(e);
+      if (LOCALRUN.has(c)) { coop.quiet++; try { e.update(dt); } finally { coop.quiet--; } continue; }
+      e.t += dt; if (e.flash > 0) e.flash -= dt;
+      if (TICK[c]) TICK[c](e, dt);
+    }
+    const q = L.partner;                                          // the other player's animation clocks (it is never updated here)
+    tickBody(q, dt);
   }
   function applySnap(L, s) {
     const g = L._rg || (L._rg = { ring: new Map(), last: 0, shown: null, list: [], off: null, jit: 0.02, si: 0.066, D: 0.12, lastTm: 0, evq: [], rt: 0 });
@@ -6877,15 +6927,16 @@ G.VOICE = {
     const S = applyDelta(B, s);
     g.ring.set(s.sn, S); g.ring.delete(s.sn - 32); g.last = s.sn;
     if (s.kf) coop.needFull = false;
+    if (s.lt !== undefined) S.lt = s.lt; if (s.ck !== undefined) S.ck = s.ck;
     noteArrival(g, S, s._at || performance.now());
     if (s.pjk) syncProjs(L, s.pjk, s.tm);
     if (s.ev) g.evq.push({ tm: s.tm, ev: s.ev });
   }
   function showState(L, S, prev) {
     const w = S.w;
-    if (w.lt !== undefined) { if (L._tm === undefined || Math.abs(w.lt - L.time) > 0.3) L.time = w.lt; else L.time += (w.lt - L.time) * 0.15; L._tm = 1; }
+    if (S.lt !== undefined) { if (L._tm === undefined || Math.abs(S.lt - L.time) > 0.3) L.time = S.lt; else L.time += (S.lt - L.time) * 0.5; L._tm = 1; }
     if (w.ly === null) L.liquidY = null; else if (w.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - w.ly) > 60 ? w.ly : L.liquidY + (w.ly - L.liquidY) * 0.5;
-    L.rising = !!w.rs; L.clock = w.ck; L.tokens = w.tk; L.hits = w.ht; L.cpIndex = w.ci;
+    L.rising = !!w.rs; L.tokens = w.tk; L.hits = w.ht; L.cpIndex = w.ci;
     if (w.cp) w.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
     if (L.exit) L.exit.done = !!w.ex;
     if (w.sk) L.sparks = w.sk.slice();
@@ -6895,25 +6946,26 @@ G.VOICE = {
     }
     if (!prev || S.cr !== prev.cr) { Map.prototype.clear.call(L.crumble); for (let i = 0; i < S.cr.length; i += 3) Map.prototype.set.call(L.crumble, S.cr[i], { s: S.cr[i + 1], t: S.cr[i + 2] }); }
     if (!prev || S.bh !== prev.bh) L.blinkHold = new Set(S.bh);
-    const keep = new Set(S.ei); L.ents = L.ents.filter((e) => keep.has(e._id));
+    const keep = new Set(S.ei); L.ents = L.ents.filter((e) => keep.has(e._id) || LOCALRUN.has(CLS(e)));
     const map = new Map(); for (const e of L.ents) map.set(e._id, e);
     for (const [id, u] of S.ents) {
+      const f = fOf(u, NSP[u.c] || NSP.Bug);
       let e = map.get(id);
       if (!e) {
         const C = G.Enemies[u.c]; if (!C) continue;
-        try { e = new C(L, u.f.x || 0, u.f.y || 0, !!u.f.small); } catch (err) { continue; }
+        try { e = new C(L, f.x || 0, f.y || 0, !!u.a); } catch (err) { continue; }
         e._id = id; L.ents.push(e);
       }
-      mergeTop(e, u.f);
+      merge(e, f);
     }
     const ki = new Set(S.ii); L.items = L.items.filter((it) => ki.has(it._id));
     const imap = new Map(); for (const it of L.items) imap.set(it._id, it);
     for (const [id, u] of S.items) {
       let it = imap.get(id);
       if (!it) { it = { _id: id }; L.items.push(it); }
-      mergeTop(it, u.f);
+      merge(it, fOf(u, ITEMSP));
     }
-    if (S.p) mergeTop(L.partner, S.p);
+    if (S.p) merge(L.partner, fOf(S, PLAYERSP, 'pf', S.p));
     if (S.ph) Object.assign(L.me, S.ph);
     if (S.hs) coop.hostState = S.hs;
   }
@@ -7024,6 +7076,7 @@ G.VOICE = {
     ms.forEach((m) => { if (m.t === 's') applySnap(L, m); });
     if (L._rg) L._rg.dt = dt;
     renderTimeline(L);
+    localTick(L, dt);
     while (coop.relQ.length) { const r = coop.relQ[0]; if (r.e > L._ep) break; coop.relQ.shift(); if (r.e === L._ep) coop.guestRel(L, r.ev); }
     // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
     if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); gsend({ t: 'full', e: L._ep }); }
@@ -7076,11 +7129,13 @@ G.VOICE = {
     if (!L.cam.frozen) L.updateCam(dt);
     // my state -> host, 30 times a second
     if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
-      const d = deltaDump(coop.gs, 'me', p, HOSTOWN);
+      if (coop.gTick % 150 === 0) coop.gsPrev = null;                 // now and then the whole body again, so a lost message cannot leave the host with a stale field
+      const cur = encAll(PLAYERSP, p), d = sparse(coop.gsPrev, cur);
+      if (d) coop.gsPrev = cur;
       const sa = L._rg ? L._rg.last : 0;
       const gt = r2(performance.now() / 1000);
       if (d) gsend({ t: 'st', d, sa, gt });
-      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: {}, sa, gt });
+      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: [], sa, gt });
     }
   };
 
@@ -7131,7 +7186,8 @@ G.VOICE = {
         if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') {
-        Object.assign(coop.rAll, m.d); coop.rHas = true;
+        for (let i = 0; i < m.d.length; i += 2) { const f = PLAYERSP[m.d[i]]; if (f) coop.rAll[f.k] = decOne(f, m.d[i + 1]); }
+        coop.rHas = true;
         if (m.gt !== undefined) pNote(m.gt, performance.now());
         const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
       }

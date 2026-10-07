@@ -169,4 +169,59 @@ module.exports = (S, h) => {
       return R(maxD <= 3 && lurch === 0, 'walking bug, ' + xs.length + ' frames at lag ' + (T.sim.SIM_LAG || process.env.SIM_LAG || '150') + ': max per-frame step ' + maxD.toFixed(2) + ' px (want <= 3), freeze-then-lurch frames ' + lurch + ' (want 0)');
     } finally { await T.close(); }
   };
+
+  // are the per-class field lists complete? Every property that a creature's draw() / hurtboxes() / harmboxes() reads AND that changes
+  // while it lives must be on its list (or be rebuilt locally). Checked by running every level and every boss with property-read tracking.
+  S['netfields'] = async () => {
+    const srv = await h.startServer();
+    const browser = await h.chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+    const errs = [];
+    try {
+      const page = await h.openPage(browser, 'http://127.0.0.1:' + srv.port + '/?mute&manual', errs, 'solo');
+      const res = await page.evaluate(() => {
+        const need = {}, listed = G.coop.netspec, local = G.coop.localrun;
+        const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+        const snap = (e) => { const o = {}; for (const k of Object.keys(e)) { const v = e[k], t = typeof v; if (t === 'number' || t === 'string' || t === 'boolean') o[k] = v; else if (v && t === 'object' && k !== 'L' && !(v instanceof HTMLElement) && (Array.isArray(v) || Object.getPrototypeOf(v) === Object.prototype)) { try { o[k] = JSON.stringify(v, (kk, vv) => (kk === 'def' ? undefined : vv)); } catch (x) { /* cyclic */ } } } return o; };
+        for (const id of G.NODES) {
+          for (const k of Object.keys(G.LEVELS)) G.save.data.seen['b' + k] = true;
+          G.setScene(G.Scenes.play(id, null));
+          const L = G.scene.L, last = new Map(), reads = new Map(), chg = new Map();
+          const acts = ['right', 'jump', 'attack', 'dash', 'left', 'down', 'up'];
+          for (let i = 0; i < (id.endsWith('B') ? 1500 : Math.max(700, L.ents.length * 45 + 60)); i++) {
+            G.input.script = { right: (i >> 6) % 2 === 0 }; G.input.script[acts[(i >> 4) % acts.length]] = true;
+            L.me.inv = 99; L.me.hp = L.me.maxHp;
+            if (!id.endsWith('B') && i % 45 === 0 && L.ents.length) { const e = L.ents[(i / 45 | 0) % L.ents.length]; L.me.x = e.x - 24; L.me.y = e.y - 6; L.me.vx = L.me.vy = 0; L.snapCam(); }       // visit every creature so it wakes up
+            G.step(1, true);
+            for (const e of L.ents) {
+              const c = e.constructor.name;
+              if (e.dead) continue;
+              const now = snap(e), was = last.get(e);
+              if (was) for (const k in now) if (was[k] !== now[k]) { (chg.get(c) || chg.set(c, new Set()).get(c)).add(k); }
+              last.set(e, now);
+              if (i % 3 === 0) {
+                const rs = reads.get(c) || reads.set(c, new Set()).get(c);
+                const px = new Proxy(e, { get(t, k, r) { if (typeof k === 'string' && own(t, k) && typeof t[k] !== 'function') rs.add(k); return Reflect.get(t, k, r); } });
+                try { px.draw(G.g, L.cx || 0, L.cy || 0); px.hurtboxes(); px.harmboxes(); } catch (x) { /* some need a rendered frame */ }
+              }
+            }
+          }
+          G.input.script = null;
+          for (const [c, rs] of reads) for (const k of rs) if (chg.get(c) && chg.get(c).has(k)) (need[c] || (need[c] = {}))[k] = 1;
+        }
+        const out = {};
+        for (const c in need) {
+          if (local.has(c)) continue;
+          const have = new Set((listed[c] || listed.Bug).split(' ').map((x) => x.split(':')[0]));
+          const miss = Object.keys(need[c]).filter((k) => !have.has(k));
+          out[c] = { miss, needed: Object.keys(need[c]) };
+        }
+        return out;
+      });
+      // properties the guest rebuilds by itself, or that only matter to the host
+      const OK = { '*': ['t', 'hitWall', 'stun'], Loop: ['x', 'y', 'hist', 'N', 'u', 'path', 'lastK', 'dieT', 'ang'], Null: ['trail', 'tx', 'ty', 'x', 'y'] };
+      const bad = [];
+      for (const c in res) { const miss = res[c].miss.filter((k) => !(OK['*'].includes(k) || (OK[c] || []).includes(k))); if (miss.length) bad.push(c + ': ' + miss.join(',')); }
+      return R(bad.length === 0 && errs.length === 0, bad.length ? 'MISSING ' + bad.join(' | ') : 'all ' + Object.keys(res).length + ' classes complete (' + Object.keys(res).map((c) => c + '[' + res[c].needed.join(',') + ']').join(' ') + ')' + (errs.length ? '; errors ' + errs.slice(0, 3).join('|') : ''));
+    } finally { await browser.close(); await srv.stop(); }
+  };
 };

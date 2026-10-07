@@ -262,11 +262,15 @@ S['bandwidth'] = async () => {
       await godmode(T);
       await sleep(id.endsWith('B') ? 3500 : 1500);   // intro (seen) + boss start
       const secs = 6;
+      await T.host.evaluate(() => { G.coop.dbg.stat = {}; }); await T.guest.evaluate(() => { G.coop.dbg.stat = {}; });
       const [h0, g0] = [await counters(T.host), await counters(T.guest)];
       await sleep(secs * 1000);
       const [h1, g1] = [await counters(T.host), await counters(T.guest)];
       const dh = diffNet(h0, h1), dg = diffNet(g0, g1);
       const h2g = dh.tx / 1024 / secs, g2h = dg.tx / 1024 / secs;
+      const hk = await T.host.evaluate(() => G.coop.dbg.stat), gk = await T.guest.evaluate(() => G.coop.dbg.stat);
+      const top = (o) => Object.entries(o).sort((x, y) => y[1] - x[1]).slice(0, 5).map(([k, v]) => k + ':' + (v / 1024 / secs).toFixed(2)).join(' ');
+      if (process.env.BW_DETAIL) console.log('    ' + id + ' host keys KB/s: ' + top(hk) + ' | guest keys: ' + top(gk));
       rows.push(id + ': host->guest ' + h2g.toFixed(1) + ' KB/s, guest->host ' + g2h.toFixed(1) + ' KB/s');
       worst = Math.max(worst, h2g, g2h); if (!id.endsWith('B')) worstIdle = Math.max(worstIdle, h2g, g2h);
       await noGod(T);
