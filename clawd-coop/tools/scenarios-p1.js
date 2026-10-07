@@ -147,4 +147,25 @@ module.exports = (S, h) => {
       return R(mid < 80, 'tokens started 80px from the partner (272px from the host); 0.33 s later mean distance to the partner ' + mid.toFixed(0) + 'px (want < 80)');
     } finally { await T.close(); }
   };
+
+  // hurting one player must not flash / shake / freeze the other player's screen
+  S['fx-ctx'] = async () => {
+    const T = await openPair();
+    try {
+      await startLevel(T, '1-1'); await sleep(1000);
+      for (const p of [T.host, T.guest]) await p.evaluate(() => { window.__m = { flash: 0, stop: 0, trauma: 0 }; window.__iv = setInterval(() => { const L = G.scene.L; if (!L) return; window.__m.flash = Math.max(window.__m.flash, L.flash); window.__m.stop = Math.max(window.__m.stop, L.hitstop); window.__m.trauma = Math.max(window.__m.trauma, L.trauma); }, 4); });
+      const reset = () => Promise.all([T.host, T.guest].map((p) => p.evaluate(() => { window.__m = { flash: 0, stop: 0, trauma: 0 }; })));
+      const read = (p) => p.evaluate(() => window.__m);
+      await reset();
+      await T.host.evaluate(() => { const L = G.scene.L; L.me.inv = 0; L.me.hurt(1, L.me.x + 30); });
+      await sleep(600);
+      const hostHurt_guest = await read(T.guest), hostHurt_host = await read(T.host);
+      await reset();
+      await T.host.evaluate(() => { const L = G.scene.L, p = L.p2; p.inv = 0; L.shoot(p.x + 5, p.y + 5, 0, 0, { dmg: 1, life: 0.1, tile: false, cut: false, r: 4 }); });
+      await sleep(600);
+      const p2Hurt_host = await read(T.host), p2Hurt_guest = await read(T.guest);
+      const ok = hostHurt_guest.flash === 0 && hostHurt_guest.trauma < 0.05 && hostHurt_host.flash > 0 && p2Hurt_host.flash === 0 && p2Hurt_host.stop === 0 && p2Hurt_host.trauma < 0.05 && p2Hurt_guest.flash > 0;
+      return R(ok, 'host hurt -> guest flash ' + hostHurt_guest.flash.toFixed(2) + ' trauma ' + hostHurt_guest.trauma.toFixed(2) + ' (host flash ' + hostHurt_host.flash.toFixed(2) + '); partner hurt -> host flash ' + p2Hurt_host.flash.toFixed(2) + ' stop ' + p2Hurt_host.stop.toFixed(2) + ' trauma ' + p2Hurt_host.trauma.toFixed(2) + ' (guest flash ' + p2Hurt_guest.flash.toFixed(2) + ')');
+    } finally { await T.close(); }
+  };
 };

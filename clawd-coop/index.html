@@ -6319,12 +6319,12 @@ G.VOICE = {
   coop.initLevel = (L, start) => {
     L._tiles0 = L.tiles.slice();
     if (coop.role === 'host' && coop.peer && coop.open) {
-      L.net = 'host'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
+      L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
       const p2 = new Player(L, start.x - 8, start.y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
       L.p2 = p2; L.partner = p2; L.reviveQ = [];
       coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
     } else if (coop.role === 'guest' && coop.building) {
-      L.net = 'guest';
+      L.net = 'guest'; L._ctx = 'all';
       const remote = L.player; remote.remote = true;
       const me = new Player(L, start.x - 8, start.y); me.blue = true;
       const tools = Object.assign({}, coop.tools || me.tools, { agents: false });
@@ -6440,22 +6440,23 @@ G.VOICE = {
     if (++coop.tickN % 4 === 0) sendSnap(L);
   };
   function withFx(L, fn) {
-    const p2 = L.p2, before = prim(p2);
-    L.player = p2;
-    try { fn(); } finally { L.player = L.me; }
+    const p2 = L.p2, before = prim(p2), ctx = L._ctx;
+    L.player = p2; L._ctx = 'p2';
+    try { fn(); } finally { L.player = L.me; L._ctx = ctx; }
     const d = primDiff(before, p2);
     if (d) sendFx(d);
   }
   const oInteract = Level.prototype.interact, oItems = Level.prototype.updateItems, oProjs = Level.prototype.updateProjs;
+  const asP1 = (L, f) => { if (L.net !== 'host') return f(); const c = L._ctx; L._ctx = 'p1'; try { return f(); } finally { L._ctx = c; } };
   Level.prototype.interact = function (dt) {
-    oInteract.call(this, dt);
+    asP1(this, () => oInteract.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
     const sign = this.sign;
     withFx(this, () => oInteract.call(this, dt));
     this.sign = sign;
   };
   Level.prototype.updateItems = function (dt) {
-    oItems.call(this, dt);
+    asP1(this, () => oItems.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
     const p2 = this.p2;
     if (p2.dead || p2.gone) return;
@@ -6467,7 +6468,7 @@ G.VOICE = {
     }
   };
   Level.prototype.updateProjs = function (dt) {
-    oProjs.call(this, dt);
+    asP1(this, () => oProjs.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
     const p2 = this.p2;
     if (p2.dead || p2.gone) return;
@@ -6520,16 +6521,49 @@ G.VOICE = {
     send(s);
   }
 
-  // events from the host (effects, sounds, voice) are relayed to the guest
+  // events from the host (effects, sounds, voice) are relayed to the guest. Each carries who caused it ('p1' host player,
+  // 'p2' partner, 'all' world) as its last element, so shakes/flashes/loud sounds of one player do not hit the other's screen.
   const rec = (a) => { if (coop.role === 'host' && coop.peer && coop.open && coop.ev.length < 80) coop.ev.push(a); };
+  const ctxNow = () => { const L = G.scene && G.scene.L; return (L && L._ctx) || 'all'; };
+  const near2 = (L) => (L.p2 && L.me ? Math.hypot(L.me.x - L.p2.x, L.me.y - L.p2.y) : 0);
+  const hear = (d) => G.clamp(1 - d / 320, 0.25, 1);                 // how loud the other player's actions are
   for (const n of ['burst', 'ring', 'spark', 'pop', 'explode', 'dust', 'shake', 'flashScreen']) {
     const o = Level.prototype[n];
-    Level.prototype[n] = function (...a) { if (this.net === 'host') rec(['L', n].concat(a)); return o.apply(this, a); };
+    Level.prototype[n] = function (...a) {
+      if (this.net === 'host') {
+        if (!(coop.inExplode && (n === 'ring' || n === 'burst'))) rec(['L', n].concat(a, this._ctx || 'all'));   // explode already carries its rings/bursts
+        if ((n === 'shake' || n === 'flashScreen') && this._ctx === 'p2') return;                              // the partner's hits shake the partner only
+        if (n === 'explode') { coop.inExplode = true; try { return o.apply(this, a); } finally { coop.inExplode = false; } }
+      }
+      return o.apply(this, a);
+    };
   }
+  const oStop = Level.prototype.stop;
+  Level.prototype.stop = function (t) { if (this.net === 'host' && this._ctx === 'p2') return; return oStop.call(this, t); };   // no hitstop on my screen for the partner's hits
   const oSfx = A.sfx, oMus = A.music, oSpeak = G.speak;
-  A.sfx = function (name, o) { if (name !== 'tick' && name !== 'tock') rec(['S', name, o]); return oSfx.apply(this, arguments); };
+  const UI_SFX = new Set(['uiMove', 'uiOk', 'uiBack', 'pause', 'tick', 'tock']);
+  A.sfx = function (name, o) {
+    if (coop.role === 'host' && !UI_SFX.has(name)) {
+      const L = G.scene && G.scene.L, ctx = ctxNow();
+      rec(['S', name, o, ctx]);
+      if (ctx === 'p2' && L && L.net === 'host') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(near2(L)) });
+    }
+    return oSfx.call(this, name, o);
+  };
   A.music = function (name, o) { rec(['M', name, o]); return oMus.apply(this, arguments); };
   G.speak = function (cap, id, fb) { rec(['V', id]); return oSpeak.apply(this, arguments); };
+
+  // who is "me" for effects: the host's own player is p1, the partner (host's L.p2, or the guest's own body) is p2
+  const ctxOf = (L, q) => (q === L.p2 ? 'p2' : L.net === 'guest' ? 'p2' : 'p1');
+  for (const n of ['update', 'hurt', 'hazard', 'die', 'onHit', 'bounce', 'spring']) {
+    const o = Player.prototype[n];
+    Player.prototype[n] = function (...a) {
+      const L = this.L;
+      if (!L.net) return o.apply(this, a);
+      const prev = L._ctx; L._ctx = ctxOf(L, this);
+      try { return o.apply(this, a); } finally { L._ctx = prev; }
+    };
+  }
 
   // ---------- guest side ----------
   function applySnap(L, s, quiet) {
@@ -6573,8 +6607,16 @@ G.VOICE = {
     if (s.ph) Object.assign(L.me, s.ph);
     if (s.hs) coop.hostState = s.hs;
     if (s.ev && !quiet) for (const e of s.ev) {
-      if (e[0] === 'L') { if (typeof L[e[1]] === 'function') L[e[1]].apply(L, e.slice(2)); }
-      else if (e[0] === 'S') oSfx.call(A, e[1], e[2]);
+      if (e[0] === 'L') {
+        const ctx = e[e.length - 1];
+        if ((e[1] === 'shake' || e[1] === 'flashScreen') && ctx === 'p1') continue;       // the host player's hits do not shake my screen
+        if (typeof L[e[1]] === 'function') L[e[1]].apply(L, e.slice(2, -1));
+      }
+      else if (e[0] === 'S') {
+        let o = e[2];
+        if (e[3] === 'p1') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(Math.hypot(L.me.x - L.partner.x, L.me.y - L.partner.y)) });
+        oSfx.call(A, e[1], o);
+      }
       else if (e[0] === 'M') oMus.call(A, e[1], e[2]);
       else if (e[0] === 'V' && coop.cap) oSpeak(coop.cap, e[1]);
     }
