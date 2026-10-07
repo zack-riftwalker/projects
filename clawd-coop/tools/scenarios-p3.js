@@ -112,4 +112,32 @@ module.exports = (S, h) => {
       return R(b1 < b0 && down.dead && down.q === 1 && !up.dead && up.hp > 0 && !hostSees.dead, 'boss hp ' + b0 + ' -> ' + b1 + ' (guest swings); guest down on host=' + down.dead + ' queued=' + down.q + '; after 5 s guest dead=' + up.dead + ' hp=' + up.hp + ', host sees dead=' + hostSees.dead);
     } finally { await T.close(); }
   };
+
+  // projectiles are events: the guest flies them itself (matches the host), takes hits from them itself, cuts them itself
+  S['projectiles'] = async () => {
+    const T = await openPair({ env: process.env.SIM_LAG ? {} : { SIM_LAG: '100' } });
+    try {
+      await startLevel(T, '1-1'); await sleep(1000);
+      await T.host.evaluate(() => { G.scene.L.ents.length = 0; });
+      // 1) a long flight far from both players: same place on both screens
+      await T.host.evaluate(() => { const L = G.scene.L; window.__q1 = L.shoot(40, 20, 90, 0, { kind: 'orb', col: '#ff5d5d', r: 3, life: 6, tile: false }); });
+      await sleep(900);
+      const [hq, gq] = [await T.host.evaluate(() => ({ x: window.__q1.x, dead: window.__q1.dead })), await T.guest.evaluate(() => { const q = G.scene.L.projs.find((q) => q.pid === 1); return q ? { x: q.x } : null; })];
+      const flightOk = gq && Math.abs(gq.x - hq.x) < 25;
+      // 2) one flies into the guest: it loses exactly one hit point, the host's projectile is gone
+      const hp0 = await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.hp = p.maxHp; p.dashT = 0; return p.hp; });
+      await T.host.evaluate(() => { const L = G.scene.L, p = L.p2; window.__q2 = L.shoot(p.x - 60, p.y + 5, 120, 0, { kind: 'orb', col: '#ff5d5d', r: 3, life: 4, tile: false }); });
+      await sleep(1500);
+      const hp1 = await T.guest.evaluate(() => G.scene.L.me.hp), q2dead = await T.host.evaluate(() => window.__q2.dead);
+      // 3) the guest cuts one with its claw
+      await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 99; });
+      await T.host.evaluate(() => { const L = G.scene.L, p = L.p2; window.__q3 = L.shoot(p.x + 90, p.y + 4, -60, 0, { kind: 'orb', col: '#ff5d5d', r: 3, life: 6, tile: false }); });
+      await sleep(250);
+      for (let i = 0; i < 16; i++) { await h.key(T.guest, 'KeyX', true); await sleep(60); await h.key(T.guest, 'KeyX', false); await sleep(130); if (await T.host.evaluate(() => window.__q3.dead)) break; }
+      await sleep(400);
+      const q3dead = await T.host.evaluate(() => window.__q3.dead), q3x = await T.host.evaluate(() => window.__q3.x - G.scene.L.p2.x);
+      const ok = flightOk && hp1 === hp0 - 1 && q2dead && q3dead;
+      return R(ok, 'flight: host x ' + hq.x.toFixed(0) + ' guest x ' + (gq ? gq.x.toFixed(0) : 'missing') + '; hit: guest hp ' + hp0 + ' -> ' + hp1 + ' (want -1), host projectile gone=' + q2dead + '; cut by claw: host projectile gone=' + q3dead);
+    } finally { await T.close(); }
+  };
 };
