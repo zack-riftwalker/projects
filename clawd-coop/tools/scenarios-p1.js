@@ -48,4 +48,63 @@ module.exports = (S, h) => {
       return R(away && !hurtWhileAway && !awayAfter && Math.abs(x1 - x0) > 20 && gOnlyOrSame, 'away shown=' + away + ' hurtWhileAway=' + hurtWhileAway + ' awayAfter=' + awayAfter + ' p2 moved ' + (x1 - x0).toFixed(0) + 'px; host ents [' + hi + '] guest ents [' + gi + ']');
     } finally { await T.close(); }
   };
+
+  S['pause'] = async () => {
+    const T = await openPair();
+    try {
+      await startLevel(T, '1-1'); await sleep(1000);
+      const st = (p) => p.evaluate(() => G.scene.getState());
+      const gx = () => T.guest.evaluate(() => G.scene.L.me.x);
+      // host pauses with the keyboard
+      await h.key(T.host, 'Escape', true); await h.key(T.host, 'Escape', false);
+      await sleep(500);
+      const gFrozen = await T.guest.evaluate(() => G.scene.L.me.frozen), gState = await st(T.guest);
+      const x0 = await gx(); await h.key(T.guest, 'ArrowRight', true); await sleep(2000); await h.key(T.guest, 'ArrowRight', false);
+      const x1 = await gx();
+      // the guest resumes with its own pause key (opens its menu, then Esc again)
+      await h.key(T.guest, 'Escape', true); await h.key(T.guest, 'Escape', false); await sleep(200);
+      await h.key(T.guest, 'Escape', true); await h.key(T.guest, 'Escape', false); await sleep(800);
+      const hostAfter = await st(T.host), gFrozen2 = await T.guest.evaluate(() => G.scene.L.me.frozen);
+      // the guest pauses for both
+      await h.key(T.guest, 'Escape', true); await h.key(T.guest, 'Escape', false); await sleep(600);
+      const hostPaused = await st(T.host);
+      await h.key(T.guest, 'Escape', true); await h.key(T.guest, 'Escape', false); await sleep(600);
+      const hostBack = await st(T.host);
+      const ok = gFrozen === true && gState === 'paused' && Math.abs(x1 - x0) < 0.5 && hostAfter === 'play' && gFrozen2 === false && hostPaused === 'paused' && hostBack === 'play';
+      return R(ok, 'host pause: guest frozen=' + gFrozen + ' state=' + gState + ', guest moved ' + (x1 - x0).toFixed(1) + 'px; guest resume -> host ' + hostAfter + ', frozen=' + gFrozen2 + '; guest pause -> host ' + hostPaused + ', resume -> ' + hostBack);
+    } finally { await T.close(); }
+  };
+
+  // the guest dashes into a cracked wall: passes through at once, the host's tile follows
+  S['crack-dash'] = async () => {
+    const T = await openPair();
+    try {
+      const ids = await T.host.evaluate(() => Object.keys(G.LEVELS).filter((k) => !G.LEVELS[k].boss && G.LEVELS[k].map.some((r) => r.includes('%'))));
+      let spot = null, id = null;
+      for (const cand of ids) {
+        await startLevel(T, cand); await sleep(600); id = cand;
+        spot = await T.guest.evaluate(() => {
+          const L = G.scene.L, C = G.TILE.CRACK;
+          for (let ty = 1; ty < L.h - 1; ty++) for (let tx = 4; tx < L.w - 3; tx++) {
+            if (L.tiles[ty * L.w + tx] !== C) continue;
+            const free = [1, 2, 3].every((d) => L.tile(tx - d, ty) === 0 && L.tile(tx - d, ty - 1) === 0);
+            if (free && L.solid(tx - 3, ty + 1) && L.solid(tx - 2, ty + 1)) {
+              const p = L.me; p.tools.bash = true; p.x = (tx - 3) * 16 + 3; p.y = (ty + 1) * 16 - 10; p.vx = p.vy = 0; p.face = 1;
+              return { tx, ty, x: p.x };
+            }
+          }
+          return null;
+        });
+        if (spot) break;
+      }
+      if (!spot) return R(false, 'no usable crack in ' + id);
+      await sleep(500);
+      await h.key(T.guest, 'ArrowRight', true); await h.key(T.guest, 'KeyC', true); await h.key(T.guest, 'KeyC', false);
+      await sleep(450); await h.key(T.guest, 'ArrowRight', false);
+      const gx = await T.guest.evaluate(() => G.scene.L.me.x);
+      let hostOpen = false;
+      for (let i = 0; i < 10 && !hostOpen; i++) { hostOpen = await T.host.evaluate((s) => G.scene.L.tiles[s.ty * G.scene.L.w + s.tx] === 0, spot); if (!hostOpen) await sleep(100); }
+      return R(gx > (spot.tx + 1) * 16 && hostOpen, id + ': guest x ' + spot.x.toFixed(0) + ' -> ' + gx.toFixed(0) + ' (crack at x=' + spot.tx * 16 + '), host tile open=' + hostOpen);
+    } finally { await T.close(); }
+  };
 };

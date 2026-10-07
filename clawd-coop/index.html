@@ -5789,7 +5789,7 @@ G.VOICE = {
   function Play(id, snap) {
     const def = G.LEVELS[id], L = new G.Level(def, snap), th = L.th, p = L.player;
     const cap = new G.Caption();
-    let state = 'play', t = 0, wait = 0, sel = 0, opts = null, intro = null, res = null, failMsg = '', bars = 0, hpShake = 0, lastHp = p.hp, tokPop = 0, lastTok = L.tokens;
+    let state = 'play', pausedBy = '', gpause = false, fz = false, frozenBefore = false, t = 0, wait = 0, sel = 0, opts = null, intro = null, res = null, failMsg = '', bars = 0, hpShake = 0, lastHp = p.hp, tokPop = 0, lastTok = L.tokens;
     const say = (vid) => G.speak(cap, vid);
     const startFight = () => { state = 'play'; p.frozen = false; L.boss.start(); SV().seen['b' + id] = true; G.save.write(); A.music(def.boss === 'mono' ? 'final' : 'boss', { fade: 0.3 }); cap.text = ''; };
     const finish = () => {
@@ -5818,6 +5818,12 @@ G.VOICE = {
     };
     return {
       L,
+      getState: () => state,
+      // used by the co-op layer: the partner pauses or resumes the game for both of us
+      pauseFor(on, by) {
+        if (on && state === 'play' && !p.dead && !G.transitioning()) { state = 'paused'; sel = 0; pausedBy = by || ''; A.sfx('pause'); A.duck(0.35); if (L.net === 'host') G.coop.setState(state, failMsg, res); }
+        else if (!on && state === 'paused') { state = 'play'; pausedBy = ''; opts = null; A.sfx('pause'); A.duck(1); }
+      },
       enter() {
         A.intensity = 0;
         if (G.coop) G.coop.playEnter(L, cap);
@@ -5836,10 +5842,27 @@ G.VOICE = {
           const hs = G.coop.hostState;
           if (hs.st !== state) {
             state = hs.st;
+            if (state !== 'paused' && !opts) gpause = false;
             if (state === 'dead') { wait = 0.5; failMsg = hs.fm; }
             if (state === 'clear' && hs.rs) { res = { rows: hs.rs.rows, best: hs.rs.best, shown: 0, t: 0 }; A.music('clear'); }
             if (state === 'bossIntro') intro = { t: 0 };
           }
+          // either player can pause for both; either can resume. The guest's menu is local, the pause itself lives on the host.
+          if (opts) opts.update(dt);
+          else if (gpause) {
+            if (I.pressed.down) { sel = (sel + 1) % 3; A.sfx('uiMove'); }
+            if (I.pressed.up) { sel = (sel + 2) % 3; A.sfx('uiMove'); }
+            if (I.pressed.pause || ((I.pressed.jump || I.pressed.attack || I.pressed.start) && sel === 0)) { gpause = false; G.coop.send({ t: 'pz', on: false, e: L._ep }); A.sfx('pause'); }
+            else if (I.pressed.jump || I.pressed.attack || I.pressed.start) {
+              A.sfx('uiOk');
+              if (sel === 1) opts = Options(() => { opts = null; });
+              else { gpause = false; G.coop.disconnect(); }
+            }
+          } else if ((state === 'play' || state === 'paused') && (I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) {
+            gpause = true; sel = 0; G.coop.send({ t: 'pz', on: true, e: L._ep }); A.sfx('pause');
+          }
+          const wantFz = state === 'paused' || gpause;
+          if (wantFz && !fz) { fz = true; frozenBefore = p.frozen; p.frozen = true; } else if (!wantFz && fz) { fz = false; p.frozen = frozenBefore; }
           t += dt; cap.update(dt);
           bars = G.damp(bars, state === 'bossIntro' || (L.boss && L.boss.dying) ? 1 : 0, 6, dt);
           if (hpShake > 0) hpShake -= dt;
@@ -5852,15 +5875,16 @@ G.VOICE = {
           L.update(dt);
           return;
         }
-        if (opts) { opts.update(dt); return; }
+        if (opts) { if (state === 'paused' && L.net === 'host') { G.coop.setState(state, failMsg, res); G.coop.pauseTick(L, dt); } opts.update(dt); return; }
         if (state === 'paused') {
+          if (L.net === 'host') { G.coop.setState(state, failMsg, res); G.coop.pauseTick(L, dt); }
           const items = 4;
-          if (I.pressed.pause || I.pressed.start && sel === 0) { state = 'play'; A.sfx('pause'); A.duck(1); return; }
+          if (I.pressed.pause || I.pressed.start && sel === 0) { state = 'play'; pausedBy = ''; A.sfx('pause'); A.duck(1); return; }
           if (I.pressed.down) { sel = (sel + 1) % items; A.sfx('uiMove'); }
           if (I.pressed.up) { sel = (sel + items - 1) % items; A.sfx('uiMove'); }
           if (I.pressed.jump || I.pressed.attack || I.pressed.start) {
             A.sfx('uiOk'); A.duck(1);
-            if (sel === 0) state = 'play';
+            if (sel === 0) { state = 'play'; pausedBy = ''; }
             else if (sel === 1) G.go(() => Play(id, def.boss ? null : L.snapshot()));
             else if (sel === 2) opts = Options(() => { opts = null; });
             else G.go(() => MapScene());
@@ -5884,7 +5908,7 @@ G.VOICE = {
             else startFight();
           }
         } else if (state === 'play') {
-          if ((I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) { state = 'paused'; sel = 0; A.sfx('pause'); A.duck(0.35); return; }
+          if ((I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) { state = 'paused'; sel = 0; pausedBy = ''; A.sfx('pause'); A.duck(0.35); if (L.net === 'host') G.coop.setState(state, failMsg, res); return; }
         }
         L.update(dt);
         for (const ev of L.events.splice(0)) {
@@ -5977,10 +6001,19 @@ G.VOICE = {
           G.text(ug, 'RESTORING LAST COMMIT', W / 2, 109, C.dim, { align: 'c', tiny: true });
         }
         if (state === 'clear') this.drawResults(ug);
-        if (state === 'paused') {
+        if (L.net === 'guest' && (state === 'paused' || gpause)) {
+          ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
+          if (!gpause) G.text(ug, 'PAUSED', W / 2, H / 2 - 4, C.clawd, { align: 'c', scale: 2 });
+          else {
+            G.panel(ug, 112, 62, 160, 70, '#17131f', C.paper, '#0d0a12');
+            G.text(ug, 'PAUSED', 122, 70, C.clawd, { sp: 2 });
+            ['resume', 'options', 'leave co-op'].forEach((s2, i) => { const on = i === sel, y = 90 + i * 14; if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(116, y - 3, 152, 13); G.text(ug, '▸', 120, y, C.clawd); } G.text(ug, s2, 130, y, on ? C.paper : C.dim); });
+            if (opts) opts.draw(ug);
+          }
+        } else if (state === 'paused') {
           ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
           G.panel(ug, 112, 52, 160, 112, '#17131f', C.paper, '#0d0a12');
-          G.text(ug, 'PAUSED', 122, 60, C.clawd, { sp: 2 }); G.text(ug, 'esc to resume', 262, 62, '#6b6578', { tiny: true, align: 'r' });
+          G.text(ug, pausedBy ? 'PAUSED BY ' + pausedBy : 'PAUSED', 122, 60, C.clawd, { sp: 2 }); G.text(ug, 'esc to resume', 262, 62, '#6b6578', { tiny: true, align: 'r' });
           ['resume', 'retry from last commit', 'options', 'back to git log'].forEach((s, i) => { const on = i === sel, y = 80 + i * 14; if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(116, y - 3, 152, 13); G.text(ug, '▸', 120, y, C.clawd); } G.text(ug, s, 130, y, on ? C.paper : C.dim); });
           const tl = SV().tools;
           G.text(ug, 'Z JUMP  X CLAW' + (tl.bash ? '  C BASH' : '') + (tl.agents ? '  V AGENTS' : ''), W / 2, 146, '#6b6578', { tiny: true, align: 'c' });
@@ -6280,15 +6313,33 @@ G.VOICE = {
       me.tools = tools; remote.tools = tools;
       L.player = L.me = me; L.partner = remote; L.p1 = remote; L._ep = coop.startEpoch;
       L.crumble = new HookMap(); coop.hookCr = true;
-      L.breakTile = function (tx, ty) { send({ t: 'bt', tx, ty }); return false; };
+      // cracked walls: the guest breaks the tile at once (prediction) and tells the host, which owns the real world
+      L._predBroken = new Map();
+      L.breakTile = function (tx, ty) {
+        if (this.tile(tx, ty) !== G.TILE.CRACK) return false;
+        const i = ty * this.w + tx;
+        this.tiles[i] = G.TILE.E; this._predBroken.set(i, this.time + 1);
+        this.burst(tx * 16 + 8, ty * 16 + 8, 12, ['#8d8798', '#c3bccd', '#4c4658'], 90, 300);
+        this.shake(0.3); A.sfx('brk');
+        send({ t: 'bt', tx, ty });
+        return true;
+      };
       coop.gs = {};
       coop.gTick = 0; coop.fxAck = 0;
     }
   };
   coop.playEnter = (L, cap) => { coop.cap = cap; if (L.net) ensureIds(L); };
   coop.setState = (st, fm, res) => {
-    if (st === 'paused') st = 'play';
     coop.hostState = { st, fm: fm || '', rs: st === 'clear' && res ? { rows: res.rows, best: res.best } : null };
+  };
+  // while paused the level does not tick, so the host keeps the guest informed from here
+  coop.pauseTick = (L, dt) => {
+    if (!coop.peer || !coop.open) return;
+    coop.pT = (coop.pT || 0) - dt;
+    if (coop.pT > 0) return;
+    coop.pT = 0.25;
+    if (L._net) L._net.hs = null;                  // the first snapshot after resuming must carry the state again
+    send({ t: 'hs', hs: coop.hostState, e: coop.epoch });
   };
   coop.aimAt = (L, e) => {
     const a = L.me, b = L.p2;
@@ -6467,7 +6518,10 @@ G.VOICE = {
     s.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
     if (L.exit) L.exit.done = !!s.ex;
     if (s.sk) L.sparks = s.sk;
-    if (s.tl) { L.tiles.set(L._tiles0); for (let i = 0; i < s.tl.length; i += 2) L.tiles[s.tl[i]] = s.tl[i + 1]; }
+    if (s.tl) {
+      L.tiles.set(L._tiles0); for (let i = 0; i < s.tl.length; i += 2) L.tiles[s.tl[i]] = s.tl[i + 1];
+      for (const [i, exp] of L._predBroken) { if (exp < L.time) L._predBroken.delete(i); else if (L.tiles[i] === G.TILE.CRACK) L.tiles[i] = G.TILE.E; }   // my own breaks the host has not confirmed yet
+    }
     if (s.cr) { Map.prototype.clear.call(L.crumble); for (let i = 0; i < s.cr.length; i += 3) Map.prototype.set.call(L.crumble, s.cr[i], { s: s.cr[i + 1], t: s.cr[i + 2] }); }
     if (s.bh) L.blinkHold = new Set(s.bh);
     if (s.ei) { const keep = new Set(s.ei); L.ents = L.ents.filter((e) => keep.has(e._id)); }
@@ -6617,6 +6671,7 @@ G.VOICE = {
       } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
       else if (m.t === 'cr' || m.t === 'bt') coop.inbox.push(m);
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) { L._net = null; coop.kfNext = true; } }
+      else if (m.t === 'pz') { const sc = G.scene; if (m.e === coop.epoch && sc && sc.pauseFor) sc.pauseFor(!!m.on, 'P2'); }
       else if (m.t === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!m.on; }
     } else {
       if (m.t === 'host') {
@@ -6624,6 +6679,7 @@ G.VOICE = {
         if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
       }
       else if (m.t === 'start') { coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
+      else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) coop.hostState = m.hs; }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's' || m.t === 'fx') {
         coop.q.push(m);
