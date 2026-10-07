@@ -107,4 +107,44 @@ module.exports = (S, h) => {
       return R(gx > (spot.tx + 1) * 16 && hostOpen, id + ': guest x ' + spot.x.toFixed(0) + ' -> ' + gx.toFixed(0) + ' (crack at x=' + spot.tx * 16 + '), host tile open=' + hostOpen);
     } finally { await T.close(); }
   };
+
+  // a rising-liquid level only starts rising for the host's partner too
+  S['liquid'] = async () => {
+    const T = await openPair();
+    try {
+      const id = await T.host.evaluate(() => Object.keys(G.LEVELS).find((k) => G.LEVELS[k].rise && !G.LEVELS[k].boss));
+      if (!id) return R(false, 'no level with def.rise');
+      await startLevel(T, id); await sleep(1200);
+      const before = await T.host.evaluate(() => ({ rising: G.scene.L.rising, trig: G.scene.L.rise.trigger, y: G.scene.L.me.y }));
+      await T.guest.evaluate(() => { const L = G.scene.L, p = L.me; p.y = L.rise.trigger * 16 - 60; p.vy = 0; });
+      await sleep(800);
+      const after = await T.host.evaluate(() => ({ rising: G.scene.L.rising, p2y: G.scene.L.p2.y, ly: G.scene.L.liquidY }));
+      return R(!before.rising && after.rising, id + ': trigger row ' + before.trig + ', host y ' + before.y.toFixed(0) + ' rising before=' + before.rising + ' after guest climbs=' + after.rising);
+    } finally { await T.close(); }
+  };
+  // loot drops fly to the nearest living player, not always to the host
+  S['loot'] = async () => {
+    const T = await openPair();
+    try {
+      await startLevel(T, '1-1'); await sleep(800);
+      const far = await T.host.evaluate(() => {
+        const L = G.scene.L, p1 = L.me, f = L.findSafe(p1.x + 280, p1.y);
+        L.ents.length = 0;
+        if (!f || Math.abs(f.x - p1.x) < 150) return null;
+        return f;
+      });
+      if (!far) return R(false, 'could not find a spot far from the host');
+      await T.guest.evaluate((f) => { const p = G.scene.L.me; p.x = f.x; p.y = f.y; p.vx = p.vy = 0; }, far);
+      await sleep(600);
+      // tokens sit 80 px to the partner's left (the host's side) and are already "loose": they must come to the partner
+      const r = await T.host.evaluate(() => {
+        const L = G.scene.L, p2 = L.p2; L.items.length = 0;
+        for (let i = 0; i < 3; i++) L.items.push({ kind: 'token', x: p2.x - 80, y: p2.y - 6, vx: 0, vy: 0, loose: true, t: 0.34, ph: i });
+        return { d0: 80 };
+      });
+      await sleep(330);
+      const mid = await T.host.evaluate(() => { const L = G.scene.L, p2 = L.p2; const a = L.items.filter((i) => !i.dead).map((i) => Math.hypot(i.x - p2.x, i.y - p2.y)); return a.length ? a.reduce((x, y) => x + y) / a.length : 0; });
+      return R(mid < 80, 'tokens started 80px from the partner (272px from the host); 0.33 s later mean distance to the partner ' + mid.toFixed(0) + 'px (want < 80)');
+    } finally { await T.close(); }
+  };
 };

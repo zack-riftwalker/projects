@@ -2673,7 +2673,15 @@ G.VOICE = {
       if (this.rise) this.liquidY = this.ph + 30;
       this.snapCam();
     }
+    // the players that count for level mechanics: everyone alive (just Clawd when playing alone)
+    players() { return (this.net === 'host' && this.p2 ? [this.me, this.p2] : [this.player]).filter((q) => !q.dead); }
     snapshot() { return { cp: this.cpIndex, tokens: this.tokens, got: Array.from(this.got), sparks: this.sparks.slice(), clock: this.clock, kills: this.kills, hits: this.hits }; }
+
+    // does any living player overlap this tile?
+    anyOn(tx, ty) {
+      for (const q of this.players()) if (q.x < tx * T + T && q.x + q.w > tx * T && q.y < ty * T + T && q.y + q.h > ty * T) return true;
+      return false;
+    }
 
     // ---------- tiles ----------
     tile(tx, ty) {
@@ -2864,14 +2872,16 @@ G.VOICE = {
         if (this.hasBlink === undefined) this.hasBlink = this.tiles.includes(BLINK_A) || this.tiles.includes(BLINK_B);
         if (this.hasBlink) {
           const want = ph === 0 ? BLINK_A : BLINK_B;
-          const x0 = Math.floor(p.x / T), x1 = Math.floor((p.x + p.w) / T), y0 = Math.floor(p.y / T), y1 = Math.floor((p.y + p.h) / T);
-          for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (this.tile(tx, ty) === want) this.blinkHold.add(ty * this.w + tx);
+          for (const q of this.players()) {
+            const x0 = Math.floor(q.x / T), x1 = Math.floor((q.x + q.w) / T), y0 = Math.floor(q.y / T), y1 = Math.floor((q.y + q.h) / T);
+            for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (this.tile(tx, ty) === want) this.blinkHold.add(ty * this.w + tx);
+          }
           if (Math.abs(p.x - this.cam.x - W / 2) < W) G.audio.sfx(ph ? 'tock' : 'tick');
         }
       }
       if (this.blinkHold.size) for (const i of this.blinkHold) {
         const tx = i % this.w, ty = (i / this.w) | 0;
-        if (!(p.x < tx * T + T && p.x + p.w > tx * T && p.y < ty * T + T && p.y + p.h > ty * T)) this.blinkHold.delete(i);
+        if (!this.anyOn(tx, ty)) this.blinkHold.delete(i);
       }
       // crumbling blocks
       for (const [i, c] of this.crumble) {
@@ -2880,7 +2890,7 @@ G.VOICE = {
         const tx = i % this.w, ty = (i / this.w) | 0;
         if (c.s === 1) { c.s = 2; c.t = 2.6; this.burst(tx * T + 8, ty * T + 4, 7, ['#cbb894', '#8a7a5c'], 50, 260); G.audio.sfx('crumble'); }
         else if (c.s === 2) {
-          if (p.x < tx * T + T && p.x + p.w > tx * T && p.y < ty * T + T && p.y + p.h > ty * T) c.t = 0.2;
+          if (this.anyOn(tx, ty)) c.t = 0.2;
           else { this.crumble.delete(i); this.dust(tx * T + 8, ty * T + 8, 4); }
         }
       }
@@ -2896,9 +2906,10 @@ G.VOICE = {
       }
       // rising liquid
       if (this.rise) {
-        if (!this.rising && p.y < this.rise.trigger * T) { this.rising = true; G.audio.sfx('roar'); this.shake(0.5); }
-        if (this.rising && !p.dead && !this.frozen) {
-          const gap = this.liquidY - (p.y + p.h);
+        const ps = this.players();
+        if (!this.rising && ps.some((q) => q.y < this.rise.trigger * T)) { this.rising = true; G.audio.sfx('roar'); this.shake(0.5); }
+        if (this.rising && ps.length && !this.frozen) {
+          const gap = this.liquidY - Math.max(...ps.map((q) => q.y + q.h));      // measured from the lowest player: nobody is left behind
           this.liquidY -= (this.rise.speed + Math.max(0, gap - 130) * 1.2) * dt;
           this.liquidY = Math.max(this.liquidY, (this.rise.top || 0) * T);
         }
@@ -2999,9 +3010,14 @@ G.VOICE = {
       for (const s of this.springs) if (p.vy >= 0 && G.overlap(hb, s) && p.dashT <= 0 && !p.remote) p.spring(s);
       // checkpoints + exit + signs
       this.cps.forEach((c, i) => {
-        if (!c.on && Math.abs(p.x + p.w / 2 - c.x) < 12 && p.y + p.h > c.y - 34 && p.y < c.y) {
+        const inR = Math.abs(p.x + p.w / 2 - c.x) < 12 && p.y + p.h > c.y - 34 && p.y < c.y;
+        if (c.on && inR && this.net === 'host' && p === this.p2 && !c.healed2) {       // first visit of the partner to an active checkpoint
+          c.healed2 = true; p.hp = Math.max(p.hp, p.maxHp); p.setSafe(c.x - 5, c.y - p.h); this.pop(p.x + 5, p.y - 12, 'committed ✓', C.okHi, true);
+        }
+        if (!c.on && inR) {
           for (const o of this.cps) o.on = false;
           c.on = true; this.cpIndex = i; p.hp = Math.max(p.hp, p.maxHp); p.setSafe(c.x - 5, c.y - p.h);
+          if (this.net === 'host') { c.healed2 = true; for (const q of [this.me, this.p2]) if (q && !q.dead) q.hp = Math.max(q.hp, q.maxHp); }
           this.ring(c.x, c.y - 22, 3, 26, C.ok, 0.4); this.burst(c.x, c.y - 22, 14, [C.ok, C.okHi, '#fff'], 100, 100, { glow: 1 });
           this.pop(c.x, c.y - 36, 'committed ✓', C.okHi, true);
           G.audio.sfx('checkpoint');
@@ -3016,13 +3032,15 @@ G.VOICE = {
     }
 
     updateItems(dt) {
-      const p = this.player, pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
+      const p = this.player, pcx = p.x + p.w / 2, pcy = p.y + p.h / 2, ps = this.players();
       for (const it of this.items) {
         if (it.dead) continue;
         if (it.loose) {
           it.t += dt;
-          if (it.t > 0.35 && !p.dead) {            // drawn to Clawd
-            const dx = pcx - it.x, dy = pcy - it.y, d = Math.hypot(dx, dy) || 1, pull = Math.min(700, 160 + it.t * 500);
+          if (it.t > 0.35 && ps.length) {            // drawn to the nearest living Clawd
+            let tg = ps[0];
+            if (ps.length > 1 && Math.hypot(ps[1].x - it.x, ps[1].y - it.y) < Math.hypot(tg.x - it.x, tg.y - it.y)) tg = ps[1];
+            const dx = tg.x + tg.w / 2 - it.x, dy = tg.y + tg.h / 2 - it.y, d = Math.hypot(dx, dy) || 1, pull = Math.min(700, 160 + it.t * 500);
             it.vx = G.damp(it.vx, (dx / d) * pull, 8, dt); it.vy = G.damp(it.vy, (dy / d) * pull, 8, dt);
           } else {
             it.vy += 520 * dt;
@@ -6314,6 +6332,10 @@ G.VOICE = {
       L.player = L.me = me; L.partner = remote; L.p1 = remote; L._ep = coop.startEpoch;
       L.crumble = new HookMap(); coop.hookCr = true;
       // cracked walls: the guest breaks the tile at once (prediction) and tells the host, which owns the real world
+      // a tile that vanished/appeared under or inside me must not trap me: hold it open for as long as I overlap it
+      L._myHold = new Set();
+      const solid0 = L.solid;
+      L.solid = function (tx, ty) { return this._myHold.size && this._myHold.has(ty * this.w + tx) ? false : solid0.call(this, tx, ty); };
       L._predBroken = new Map();
       L.breakTile = function (tx, ty) {
         if (this.tile(tx, ty) !== G.TILE.CRACK) return false;
@@ -6583,6 +6605,14 @@ G.VOICE = {
       if (m.ax) { m.dx = v - m.x; m.dy = 0; m.x = v; } else { m.dy = v + 2 - m.y; m.dx = 0; m.y = v + 2; }
     }
     const p = L.me;
+    {
+      const T = G.TILE, x0 = Math.floor(p.x / 16), x1 = Math.floor((p.x + p.w - 0.001) / 16), y0 = Math.floor(p.y / 16), y1 = Math.floor((p.y + p.h - 0.001) / 16);
+      for (const i of L._myHold) { const tx = i % L.w, ty = (i / L.w) | 0; if (tx < x0 || tx > x1 || ty < y0 || ty > y1) L._myHold.delete(i); }
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+        const tt = L.tile(tx, ty);
+        if ((tt === T.CRUMBLE || tt === T.BLINK_A || tt === T.BLINK_B) && !Level.prototype.solid.call(L, tx, ty)) L._myHold.add(ty * L.w + tx);
+      }
+    }
     p.update(dt);
     const hb = p.hurtbox();
     for (const sp of L.springs) { if (sp.t > 0) sp.t -= dt; if (p.vy >= 0 && G.overlap(hb, sp) && p.dashT <= 0 && !p.dead) p.spring(sp); }
