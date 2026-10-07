@@ -6312,7 +6312,7 @@ G.VOICE = {
   const G = window.G, Level = G.Level, Player = G.Player, W = G.W, H = G.H, A = G.audio;
   const coop = G.coop = {
     role: null, ws: null, open: false, peer: false, building: false, tools: null,
-    mute: 0, quiet: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
+    skipped: 0, stalls: [], stallLog: [], lastStamp: undefined, lastRx: 0, mute: 0, quiet: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
     cap: null, ping: 0, tickN: 0, epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
     relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
@@ -6405,7 +6405,7 @@ G.VOICE = {
     for (const e of L.ents) if (e._id === undefined) e._id = L._eid++;
     for (const it of L.items) if (it._id === undefined) it._id = L._iid++;
   }
-  const send = (o) => { if (coop.ws && coop.ws.readyState === 1) coop.ws.send(JSON.stringify(o)); };
+  const send = (o) => { if (coop.ws && coop.ws.readyState === 1) { const t = JSON.stringify(o); coop.bytesOut += t.length; coop.ws.send(t); } };
   coop.send = send;
 
   // ---------- protocol envelope + two event channels ----------
@@ -6416,9 +6416,12 @@ G.VOICE = {
   const R = coop.R = { out: [], seq: 0, hi: 0, resend: 220 };
   const curEpoch = () => (coop.role === 'host' ? coop.epoch : (G.scene && G.scene.L && G.scene.L._ep !== undefined ? G.scene.L._ep : coop.startEpoch));
   coop.rel = (k, f) => { R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
-  coop.resetNet = () => { R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
+  coop.resetNet = () => { if (coop.rate) Object.assign(coop.rate, RATES[0], { level: 0, since: 0 }); coop.stalls = []; coop.stallLog = []; coop.lastStamp = undefined; R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
   // game message out: stamps the envelope and attaches every unacknowledged reliable event that is due
   function gsend(o) {
+    // a clogged line (socket buffer filling up) gets no more snapshots / body reports; events and everything else always go
+    const hasEv = R.out.length > 0 && R.out.some((x) => performance.now() - x.at > R.resend);
+    if (!hasEv && (o.t === 's' || o.t === 'st') && coop.ws && coop.ws.bufferedAmount > 4096) { coop.skipped++; return false; }
     o.n = ++coop.txN; if (o.e === undefined) o.e = curEpoch(); o.ra = R.hi;
     if (R.out.length) {
       const now = performance.now();
@@ -6427,6 +6430,7 @@ G.VOICE = {
     coop.relWake = false; coop.lastTx = performance.now();
     if (coop.dbg.stat) { const st = coop.dbg.stat; for (const k in o) st[k] = (st[k] || 0) + JSON.stringify(o[k]).length + k.length + 4; }
     send(o);
+    return true;
   }
   coop.gsend = gsend;
   // game message in: acknowledgements, reliable events (once, in order), loss accounting
@@ -6564,6 +6568,7 @@ G.VOICE = {
   // the partner's body is the partner's own: speed, attacks, hit points are taken over as reported;
   // its position is shown a few frames in the past, blended between two reports, so it moves smoothly whatever the line does
   const pb = { list: [], off: null, jit: 0.01, D: 0.06, last: 0 };
+  coop.pJit = () => pb.jit;
   coop.pbReset = () => { pb.list = []; pb.off = null; pb.jit = 0.01; pb.D = 0.06; pb.last = 0; };
   function pNote(gt, at) {
     const now = at / 1000, d = now - gt;
@@ -6652,7 +6657,7 @@ G.VOICE = {
       L.ring(q.p.x + 5, q.p.y + 5, 2, 26, '#6aa8ff', 0.4); L.pop(q.p.x + 5, q.p.y - 12, 'revived', '#cfe3ff', true);
       if (q.p === p2) coop.rel('revive', { x: p2.x, y: p2.y, hp: p2.hp });          // its body is its own: tell it
     }
-    if (++coop.tickN % 4 === 0) sendSnap(L);
+    if (++coop.tickN % coop.rate.snap === 0) sendSnap(L);
   };
   coop.hostIdle = (L) => { if (L.p2 && coop.peer && coop.rHas) applyRemote(L); };
   // hit points for the partner (checkpoint, coffee, 25 tokens): it owns them, so it is told how many to add
@@ -7128,13 +7133,12 @@ G.VOICE = {
     L.events.length = 0;
     if (!L.cam.frozen) L.updateCam(dt);
     // my state -> host, 30 times a second
-    if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
+    if ((coop.gTick = (coop.gTick || 0) + 1) % coop.rate.st === 0) {
       if (coop.gTick % 150 === 0) coop.gsPrev = null;                 // now and then the whole body again, so a lost message cannot leave the host with a stale field
       const cur = encAll(PLAYERSP, p), d = sparse(coop.gsPrev, cur);
-      if (d) coop.gsPrev = cur;
       const sa = L._rg ? L._rg.last : 0;
       const gt = r2(performance.now() / 1000);
-      if (d) gsend({ t: 'st', d, sa, gt });
+      if (d) { if (gsend({ t: 'st', d, sa, gt })) coop.gsPrev = cur; }
       else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: [], sa, gt });
     }
   };
@@ -7153,6 +7157,25 @@ G.VOICE = {
     for (let i = 0; i < q.maxHp; i++) ug.drawImage(i < q.hp ? on : S.pipOff, 6 + i * 9, hudY + dy);
     if (q.dead) G.text(ug, 'down...', 6 + q.maxHp * 9 + 2, hudY + dy, '#8d8798', { tiny: true });
   };
+
+  // ---------- line quality: measured every 2 s, rates follow it ----------
+  // good: host 15 Hz / guest 30 Hz.  RTT > 200 ms or jitter > 40 ms: 10 / 20 Hz.  RTT > 350 ms or recent stalls: 6 / 15 Hz.
+  // A change needs the previous one to be at least 3 s old, so the rate does not flap.
+  const RATES = [{ snap: 4, st: 2 }, { snap: 6, st: 3 }, { snap: 10, st: 4 }];
+  coop.rate = Object.assign({ level: 0, since: 0 }, RATES[0]);
+  coop.net = { rtt: 0, jit: 0, stalls: 0, lost: 0, hz: 0, kbIn: 0, kbOut: 0, level: 0 };
+  coop.bytesIn = 0; coop.bytesOut = 0;
+  function netTick() {
+    const now = performance.now(), N = coop.net, win = 2;
+    coop.stalls = coop.stalls.filter((t) => now - t < 5000);
+    const g = G.scene && G.scene.L && G.scene.L._rg;
+    N.rtt = coop.ping; N.jit = Math.round((coop.role === 'host' ? coop.pJit() : g ? g.jit : 0) * 1000); N.stalls = coop.stalls.length; N.lost = coop.lost;
+    N.kbIn = +(coop.bytesIn / 1024 / win).toFixed(2); N.kbOut = +(coop.bytesOut / 1024 / win).toFixed(2); coop.bytesIn = coop.bytesOut = 0;
+    const want = N.rtt > 350 || N.stalls > 0 ? 2 : N.rtt > 200 || N.jit > 40 ? 1 : 0;
+    if (want !== coop.rate.level && now - coop.rate.since >= 3000) { Object.assign(coop.rate, RATES[want], { level: want, since: now }); }
+    N.level = coop.rate.level; N.hz = coop.role === 'host' ? Math.round(60 / coop.rate.snap) : Math.round(60 / coop.rate.st);
+    ui.render();
+  }
 
   // ---------- connection ----------
   const wait = () => ({
@@ -7178,6 +7201,12 @@ G.VOICE = {
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
+    if (m.t === 's' || m.t === 'st') {
+      // a stall = this message came much later than the sender's own clock says it should have (a gap the sender did not make)
+      const now = performance.now(), stamp = m.t === 's' ? m.tm : m.gt;
+      if (coop.lastRx && stamp !== undefined && coop.lastStamp !== undefined && (now - coop.lastRx) - (stamp - coop.lastStamp) * 1000 > 250) { coop.stalls.push(now); coop.stallLog.push(now); }
+      coop.lastRx = now; if (stamp !== undefined) coop.lastStamp = stamp;
+    }
     if ((m.t === 's' || m.t === 'st' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
     if (coop.role === 'host') {
       if (m.t === 'peer') {
@@ -7221,12 +7250,13 @@ G.VOICE = {
       coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
       // when the game loop is not running (background tab, pause) events still need a carrier
       clearInterval(coop.kaT);
+      clearInterval(coop.mtT); coop.mtT = setInterval(netTick, 2000);
       coop.kaT = setInterval(() => { if (R.out.length && performance.now() - (coop.lastTx || 0) > R.resend) gsend({ t: 'ack' }); }, 150);
     };
-    ws.onmessage = (ev) => { try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
+    ws.onmessage = (ev) => { coop.bytesIn += ev.data.length; try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
-      clearInterval(coop.pgT); clearInterval(coop.kaT); coop.open = false; coop.peer = false; coop.ping = 0;
+      clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false; coop.ping = 0;
       coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
       const L = G.scene && G.scene.L;
       if (L && L.net === 'host') coop.partnerLost(L);
@@ -7245,7 +7275,7 @@ G.VOICE = {
   }).catch(() => {});
   coop.disconnect = () => {
     const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
-    coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); clearInterval(coop.kaT); coop.open = false; coop.peer = false;
+    coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false;
     if (L && L.net === 'host') coop.partnerLost(L);
     else if (wasGuest && ((L && L.net === 'guest') || (G.scene && G.scene.isWait))) coop.kick = 'map';
     coop.role = null; coop.status = 'offline'; ui.render();

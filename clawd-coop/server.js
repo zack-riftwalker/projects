@@ -68,19 +68,25 @@ server.on('clientError', (e, sock) => { try { sock.destroy(); } catch (x) { /* g
 const num = (v, d) => (Number.isFinite(+v) && v !== undefined && v !== '' ? +v : d);
 const SIM = { lag: num(process.env.SIM_LAG, 0), jit: num(process.env.SIM_JITTER, 0), stallPct: num(process.env.SIM_STALL_PCT, 0), stallMs: num(process.env.SIM_STALL_MS, 400), bw: num(process.env.SIM_BW, 0) };
 const SIM_ON = !!(SIM.lag || SIM.jit || SIM.stallPct || SIM.bw);
-const lane = () => ({ q: [], timer: null, lastDue: 0, blockedUntil: 0, bwFree: 0 });
+const lane = () => ({ q: [], qBytes: 0, timer: null, lastDue: 0, blockedUntil: 0, bwFree: 0 });
 const lanes = { toGuest: lane(), toHost: lane() };
 function pump(l) {
   if (l.timer) return;
   const step = () => {
     l.timer = null;
     const now = Date.now();
-    while (l.q.length && l.q[0].due <= now) { const m = l.q.shift(); const to = m.to(); if (to && to.readyState === 1) to.send(m.text); }
+    while (l.q.length && l.q[0].due <= now) { const m = l.q.shift(); l.qBytes -= m.text.length; const to = m.to(); if (to && to.readyState === 1) to.send(m.text); }
     if (l.q.length) l.timer = setTimeout(step, Math.max(1, l.q[0].due - Date.now()));
   };
   l.timer = setTimeout(step, 0);
 }
+// Messages the game marks as droppable (top-level "u":1: snapshots, body reports) are thrown away while the receiver is clogged,
+// so a slow line never builds an ever-growing queue. Everything else (start, leave, events, pings...) always goes through.
+const CLOG = 16384;
+let dropped = 0;
 function relayTo(l, to, text) {
+  const t0 = to();
+  if (text.endsWith(',"u":1}') && t0 && t0.bufferedAmount + l.qBytes > CLOG) { dropped++; return; }
   if (!SIM_ON) { const t = to(); if (t && t.readyState === 1) t.send(text); return; }
   const now = Date.now();
   let due = now + SIM.lag + (SIM.jit ? (Math.random() * 2 - 1) * SIM.jit : 0);
@@ -88,6 +94,7 @@ function relayTo(l, to, text) {
   due = Math.max(due, l.lastDue, l.blockedUntil);
   if (SIM.bw) { l.bwFree = Math.max(due, l.bwFree) + (text.length / SIM.bw) * 1000; due = l.bwFree; }
   l.lastDue = due;
+  l.qBytes += text.length;
   l.q.push({ due, text, to });
   pump(l);
 }

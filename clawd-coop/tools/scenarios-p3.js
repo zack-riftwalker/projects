@@ -224,4 +224,38 @@ module.exports = (S, h) => {
       return R(bad.length === 0 && errs.length === 0, bad.length ? 'MISSING ' + bad.join(' | ') : 'all ' + Object.keys(res).length + ' classes complete (' + Object.keys(res).map((c) => c + '[' + res[c].needed.join(',') + ']').join(' ') + ')' + (errs.length ? '; errors ' + errs.slice(0, 3).join('|') : ''));
     } finally { await browser.close(); await srv.stop(); }
   };
+
+  // the send rate follows the line: bad ping -> fewer snapshots / reports (3 s dwell between changes)
+  S['rates'] = async () => {
+    const out = [];
+    let ok = true;
+    for (const [lag, want] of [[0, 0], [150, 1], [300, 2]]) {
+      const T = await openPair({ env: lag ? { SIM_LAG: String(lag) } : {} });
+      try {
+        await startLevel(T, '1-1'); await sleep(8500);
+        const r = await T.host.evaluate(() => ({ lvl: G.coop.rate.level, snap: G.coop.rate.snap, rtt: G.coop.ping }));
+        const g = await T.guest.evaluate(() => ({ lvl: G.coop.rate.level, st: G.coop.rate.st, rtt: G.coop.ping }));
+        out.push('lag ' + lag + ': rtt ' + r.rtt + ' -> level ' + r.lvl + ' (host ' + Math.round(60 / r.snap) + ' Hz), guest level ' + g.lvl + ' (' + Math.round(60 / g.st) + ' Hz)');
+        if (r.lvl !== want || g.lvl !== want) ok = false;
+      } finally { await T.close(); }
+    }
+    return R(ok, out.join('; '));
+  };
+  // a narrow line must not build a growing queue: after a minute of boss fight the ping is still close to the bare line delay
+  S['bufferbloat'] = async () => {
+    const lag = +(process.env.SIM_LAG || 150), env = process.env.SIM_LAG ? {} : { SIM_LAG: '150', SIM_JITTER: '60', SIM_STALL_PCT: '5', SIM_BW: '8000' };
+    const T = await openPair({ env });
+    try {
+      await startLevel(T, '2-B'); await sleep(3000);
+      await h.godmode(T);
+      const secs = +(process.env.BB_SECS || 60), hist = [];
+      const walk = (async () => { for (let i = 0; i < secs / 1.2; i++) await holdKey(T.guest, i % 2 ? 'ArrowLeft' : 'ArrowRight', 1000); })();
+      for (let i = 0; i < secs; i++) { await sleep(1000); hist.push(await T.guest.evaluate(() => G.coop.ping)); }
+      await walk;
+      const late = hist.slice(-20), max = Math.max(...late), med = late.slice().sort((a, b) => a - b)[10];
+      const drops = await T.host.evaluate(() => G.coop.skipped);
+      const base = 2 * lag;
+      return R(max < base * 2 + 150, 'bare round trip ' + base + ' ms; last 20 s: median ' + med + ' ms, max ' + max + ' ms (want < ' + (base * 2 + 150) + '); host skipped ' + drops + ' sends; ping every 10 s: ' + hist.filter((_, i) => i % 10 === 9).join(','));
+    } finally { await T.close(); }
+  };
 };
