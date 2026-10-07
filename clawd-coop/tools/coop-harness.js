@@ -178,7 +178,7 @@ S['softlock'] = async () => {
     await T.guest.close();
     const t0 = Date.now(); let restarted = false;
     while (Date.now() - t0 < 6000) { if (await T.host.evaluate(() => G.scene.L !== window.__L0 && !!G.scene.L)) { restarted = true; break; } await sleep(100); }
-    const st = await T.host.evaluate(() => ({ dead: G.scene.L.me.dead, rq: G.scene.L.reviveQ.length }));
+    const st = await T.host.evaluate(() => ({ dead: G.scene.L.me.dead, rq: (G.scene.L.reviveQ || []).length }));
     return R(restarted, 'reviveQ before=' + q + ' restarted=' + restarted + ' after ' + (Date.now() - t0) + 'ms; now dead=' + st.dead + ' rq=' + st.rq);
   } finally { await T.close(); }
 };
@@ -298,7 +298,8 @@ S['smoke'] = async () => {   // solo, no co-op: every level for 3 s with scripte
 // scenarios for later phases are appended by tools/scenarios-*.js
 for (const f of ['scenarios-p1.js', 'scenarios-p2.js', 'scenarios-p3.js']) { try { require('./' + f)(S, { startServer, get, rawReq, openPair, startLevel, counters, diffNet, key, holdKey, godmode, noGod, sleep, R, openPage, chromium, ROOT, CODE, createRequire }); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; } }
 
-(async () => {
+module.exports = { S, openPair, startLevel, sleep, counters, key, holdKey, godmode, startServer };
+if (require.main === module) (async () => {
   const want = process.argv.slice(2);
   const names = want.length === 0 || want[0] === 'all' ? Object.keys(S) : want;
   let fails = 0;

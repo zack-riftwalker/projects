@@ -6297,6 +6297,17 @@ G.VOICE = {
     return Math.hypot(a.x - cx, a.y - cy) <= Math.hypot(b.x - cx, b.y - cy) ? a : b;
   };
   coop.nearP2 = (L, e) => { const p = L.p2; return !!p && !p.dead && Math.abs(e.x + (e.w || 0) / 2 - p.x) < W / 2 + 120 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < H / 2 + 120; };
+  // the partner is gone (left, crashed, or the host closed): never leave the survivor stuck waiting for a revive
+  coop.partnerLost = (L) => {
+    if (!L || !L.net) return;
+    if (L.net === 'host') {
+      if (L.me.dead && L.reviveQ && L.reviveQ.some((q) => q.p === L.me)) L.events.push('death');
+      L.reviveQ = [];
+    }
+    L.net = null; L.partner = null; L.p2 = null;
+  };
+  coop.notice = null;
+  coop.say = (text) => { coop.notice = { text, t: 2 }; };
   coop.holdDeath = (p) => {
     const L = p.L;
     if (!L.net || !L.reviveQ) return false;
@@ -6559,7 +6570,7 @@ G.VOICE = {
 
   // ---------- connection ----------
   const wait = () => ({
-    t: 0,
+    t: 0, isWait: true,
     update(dt) { this.t += dt; },
     draw(g, ug) {
       g.fillStyle = '#0d0a12'; g.fillRect(0, 0, W, H);
@@ -6568,6 +6579,13 @@ G.VOICE = {
       G.text(ug, coop.ping ? 'ping ' + coop.ping + ' ms' : '', W / 2, H / 2 + 16, '#8d8798', { align: 'c', tiny: true });
     },
   });
+  // short on-screen message ("host disconnected"), drawn over whatever scene is showing
+  const drawNotice = (ug) => {
+    const n = coop.notice; if (!n) return;
+    const w = G.textW(n.text) + 16; ug.globalAlpha = Math.min(1, n.t * 3);
+    G.panel(ug, Math.round((W - w) / 2), 26, w, 15, '#17131f', '#ffb3b3', '#0d0a12');
+    G.text(ug, n.text, W / 2, 30, '#ffd9d9', { align: 'c' }); ug.globalAlpha = 1;
+  };
   coop.waitScene = wait;
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
@@ -6577,11 +6595,14 @@ G.VOICE = {
         coop.peer = !!m.on; ui.render();
         const sc = G.scene;
         if (m.on) { if (sc && sc.L && !sc.L.net) G.go(() => G.Scenes.play(sc.L.id, sc.L.def.boss ? null : sc.L.snapshot())); }
-        else if (sc && sc.L && sc.L.net) { sc.L.net = null; sc.L.partner = null; sc.L.p2 = null; }
+        else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
       else if (m.t === 'cr' || m.t === 'bt') coop.inbox.push(m);
     } else {
-      if (m.t === 'host') { coop.hostOn = !!m.on; ui.render(); }
+      if (m.t === 'host') {
+        coop.hostOn = !!m.on; ui.render();
+        if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
+      }
       else if (m.t === 'start') { coop.q.length = 0; coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's' || m.t === 'fx') { if (coop.q.length < 400) coop.q.push(m); }
@@ -6601,14 +6622,27 @@ G.VOICE = {
       if (coop.ws !== ws) return;
       clearInterval(coop.pgT); coop.open = false; coop.peer = false; coop.ping = 0;
       coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4003 ? 'host is not online yet' : 'offline';
-      const L = G.scene && G.scene.L; if (L && L.net === 'host') { L.net = null; L.partner = null; L.p2 = null; }
+      const L = G.scene && G.scene.L;
+      if (L && L.net === 'host') coop.partnerLost(L);
+      else if (coop.role === 'guest') { if (L && L.net === 'guest') coop.kick = 'map'; else if (G.scene && G.scene.isWait) coop.kick = 'map'; coop.say('connection lost'); }
       coop.role = null; ui.render();
     };
   };
-  coop.disconnect = () => { const w = coop.ws; coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); coop.open = false; coop.peer = false; coop.role = null; coop.status = 'offline'; ui.render(); };
+  coop.disconnect = () => {
+    const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
+    coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); coop.open = false; coop.peer = false;
+    if (L && L.net === 'host') coop.partnerLost(L);
+    else if (wasGuest && ((L && L.net === 'guest') || (G.scene && G.scene.isWait))) coop.kick = 'map';
+    coop.role = null; coop.status = 'offline'; ui.render();
+  };
 
   const oStep = G.step;
   G.step = function (n, quiet) {
+    if (coop.notice && (coop.notice.t -= n / 60) <= 0) coop.notice = null;
+    if (coop.kick && !G.transitioning()) {
+      const k = coop.kick; coop.kick = null;
+      if (k === 'wait' && coop.open) G.go(() => wait(), { speed: 3.2 }); else G.go(() => G.Scenes.map(), { speed: 3.2 });
+    }
     if (coop.role === 'guest' && coop.open && !G.transitioning()) {
       if (coop.startMsg) {
         const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools;
@@ -6620,6 +6654,7 @@ G.VOICE = {
   const oSet = G.setScene;
   G.setScene = function (s) {
     const old = G.scene;
+    if (s && s.draw && !s._cn) { const d = s.draw; s._cn = 1; s.draw = function (g, ug) { d.call(this, g, ug); drawNotice(ug); }; }
     oSet.call(this, s);
     if (coop.role === 'host' && coop.open && coop.peer) {
       if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools });
