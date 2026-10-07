@@ -6319,6 +6319,7 @@ G.VOICE = {
   function hostSetup(L, x, y) {
     L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
     const p2 = new Player(L, x, y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
+    p2.tools = Object.assign({}, G.save.data.tools, { agents: false });     // the partner has no sub-agent meter (for now): no "subagents ready" pop, no meter effects
     L.p2 = p2; L.partner = p2; L.reviveQ = [];
     coop.rAll = {}; coop.rHas = false; coop.rAck = 0; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = []; coop.fxKeys.clear();
   }
@@ -6777,6 +6778,7 @@ G.VOICE = {
     const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || ''));
     ws.onopen = () => {
       coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected'; ui.render();
+      if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
       if (role === 'guest') G.go(() => wait(), { speed: 3 });
       coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
     };
@@ -6841,8 +6843,10 @@ G.VOICE = {
     render() {
       if (!this.btn) return;
       const on = coop.open;
-      this.btn.textContent = on ? '2P \u25CF' + (coop.ping ? ' ' + coop.ping : '') : '2P';
-      this.btn.style.color = on ? (coop.role === 'host' && !coop.peer ? '#ffd27a' : '#7fe08a') : '#fff';
+      // the dot shows the connection quality: green < 120 ms, yellow < 250 ms, red above (yellow while the host waits for a friend)
+      const dot = !on ? '' : coop.role === 'host' && !coop.peer ? '#ffd27a' : !coop.ping ? '#7fe08a' : coop.ping < 120 ? '#7fe08a' : coop.ping < 250 ? '#ffd27a' : '#ff6b6b';
+      this.btn.innerHTML = on ? '2P <span style="color:' + dot + '">\u25CF</span>' + (coop.ping ? ' ' + coop.ping : '') : '2P';
+      this.btn.style.color = '#fff';
       let s = coop.status;
       if (coop.role === 'host' && on) s = coop.peer ? 'friend connected - pick a level' : 'waiting for your friend (give them the link and code)';
       if (coop.role === 'guest' && on) s = coop.hostOn ? 'connected to host' : 'host is not online yet';
@@ -6854,7 +6858,7 @@ G.VOICE = {
   };
   if (/^https?:$/.test(location.protocol)) {
     const css = document.createElement('style');
-    css.textContent = '#coopBtn{position:fixed;top:6px;left:6px;z-index:60;font:bold 12px monospace;padding:4px 8px;background:rgba(20,16,30,.75);border:1px solid #555;border-radius:6px;opacity:.75}#coopBtn:hover{opacity:1}#coopP{position:fixed;top:34px;left:6px;z-index:60;width:230px;padding:10px;background:#17131f;color:#fff3e4;border:1px solid #6aa8ff;border-radius:8px;font:12px monospace;display:none}#coopP button,#coopP input{font:12px monospace;margin:3px 2px;padding:5px 8px;border-radius:5px;border:1px solid #555;background:#2a2338;color:#fff}#coopP input{width:70px}';
+    css.textContent = '#coopBtn{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:60;font:bold 12px monospace;padding:4px 8px;background:rgba(20,16,30,.75);border:1px solid #555;border-radius:6px;opacity:.75}#coopBtn:hover{opacity:1}body.touch #coopBtn{font-size:10px;padding:2px 6px;opacity:.55}#coopP{position:fixed;top:30px;left:50%;transform:translateX(-50%);z-index:60;max-width:92vw;width:230px;padding:10px;background:#17131f;color:#fff3e4;border:1px solid #6aa8ff;border-radius:8px;font:12px monospace;display:none}#coopP button,#coopP input{font:12px monospace;margin:3px 2px;padding:5px 8px;border-radius:5px;border:1px solid #555;background:#2a2338;color:#fff}#coopP input{width:70px}';
     document.head.appendChild(css);
     const btn = document.createElement('button'); btn.id = 'coopBtn'; btn.textContent = '2P'; btn.style.color = '#fff';
     const panel = document.createElement('div'); panel.id = 'coopP';
@@ -6862,7 +6866,7 @@ G.VOICE = {
       '<div id="cRow"><button id="cHost">Host</button> <span>or</span><br><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
       '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b></div><button id="cOff" style="display:none">Disconnect</button>';
     document.body.appendChild(btn); document.body.appendChild(panel);
-    ui.btn = btn; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
+    ui.btn = btn; ui.panel = panel; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
     for (const el of [btn, panel]) for (const ev of ['keydown', 'keyup', 'pointerdown']) el.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; });
     const host = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
