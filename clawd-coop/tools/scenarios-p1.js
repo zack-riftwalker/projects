@@ -190,4 +190,19 @@ module.exports = (S, h) => {
       return R(same && hi === gi && absent && Math.abs(gpos[0] - hpos[0]) < 40, 'level kept=' + same + ' ids equal=' + (hi === gi) + ' (host [' + hi + '] guest [' + gi + ']) killed #' + killed + ' absent on guest=' + absent + '; guest at ' + gpos.map(Math.round) + ' host at ' + hpos.map(Math.round));
     } finally { await T.close(); }
   };
+
+  // static file headers, 304, gzip, wrong-code lockout
+  S['cache'] = async () => {
+    const srv = await h.startServer();
+    try {
+      const mp3 = await h.get(srv.port, '/assets/voice/nar_title.mp3'), idx = await h.get(srv.port, '/'), gz = await h.get(srv.port, '/', { 'Accept-Encoding': 'gzip' });
+      const idx304 = await h.get(srv.port, '/', { 'If-None-Match': idx.headers.etag }), mp304 = await h.get(srv.port, '/assets/voice/nar_title.mp3', { 'If-None-Match': mp3.headers.etag });
+      const WebSocket = h.createRequire(require('path').join(h.ROOT, 'x.js'))('ws');
+      const codes = [];
+      for (let i = 0; i < 7; i++) codes.push(await new Promise((res) => { const ws = new WebSocket('ws://127.0.0.1:' + srv.port + '/ws?role=guest&code=000000'); ws.on('close', (c) => res(c)); ws.on('error', () => {}); }));
+      const good = await new Promise((res) => { const ws = new WebSocket('ws://127.0.0.1:' + srv.port + '/ws?role=guest&code=' + h.CODE); ws.on('close', (c) => res(c)); ws.on('open', () => { ws.close(); }); ws.on('error', () => {}); });
+      const ok = /immutable/.test(mp3.headers['cache-control']) && !!mp3.headers.etag && idx.headers['cache-control'] === 'no-cache' && !!idx.headers.etag && idx304.status === 304 && mp304.status === 304 && gz.headers['content-encoding'] === 'gzip' && gz.body.length < 120 * 1024 && codes.slice(0, 5).every((c) => c === 4001) && codes[5] === 4005 && good === 4005;
+      return R(ok, 'mp3 ' + mp3.headers['cache-control'] + '; index ' + idx.headers['cache-control'] + ' ' + idx.body.length + ' B raw, gzip ' + gz.body.length + ' B; 304s ' + idx304.status + '/' + mp304.status + '; wrong codes close ' + codes.join(',') + ', right code right after lockout -> ' + good);
+    } finally { await srv.stop(); }
+  };
 };

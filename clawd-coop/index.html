@@ -6774,6 +6774,7 @@ G.VOICE = {
   }
   coop.connect = (role, code) => {
     if (coop.ws) { try { coop.ws.close(); } catch (e) {} }
+    clearInterval(coop.pgT);
     coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = 'connecting...'; ui.render();
     const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || ''));
     ws.onopen = () => {
@@ -6786,7 +6787,7 @@ G.VOICE = {
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
       clearInterval(coop.pgT); coop.open = false; coop.peer = false; coop.ping = 0;
-      coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4003 ? 'host is not online yet' : 'offline';
+      coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
       const L = G.scene && G.scene.L;
       if (L && L.net === 'host') coop.partnerLost(L);
       else if (coop.role === 'guest') { if (L && L.net === 'guest') coop.kick = 'map'; else if (G.scene && G.scene.isWait) coop.kick = 'map'; coop.say('connection lost'); }

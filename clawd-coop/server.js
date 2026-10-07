@@ -1,9 +1,9 @@
 // CLAWD co-op relay: serves the game and forwards messages between the host and one guest.
-const http = require('http'), fs = require('fs'), path = require('path');
+const http = require('http'), fs = require('fs'), path = require('path'), zlib = require('zlib');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
-const CODE = process.env.CODE || String(Math.floor(1000 + Math.random() * 9000));
+const CODE = process.env.CODE || String(Math.floor(100000 + Math.random() * 900000));   // 6 digits
 const MIME = { '.html': 'text/html; charset=utf-8', '.mp3': 'audio/mpeg', '.js': 'text/javascript', '.png': 'image/png', '.json': 'application/json' };
 
 // a request that came through the tunnel carries proxy headers; a local one does not
@@ -12,6 +12,31 @@ const isLocal = (req) => {
   const loop = a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
   return loop && !req.headers['cf-connecting-ip'] && !req.headers['x-forwarded-for'];
 };
+
+// ---------- static files: ETag, 304, long cache for voices, gzip for the page (kept in memory until the file changes) ----------
+const cache = new Map();
+function load(rel) {
+  const f = path.join(ROOT, rel);
+  let st; try { st = fs.statSync(f); } catch (e) { return null; }
+  const hit = cache.get(rel);
+  if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit;
+  const raw = fs.readFileSync(f);
+  const ent = { mtime: st.mtimeMs, size: st.size, raw, etag: 'W/"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"', gz: rel.endsWith('.html') ? zlib.gzipSync(raw, { level: 9 }) : null };
+  cache.set(rel, ent);
+  return ent;
+}
+function serveFile(req, res, rel) {
+  const ent = load(rel);
+  if (!ent) { res.writeHead(404); return res.end('not found'); }
+  const isMp3 = rel.endsWith('.mp3');
+  const h = { 'Content-Type': MIME[path.extname(rel)] || 'application/octet-stream', ETag: ent.etag, 'Cache-Control': isMp3 ? 'public, max-age=31536000, immutable' : 'no-cache' };
+  if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, h); return res.end(); }
+  let body = ent.raw;
+  if (ent.gz) { h.Vary = 'Accept-Encoding'; if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) { body = ent.gz; h['Content-Encoding'] = 'gzip'; } }
+  h['Content-Length'] = body.length;
+  res.writeHead(200, h);
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
 
 // only these paths are ever served: no directory traversal is possible
 const VOICE = /^\/assets\/voice\/[a-z0-9_]+\.mp3$/;
@@ -24,11 +49,7 @@ const server = http.createServer((req, res) => {
   }
   if (u === '/') u = '/index.html';
   if (u !== '/index.html' && !VOICE.test(u)) { res.writeHead(404); return res.end('not found'); }
-  fs.readFile(path.join(ROOT, u.slice(1)), (err, data) => {
-    if (err) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(u)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(data);
-  });
+  serveFile(req, res, u.slice(1));
 });
 server.on('clientError', (e, sock) => { try { sock.destroy(); } catch (x) { /* gone */ } });
 
@@ -64,6 +85,17 @@ function relayTo(l, to, text) {
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 512 * 1024, perMessageDeflate: { threshold: 200 } });
 wss.on('error', (e) => console.log('wss error: ' + e.message));
+// wrong codes: 5 failures within a minute from one address lock that address out for a minute
+const fails = new Map();
+const clientIp = (req) => String(req.headers['cf-connecting-ip'] || (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '?');
+const blocked = (ip) => { const f = fails.get(ip); return !!f && f.until > Date.now(); };
+function fail(ip) {
+  const now = Date.now(), f = fails.get(ip) || { n: 0, first: now, until: 0 };
+  if (now - f.first > 60000) { f.n = 0; f.first = now; }
+  if (++f.n >= 5) { f.until = now + 60000; f.n = 0; f.first = now; }
+  fails.set(ip, f);
+}
+setInterval(() => { const now = Date.now(); for (const [k, f] of fails) if (f.until < now && now - f.first > 60000) fails.delete(k); }, 60000).unref();
 let host = null, guest = null;
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
@@ -71,13 +103,15 @@ wss.on('connection', (ws, req) => {
   ws.on('error', (e) => console.log('socket error: ' + e.message));
   const q = new URL(req.url, 'http://x').searchParams, role = q.get('role');
   if (role === 'host') {
-    if (!isLocal(req)) return ws.close(4001, 'host must be local');
+    if (!isLocal(req)) return ws.close(4004, 'host must be local');
     if (host && host.readyState === 1) return ws.close(4002, 'host exists');
     host = ws;
     send(guest, { t: 'host', on: true });
     send(host, { t: 'peer', on: !!guest });
   } else if (role === 'guest') {
-    if (q.get('code') !== CODE) return ws.close(4001, 'wrong code');
+    const ip = clientIp(req);
+    if (blocked(ip)) return ws.close(4005, 'too many wrong codes');
+    if (q.get('code') !== CODE) { fail(ip); return ws.close(4001, 'wrong code'); }
     if (guest && guest.readyState === 1) guest.close(4000, 'replaced');
     guest = ws;
     send(guest, { t: 'host', on: !!host });
