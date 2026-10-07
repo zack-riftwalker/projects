@@ -18,6 +18,7 @@ The harness counts every WebSocket message per type and direction (`window.__net
 | bugs (phase 1) | `double-hit solo-hit softlock host-gone guest-leave boss-intro bt-spam pause crack-dash liquid loot fx-ctx late-join background` |
 | difficulty (phase 2) | `diff-solo diff-boss diff-merge diff-loot diff-coop diff-lock` |
 | network (phase 3) | `reliable lossy ownership guest-fight projectiles hitfeel smooth rates bufferbloat lenient blip grace netfields p2-freeze bandwidth` |
+| review fixes | `pause-resume pause-proj half-open zombie` |
 | solo | `smoke` (every level, 3 s of scripted input, no page errors) |
 
 `netfields` checks that the per-class field lists in `index.html` (`NETSPEC`) cover every property that `draw()` / `hurtboxes()` / `harmboxes()` reads and that changes while a creature lives. Run it after adding or changing an enemy.

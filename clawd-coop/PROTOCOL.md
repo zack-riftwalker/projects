@@ -22,7 +22,7 @@ Damage **dealt** by the guest is only announced (`hit` event); the host checks i
 | message | content |
 |---|---|
 | `start` | `{id, snap, tools, e, diff, join?, spawn?}` start (or join) a level |
-| `leave`, `cfg {diff}`, `hs {hs}` (pause heartbeat) | control |
+| `leave`, `cfg {diff}`, `hs {hs, tm}` (pause heartbeat, host clock) | control; the guest keeps the newest pause state: a snapshot older than the last `hs` (`tm`) does not overwrite it |
 | `s` snapshot | `{sn, b, tm, kf?, w, tl, cr, bh, ei, ii, ph, hs, en, eu, in, iu, p, pjk?, lt?, ev?}` — delta against snapshot `b` (the last one the guest acknowledged with `sa`); `b:0` = keyframe (every 5 s, on request `full`, or when the baseline is missing); `tm` host clock |
 | reliable | `proj`/`projDead` (hostile projectiles), `heal {n, safe?}`, `revive {x,y,hp}` |
 
@@ -46,4 +46,6 @@ Cosmetic events (`ev`: sounds, particles, shake) carry who caused them (`p1`/`p2
 
 ## Connection
 * The relay keeps the guest's seat for 15 s after a dropped line (`{t:'peer', lag:true}` to the host) and gives out a token (`{t:'tok'}`); the guest reconnects with the token (0.5 s … 15 s backoff) and the host gets `{t:'peer', on:true, resume:true}`: nothing restarts, unacknowledged events are re-sent, a keyframe follows.
+* Heartbeat: the relay sends `{"t":"hb"}` and a WebSocket ping to every socket every 2 s and terminates a socket that missed 3 pongs. A guest that hears nothing for 6 s treats the line as dead and reconnects (resume with its token, also while the relay still holds the old, silently dead socket).
+* While the host is paused the guest's own simulation (projectiles, clock hazards, platforms, its body and fights) stands still.
 * Explicit disconnect uses close code 4010 (leave at once). 4001 wrong code, 4002 host exists, 4004 host must be local, 4005 too many wrong codes.

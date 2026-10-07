@@ -36,3 +36,15 @@ Design and wire format: see `PROTOCOL.md`. All tests: `node tools/coop-harness.j
 * A guest that hides its tab or stops answering is a ghost on the host and cannot hurt/help; a stall longer than the 0.25 s extrapolation shows the partner standing still until data returns (cannot be avoided on TCP).
 * Everything was tested in headless Chromium on one machine with a simulated line. **Real tests on PC + Huawei Y9s (Firefox) over a tunnel are still needed.**
 * The deferred layer 2 (WebRTC, TURN, named tunnel) was not touched.
+
+## Review fixes (after Phase 3)
+Four bugs found in review, each reproduced by a new scenario (`tools/scenarios-review.js`) that fails on the Phase 3 code and passes now:
+| bug | fix | test |
+|---|---|---|
+| guest pause menu closed itself (an older snapshot shown after the newer `hs` message reset the pause state), the next Esc paused again and the host stayed paused | `hs` carries the host clock; a snapshot older than the last `hs` does not overwrite the pause state | `pause-resume` (8 pause/resume cycles) |
+| while paused, the guest's own projectiles / clock hazards / platforms kept running and hurt the frozen guest | the guest's local simulation stands still while the host is paused | `pause-proj` |
+| a line that died without a clean close (network switch, tunnel hiccup) was never noticed: no reconnect, the guest looked connected | relay heartbeat (`hb` + ping every 2 s, dead after 3 missed pongs); guest reconnects after 6 s of silence; token resume also while the relay still holds the dead socket | `half-open` (back in ~8 s, same level, no restart) |
+| a bug the guest had just killed could still hurt it until the host's word arrived (3 of 6 at lag 150) | creature hp is sent (`hp:h`); a hit that kills on the guest's screen makes the creature harmless there at once (guess expires after 1 s) | `zombie` |
+
+Also: the gzipped page had grown to 122 877 B, right at the 120 KB limit of the `cache` test (the Phase 1 report's 108 KB is from before Phase 3); the fixes pushed it over. The server now also serves brotli (every current browser asks for it): 103 KB. Old browsers still get gzip. `cache` checks the brotli size and that it decodes to the page.
+Known flaky checks (test timing, not game bugs): `lenient` on a jittery line (RTT 300 ± 120 ms sometimes measures under the 250 ms "slow line" threshold), `bufferbloat` max (one 400 ms stall plus jitter can pass 750 ms; the median stays ~350 ms).

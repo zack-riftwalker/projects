@@ -5926,7 +5926,7 @@ G.VOICE = {
             gpause = true; sel = 0; G.coop.rel('pz', { on: true }); A.sfx('pause');
           }
           const wantFz = state === 'paused' || gpause;
-          if (wantFz && !fz) { fz = true; frozenBefore = p.frozen; p.frozen = true; } else if (!wantFz && fz) { fz = false; p.frozen = frozenBefore; }
+          if (wantFz) { if (!fz) { fz = true; frozenBefore = p.frozen; } p.frozen = true; } else if (fz) { fz = false; p.frozen = frozenBefore; }      // every frame: a shown snapshot must not unfreeze me
           t += dt; cap.update(dt);
           bars = G.damp(bars, state === 'bossIntro' || (L.boss && L.boss.dying) ? 1 : 0, 6, dt);
           if (hpShake > 0) hpShake -= dt;
@@ -6352,10 +6352,10 @@ G.VOICE = {
   const encAll = (sp, o) => sp.map((f) => encOne(f, o[f.k]));
   const decAll = (sp, vals) => { const o = {}; for (let i = 0; i < sp.length; i++) o[sp[i].k] = decOne(sp[i], vals[i]); return o; };
 
-  const ENT = 'x:p y:p vx:v vy:v face:n flash:t passive:b';
+  const ENT = 'x:p y:p vx:v vy:v face:n flash:t passive:b hp:h';      // hp: the guest can tell when its own hit is a kill
   const BOSS = 'x:p y:p hp:h maxHp:h flash:t active:b passive:b phase:n st:s dying:b gone:b';
   const NETSPEC = {
-    Bug: ENT, Typo: ENT + ' onGround:b wait:u', Flaky: ENT + ' st:s', Lint: 'x:p y:p flash:t', Logger: ENT + ' open:u', Mimic: ENT + ' awake:b onGround:b',
+    Bug: ENT, Typo: ENT + ' onGround:b wait:u', Flaky: ENT + ' st:s', Lint: 'x:p y:p flash:t hp:h', Logger: ENT + ' open:u', Mimic: ENT + ' awake:b onGround:b',
     Noodle: ENT + ' st:s onGround:b', Slime: ENT + ' land:u onGround:b wait:u', Ghost: ENT + ' a:f shy:b', Racer: ENT + ' pause:u', Drone: ENT + ' aim:u',
     Dripper: 'x:p y:p grow:t',
     Null: BOSS + ' cur:o:x,y,a,mode marks:a:x,t aim:o:x,y dir:n',
@@ -6532,7 +6532,7 @@ G.VOICE = {
     if (coop.pT > 0) return;
     coop.pT = 0.25;
     if (L._net) L._net.hs = null;                  // the first snapshot after resuming must carry the state again
-    gsend({ t: 'hs', hs: coop.hostState });
+    gsend({ t: 'hs', hs: coop.hostState, tm: r2(G.time) });
   };
   coop.aimAt = (L, e) => {
     const a = L.me, b = L.p2;
@@ -6982,7 +6982,7 @@ G.VOICE = {
     }
     if (S.p) merge(L.partner, fOf(S, PLAYERSP, 'pf', S.p));
     if (S.ph) Object.assign(L.me, S.ph);
-    if (S.hs) coop.hostState = S.hs;
+    if (S.hs && !(S.tm < coop.hsTm)) coop.hostState = S.hs;          // a newer 'hs' message beats an older snapshot shown with delay
   }
   const ECHO = new Set(['hit', 'clang', 'squish', 'bossHit']);
   function playEvents(L, evs) {
@@ -7038,6 +7038,15 @@ G.VOICE = {
   function predicted(key) { const now = performance.now(); coop.pred.set(key, now + 2000); if (coop.pred.size > 40) for (const [k, t] of coop.pred) if (t < now) coop.pred.delete(k); }
   // a bad line (RTT over 250 ms or a stall in the last 5 s): a little more mercy after each hit, and no damage from creatures that are only being guessed at
   const laggy = () => coop.ping > 250 || coop.stalls.length > 0;
+  // my hit kills it (as far as this screen knows): it can no longer hurt me, even though the host's word of its death is a round trip away.
+  // The guess expires after 1 s, so a hit the host rejects only costs a moment of safety.
+  function predictHit(e, d) {
+    if (e.isBoss || typeof e.hp !== 'number') return;
+    const now = performance.now(), base = e._phT > now ? e._ph : e.hp;
+    e._ph = base - d; e._phT = now + 1000;
+    if (e._ph <= 0) e._pdead = now + 1000;
+  }
+  const predDead = (e) => e._pdead > performance.now();
   function guestCombat(L, p) {
     if (p.dead || p.gone) return;
     if (L.boss && (L.boss.dying || L.boss.dead)) p.inv = Math.max(p.inv, 99);       // the boss is going down: nothing hurts any more
@@ -7045,14 +7054,14 @@ G.VOICE = {
     if (p.atkT > 0 && p.atkLive) {
       const box = p.atkBox();
       for (const e of L.ents) {
-        if (e.dead || e[p.hitKey] === p.atkId || e.noHit) continue;
+        if (e.dead || e[p.hitKey] === p.atkId || e.noHit || predDead(e)) continue;
         const hbs = e.hurtboxes();
         for (let bi = 0; bi < hbs.length; bi++) {
           const b = hbs[bi];
           if (!G.overlap(box, b)) continue;
           e[p.hitKey] = p.atkId;
           if (canHit(e) && (!e.isBoss || b.head !== undefined || !e.heads)) {
-            if (!b.armor) coop.rel('hit', { eid: e._id, how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi });
+            if (!b.armor) { coop.rel('hit', { eid: e._id, how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi }); predictHit(e, p.atkDmg); }
             predicted('w' + p.atkId);
             if (!b.armor) A.sfx('hit');                                                // sound at the moment of contact, not a round trip later
             p.onHit(e, b.armor ? 'block' : 'hit', b);                              // my own reactions: recoil, pogo, sparks, a 30 ms hitstop
@@ -7071,14 +7080,14 @@ G.VOICE = {
     }
     const hb = p.hurtbox();
     for (const e of L.ents) {
-      if (e.dead || e.passive) continue;
+      if (e.dead || e.passive || predDead(e)) continue;
       for (const b of e.harmboxes()) {
         if (!G.overlap(hb, b)) continue;
         if (p.dashT > 0 && e.dashable !== false) {
-          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); predicted('d' + p.dashId); A.sfx('hit'); L.spark(Math.max(b.x, Math.min(p.x + 5, b.x + b.w)), Math.max(b.y, Math.min(p.y + 5, b.y + b.h)), '#fff3e4', 6); L.stop(0.05); L.shake(0.2); } }
+          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); predictHit(e, 1); predicted('d' + p.dashId); A.sfx('hit'); L.spark(Math.max(b.x, Math.min(p.x + 5, b.x + b.w)), Math.max(b.y, Math.min(p.y + 5, b.y + b.h)), '#fff3e4', 6); L.stop(0.05); L.shake(0.2); } }
         } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
           coop.rel('hit', { eid: e._id, how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
-          predicted('s' + p._stompN); A.sfx('squish'); L.spark(p.x + 5, b.y, '#fff3e4', 6);
+          predictHit(e, 1e9); predicted('s' + p._stompN); A.sfx('squish'); L.spark(p.x + 5, b.y, '#fff3e4', 6);
           p.y = b.y - p.h; p.bounce(1); L.stop(0.05);
         } else if (p.grace <= 0 && !(e._ex && laggy())) p.hurt(e.dmg || 1, b.x + b.w / 2);
         break;
@@ -7101,12 +7110,17 @@ G.VOICE = {
     ms.forEach((m) => { if (m.t === 's') applySnap(L, m); });
     if (L._rg) L._rg.dt = dt;
     renderTimeline(L);
-    localTick(L, dt);
+    // paused on the host: the host's world stands still, so everything this screen simulates by itself (projectiles, clock hazards,
+    // platforms, my own body and fights) must stand still too, or I would be hurt by things that are frozen on the host
+    const held = coop.hostState.st === 'paused';
+    if (!held) localTick(L, dt);
     while (coop.relQ.length) { const r = coop.relQ[0]; if (r.e > L._ep) break; coop.relQ.shift(); if (r.e === L._ep) coop.guestRel(L, r.ev); }
     // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
     if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); gsend({ t: 'full', e: L._ep }); }
     L.trauma = Math.max(0, L.trauma - dt * 2.2);
     if (L.flash > 0) L.flash = Math.max(0, L.flash - dt * 3);
+    const p = L.me;
+    if (!held) {
     L.time += dt;
     L.blinkPhase = Math.floor(L.time / L.blinkPeriod) % 2;
     for (const m of L.plats) {
@@ -7115,7 +7129,6 @@ G.VOICE = {
       const period = (span / m.speed) * 2, u = 0.5 - 0.5 * Math.cos(((L.time / period + m.ph) % 1) * Math.PI * 2), v = G.lerp(m.a, m.b, u);
       if (m.ax) { m.dx = v - m.x; m.dy = 0; m.x = v; } else { m.dy = v + 2 - m.y; m.dx = 0; m.y = v + 2; }
     }
-    const p = L.me;
     {
       const T = G.TILE, x0 = Math.floor(p.x / 16), x1 = Math.floor((p.x + p.w - 0.001) / 16), y0 = Math.floor(p.y / 16), y1 = Math.floor((p.y + p.h - 0.001) / 16);
       for (const i of L._myHold) { const tx = i % L.w, ty = (i / L.w) | 0; if (tx < x0 || tx > x1 || ty < y0 || ty > y1) L._myHold.delete(i); }
@@ -7149,6 +7162,7 @@ G.VOICE = {
         q.x += q.vx * dt; q.y += q.vy * dt;
         if (q.bounce && q.vy > 0 && L.solidAt(q.x, q.y + 1)) { q.vy *= -0.45; q.vx *= 0.7; q.y -= 1; }
       }
+    }
     }
     L.events.length = 0;
     if (!L.cam.frozen) L.updateCam(dt);
@@ -7258,8 +7272,8 @@ G.VOICE = {
         coop.hostOn = !!m.on; ui.render();
         if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
       }
-      else if (m.t === 'start') { coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
-      else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) coop.hostState = m.hs; }
+      else if (m.t === 'start') { coop.hsTm = -1; coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
+      else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) { coop.hostState = m.hs; if (m.tm !== undefined) coop.hsTm = m.tm; } }
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'tok') { if (m.v !== coop.token) { if (coop.token) coop.resetNet(); coop.token = m.v; } }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
@@ -7292,13 +7306,18 @@ G.VOICE = {
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
       if (role === 'host') coop.fetchCfg();
       if (role === 'guest' && !resume) G.go(() => wait(), { speed: 3 });
-      coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
+      coop.lastMsgAt = performance.now();
+      coop.pgT = setInterval(() => {
+        // the relay sends a heartbeat every 2 s: 6 s of total silence means the line is dead even if the socket still looks open
+        if (role === 'guest' && performance.now() - coop.lastMsgAt > 6000) { const h = ws.onclose; ws.onclose = null; try { ws.close(); } catch (e) { /* */ } if (h) h.call(ws, { code: 1006 }); return; }
+        send({ t: 'pg', ts: performance.now() });
+      }, 2000);
       // when the game loop is not running (background tab, pause) events still need a carrier
       clearInterval(coop.kaT);
       clearInterval(coop.mtT); coop.mtT = setInterval(netTick, 2000);
       coop.kaT = setInterval(() => { if (R.out.length && performance.now() - (coop.lastTx || 0) > R.resend) gsend({ t: 'ack' }); }, 150);
     };
-    ws.onmessage = (ev) => { coop.bytesIn += ev.data.length; try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
+    ws.onmessage = (ev) => { coop.bytesIn += ev.data.length; coop.lastMsgAt = performance.now(); if (ev.data === '{"t":"hb"}') return; try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
       clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false; coop.ping = 0;

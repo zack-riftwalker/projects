@@ -26,7 +26,8 @@ function load(rel) {
   const hit = cache.get(rel);
   if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit;
   const raw = fs.readFileSync(f);
-  const ent = { mtime: st.mtimeMs, size: st.size, raw, etag: 'W/"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"', gz: rel.endsWith('.html') ? zlib.gzipSync(raw, { level: 9 }) : null };
+  const ent = { mtime: st.mtimeMs, size: st.size, raw, etag: 'W/"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"', gz: rel.endsWith('.html') ? zlib.gzipSync(raw, { level: 9 }) : null,
+    br: rel.endsWith('.html') ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }) : null };
   cache.set(rel, ent);
   return ent;
 }
@@ -37,7 +38,11 @@ function serveFile(req, res, rel) {
   const h = { 'Content-Type': MIME[path.extname(rel)] || 'application/octet-stream', ETag: ent.etag, 'Cache-Control': isMp3 ? 'public, max-age=31536000, immutable' : 'no-cache' };
   if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, h); return res.end(); }
   let body = ent.raw;
-  if (ent.gz) { h.Vary = 'Accept-Encoding'; if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) { body = ent.gz; h['Content-Encoding'] = 'gzip'; } }
+  if (ent.gz) {            // brotli (every current browser asks for it) is ~20 % smaller than gzip
+    const ae = req.headers['accept-encoding'] || '';
+    h.Vary = 'Accept-Encoding';
+    if (/\bbr\b/.test(ae)) { body = ent.br; h['Content-Encoding'] = 'br'; } else if (/\bgzip\b/.test(ae)) { body = ent.gz; h['Content-Encoding'] = 'gzip'; }
+  }
   h['Content-Length'] = body.length;
   res.writeHead(200, h);
   res.end(req.method === 'HEAD' ? undefined : body);
@@ -112,12 +117,21 @@ function fail(ip) {
   fails.set(ip, f);
 }
 setInterval(() => { const now = Date.now(); for (const [k, f] of fails) if (f.until < now && now - f.first > 60000) fails.delete(k); }, 60000).unref();
+// heartbeat: a line that dies without a clean close (phone switches network, tunnel hiccup) leaves TCP "open" for minutes.
+// Every 2 s each socket gets a tiny {"t":"hb"} (so the page can tell a dead line from a quiet one) and a ping; three missed pongs = dead.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if ((ws.missed = (ws.missed || 0) + 1) > 3) { ws.terminate(); continue; }
+    try { ws.ping(); if (ws.readyState === 1) ws.send('{"t":"hb"}'); } catch (e) { /* closing */ }
+  }
+}, 2000).unref();
 let host = null, guest = null, guestTok = null, graceOn = false, graceTimer = null;
 const GRACE = Number(process.env.GRACE_MS) || 15000;
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
 wss.on('connection', (ws, req) => {
   ws.on('error', (e) => console.log('socket error: ' + e.message));
+  ws.on('pong', () => { ws.missed = 0; });
   const q = new URL(req.url, 'http://x').searchParams, role = q.get('role');
   if (role === 'host') {
     if (!isLocal(req)) return ws.close(4004, 'host must be local');
@@ -128,7 +142,7 @@ wss.on('connection', (ws, req) => {
   } else if (role === 'guest') {
     const ip = clientIp(req);
     // a guest whose line dropped may come back with its token within the grace time, even without the right code
-    const resume = graceOn && guestTok && q.get('token') === guestTok;
+    const resume = !!guestTok && (graceOn || !!guest) && q.get('token') === guestTok;      // (or while the relay still holds its old, silently dead socket)
     if (!resume) {
       if (blocked(ip)) return ws.close(4005, 'too many wrong codes');
       if (q.get('code') !== CODE) { fail(ip); return ws.close(4001, 'wrong code'); }
