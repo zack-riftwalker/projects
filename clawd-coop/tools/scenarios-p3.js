@@ -307,4 +307,41 @@ module.exports = (S, h) => {
       return R(inv > 1.6 && ok0 && lag.lagging && lag.aim && restarted, 'guest inv after a hit ' + inv.toFixed(2) + ' (1.3 normal, want > 1.6 on a slow line); partner lagging after 1.8 s silence=' + lag.lagging + ', enemies ignore it=' + lag.aim + '; host down + lagging partner -> restart ' + restarted + ' after ' + (Date.now() - t0) + ' ms');
     } finally { await T.close(); }
   };
+
+  // the guest's connection dies in the middle of a boss fight: it comes back to the same fight within seconds, nothing restarts
+  S['blip'] = async () => {
+    const T = await openPair();
+    try {
+      await startLevel(T, '3-B'); await sleep(3500);
+      await h.godmode(T);
+      await T.host.evaluate(() => { window.__L0 = G.scene.L; window.__P0 = G.scene.L.p2; window.__hp0 = G.scene.L.boss.hp; });
+      await T.guest.evaluate(() => { window.__GL0 = G.scene.L; });
+      const t0 = Date.now();
+      await T.guest.evaluate(() => G.coop.ws.close());
+      // a reliable event raised during the outage must still arrive afterwards
+      await T.guest.evaluate(() => { G.coop.testLog = []; G.coop.rel('test', { n: 7 }); });
+      let back = false;
+      while (Date.now() - t0 < 5000) { if (await T.guest.evaluate(() => G.coop.open && !G.coop.reconnecting)) { back = true; break; } await sleep(100); }
+      const tBack = Date.now() - t0;
+      await sleep(1500);
+      const host = await T.host.evaluate(() => ({ same: G.scene.L === window.__L0 && G.scene.L.p2 === window.__P0, peer: G.coop.peer, lag: !!G.scene.L.p2.lagging, hpMoved: G.scene.L.boss.hp <= window.__hp0, boss: G.scene.L.boss.hp, ev: G.coop.testLog.slice() }));
+      const guest = await T.guest.evaluate(() => ({ same: G.scene.L === window.__GL0, net: G.scene.L.net, fight: G.scene.L.boss.active, hp: G.scene.L.boss.hp }));
+      const ok = back && tBack < 3000 && host.same && host.peer && !host.lag && guest.same && guest.net === 'guest' && guest.fight && host.ev.includes(7) && Math.abs(guest.hp - host.boss) < 0.01;
+      return R(ok, 'guest back after ' + tBack + ' ms; host level+partner unchanged=' + host.same + ' peer=' + host.peer + ' lagging=' + host.lag + '; guest same level=' + guest.same + ' fight on=' + guest.fight + '; event sent during outage arrived=' + host.ev.includes(7) + '; boss hp host ' + host.boss + ' guest ' + guest.hp);
+    } finally { await T.close(); }
+  };
+
+  // a guest that never comes back is let go after the grace time (shortened here to 2 s)
+  S['grace'] = async () => {
+    const T = await openPair({ env: { GRACE_MS: '2000' } });
+    try {
+      await startLevel(T, '1-1'); await sleep(1000);
+      await T.guest.close();
+      await sleep(900);
+      const early = await T.host.evaluate(() => ({ net: G.scene.L.net, lag: !!(G.scene.L.p2 && G.scene.L.p2.lagging) || G.coop.peerLag }));
+      await sleep(2600);
+      const late = await T.host.evaluate(() => ({ net: G.scene.L.net, peer: G.coop.peer }));
+      return R(early.net === 'host' && early.lag && !late.net && !late.peer, 'right after the drop: partner kept, marked lagging=' + early.lag + '; after the grace time: net=' + late.net + ' peer=' + late.peer);
+    } finally { await T.close(); }
+  };
 };

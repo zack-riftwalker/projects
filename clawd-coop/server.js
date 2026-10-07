@@ -112,7 +112,8 @@ function fail(ip) {
   fails.set(ip, f);
 }
 setInterval(() => { const now = Date.now(); for (const [k, f] of fails) if (f.until < now && now - f.first > 60000) fails.delete(k); }, 60000).unref();
-let host = null, guest = null;
+let host = null, guest = null, guestTok = null, graceOn = false, graceTimer = null;
+const GRACE = Number(process.env.GRACE_MS) || 15000;
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
 wss.on('connection', (ws, req) => {
@@ -126,22 +127,36 @@ wss.on('connection', (ws, req) => {
     send(host, { t: 'peer', on: !!guest });
   } else if (role === 'guest') {
     const ip = clientIp(req);
-    if (blocked(ip)) return ws.close(4005, 'too many wrong codes');
-    if (q.get('code') !== CODE) { fail(ip); return ws.close(4001, 'wrong code'); }
+    // a guest whose line dropped may come back with its token within the grace time, even without the right code
+    const resume = graceOn && guestTok && q.get('token') === guestTok;
+    if (!resume) {
+      if (blocked(ip)) return ws.close(4005, 'too many wrong codes');
+      if (q.get('code') !== CODE) { fail(ip); return ws.close(4001, 'wrong code'); }
+    }
     if (guest && guest.readyState === 1) guest.close(4000, 'replaced');
+    if (graceOn) { clearTimeout(graceTimer); graceOn = false; }
     guest = ws;
+    if (!resume) guestTok = require('crypto').randomBytes(8).toString('hex');
+    send(guest, { t: 'tok', v: guestTok });
     send(guest, { t: 'host', on: !!host });
-    send(host, { t: 'peer', on: true });
+    send(host, resume ? { t: 'peer', on: true, resume: true } : { t: 'peer', on: true });
   } else return ws.close();
   console.log(role + ' connected');
   ws.on('message', (data) => {
     if (ws === host) relayTo(lanes.toGuest, () => guest, data.toString());
     else relayTo(lanes.toHost, () => host, data.toString());
   });
-  ws.on('close', () => {
-    console.log(role + ' left');
+  ws.on('close', (code) => {
+    console.log(role + ' left (' + code + ')');
     if (ws === host) { host = null; send(guest, { t: 'host', on: false }); }
-    else if (ws === guest) { guest = null; send(host, { t: 'peer', on: false }); }
+    else if (ws === guest) {
+      guest = null;
+      if (code === 4010) { guestTok = null; send(host, { t: 'peer', on: false }); return; }        // the friend chose to leave
+      // line dropped: keep the seat for a while, the host only hears that the friend is lagging
+      graceOn = true; send(host, { t: 'peer', lag: true });
+      clearTimeout(graceTimer);
+      graceTimer = setTimeout(() => { graceOn = false; guestTok = null; send(host, { t: 'peer', on: false }); }, GRACE);
+    }
   });
 });
 

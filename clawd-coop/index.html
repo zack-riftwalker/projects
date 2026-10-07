@@ -7208,6 +7208,7 @@ G.VOICE = {
   });
   // short on-screen message ("host disconnected"), drawn over whatever scene is showing
   const drawNotice = (ug) => {
+    if (coop.reconnecting) { const t = 'reconnecting' + '.'.repeat(1 + ((G.time * 2) | 0) % 3); const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), H - 22, w, 15, '#17131f', '#ffd27a', '#0d0a12'); G.text(ug, t, W / 2, H - 18, '#ffd27a', { align: 'c' }); }
     const n = coop.notice; if (!n) return;
     const w = G.textW(n.text) + 16; ug.globalAlpha = Math.min(1, n.t * 3);
     G.panel(ug, Math.round((W - w) / 2), 26, w, 15, '#17131f', '#ffb3b3', '#0d0a12');
@@ -7227,8 +7228,12 @@ G.VOICE = {
     if ((m.t === 's' || m.t === 'st' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
     if (coop.role === 'host') {
       if (m.t === 'peer') {
-        coop.peer = !!m.on; ui.render(); if (m.on) { coop.resetNet(); coop.sendCfg(); }
         const sc = G.scene;
+        if (m.lag) { coop.peerLag = true; ui.render(); return; }                          // the friend's line dropped: they have 15 s to come back
+        coop.peerLag = false;
+        if (m.on && m.resume) { coop.peer = true; coop.kfNext = true; coop.lastRx = 0; coop.say('partner is back'); ui.render(); return; }
+        if (m.on && sc && sc.L && sc.L.net) coop.partnerLost(sc.L);                      // a different friend (or a fresh start): begin cleanly
+        coop.peer = !!m.on; ui.render(); if (m.on) { coop.resetNet(); coop.sendCfg(); }
         if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
         else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
       } else if (m.t === 'st') {
@@ -7246,6 +7251,7 @@ G.VOICE = {
       else if (m.t === 'start') { coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) coop.hostState = m.hs; }
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
+      else if (m.t === 'tok') { if (m.v !== coop.token) { if (coop.token) coop.resetNet(); coop.token = m.v; } }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
       else if (m.t === 's') {
         coop.latestTm = m.tm; coop.latestAt = m._at = performance.now();
@@ -7254,16 +7260,28 @@ G.VOICE = {
       }
     }
   }
-  coop.connect = (role, code) => {
-    if (coop.ws) { try { coop.ws.close(); } catch (e) {} }
+  // A guest whose line drops keeps its level and tries again (0.5 s, 1 s, 2 s ... 15 s). The relay keeps its seat for 15 s and hands back
+  // the same token, so the host never sees it leave: the fight goes on where it was and nothing is restarted.
+  const FATAL = new Set([4000, 4001, 4002, 4004, 4005, 4010]);
+  function reconnect() {
+    clearTimeout(coop.rcT);
+    const n = coop.rc = (coop.rc || 0) + 1, delay = Math.min(15000, 500 * Math.pow(2, n - 1));
+    coop.reconnecting = true; ui.render();
+    coop.rcT = setTimeout(() => { if (coop.reconnecting) coop.connect('guest', coop.lastCode, true); }, delay);
+  }
+  coop.connect = (role, code, resume) => {
+    if (coop.ws) { coop.ws.onclose = null; try { coop.ws.close(); } catch (e) {} }
     clearInterval(coop.pgT);
-    coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = 'connecting...'; ui.render();
-    const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || ''));
+    if (!resume) { coop.token = null; coop.rc = 0; coop.reconnecting = false; clearTimeout(coop.rcT); }
+    coop.lastCode = code; coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = resume ? 'reconnecting...' : 'connecting...'; ui.render();
+    const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || '') + (resume && coop.token ? '&token=' + coop.token : ''));
     ws.onopen = () => {
-      coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected'; coop.resetNet(); ui.render();
+      coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected';
+      if (resume) { coop.reconnecting = false; coop.rc = 0; coop.needFull = true; coop.lastFull = 0; coop.say('back online'); } else coop.resetNet();
+      ui.render();
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
       if (role === 'host') coop.fetchCfg();
-      if (role === 'guest') G.go(() => wait(), { speed: 3 });
+      if (role === 'guest' && !resume) G.go(() => wait(), { speed: 3 });
       coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
       // when the game loop is not running (background tab, pause) events still need a carrier
       clearInterval(coop.kaT);
@@ -7277,8 +7295,11 @@ G.VOICE = {
       coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
       const L = G.scene && G.scene.L;
       if (L && L.net === 'host') coop.partnerLost(L);
-      else if (coop.role === 'guest') { if (L && L.net === 'guest') coop.kick = 'map'; else if (G.scene && G.scene.isWait) coop.kick = 'map'; coop.say('connection lost'); }
-      coop.role = null; ui.render();
+      else if (coop.role === 'guest') {
+        if (coop.token && !FATAL.has(ev.code)) { coop.say('connection lost - reconnecting'); reconnect(); ui.render(); return; }
+        if (L && L.net === 'guest') coop.kick = 'map'; else if (G.scene && G.scene.isWait) coop.kick = 'map'; coop.say('connection lost');
+      }
+      coop.reconnecting = false; coop.role = null; ui.render();
     };
   };
   coop.fetchCfg = () => fetch('/config').then((r) => r.json()).then((c) => {
@@ -7292,7 +7313,7 @@ G.VOICE = {
   }).catch(() => {});
   coop.disconnect = () => {
     const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
-    coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false;
+    coop.ws = null; coop.token = null; coop.reconnecting = false; clearTimeout(coop.rcT); if (w) w.close(4010, 'bye'); clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false;
     if (L && L.net === 'host') coop.partnerLost(L);
     else if (wasGuest && ((L && L.net === 'guest') || (G.scene && G.scene.isWait))) coop.kick = 'map';
     coop.role = null; coop.status = 'offline'; ui.render();
