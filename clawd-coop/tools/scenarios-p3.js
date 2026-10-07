@@ -287,4 +287,24 @@ module.exports = (S, h) => {
       return R((g.sfx.hit || 0) === 1 && early > 100 && g.stop > 0 && g.stop <= 0.031, 'hit sound played ' + (g.sfx.hit || 0) + 'x on the guest (want 1), ' + early.toFixed(0) + ' ms before the host applied the damage (want > 100), guest hitstop ' + g.stop.toFixed(3) + ' s (want 0..0.03)');
     } finally { await T.close(); }
   };
+
+  // a partner who stops answering becomes a ghost (not targeted, cannot revive); a bad line gives the guest extra mercy
+  S['lenient'] = async () => {
+    const T = await openPair({ env: process.env.SIM_LAG ? {} : { SIM_LAG: '150' } });
+    try {
+      await startLevel(T, '1-1'); await sleep(3500);       // let the first ping measure the line
+      // extra invulnerability after a hit on a slow line
+      const inv = await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.grace = 0; p.hurt(1, p.x + 20); return p.inv; });
+      await sleep(300);
+      const ok0 = await T.host.evaluate(() => !G.scene.L.p2.lagging);
+      // the guest's game loop stops answering
+      await T.guest.evaluate(() => { window.__upd = G.scene.update; G.scene.update = () => {}; });
+      await sleep(1800);
+      const lag = await T.host.evaluate(() => { const L = G.scene.L; return { lagging: L.p2.lagging, aim: G.coop.aimAt(L, { x: L.p2.x, y: L.p2.y, w: 1, h: 1 }) === L.me }; });
+      await T.host.evaluate(() => { window.__L0 = G.scene.L; G.scene.L.me.die(); });          // nobody can pick me up: the level restarts
+      let restarted = false; const t0 = Date.now();
+      while (Date.now() - t0 < 6000) { if (await T.host.evaluate(() => G.scene.L !== window.__L0 && !!G.scene.L)) { restarted = true; break; } await sleep(100); }
+      return R(inv > 1.6 && ok0 && lag.lagging && lag.aim && restarted, 'guest inv after a hit ' + inv.toFixed(2) + ' (1.3 normal, want > 1.6 on a slow line); partner lagging after 1.8 s silence=' + lag.lagging + ', enemies ignore it=' + lag.aim + '; host down + lagging partner -> restart ' + restarted + ' after ' + (Date.now() - t0) + ' ms');
+    } finally { await T.close(); }
+  };
 };

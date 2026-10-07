@@ -2911,7 +2911,7 @@ G.VOICE = {
       }
       // rising liquid
       if (this.rise) {
-        const ps = this.players();
+        const ps = this.players().filter((q) => !q.lagging);
         if (!this.rising && ps.some((q) => q.y < this.rise.trigger * T)) { this.rising = true; G.audio.sfx('roar'); this.shake(0.5); }
         if (this.rising && ps.length && !this.frozen) {
           const gap = this.liquidY - Math.max(...ps.map((q) => q.y + q.h));      // measured from the lowest player: nobody is left behind
@@ -6416,7 +6416,7 @@ G.VOICE = {
   const R = coop.R = { out: [], seq: 0, hi: 0, resend: 220 };
   const curEpoch = () => (coop.role === 'host' ? coop.epoch : (G.scene && G.scene.L && G.scene.L._ep !== undefined ? G.scene.L._ep : coop.startEpoch));
   coop.rel = (k, f) => { R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
-  coop.resetNet = () => { if (coop.rate) Object.assign(coop.rate, RATES[0], { level: 0, since: 0 }); coop.stalls = []; coop.stallLog = []; coop.lastStamp = undefined; R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
+  coop.resetNet = () => { if (coop.rate) Object.assign(coop.rate, RATES[0], { level: 0, since: 0 }); coop.stalls = []; coop.stallLog = []; coop.lastStamp = undefined; coop.lastRx = 0; R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
   // game message out: stamps the envelope and attaches every unacknowledged reliable event that is due
   function gsend(o) {
     // a clogged line (socket buffer filling up) gets no more snapshots / body reports; events and everything else always go
@@ -6512,7 +6512,7 @@ G.VOICE = {
       };
       // my hit points and my death are mine: whatever happens to my body is announced to the host
       const hurt0 = me.hurt, haz0 = me.hazard, die0 = me.die;
-      me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) coop.rel('hurt', { x, y, d }); return r; };
+      me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) { coop.rel('hurt', { x, y, d }); if (laggy()) this.inv += 0.4; } return r; };
       me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
       me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
       coop.gsPrev = null;
@@ -6535,12 +6535,12 @@ G.VOICE = {
   };
   coop.aimAt = (L, e) => {
     const a = L.me, b = L.p2;
-    if (!b || b.dead || b.away) return a;
+    if (!b || b.dead || b.away || b.lagging) return a;
     if (a.dead) return b;
     const cx = e.x + (e.w || 0) / 2, cy = e.y + (e.h || 0) / 2;
     return Math.hypot(a.x - cx, a.y - cy) <= Math.hypot(b.x - cx, b.y - cy) ? a : b;
   };
-  coop.nearP2 = (L, e) => { const p = L.p2; return !!p && !p.dead && Math.abs(e.x + (e.w || 0) / 2 - p.x) < W / 2 + 120 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < H / 2 + 120; };
+  coop.nearP2 = (L, e) => { const p = L.p2; return !!p && !p.dead && !p.lagging && Math.abs(e.x + (e.w || 0) / 2 - p.x) < W / 2 + 120 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < H / 2 + 120; };
   // the partner is gone (left, crashed, or the host closed): never leave the survivor stuck waiting for a revive
   coop.partnerLost = (L) => {
     if (!L || !L.net) return;
@@ -6556,7 +6556,7 @@ G.VOICE = {
     const L = p.L;
     if (!L.net || !L.reviveQ) return false;
     const other = p === L.me ? L.partner : L.me;
-    if (!other || other.dead) return false;
+    if (!other || other.dead || other.lagging) return false;           // a partner who does not answer cannot pick anyone up
     L.reviveQ.push({ p, t: 4 });
     return true;
   };
@@ -6648,9 +6648,13 @@ G.VOICE = {
     if (coop.rHas) applyRemote(L);
     p2.frozen = L.me.frozen; p2.celebrate = L.me.celebrate;
     tickBody(p2, dt);
+    const idle = coop.lastRx ? performance.now() - coop.lastRx : 0;
+    p2.lagging = idle > 1000 || !!coop.peerLag;
+    if (idle > 10000 && !p2.away) { p2.away = true; p2.lagAway = true; } else if (p2.lagAway && idle < 1000) { p2.away = false; p2.lagAway = false; }
     // revive the fallen partner after a few seconds
     for (let i = L.reviveQ.length - 1; i >= 0; i--) {
       const q = L.reviveQ[i]; q.t -= dt;
+      if (q.p === L.me && p2.lagging) { L.reviveQ.length = 0; L.events.push('death'); break; }      // nobody is there to pick me up
       if (q.t > 0) continue;
       L.reviveQ.splice(i, 1);
       const other = q.p === L.me ? p2 : L.me;
@@ -6899,7 +6903,7 @@ G.VOICE = {
     if (g.shown !== A) { showState(L, A, g.shown); g.shown = A; }
     const u = B ? G.clamp((rt - A.tm) / (B.tm - A.tm), 0, 1) : 0, ex = B ? 0 : G.clamp(rt - A.tm, 0, 0.25);
     const seg = B ? B.tm - A.tm : 0.066, fdt = g.dt || 1 / 60;
-    for (const e of L.ents) { const a = A.ents.get(e._id); if (a) { const b = B && B.ents.get(e._id); posInto(e, fOf(a, NSP[a.c] || NSP.Bug), b && fOf(b, NSP[b.c] || NSP.Bug), u, ex, seg, fdt); } }
+    for (const e of L.ents) { const a = A.ents.get(e._id); if (a) { const b = B && B.ents.get(e._id); e._ex = !b; posInto(e, fOf(a, NSP[a.c] || NSP.Bug), b && fOf(b, NSP[b.c] || NSP.Bug), u, ex, seg, fdt); } }
     for (const it of L.items) { const a = A.items.get(it._id); if (a) { const b = B && B.items.get(it._id); posInto(it, fOf(a, ITEMSP), b && fOf(b, ITEMSP), u, ex, seg, fdt); } }
     if (A.p) posInto(L.partner, fOf(A, PLAYERSP, 'pf', A.p), B && B.p && fOf(B, PLAYERSP, 'pf', B.p), u, ex, seg, fdt);
     while (g.evq.length && g.evq[0].tm <= rt) { const q = g.evq.shift(); if (rt - q.tm <= 0.3) playEvents(L, q.ev); }      // sounds/effects belong to their moment; old ones are dropped
@@ -7029,6 +7033,8 @@ G.VOICE = {
   // Damage dealt is only *announced* (reliable 'hit' event); the host owns the creatures and applies it after checking it makes sense.
   // remember which hits this screen already showed, so the host's echo of the same hit is not played a second time
   function predicted(key) { const now = performance.now(); coop.pred.set(key, now + 2000); if (coop.pred.size > 40) for (const [k, t] of coop.pred) if (t < now) coop.pred.delete(k); }
+  // a bad line (RTT over 250 ms or a stall in the last 5 s): a little more mercy after each hit, and no damage from creatures that are only being guessed at
+  const laggy = () => coop.ping > 250 || coop.stalls.length > 0;
   function guestCombat(L, p) {
     if (p.dead || p.gone) return;
     if (L.boss && (L.boss.dying || L.boss.dead)) p.inv = Math.max(p.inv, 99);       // the boss is going down: nothing hurts any more
@@ -7071,7 +7077,7 @@ G.VOICE = {
           coop.rel('hit', { eid: e._id, how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
           predicted('s' + p._stompN); A.sfx('squish'); L.spark(p.x + 5, b.y, '#fff3e4', 6);
           p.y = b.y - p.h; p.bounce(1); L.stop(0.05);
-        } else if (p.grace <= 0) p.hurt(e.dmg || 1, b.x + b.w / 2);
+        } else if (p.grace <= 0 && !(e._ex && laggy())) p.hurt(e.dmg || 1, b.x + b.w / 2);
         break;
       }
     }
@@ -7157,11 +7163,11 @@ G.VOICE = {
   coop.drawPartner = (g, L, cx, cy) => {
     const q = L.partner;
     if (q.dead || q.gone) return;
-    if (q.away) g.globalAlpha = 0.4;
+    if (q.away || q.lagging) g.globalAlpha = 0.4;
     q.draw(g, cx, cy);
     g.globalAlpha = 1;
     const px = Math.round(q.x + q.w / 2) - cx, py = Math.round(q.y) - cy;
-    G.text(g, q.away ? 'away' : L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
+    G.text(g, q.away ? 'away' : q.lagging ? 'lag' : L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
   };
   coop.drawPartnerHud = (ug, L, hudY, dy) => {
     const q = L.partner, S = G.SPR, on = L.net === 'host' ? G.tint(S.pip, '#6aa8ff') : S.pip;
