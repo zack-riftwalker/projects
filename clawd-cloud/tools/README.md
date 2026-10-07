@@ -1,7 +1,8 @@
 # Test harness (developers only, not shipped to players)
 
 ```
-npm i playwright            # once; Chromium is expected at /opt/pw-browsers/chromium (or edit executablePath)
+npm install                 # wrangler (from clawd-cloud/)
+npm i playwright            # once, e.g. in /opt/node-tools; Chromium is expected at /opt/pw-browsers/chromium (or edit executablePath)
 node tools/coop-harness.js all                 # every scenario
 node tools/coop-harness.js ownership blip      # some of them
 SIM_LAG=150 SIM_JITTER=60 SIM_STALL_PCT=5 node tools/coop-harness.js all           # on a bad line
@@ -9,12 +10,13 @@ SIM_LAG=300 SIM_JITTER=100 SIM_STALL_PCT=10 SIM_BW=8000 node tools/coop-harness.
 BW_DETAIL=1 BW_MOVE=1 node tools/coop-harness.js bandwidth                          # per-field traffic, guest running around
 ```
 
-Each scenario starts its own relay server on a free port (`CODE=123456`) and, for co-op tests, two browser contexts (host on `localhost`, guest on `127.0.0.1`).
+Each scenario starts its own `wrangler dev` (the real Worker + Durable Object, fresh `--persist-to` directory, `CODE=123456`, `HOST_KEY=test`; every var is passed with `--var`) and, for co-op tests, two browser contexts (host on `localhost`, guest on `127.0.0.1`). The SIM_* variables reach the Durable Object as vars (dev-only network simulator).
 The harness counts every WebSocket message per type and direction (`window.__net`).
 
 | group | scenarios |
 |---|---|
 | server | `crash-url crash-big paths cache` |
+| cloud only | `host-key host-blip host-half-open host-grace new-code restart` |
 | bugs (phase 1) | `double-hit solo-hit softlock host-gone guest-leave boss-intro bt-spam pause crack-dash liquid loot fx-ctx late-join background` |
 | difficulty (phase 2) | `diff-solo diff-boss diff-merge diff-loot diff-coop diff-lock` |
 | network (phase 3) | `reliable lossy ownership guest-fight projectiles hitfeel smooth rates bufferbloat lenient blip grace netfields p2-freeze bandwidth` |

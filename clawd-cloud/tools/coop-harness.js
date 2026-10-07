@@ -220,15 +220,17 @@ S['softlock'] = async () => {
   } finally { await T.close(); }
 };
 S['host-gone'] = async () => {
-  const T = await openPair();
+  // the host's page vanishes. In the cloud the relay holds its seat for GRACE_MS (host grace, C1-05) before the guest is sent to the wait scene
+  // (shortened to 2 s here); the old local server did it at once.
+  const T = await openPair({ env: { GRACE_MS: '2000' } });
   try {
     await startLevel(T, '1-1');
     await sleep(800);
     await T.host.close();
     const t0 = Date.now(); let ok = false;
-    while (Date.now() - t0 < 2500) { if (await T.guest.evaluate(() => !G.scene.L && !G.transitioning())) { ok = true; break; } await sleep(100); }
+    while (Date.now() - t0 < 2000 + 3000 + 1500 * Math.max(1, (+process.env.SIM_LAG || 0) / 150)) { if (await T.guest.evaluate(() => !G.scene.L && !G.transitioning())) { ok = true; break; } await sleep(100); }
     const desc = await T.guest.evaluate(() => (G.scene.L ? 'still in level net=' + G.scene.L.net : 'no level'));
-    return R(ok, desc + ' after ' + (Date.now() - t0) + 'ms');
+    return R(ok, desc + ' after ' + (Date.now() - t0) + 'ms (grace 2000 ms)');
   } finally { await T.close(); }
 };
 S['boss-intro'] = async () => {
