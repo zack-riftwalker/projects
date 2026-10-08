@@ -138,6 +138,8 @@
     jump: ['KeyZ', 'Space'], attack: ['KeyX', 'KeyJ'], dash: ['KeyC', 'ShiftLeft'], special: ['KeyV', 'KeyE'],
     start: ['Enter', null], pause: ['Escape', 'KeyP'],
   };
+  const DEFAULT_PAD = { jump: [0], attack: [2], dash: [1, 5, 7], special: [3, 4], start: [9], pause: [8] };     // d-pad and left stick stay fixed for movement
+  const PAD_ACTIONS = Object.keys(DEFAULT_PAD);
   const RESERVED_KEYS = ['KeyF', 'KeyM', 'Tab'];     // fullscreen, mute, focus: never bindable
   const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'dash', 'special', 'start', 'pause'];
   const held = {}, queued = {}, prev = {};
@@ -166,6 +168,7 @@
   window.addEventListener('pointerdown', () => { if (G.audio) G.audio.unlock(); anyQueued = true; });
 
   input.defaultKeys = () => JSON.parse(JSON.stringify(DEFAULT_KEYS));
+  input.padActions = PAD_ACTIONS;
   input.reserved = (code) => RESERVED_KEYS.includes(code);
   input.rebuild = () => {
     const sv = G.save && G.save.data.keys, b = (input.binds = {});
@@ -175,9 +178,13 @@
       b[a] = [0, 1].map((i) => (typeof src[i] === 'string' && !RESERVED_KEYS.includes(src[i]) ? src[i] : null));
       for (const c of b[a]) if (c) KEYMAP[c] = a;
     }
+    const sp = (sv && sv.pad) || {}, pb = (input.padBinds = {});
+    for (const a of PAD_ACTIONS) pb[a] = (a in sp ? [].concat(sp[a]) : DEFAULT_PAD[a]).filter((i) => Number.isInteger(i) && i >= 0 && i < 32);
     for (const a of ACTIONS) held[a] = 0;
     for (const k in held) if (k[0] === '_') held[k] = null;
   };
+  const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'BACK', 'START', 'L3', 'R3', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'HOME'];
+  G.padLabel = (i) => PAD_NAMES[i] || 'BTN' + i;
   const KEY_NAMES = { ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', ControlLeft: 'CTRL', ControlRight: 'CTRL', AltLeft: 'ALT', AltRight: 'ALT', Escape: 'ESC', Enter: 'ENTER', NumpadEnter: 'ENTER', Backspace: 'BKSP', Delete: 'DEL', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Backquote: '`', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', CapsLock: 'CAPS', Insert: 'INS', Home: 'HOME', End: 'END', PageUp: 'PGUP', PageDown: 'PGDN' };
   G.keyLabel = (code) => {
     if (!code) return '';
@@ -201,12 +208,14 @@
       const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
       const s = {
         left: b(14) || ax < -0.4, right: b(15) || ax > 0.4, up: b(12) || ay < -0.55, down: b(13) || ay > 0.55,
-        jump: b(0), attack: b(2), dash: b(1) || b(5) || b(7), special: b(3) || b(4), start: b(9), pause: b(8),
       };
+      for (const a of PAD_ACTIONS) s[a] = input.padBinds[a].some(b);
       for (const a of ACTIONS) if (s[a]) { state[a] = true; input.padActive = true; }
       break;
     }
   }
+  // after a rebinding: buttons held right now must not count as a fresh press under the new mapping
+  input.settle = () => { const st = {}; if (padSeen) pollPad(st); for (const a of ACTIONS) if (st[a]) prev[a] = true; };
   // called once per fixed update
   input.poll = () => {
     const state = {};
@@ -244,7 +253,7 @@
     deaths: 0, tokens: 0, finished: false,
     opt: { music: 0.7, sfx: 0.8, voice: 1, shake: 1, min: 0, diffPreset: 'normal', bossPct: 0, npcExtra: 0, npcMult: 100 },
     coopDiff: { preset: 'coop', bossPct: 50, npcExtra: 0, npcMult: 100 },     // the difficulty profile used while hosting a co-op game
-    keys: null,             // custom key bindings { action: [code, code] }; null = defaults. Survives "erase save", like opt.
+    keys: null,             // custom key bindings { action: [code, code], pad: { action: [button, ...] } }; null = defaults. Survives "erase save", like opt.
   });
   G.save = {
     data: fresh(),
@@ -5682,10 +5691,19 @@ G.VOICE = {
     const ROWS = [['left', 'move left'], ['right', 'move right'], ['up', 'up / aim'], ['down', 'down'], ['jump', 'jump'], ['attack', 'swipe'], ['dash', 'bash'], ['special', 'subagents'], ['start', 'confirm'], ['pause', 'pause']];
     const NEEDED = ['left', 'right', 'up', 'down', 'jump', 'attack', 'pause'];     // these keep at least one key, or the menus could not be reached
     const n = ROWS.length + 2;
-    const clone = () => { const k = {}; for (const [a] of ROWS) k[a] = G.input.binds[a].slice(); return k; };
-    let sel = 0, slot = 0, cap = false, note = '', noteT = 0;
+    const clone = () => { const k = { pad: {} }; for (const [a] of ROWS) k[a] = G.input.binds[a].slice(); for (const a of G.input.padActions) k.pad[a] = G.input.padBinds[a].slice(); return k; };
+    const slots = () => (G.input.padActions.includes(ROWS[sel] && ROWS[sel][0]) ? 3 : 2);     // key 1, key 2, pad button(s)
+    let sel = 0, slot = 0, cap = false, capPad = null, note = '', noteT = 0;
     const say = (t) => { note = t; noteT = 1.5; };
-    const commit = (keys) => { SV().keys = keys; G.save.write(); G.input.rebuild(); G.input.clear(); };
+    const commit = (keys) => { SV().keys = keys; G.save.write(); G.input.rebuild(); G.input.settle(); G.input.clear(); };
+    const assignPad = (a, btn) => {
+      const keys = clone(); let from = '';
+      if (btn >= 12 && btn <= 15) { say('the d-pad is fixed for moving'); A.sfx('warn'); return; }
+      for (const b of G.input.padActions) if (b !== a && keys.pad[b].includes(btn)) { keys.pad[b] = keys.pad[b].filter((x) => x !== btn); from = b; }
+      keys.pad[a] = [btn];
+      if (from) say(G.padLabel(btn) + ' taken from ' + from);
+      commit(keys); A.sfx('uiOk');
+    };
     const assign = (a, i, code) => {
       const keys = clone(), old = keys[a][i];
       if (code === old) return;
@@ -5702,13 +5720,16 @@ G.VOICE = {
     };
     const clearSlot = (a, i) => {
       const keys = clone();
+      if (i === 2) { keys.pad[a] = []; commit(keys); A.sfx('uiBack'); return; }
       if (NEEDED.includes(a) && !keys[a][1 - i]) { say('needs at least one key'); A.sfx('warn'); return; }
       keys[a][i] = null; commit(keys); A.sfx('uiBack');
     };
+    const pads = () => { const l = []; for (const p of navigator.getGamepads ? navigator.getGamepads() : []) if (p && p.connected) { p.buttons.forEach((b, i) => { if (b.pressed) l.push(i); }); break; } return l; };
     const listen = () => {
-      cap = true;
+      cap = true; capPad = slot === 2 ? pads() : null;     // buttons already down are ignored until they are let go
       G.input.capture = (code) => {
-        G.input.capture = null; cap = false;
+        if (slot === 2 && code !== 'Escape' && code !== 'Backspace' && code !== 'Delete') return;     // waiting for a pad button
+        G.input.capture = null; cap = false; capPad = null;
         const a = ROWS[sel][0];
         if (code === 'Escape') { A.sfx('uiBack'); return; }
         if (code === 'Backspace' || code === 'Delete') { clearSlot(a, slot); return; }
@@ -5719,11 +5740,19 @@ G.VOICE = {
     return {
       update(dt) {
         if (noteT > 0) noteT -= dt;
-        if (cap) return;
+        if (cap) {
+          if (capPad) {
+            const now = pads(), fresh = now.filter((i) => !capPad.includes(i));
+            capPad = capPad.filter((i) => now.includes(i));
+            if (fresh.length) { const a = ROWS[sel][0]; G.input.capture = null; cap = false; capPad = null; assignPad(a, fresh[0]); }
+          }
+          return;
+        }
         const I = G.input;
         if (I.pressed.down) { sel = (sel + 1) % n; A.sfx('uiMove'); }
         if (I.pressed.up) { sel = (sel + n - 1) % n; A.sfx('uiMove'); }
-        if (sel < ROWS.length && (I.pressed.left || I.pressed.right)) { slot = 1 - slot; A.sfx('uiMove'); }
+        if (I.pressed.left || I.pressed.right) { if (sel < ROWS.length) slot = G.clamp(slot + (I.pressed.right ? 1 : -1), 0, slots() - 1); A.sfx('uiMove'); }
+        if (sel < ROWS.length) slot = Math.min(slot, slots() - 1);
         if (I.ok) {
           if (sel < ROWS.length) { A.sfx('uiOk'); listen(); }
           else if (sel === ROWS.length) { commit(null); say('defaults restored'); A.sfx('uiOk'); }
@@ -5731,7 +5760,7 @@ G.VOICE = {
         } else if (I.back) { A.sfx('uiBack'); onClose(); }
       },
       draw(ug) {
-        const rh = 11, pw = 220, ph = n * rh + 40, x = (W - pw) / 2, y = (H - ph) / 2;
+        const rh = 11, pw = 290, ph = n * rh + 40, x = (W - pw) / 2, y = (H - ph) / 2;
         ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
         G.panel(ug, x, y, pw, ph, '#17131f', C.paper, '#0d0a12');
         G.text(ug, 'CONTROLS', x + 10, y + 8, C.clawd, { sp: 2 });
@@ -5741,14 +5770,16 @@ G.VOICE = {
           if (i >= ROWS.length) { G.text(ug, i === ROWS.length ? 'reset to defaults' : 'back', x + 18, yy + 1, on ? C.paper : C.dim); continue; }
           const a = ROWS[i][0];
           G.text(ug, ROWS[i][1], x + 18, yy + 1, on ? C.paper : C.dim);
-          for (let j = 0; j < 2; j++) {
-            const cx = x + 98 + j * 62, code = G.input.binds[a][j], me = on && j === slot;
-            if (me && cap) { G.text(ug, 'press a key...', cx, yy + 1, C.gold, { tiny: true }); continue; }
-            const w = G.keycap(ug, cx, yy - 2, code ? G.keyLabel(code) : '-', code ? undefined : '#9a8fa8');
+          for (let j = 0; j < 3; j++) {
+            const cx = x + 98 + j * 62, me = on && j === slot;
+            if (j === 2 && !G.input.padActions.includes(a)) { G.text(ug, 'fixed', cx, yy + 1, '#6b6578', { tiny: true }); continue; }
+            if (me && cap) { G.text(ug, j === 2 ? 'press button' : 'press a key...', cx, yy + 1, C.gold, { tiny: true }); continue; }
+            const code = j < 2 ? G.input.binds[a][j] : 1, label = j < 2 ? (code ? G.keyLabel(code) : '-') : (G.input.padBinds[a].map(G.padLabel).join('/') || '-');
+            const w = G.keycap(ug, cx, yy - 2, label, label === '-' ? '#9a8fa8' : undefined);
             if (me) { ug.strokeStyle = C.clawd; ug.lineWidth = 1; ug.strokeRect(cx - 0.5, yy - 2.5, w + 1, 12); }
           }
         }
-        const hint = cap ? 'esc cancel   bksp clear' : noteT > 0 ? note : 'jump: change   left/right: key 1 or 2';
+        const hint = cap ? 'esc cancel   bksp clear' : noteT > 0 ? note : 'jump: change   left/right: key 1 / key 2 / pad';
         G.text(ug, hint, W / 2, y + ph - 11, noteT > 0 && !cap ? C.gold : '#6b6578', { tiny: true, align: 'c' });
       },
     };

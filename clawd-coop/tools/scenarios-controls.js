@@ -72,4 +72,29 @@ module.exports = (S, h) => {
     const ok = Object.values(out).every(Boolean);
     return R(ok, JSON.stringify(out));
   });
+
+  S['keys-pad'] = () => solo(async (page) => {
+    await page.evaluate(() => {
+      window.__btn = new Set();
+      navigator.getGamepads = () => [{ connected: true, axes: [0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: window.__btn.has(i) })) }];
+      window.dispatchEvent(new Event('gamepadconnected'));
+      G.save.data.started = false; G.setScene(G.Scenes.title(true)); G.step(200, true);
+    });
+    await tap(page, 'Enter'); await page.evaluate(() => G.step(200, true));
+    await tap(page, 'ArrowDown'); await tap(page, 'Enter'); await taps(page, 'ArrowDown', 10); await tap(page, 'Enter');
+    const out = {}, step = (n) => page.evaluate((n) => G.step(n, true), n), btn = (i, on) => page.evaluate(([i, on]) => { on ? window.__btn.add(i) : window.__btn.delete(i); }, [i, on]);
+    const jumpDown = async () => { await step(2); return page.evaluate(() => G.input.down.jump); };
+    await taps(page, 'ArrowDown', 4); await taps(page, 'ArrowRight', 2);   // jump row, pad slot
+    await btn(0, true); await tap(page, 'Enter'); await step(3);              // A is held when the capture starts: it must be ignored
+    out.heldIgnored = await page.evaluate(() => !!G.input.capture) && (await page.evaluate(() => G.input.padBinds.jump.join())) === '0';
+    await btn(6, true); await step(3);                                         // the next fresh press: button 6
+    out.bound = await page.evaluate(() => G.input.padBinds.jump.join() + '|' + G.save.data.keys.pad.jump.join());
+    out.swallowed = !(await page.evaluate(() => !!G.input.capture));        // capture ended, and the button held down did not re-open it
+    out.six = await jumpDown();
+    await btn(6, false); out.up = !(await jumpDown());
+    await btn(0, true); out.oldA = !(await jumpDown()); await btn(0, false);
+    out.dashKept = await page.evaluate(() => G.input.padBinds.dash.join());
+    out.ok = out.heldIgnored && out.bound === '6|6' && out.six === true && out.up === true && out.oldA === true && out.dashKept === '1,5,7';
+    return R(out.ok, JSON.stringify(out));
+  });
 };
