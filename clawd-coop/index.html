@@ -6512,6 +6512,10 @@ G.VOICE = {
     relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
   };
   const r2 = (v) => Math.round(v * 100) / 100;
+  const BUILD = coop.build = Array.from(document.scripts).reduce((a, sc) => a + sc.text.length, 0);
+  // ?debug: a few lines on screen about the partner's hits (host: what happened to each one; guest: what was sent)
+  coop.dbgOn = /[?&]debug\b/.test(location.search); coop.dlog = [];
+  const dlog = (t) => { if (!coop.dbgOn) return; coop.dlog.push(t); if (coop.dlog.length > 7) coop.dlog.shift(); console.log('[coop] ' + t); };
   // the level (host) decides these for the partner; everything else about the partner's body is the partner's own
   const HOSTOWN = new Set(['frozen', 'celebrate', 'auto', 'remote', 'blue', 'away']);
 
@@ -6609,7 +6613,8 @@ G.VOICE = {
   //  * cosmetic events (sound, particles, shake) are stamped with the host clock; the guest drops them when they are older than 300 ms.
   const R = coop.R = { out: [], seq: 0, hi: 0, resend: 220 };
   const curEpoch = () => (coop.role === 'host' ? coop.epoch : (G.scene && G.scene.L && G.scene.L._ep !== undefined ? G.scene.L._ep : coop.startEpoch));
-  coop.rel = (k, f) => { R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
+  coop.rel = (k, f) => {
+    if (k === 'hit' && coop.dbgOn && coop.role === 'guest') dlog('sent ' + f.how + ' #' + f.eid); R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
   coop.resetNet = () => { if (coop.rate) Object.assign(coop.rate, RATES[0], { level: 0, since: 0 }); coop.stalls = []; coop.stallLog = []; coop.lastStamp = undefined; coop.lastRx = 0; R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
   // game message out: stamps the envelope and attaches every unacknowledged reliable event that is due
   function gsend(o) {
@@ -6668,7 +6673,7 @@ G.VOICE = {
     hostSetup(L, L.me.x - 8, L.me.y);
     ensureIds(L);
     L._net = null;
-    send({ t: 'start', id: L.id, snap: L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()), join: true, spawn: { x: L.me.x, y: L.me.y } });
+    send({ t: 'start', v: BUILD, id: L.id, snap: L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()), join: true, spawn: { x: L.me.x, y: L.me.y } });
   };
   // ---------- difficulty profile of this co-op game ----------
   coop.srv = null;                                            // numbers from the server (BOSS_HP / NPC_HITS / NPC_MULT / LOCK), host only
@@ -6813,21 +6818,26 @@ G.VOICE = {
   const asP2 = (L, f) => { const c = L._ctx, pl = L.player; L._ctx = 'p2'; L.player = L.p2; coop.mute++; try { return f(); } finally { L._ctx = c; L.player = pl; coop.mute--; } };
   // the partner says it hit something: check it is plausible, then apply the damage to the real creature
   function hostHit(L, ev) {
-    const p2 = L.p2, e = entById(L, ev.eid);
-    if (!e || e.dead || e.noHit || (ev.how !== 'swipe' && ev.how !== 'dash' && ev.how !== 'stomp')) return;
+    const p2 = L.p2, e = entById(L, ev.eid), tag = 'P2 ' + ev.how + ' #' + ev.eid + ' ' + (e ? CLS(e) : '?') + ': ';
+    if (!e) return dlog(tag + 'NO SUCH CREATURE');
+    if (e.dead) return dlog(tag + 'already dead');
+    if (e.noHit || (ev.how !== 'swipe' && ev.how !== 'dash' && ev.how !== 'stomp')) return dlog(tag + 'not hittable');
     const key = ev.how === 'swipe' ? p2.hitKey : ev.how === 'dash' ? p2.dashKey : 'stompId2';
-    if (e[key] === ev.atk) return;                                   // each attack hurts a creature once
-    if (ev.how === 'stomp' && !e.stompable) return;
-    const boxes = e.hurtboxes(); if (!boxes.length) return;
+    if (e[key] === ev.atk) return dlog(tag + 'same attack twice');                                   // each attack hurts a creature once
+    if (ev.how === 'stomp' && !e.stompable) return dlog(tag + 'not stompable');
+    const boxes = e.hurtboxes(); if (!boxes.length) return dlog(tag + 'no hurtbox');
     const cx = p2.x + p2.w / 2, cy = p2.y + p2.h / 2;
     let best = boxes[0], bd = 1e9;
     for (const b of boxes) { const d = Math.hypot(Math.max(b.x - cx, 0, cx - (b.x + b.w)), Math.max(b.y - cy, 0, cy - (b.y + b.h))); if (d < bd) { bd = d; best = b; } }
-    if (bd > 64 + (Math.abs(e.vx || 0) + Math.abs(e.vy || 0) + Math.abs(p2.vx || 0)) * (0.3 + coop.ping / 1000) + 120 * coop.ping / 1000) return;      // the partner is nowhere near it
+    const lim = 64 + (Math.abs(e.vx || 0) + Math.abs(e.vy || 0) + Math.abs(p2.vx || 0)) * (0.3 + coop.ping / 1000) + 120 * coop.ping / 1000;
+    if (bd > lim) return dlog(tag + 'TOO FAR ' + Math.round(bd) + '>' + Math.round(lim));      // the partner is nowhere near it
     e[key] = ev.atk;
     const b = ev.bi >= 0 && boxes[ev.bi] ? boxes[ev.bi] : best;
     const dmg = ev.how === 'swipe' ? G.clamp(+ev.dmg || 1, 1, 2) : ev.how === 'dash' ? 1 : Math.max(1, e.hp);
     L._atk = (ev.how === 'swipe' ? 'w' : ev.how[0]) + ev.atk;
-    try { asP2(L, () => e.hit(dmg, +ev.dx || 0, +ev.dy || 0, ev.how, b)); } finally { L._atk = 0; }
+    const hp0 = e.hp; let res;
+    try { res = asP2(L, () => e.hit(dmg, +ev.dx || 0, +ev.dy || 0, ev.how, b)); } finally { L._atk = 0; }
+    dlog(tag + (res || 'hit') + ' hp ' + hp0 + '>' + e.hp + (e.dead ? ' DEAD' : ''));
   }
   // the partner took damage / fell in spikes / died on its own screen: show it here too
   function hostMirror(L, ev) {
@@ -7485,6 +7495,8 @@ G.VOICE = {
   });
   // short on-screen message ("host disconnected"), drawn over whatever scene is showing
   const drawNotice = (ug) => {
+    if (coop.verBad && coop.open) { const t = 'THE OTHER SCREEN RUNS ANOTHER VERSION - RELOAD BOTH PAGES'; const w = G.textW(t, { tiny: true }) + 12; G.panel(ug, Math.round((W - w) / 2), 12, w, 11, '#3a0f14', '#ff6b6b', '#0d0a12'); G.text(ug, t, W / 2, 15, '#ffd9d9', { align: 'c', tiny: true }); }
+    if (coop.dbgOn) coop.dlog.forEach((t, i) => G.text(ug, t, 6, 70 + i * 8, '#9cc4ff', { tiny: true }));
     if (coop.reconnecting) { const t = 'reconnecting' + '.'.repeat(1 + ((G.time * 2) | 0) % 3); const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), H - 22, w, 15, '#17131f', '#ffd27a', '#0d0a12'); G.text(ug, t, W / 2, H - 18, '#ffd27a', { align: 'c' }); }
     const n = coop.notice; if (!n) return;
     const w = G.textW(n.text) + 16; ug.globalAlpha = Math.min(1, n.t * 3);
@@ -7520,13 +7532,14 @@ G.VOICE = {
         const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
       }
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
+      else if (m.t === 'ver') coop.verBad = m.v !== BUILD;
       else if (m.t === 'err') { console.error('P2 error: ' + m.m); coop.say('P2 error: ' + String(m.m).slice(0, 40)); }
     } else {
       if (m.t === 'host') {
         coop.hostOn = !!m.on; ui.render();
         if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
       }
-      else if (m.t === 'start') { coop.hsTm = -1; coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
+      else if (m.t === 'start') { coop.verBad = m.v !== BUILD; coop.hsTm = -1; coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) { coop.hostState = m.hs; if (m.tm !== undefined) coop.hsTm = m.tm; } }
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'tok') { if (m.v !== coop.token) { if (coop.token) coop.resetNet(); coop.token = m.v; } }
@@ -7559,6 +7572,7 @@ G.VOICE = {
       ui.render();
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
       if (role === 'host') coop.fetchCfg();
+      if (role === 'guest') send({ t: 'ver', v: BUILD });
       if (role === 'guest' && !resume) G.go(() => wait(), { speed: 3 });
       coop.lastMsgAt = performance.now();
       coop.pgT = setInterval(() => {
@@ -7634,7 +7648,7 @@ G.VOICE = {
     if (s && s.draw && !s._cn) { const d = s.draw; s._cn = 1; s.draw = function (g, ug) { d.call(this, g, ug); drawNotice(ug); }; }
     oSet.call(this, s);
     if (coop.role === 'host' && coop.open && coop.peer) {
-      if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()) });
+      if (s.L && s.L.net === 'host') send({ t: 'start', v: BUILD, id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()) });
       else if (old && old.L && !s.L) send({ t: 'leave' });
     }
   };
