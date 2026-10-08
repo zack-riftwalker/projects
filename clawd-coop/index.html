@@ -178,7 +178,7 @@
     for (const a of ACTIONS) held[a] = 0;
     for (const k in held) if (k[0] === '_') held[k] = null;
   };
-  const KEY_NAMES = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', ControlLeft: 'CTRL', ControlRight: 'CTRL', AltLeft: 'ALT', AltRight: 'ALT', Escape: 'ESC', Enter: 'ENTER', NumpadEnter: 'ENTER', Backspace: 'BKSP', Delete: 'DEL', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Backquote: '`', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', CapsLock: 'CAPS', Insert: 'INS', Home: 'HOME', End: 'END', PageUp: 'PGUP', PageDown: 'PGDN' };
+  const KEY_NAMES = { ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', ControlLeft: 'CTRL', ControlRight: 'CTRL', AltLeft: 'ALT', AltRight: 'ALT', Escape: 'ESC', Enter: 'ENTER', NumpadEnter: 'ENTER', Backspace: 'BKSP', Delete: 'DEL', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Backquote: '`', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', CapsLock: 'CAPS', Insert: 'INS', Home: 'HOME', End: 'END', PageUp: 'PGUP', PageDown: 'PGDN' };
   G.keyLabel = (code) => {
     if (!code) return '';
     if (KEY_NAMES[code]) return KEY_NAMES[code];
@@ -5620,8 +5620,10 @@ G.VOICE = {
         { k: 'npcExtra', label: 'enemy hits', choice: range(0, 5, 1), fmt: (v) => '+' + v },
         { k: 'npcMult', label: 'enemy HP', choice: range(100, 300, 25), fmt: (v) => v + '%' });
     }
+    if (!G.mobile) items.push({ k: 'controls', label: 'controls', act: true });
     if (canErase) items.push({ k: 'erase', label: 'erase save', act: true });
     items.push({ k: 'back', label: 'back', act: true });
+    let sub = null;     // the controls screen, while open
     const rh = items.length > 9 ? 11 : 14;
     const cycle = (it, o, dir) => {
       const c = it.choice; let i = c.indexOf(o[it.k]);
@@ -5633,7 +5635,8 @@ G.VOICE = {
     };
     let sel = 0, armed = false;
     return {
-      update() {
+      update(dt) {
+        if (sub) { sub.update(dt); return; }
         const I = G.input, o = SV().opt, it = items[sel];
         if (I.pressed.down) { sel = (sel + 1) % items.length; A.sfx('uiMove'); armed = false; }
         if (I.pressed.up) { sel = (sel + items.length - 1) % items.length; A.sfx('uiMove'); armed = false; }
@@ -5650,11 +5653,13 @@ G.VOICE = {
         if (I.ok) {
           if (it.toggle) { o[it.k] = o[it.k] ? 0 : 1; if (it.k === 'min') G.applyMin(); A.sfx('uiOk'); }
           else if (it.k === 'full') G.toggleFullscreen();
+          else if (it.k === 'controls') { A.sfx('uiOk'); sub = Controls(() => { sub = null; G.input.clear(); }); }
           else if (it.k === 'erase') { if (armed) { G.save.reset(); A.sfx('brk'); armed = false; onClose(true); } else { armed = true; A.sfx('warn'); } }
           else if (it.k === 'back') { G.save.write(); A.sfx('uiBack'); onClose(); }
         } else if (I.back) { G.save.write(); A.sfx('uiBack'); onClose(); }
       },
       draw(ug) {
+        if (sub) { sub.draw(ug); return; }
         const pw = 196, ph = items.length * rh + 30 + (hasDiff ? 10 : 0), x = (W - pw) / 2, y = (H - ph) / 2;
         ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
         G.panel(ug, x, y, pw, ph, '#17131f', C.paper, '#0d0a12');
@@ -5668,6 +5673,83 @@ G.VOICE = {
           else if (it.toggle) G.text(ug, o[it.k] ? 'on' : 'off', x + pw - 14, yy, o[it.k] ? C.ok : C.dim, { align: 'r' });
         });
         if (hasDiff) G.text(ug, 'difficulty applies from the next level / restart', W / 2, y + ph - 11, '#6b6578', { tiny: true, align: 'c' });
+      },
+    };
+  }
+
+  // ---------- controls: rebind the keyboard (sub-screen of Options) ----------
+  function Controls(onClose) {
+    const ROWS = [['left', 'move left'], ['right', 'move right'], ['up', 'up / aim'], ['down', 'down'], ['jump', 'jump'], ['attack', 'swipe'], ['dash', 'bash'], ['special', 'subagents'], ['start', 'confirm'], ['pause', 'pause']];
+    const NEEDED = ['left', 'right', 'up', 'down', 'jump', 'attack', 'pause'];     // these keep at least one key, or the menus could not be reached
+    const n = ROWS.length + 2;
+    const clone = () => { const k = {}; for (const [a] of ROWS) k[a] = G.input.binds[a].slice(); return k; };
+    let sel = 0, slot = 0, cap = false, note = '', noteT = 0;
+    const say = (t) => { note = t; noteT = 1.5; };
+    const commit = (keys) => { SV().keys = keys; G.save.write(); G.input.rebuild(); G.input.clear(); };
+    const assign = (a, i, code) => {
+      const keys = clone(), old = keys[a][i];
+      if (code === old) return;
+      let hit = null;
+      for (const [b] of ROWS) for (let j = 0; j < 2; j++) if (keys[b][j] === code) hit = [b, j];
+      if (hit) {
+        const [b, j] = hit;
+        if (!old && b !== a && NEEDED.includes(b) && !keys[b][1 - j]) { say(b + ' needs at least one key'); A.sfx('warn'); return; }
+        keys[b][j] = old;
+        say(old ? b + ' now uses ' + G.keyLabel(old) : G.keyLabel(code) + ' taken from ' + b);
+      }
+      keys[a][i] = code;
+      commit(keys); A.sfx('uiOk');
+    };
+    const clearSlot = (a, i) => {
+      const keys = clone();
+      if (NEEDED.includes(a) && !keys[a][1 - i]) { say('needs at least one key'); A.sfx('warn'); return; }
+      keys[a][i] = null; commit(keys); A.sfx('uiBack');
+    };
+    const listen = () => {
+      cap = true;
+      G.input.capture = (code) => {
+        G.input.capture = null; cap = false;
+        const a = ROWS[sel][0];
+        if (code === 'Escape') { A.sfx('uiBack'); return; }
+        if (code === 'Backspace' || code === 'Delete') { clearSlot(a, slot); return; }
+        if (G.input.reserved(code)) { say(G.keyLabel(code) + ' is reserved'); A.sfx('warn'); return; }
+        assign(a, slot, code);
+      };
+    };
+    return {
+      update(dt) {
+        if (noteT > 0) noteT -= dt;
+        if (cap) return;
+        const I = G.input;
+        if (I.pressed.down) { sel = (sel + 1) % n; A.sfx('uiMove'); }
+        if (I.pressed.up) { sel = (sel + n - 1) % n; A.sfx('uiMove'); }
+        if (sel < ROWS.length && (I.pressed.left || I.pressed.right)) { slot = 1 - slot; A.sfx('uiMove'); }
+        if (I.ok) {
+          if (sel < ROWS.length) { A.sfx('uiOk'); listen(); }
+          else if (sel === ROWS.length) { commit(null); say('defaults restored'); A.sfx('uiOk'); }
+          else { A.sfx('uiBack'); onClose(); }
+        } else if (I.back) { A.sfx('uiBack'); onClose(); }
+      },
+      draw(ug) {
+        const rh = 11, pw = 220, ph = n * rh + 40, x = (W - pw) / 2, y = (H - ph) / 2;
+        ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
+        G.panel(ug, x, y, pw, ph, '#17131f', C.paper, '#0d0a12');
+        G.text(ug, 'CONTROLS', x + 10, y + 8, C.clawd, { sp: 2 });
+        for (let i = 0; i < n; i++) {
+          const yy = y + 24 + i * rh, on = i === sel;
+          if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(x + 4, yy - 3, pw - 8, rh - 1); G.text(ug, '▸', x + 8, yy, C.clawd); }
+          if (i >= ROWS.length) { G.text(ug, i === ROWS.length ? 'reset to defaults' : 'back', x + 18, yy + 1, on ? C.paper : C.dim); continue; }
+          const a = ROWS[i][0];
+          G.text(ug, ROWS[i][1], x + 18, yy + 1, on ? C.paper : C.dim);
+          for (let j = 0; j < 2; j++) {
+            const cx = x + 98 + j * 62, code = G.input.binds[a][j], me = on && j === slot;
+            if (me && cap) { G.text(ug, 'press a key...', cx, yy + 1, C.gold, { tiny: true }); continue; }
+            const w = G.keycap(ug, cx, yy - 2, code ? G.keyLabel(code) : '-', code ? undefined : '#9a8fa8');
+            if (me) { ug.strokeStyle = C.clawd; ug.lineWidth = 1; ug.strokeRect(cx - 0.5, yy - 2.5, w + 1, 12); }
+          }
+        }
+        const hint = cap ? 'esc cancel   bksp clear' : noteT > 0 ? note : 'jump: change   left/right: key 1 or 2';
+        G.text(ug, hint, W / 2, y + ph - 11, noteT > 0 && !cap ? C.gold : '#6b6578', { tiny: true, align: 'c' });
       },
     };
   }
