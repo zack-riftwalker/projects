@@ -175,7 +175,7 @@ module.exports = (S, h) => {
   S['late-join'] = async () => {
     const T = await openPair({ connect: false });
     try {
-      await T.host.evaluate((c) => G.coop.connect('host', c), h.CODE); await T.host.waitForFunction(() => G.coop.open);
+      await T.host.evaluate((c) => G.coop.connect('host', c), 'test'); await T.host.waitForFunction(() => G.coop.open);
       await T.host.evaluate(() => { for (const k of Object.keys(G.LEVELS)) G.save.data.seen['b' + k] = true; G.go(() => G.Scenes.play('1-1', null)); });
       await T.host.waitForFunction(() => G.scene.L && !G.transitioning());
       await sleep(5000);

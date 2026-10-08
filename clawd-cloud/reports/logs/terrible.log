@@ -1,0 +1,60 @@
+PASS  crash-url  (3.8s)  bad url -> 404; room still works
+PASS  crash-big  (2.4s)  close code 1009; room still works
+PASS  paths  (3.2s)  /server.js=404 /src/worker.js=404 /wrangler.jsonc=404 /.dev.vars=404 /package.json=404 /_headers=404 /assets/../src/worker.js=404 /%2e%2e/src/worker.js=404 mp3=200 index=200
+PASS  double-hit  (4.4s)  hpLost=2 (want 2)
+PASS  solo-hit  (3.2s)  hits per swing=1 (want 1)
+PASS  softlock  (6.8s)  reviveQ before=1 restarted=true after 2079ms; now dead=false rq=0
+PASS  host-gone  (7.4s)  no level after 2774ms (grace 2000 ms)
+PASS  boss-intro  (34.3s)  1-B=true 2-B=true 3-B=true 4-B=true 5-B=true (guest frozen during intro; want true)
+PASS  bt-spam  (5.3s)  tile-break messages/events=0 (want 0)
+PASS  p2-freeze  (11.9s)  [host rAF max gap 19 ms, >40ms frames 0/438] longest P2 freeze while guest moving: 0 ms (want <= 60) [lag=300]
+PASS  bandwidth  (66.5s)  
+    1-1: host->guest 0.8 KB/s, guest->host 0.1 KB/s
+    1-B: host->guest 1.2 KB/s, guest->host 0.1 KB/s
+    2-B: host->guest 2.9 KB/s, guest->host 0.1 KB/s
+    3-B: host->guest 1.9 KB/s, guest->host 0.1 KB/s
+    4-B: host->guest 0.7 KB/s, guest->host 0.1 KB/s
+    5-B: host->guest 1.3 KB/s, guest->host 0.1 KB/s
+    worst 2.9 KB/s (want <= 4), idle 0.8 (want <= 1.5)
+PASS  smoke  (2.3s)  18 levels x 180 steps
+PASS  guest-leave  (6.2s)  guest on the map; host back to solo: {"net":null,"p2":false,"peer":false}
+PASS  background  (71.0s)  away shown=true hurtWhileAway=false awayAfter=false p2 moved 77px; host ents [0,1,2,3,4,5,6,7,8] guest ents [0,1,2,3,4,5,6,7,8]
+PASS  pause  (15.4s)  host pause: guest frozen=true state=paused, guest moved 0.0px; guest resume -> host play, frozen=false; guest pause -> host paused, resume -> play
+PASS  crack-dash  (9.9s)  2-1: guest x 179 -> 318 (crack at x=224), host tile open=true
+PASS  liquid  (7.8s)  3-3: trigger row 55, host y 966 rising before=false after guest climbs=true
+PASS  loot  (7.4s)  tokens started 80px from the partner (272px from the host); 0.33 s later mean distance to the partner 0px (want < 80)
+FAIL  fx-ctx  (8.2s)  host hurt -> guest flash 0.00 trauma 0.00 (host flash 0.22); partner hurt -> host flash 0.00 stop 0.00 trauma 0.00 (guest flash 0.00)
+FAIL  late-join  (32.3s)  exception: page.waitForFunction: Timeout 30000ms exceeded.
+    at S.late-join (/home/user/projects/clawd-cloud/tools/scenarios-p1.js:178:85)
+    at async /home/user/projects/clawd-cloud/tools/coop-harness.js:354:15
+PASS  cache  (1.8s)  mp3 public, max-age=31536000, immutable; index no-cache 442716 B; 304s 304/304; wrong codes close 4001,4001,4001,4001,4001,4005,4005, right code right after lockout -> 4005
+PASS  diff-solo  (3.7s)  bug hp 2 (want 2); dead after 1st claw hit: false, after 2nd: true; one stomp kills: true
+PASS  diff-boss  (3.6s)  boss 1-B hp 39/39 (want 39, 26 x 1.5), death drop 36 tokens (want 36)
+PASS  diff-merge  (3.6s)  heads 28,28, boss 56/56; after one head dies: phase 2, boss hp 28, dying=false
+PASS  diff-loot  (3.5s)  bug hp 3 (want 3), dropped 3 tokens (want 3)
+PASS  diff-coop  (7.4s)  host boss 39, guest boss bar 39 (want 39), guest sees "BOSS +50% · ENEMIES +1 hit"; runtime small slime hp [[2,true]] then [[2,true]] (want [[2,true]] both times)
+PASS  diff-lock  (5.9s)  locked boss maxHp 52 (want 52), line "BOSS +100% · ENEMIES +2 hits · ENEMY HP x1.5", inputs disabled=true, /config (public in the cloud) -> 200 {"bossPct":100,"npcExtra":2,"npcMult":150,"lock":true}
+PASS  reliable  (7.7s)  host received 100/100 events once each, in order; still unacknowledged on the guest: 0
+PASS  lossy  (22.2s)  host {"ids":"3,4,5,6,7,8,9","tokens":14,"tiles":"4092:85180","items":17} guest {"ids":"3,4,5,6,7,8,9","tokens":14,"tiles":"4092:85180","items":17}
+PASS  ownership  (14.8s)  spikes: guest acted 280 ms before the host heard of it (want 195..1210), hp guest 4 / host 4 (want 4 both, no double loss); stomp: guest bounced 406 ms before the bug died on the host (want 195..1210), guest hp unchanged true
+PASS  guest-fight  (26.6s)  boss hp 39 -> 34 (guest swings); guest down on host=true queued=1; after 5 s guest dead=false hp=2, host sees dead=false
+PASS  projectiles  (13.5s)  flight: host x 202 guest x 162; hit: guest hp 5 -> 4 (want -1), host projectile gone=true; cut by claw: host projectile gone=true
+PASS  smooth  (21.4s)  walking bug, 721 frames at lag 300: max per-frame step 1.60 px (want <= 3), freeze-then-lurch frames 0 (want 0)
+PASS  netfields  (3.6s)  all 17 classes complete (Flaky[st,t,x,y] Bug[t,x,flash,y,face] Typo[onGround,face,x,y,wait] Lint[t,x,y,flash] Null[cur,trail,t,st,x,y,marks,aim] Mimic[awake,onGround,face,flash,x,y] Logger[open,flash,x,y] Noodle[st,t,face,flash,x,y] Merge[heads,t] Dripper[grow] Slime[onGround,t,flash,x,y,land,wait] Leak[hp,t,flash,x,y,sq,marks] Racer[t,face,pause,x,y] Ghost[a,shy,t,face,x,y,flash] Loop[hist,t,ang,hx,hy] Drone[aim,t,flash,x,y] Monolith[open,fists,t,boltN,look])
+PASS  rates  (62.6s)  lag 0: rtt 2 -> level 0 (host 15 Hz), guest level 0 (30 Hz); lag 150: rtt 304 -> level 1 (host 10 Hz), guest level 1 (20 Hz); lag 300: rtt 608 -> level 2 (host 6 Hz), guest level 2 (15 Hz)
+PASS  bufferbloat  (130.0s)  bare round trip 600 ms; last 20 s: median 686 ms, max 813 ms (want < 1350); host skipped 0 sends; ping every 10 s: 673,818,687,684,577,813
+PASS  hitfeel  (10.6s)  hit sound played 1x on the guest (want 1), 360 ms before the host applied the damage (want > 195), guest hitstop 0.030 s (want 0..0.03)
+PASS  lenient  (17.2s)  guest inv after a hit 1.70 (1.3 normal, want > 1.6 on a slow line); partner lagging after 1.8 s silence=true, enemies ignore it=true; host down + lagging partner -> restart true after 2029 ms
+PASS  blip  (14.0s)  guest back after 3 ms; host level+partner unchanged=true peer=true lagging=false; guest same level=true fight on=true; event sent during outage arrived=true; boss hp host 51 guest 51
+PASS  grace  (13.1s)  right after the drop: partner kept, marked lagging=true; after the grace time: net=null peer=false
+PASS  pause-resume  (32.3s)  host playing again after each guest resume: 466ms, 324ms, 387ms, 358ms, 336ms, 334ms, 342ms, 387ms
+PASS  pause-proj  (12.0s)  guest orb x 92.0 -> 92.0 during 3 s of pause (want still), dead=false, guest hp 5/5
+PASS  half-open  (18.9s)  guest back after 8100 ms (want < 10000); host {"same":true,"net":"host","peer":true,"lagging":false} guest {"same":true,"net":"guest"}
+PASS  zombie  (50.2s)  six swipes at a bug walking in: killed, killed, killed, killed, killed, killed (want killed every time, never hurt)
+PASS  host-key  (4.0s)  right key -> open (+code msg); wrong 4003,4003,4003,4003,4003; sixth try with the right key -> 4005 (want 4005), guest from the same address 4005; empty HOST_KEY -> 4003,4003,4003
+PASS  host-blip  (16.4s)  host back after 524 ms (want < 6000); host same level+partner=true peer=true lagging=false; guest same level=true fight on=true hostLag cleared=true; event raised during outage arrived=true; boss hp host 51 guest 51; snapshots flowing again=true
+PASS  host-half-open  (18.0s)  host back after 8105 ms (want < 12000); host {"same":true,"net":"host","lag":false} guest {"same":true,"net":"guest","hostOn":true}
+PASS  host-grace  (8.6s)  guest saw "host reconnecting" after 65 ms (want < 2300) and kept its level (true); wait scene after 2709 ms: {"wait":true,"hostOn":false,"lag":false,"open":true}
+PASS  new-code  (2.8s)  code 380333 -> 746656; guest kicked (4001) after 52 ms; host peer=false; old code 4001, new code open
+PASS  restart  (13.8s)  after the restart: host back 1 ms, guest back 2 ms (total 6817, want each < 20000); code 107817 -> 107817; host {"code":"107817","same":true,"net":"host","peer":true} guest {"same":true,"net":"guest","tok":true,"fresh":196.89999999990687}
+2 scenario(s) FAILED
