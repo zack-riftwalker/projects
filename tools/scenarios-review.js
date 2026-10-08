@@ -222,6 +222,60 @@ module.exports = (S, h) => {
   };
 
   // the phone player pushes the stick diagonally up towards a small slime and taps CLAW: it must be a forward swipe that kills it
+  // THE bug behind "P2's hits suddenly stop working" (and lost deaths): the crumbling-tile event carried a field named i, which overwrote
+  // the event's sequence number, so the host waited forever for a number that never came and every later P2 event (hits, deaths...) was stuck.
+  S['crumble-jam'] = async () => {
+    const T = await h.openPair({ query: '?mute&debug' });
+    try {
+      await h.startLevel(T, '1-1'); await h.sleep(1000);
+      // P2 steps on a crumbling tile (the level's crumble map tells the host), then swings at something
+      await T.guest.evaluate(() => { const L = G.scene.L; L.crumble.set(4321, { s: 1, t: 0.4 }); G.coop.testLog = []; });
+      await T.guest.evaluate(() => { for (let n = 1; n <= 5; n++) G.coop.rel('test', { n }); const L = G.scene.L, e = L.ents.find((x) => !x.dead); G.coop.rel('hit', { eid: e ? e._id : 1, px: Math.round(L.me.x), py: Math.round(L.me.y), how: 'swipe', dmg: 1, dx: 1, dy: 0, atk: 9001, bi: 0 }); });
+      await h.sleep(2000);
+      const hs = await T.host.evaluate(() => ({ tile: G.scene.L.crumble.has(4321), got: G.coop.testLog.slice(), verdicts: G.coop.dfull.filter((l) => / HOST  P2 swipe/.test(l)).length, hi: G.coop.R.hi }));
+      const gs = await T.guest.evaluate(() => ({ out: G.coop.R.out.length, seq: G.coop.R.seq }));
+      return R(hs.tile && hs.got.length === 5 && hs.verdicts === 1 && gs.out === 0 && hs.hi === gs.seq, 'crumble reached the host=' + hs.tile + '; 5 events after it arrived=' + hs.got.length + '; hit verdict=' + hs.verdicts + '; guest unacked ' + gs.out + ' (seq ' + gs.seq + ', host hi ' + hs.hi + ')');
+    } finally { await T.close(); }
+  };
+
+  // a whole boss fight with a real P2 (keys, its own body, deaths and revives): every hit it sends gets a verdict on the host, and the
+  // verdicts stay sane to the end (no run of "NO SUCH CREATURE" / "TOO FAR" / "another level"). FIGHT_LV / FIGHT_S / FIGHT_GOD tune it.
+  S['fight-hits'] = async () => {
+    const T = await h.openPair({ query: '?mute&debug' });
+    try {
+      const lv = process.env.FIGHT_LV || '4-B', dur = (+process.env.FIGHT_S || 60) * 1000;
+      await h.startLevel(T, lv); await h.sleep(4000);
+      if (process.env.FIGHT_GOD) await h.godmode(T); else await T.host.evaluate(() => { const L = G.scene.L; setInterval(() => { if (G.scene.L && G.scene.L.me && !G.scene.L.me.dead) { G.scene.L.me.inv = 99; G.scene.L.me.hp = G.scene.L.me.maxHp; } }, 50); });   // the host never dies, P2 does
+      const t0 = Date.now(); let n = 0;
+      while (Date.now() - t0 < dur) {
+        n++;
+        // P2 goes to a live creature (the boss's head or anything else) and swings at it, sometimes from above
+        const how = await T.guest.evaluate((n) => {
+          const L = G.scene.L; if (!L || L.net !== 'guest' || G.transitioning()) return 'wait'; const p = L.me; if (p.dead) return 'dead';
+          const live = L.ents.filter((e) => !e.dead && e._id !== undefined && e.hurtboxes().length);
+          if (!live.length) return 'none';
+          const e = live[Math.floor(n / 6) % live.length], b = e.hurtboxes()[0];
+          const far = window.__tg !== e._id; window.__tg = e._id;       // a new target: get there first and let the host see it (a jump across the map is not a hit)
+          if (far) { p.x = b.x - 12; p.y = b.y + b.h / 2 - p.h / 2; p.vx = 0; return 'moved'; }
+          if (n % 3 === 0 && e.stompable) { p.x = b.x + b.w / 2 - 5; p.y = b.y - 30; p.vy = 120; p.prevBottom = p.y + p.h; return 'stomp ' + CLS(e); }
+          p.x = b.x - 12; p.y = b.y + b.h / 2 - p.h / 2; p.face = 1; p.vx = 0; return 'swipe ' + e.constructor.name;
+          function CLS(x) { return x.constructor.name; }
+        }, n);
+        if (how.startsWith('swipe')) { await h.key(T.guest, 'KeyX', true); await h.sleep(60); await h.key(T.guest, 'KeyX', false); }
+        await h.sleep(how === 'moved' ? 700 : 250);
+      }
+      await h.sleep(2000);
+      const g = await T.guest.evaluate(() => G.coop.dfull.filter((l) => / GUEST sent /.test(l)));
+      const v = await T.host.evaluate(() => G.coop.dfull.filter((l) => / HOST  P2 /.test(l)));
+      const kinds = {}; for (const l of v) { const k = (/: (.*?)( hp| \d|$)/.exec(l) || [])[1] || l; kinds[k] = (kinds[k] || 0) + 1; }
+      const bad = v.filter((l) => /NO SUCH|TOO FAR|ANOTHER LEVEL|not hittable|no hurtbox/.test(l));
+      const st = await T.guest.evaluate(() => ({ deaths: G.scene.L && G.scene.L.me.dn, out: G.coop.R.out.length }));
+      const hst = await T.host.evaluate(() => ({ scene: G.scene.L ? G.scene.L.id + ' net=' + G.scene.L.net : 'no level', st: G.coop.hostState && G.coop.hostState.st, hi: G.coop.R.hi, peer: G.coop.peer, open: G.coop.open }));
+      const gst = await T.guest.evaluate(() => ({ scene: G.scene.L ? G.scene.L.id + ' net=' + G.scene.L.net + ' ep=' + G.scene.L._ep : 'no level', seq: G.coop.R.seq, first: G.coop.R.out[0] && G.coop.R.out[0].ev }));
+      return R(g.length >= 8 && v.length >= g.length && bad.length <= 2 && st.out === 0, lv + ': P2 sent ' + g.length + ' hits, host verdicts ' + v.length + ', P2 deaths ' + st.deaths + ', unacked ' + st.out + '\n  host ' + JSON.stringify(hst) + '\n  guest ' + JSON.stringify(gst) + '\n  verdicts ' + JSON.stringify(kinds) + (bad.length ? '\n  bad: ' + bad.slice(0, 6).join('\n       ') : ''));
+    } finally { await T.close(); }
+  };
+
   // ?debug on both pages: the guest's lines reach the host's log; the LOG window shows both sides and Copy works on a plain http:// page
   S['debug-log'] = async () => {
     const T = await h.openPair({ query: '?mute&debug' });

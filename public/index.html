@@ -6622,7 +6622,7 @@ G.VOICE = {
   const R = coop.R = { out: [], seq: 0, hi: 0, resend: 220 };
   const curEpoch = () => (coop.role === 'host' ? coop.epoch : (G.scene && G.scene.L && G.scene.L._ep !== undefined ? G.scene.L._ep : coop.startEpoch));
   coop.rel = (k, f) => {
-    if (k === 'hit' && coop.dbgOn && coop.role === 'guest') dlog('sent ' + f.how + ' #' + f.eid); R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
+    if (k === 'hit' && coop.dbgOn && coop.role === 'guest') dlog('sent ' + f.how + ' #' + f.eid); R.out.push({ ev: Object.assign({}, f, { i: ++R.seq, k }), at: 0 }); /* i and k belong to the channel: no field of f may overwrite them */ coop.relWake = true; };
   coop.resetNet = () => { if (coop.rate) Object.assign(coop.rate, RATES[0], { level: 0, since: 0 }); coop.stalls = []; coop.stallLog = []; coop.lastStamp = undefined; coop.lastRx = 0; R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
   // game message out: stamps the envelope and attaches every unacknowledged reliable event that is due
   function gsend(o) {
@@ -6666,7 +6666,7 @@ G.VOICE = {
   };
 
   // ---------- level setup ----------
-  class HookMap extends Map { set(k, v) { if (coop.hookCr) coop.rel('cr', { i: k, v }); return super.set(k, v); } }
+  class HookMap extends Map { set(k, v) { if (coop.hookCr) coop.rel('cr', { ti: k, v }); return super.set(k, v); } }
   function hostSetup(L, x, y) {
     L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
     const p2 = new Player(L, x, y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
@@ -6834,9 +6834,15 @@ G.VOICE = {
     if (e[key] === ev.atk) return dlog(tag + 'same attack twice');                                   // each attack hurts a creature once
     if (ev.how === 'stomp' && !e.stompable) return dlog(tag + 'not stompable');
     const boxes = e.hurtboxes(); if (!boxes.length) return dlog(tag + 'no hurtbox');
-    const cx = p2.x + p2.w / 2, cy = p2.y + p2.h / 2;
+    // Lag compensation: P2 hit the creature where ITS screen showed it, which is a round trip plus the smoothing delay in the past.
+    // So the hit is measured from where P2 says it stood (or where this screen has it) to where the creature was at any moment of the
+    // last second, not only to where it is now: a fast boss (Loop in its second phase) has moved far by the time the hit arrives here.
+    const pts = [[p2.x + p2.w / 2, p2.y + p2.h / 2]];
+    if (Number.isFinite(ev.px) && Number.isFinite(ev.py) && Math.abs(ev.px - p2.x) + Math.abs(ev.py - p2.y) < 240) pts.push([ev.px + p2.w / 2, ev.py + p2.h / 2]);
+    const dist = (b) => { let m = 1e9; for (const [cx, cy] of pts) m = Math.min(m, Math.hypot(Math.max(b.x - cx, 0, cx - (b.x + b.w)), Math.max(b.y - cy, 0, cy - (b.y + b.h)))); return m; };
     let best = boxes[0], bd = 1e9;
-    for (const b of boxes) { const d = Math.hypot(Math.max(b.x - cx, 0, cx - (b.x + b.w)), Math.max(b.y - cy, 0, cy - (b.y + b.h))); if (d < bd) { bd = d; best = b; } }
+    for (const b of boxes) { const d = dist(b); if (d < bd) { bd = d; best = b; } }
+    if (e._hist) for (const f of e._hist) for (const b of f.b) bd = Math.min(bd, dist(b));
     const lim = 64 + (Math.abs(e.vx || 0) + Math.abs(e.vy || 0) + Math.abs(p2.vx || 0)) * (0.3 + coop.ping / 1000) + 120 * coop.ping / 1000;
     if (bd > lim) return dlog(tag + 'TOO FAR ' + Math.round(bd) + '>' + Math.round(lim));      // the partner is nowhere near it
     e[key] = ev.atk;
@@ -6865,12 +6871,22 @@ G.VOICE = {
     if (p2.dead) return;
     asP2(L, () => { p2.x = x; p2.y = y; p2.die(silent); });
   }
+  // where every creature's hurtboxes were over the last second (every 50 ms), for the lag compensation in hostHit
+  function recordHist(L) {
+    const now = performance.now(); if (now - (L._histAt || 0) < 50) return; L._histAt = now;
+    for (const e of L.ents) {
+      if (e.dead) { e._hist = null; continue; }
+      const hs = e._hist || (e._hist = []);
+      hs.push({ t: now, b: e.hurtboxes().map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h })) });
+      while (hs.length && now - hs[0].t > 1000) hs.shift();
+    }
+  }
   coop.hostTick = (L, dt) => {
     const p2 = L.p2; if (!p2 || !coop.peer) return;
-    ensureIds(L);
+    ensureIds(L); recordHist(L);
     for (const m of coop.inbox.splice(0)) {
-      if (m.e !== coop.epoch) continue;                          // belongs to another level
-      if (m.t === 'cr') { if (!L.crumble.has(m.i)) L.crumble.set(m.i, m.v); }
+      if (m.e !== coop.epoch) { if (m.t === 'hit') dlog('P2 ' + m.how + ' #' + m.eid + ': FROM ANOTHER LEVEL e' + m.e + ' now e' + coop.epoch); continue; }      // belongs to another level
+      if (m.t === 'cr') { if (!L.crumble.has(m.ti)) L.crumble.set(m.ti, m.v); }
       else if (m.t === 'bt') L.breakTile(m.tx, m.ty);
       else if (m.t === 'hit') hostHit(L, m);
       else if (m.t === 'cut' || m.t === 'projHit') hostProj(L, m);
@@ -7301,7 +7317,7 @@ G.VOICE = {
           if (!G.overlap(box, b)) continue;
           e[p.hitKey] = p.atkId;
           if (canHit(e) && (!e.isBoss || b.head !== undefined || !e.heads)) {
-            if (!b.armor) { coop.rel('hit', { eid: e._id, how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi }); predictHit(e, p.atkDmg); }
+            if (!b.armor) { coop.rel('hit', { eid: e._id, px: Math.round(p.x), py: Math.round(p.y), how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi }); predictHit(e, p.atkDmg); }
             predicted('w' + p.atkId);
             if (!b.armor) A.sfx('hit');                                                // sound at the moment of contact, not a round trip later
             p.onHit(e, b.armor ? 'block' : 'hit', b);                              // my own reactions: recoil, pogo, sparks, a 30 ms hitstop
@@ -7324,9 +7340,9 @@ G.VOICE = {
       for (const b of e.harmboxes()) {
         if (!G.overlap(hb, b)) continue;
         if (p.dashT > 0 && e.dashable !== false) {
-          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); predictHit(e, 1); predicted('d' + p.dashId); A.sfx('hit'); L.spark(Math.max(b.x, Math.min(p.x + 5, b.x + b.w)), Math.max(b.y, Math.min(p.y + 5, b.y + b.h)), '#fff3e4', 6); L.stop(0.05); L.shake(0.2); } }
+          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, px: Math.round(p.x), py: Math.round(p.y), how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); predictHit(e, 1); predicted('d' + p.dashId); A.sfx('hit'); L.spark(Math.max(b.x, Math.min(p.x + 5, b.x + b.w)), Math.max(b.y, Math.min(p.y + 5, b.y + b.h)), '#fff3e4', 6); L.stop(0.05); L.shake(0.2); } }
         } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
-          coop.rel('hit', { eid: e._id, how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
+          coop.rel('hit', { eid: e._id, px: Math.round(p.x), py: Math.round(p.y), how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
           predictHit(e, 1e9); predicted('s' + p._stompN); A.sfx('squish'); L.spark(p.x + 5, b.y, '#fff3e4', 6);
           p.y = b.y - p.h; p.bounce(1); L.stop(0.05);
         } else if (p.grace <= 0 && !(e._ex && laggy())) p.hurt(e.dmg || 1, b.x + b.w / 2);

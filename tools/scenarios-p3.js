@@ -340,6 +340,51 @@ module.exports = (S, h) => {
     } finally { await T.close(); }
   };
 
+  // a long co-op session with everything that happens in real play: line drops on both sides, the phone tab hidden, pauses, level
+  // changes. A reliable event goes each way every 0.4 s; every single one must arrive, and nothing may stay unacknowledged.
+  // SOAK_S sets the length (default 60 s).
+  S['soak'] = async () => {
+    const T = await openPair({ query: '?mute&debug' });
+    try {
+      await startLevel(T, '3-1'); await h.godmode(T);
+      for (const p of [T.host, T.guest]) await p.evaluate(() => { G.coop.testLog = []; window.__n = 0; });
+      const dur = (+process.env.SOAK_S || 60) * 1000, t0 = Date.now(), did = [];
+      const acts = [
+        ['guest blip', () => T.guest.evaluate(() => G.coop.ws.close())],
+        ['host blip', () => T.host.evaluate(() => G.coop.ws.close())],
+        ['guest hidden 3s', async () => { await T.guest.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }); await sleep(3000); await T.guest.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }); }],
+        ['guest pause', async () => { await h.key(T.guest, 'Escape'); await sleep(1500); await h.key(T.guest, 'Escape'); }],
+        ['host pause', async () => { await h.key(T.host, 'Escape'); await sleep(1500); await h.key(T.host, 'Escape'); }],
+        ['new level', async () => { await startLevel(T, ['3-1', '3-2', '1-1'][did.length % 3]); await h.godmode(T); }],
+        ['guest silent 7s', async () => { await T.guest.evaluate(() => { const ws = G.coop.ws; ws.onmessage = null; ws.send = () => {}; }); await sleep(9000); }],
+      ];
+      let next = Date.now() + 3000, sent = 0, hits = 0;
+      while (Date.now() - t0 < dur) {
+        sent++;
+        for (const p of [T.host, T.guest]) await p.evaluate((n) => G.coop.rel('test', { n }), sent).catch(() => {});
+        hits += await T.guest.evaluate((n) => { const L = G.scene.L; if (!L || L.net !== 'guest' || G.transitioning()) return 0; const e = L.ents.find((x) => x._id && !x.dead); G.coop.rel('hit', { eid: e ? e._id : 1, how: 'swipe', dmg: 0, dx: 1, dy: 0, atk: 5000 + n, bi: 0 }); return 1; }, sent).catch(() => 0);
+        if (Date.now() > next) { const a = acts[did.length % acts.length]; did.push(a[0]); await a[1](); next = Date.now() + 4000; }
+        await h.sleep(400);
+      }
+      // settle, then compare
+      const t1 = Date.now(); let st;
+      while (Date.now() - t1 < 15000) {
+        st = await Promise.all([T.host, T.guest].map((p) => p.evaluate(() => ({ got: G.coop.testLog.slice(), out: G.coop.R.out.length, seq: G.coop.R.seq, hi: G.coop.R.hi, open: G.coop.open, net: G.scene.L && G.scene.L.net }))));
+        if (st.every((x) => x.out === 0 && x.got.length >= sent)) break;
+        await h.sleep(300);
+      }
+      const miss = (x) => { const g = new Set(x.got); const m = []; for (let i = 1; i <= sent; i++) if (!g.has(i)) m.push(i); return m; };
+      const [hs, gs] = st, mh = miss(hs), mg = miss(gs);
+      const log = await T.host.evaluate(() => G.coop.dfull.filter((l) => / HOST  P2 /.test(l)));
+      const other = log.filter((l) => /ANOTHER LEVEL/.test(l));
+      const ok = log.length >= hits && !other.length && !mh.length && !mg.length && hs.out === 0 && gs.out === 0 && hs.net === 'host' && gs.net === 'guest';
+      return R(ok, sent + ' events each way, ' + Math.round((Date.now() - t0) / 1000) + ' s, did: ' + did.join(', ') +
+        '\n  P2 hits sent ' + hits + ', host verdicts ' + log.length + ', dropped as another level ' + other.length + (other.length ? ' e.g. ' + other[0] : '') +
+        '\n  host got ' + hs.got.length + ' missing ' + mh.length + (mh.length ? ' (first ' + mh.slice(0, 5) + ')' : '') + '; unacked ' + hs.out + '; seq ' + hs.seq + ' hi ' + hs.hi +
+        '\n  guest got ' + gs.got.length + ' missing ' + mg.length + (mg.length ? ' (first ' + mg.slice(0, 5) + ')' : '') + '; unacked ' + gs.out + '; seq ' + gs.seq + ' hi ' + gs.hi);
+    } finally { await T.close(); }
+  };
+
   // a guest that never comes back is let go after the grace time (shortened here to 2 s)
   S['grace'] = async () => {
     const T = await openPair({ env: { GRACE_MS: '2000' } });
