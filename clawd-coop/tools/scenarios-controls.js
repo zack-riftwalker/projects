@@ -97,4 +97,30 @@ module.exports = (S, h) => {
     out.ok = out.heldIgnored && out.bound === '6|6' && out.six === true && out.up === true && out.oldA === true && out.dashKept === '1,5,7';
     return R(out.ok, JSON.stringify(out));
   });
+
+  S['keys-hints'] = () => solo(async (page) => {
+    // static: no hard-coded key names left in sign strings / tool cards
+    const html = require('fs').readFileSync(require('path').join(h.ROOT, 'index.html'), 'utf8');
+    const stale = (html.match(/\[(Z|X|C|V|DOWN|ARROWS|SPACE)\]/g) || []).length;
+    const out = { stale: stale === 0 };
+    const caps = () => page.evaluate(() => { const l = window.__caps; window.__caps = []; return l; });
+    await page.evaluate(() => {
+      window.__caps = []; const kc = G.keycap; G.keycap = (...a) => { window.__caps.push(a[3]); return kc(...a); };
+      for (const k of Object.keys(G.LEVELS)) G.save.data.seen['b' + k] = true;
+      G.save.data.keys = G.input.defaultKeys(); G.save.data.keys.jump = ['KeyQ', null]; G.save.data.keys.pause = ['KeyP', null]; G.input.rebuild();
+      G.setScene(G.Scenes.play('1-1', null)); G.step(30, true);
+      const L = G.scene.L, sg = L.signs[0]; L.me.x = sg.x - L.me.w / 2; L.me.y = sg.y - L.me.h; G.step(3, true); G.render();
+    });
+    const a = await caps();
+    out.sign = a.includes('Q') && a.includes('ARROWS') && !a.includes('Z') && !a.includes('SPACE');
+    await page.evaluate(() => { G.input.rebuild(); G.setScene(G.Scenes.map()); G.step(60, true); G.render(); });
+    const b = await caps(); out.map = b.includes('Q') && b.includes('P') && !b.includes('Z') && !b.includes('ESC');
+    // bound to something else: the sign follows (and an unknown bracket word is still drawn as written)
+    await page.evaluate(() => { G.save.data.keys.jump = ['KeyG', 'Space']; G.input.rebuild(); });
+    out.both = await page.evaluate(() => G.actionLabel('jump', true) === 'G/SPACE' && G.actionLabel('move') === 'ARROWS');
+    await page.evaluate(() => { G.save.data.keys.left = ['KeyA', null]; G.save.data.keys.right = ['KeyD', null]; G.input.rebuild(); });
+    out.move = await page.evaluate(() => G.actionLabel('move'));
+    out.ok = out.stale && out.sign && out.map && out.both && out.move === 'A/D';
+    return R(out.ok, JSON.stringify(out) + ' caps(sign)=' + a.join(',') + ' caps(map)=' + b.join(','));
+  });
 };

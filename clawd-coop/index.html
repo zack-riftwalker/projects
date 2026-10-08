@@ -169,6 +169,7 @@
 
   input.defaultKeys = () => JSON.parse(JSON.stringify(DEFAULT_KEYS));
   input.padActions = PAD_ACTIONS;
+  G.isAction = (n) => n === 'move' || ACTIONS.includes(n);
   input.reserved = (code) => RESERVED_KEYS.includes(code);
   input.rebuild = () => {
     const sv = G.save && G.save.data.keys, b = (input.binds = {});
@@ -196,6 +197,7 @@
   };
   // label of an action's first bound key ('Z'), or both ('Z/SPACE') with both = true; '?' if unbound
   G.actionLabel = (action, both) => {
+    if (action === 'move') { const b = input.binds, l = b.left[0] || b.left[1], r = b.right[0] || b.right[1]; return /^Arrow/.test(l) && /^Arrow/.test(r) ? 'ARROWS' : G.keyLabel(l) + '/' + G.keyLabel(r); }
     const ks = ((input.binds && input.binds[action]) || []).filter(Boolean).map(G.keyLabel);
     return ks.length ? (both ? ks.filter((k, i) => ks.indexOf(k) === i).join('/') : ks[0]) : '?';
   };
@@ -4799,10 +4801,10 @@ G.VOICE = {
   L['1-1'] = {
     world: 1, name: 'hello_world.py', blurb: "print('hello, world'). Then squash the first few bugs.",
     signs: [
-      'MOVE with the [ARROWS] and JUMP with [Z] or [SPACE] - hold it to go higher.',
-      'Bugs. Swipe them with [X] - or simply land on them.',
+      'MOVE with the [move] and JUMP with [jump] - hold it to go higher.',
+      'Bugs. Swipe them with [attack] - or simply land on them.',
       'Between two walls? Jump at one, then jump again. Clawd has grippy legs.',
-      'Land on a flying bug, or hold [DOWN] and swipe in mid-air, to bounce off it.',
+      'Land on a flying bug, or hold [down] and swipe in mid-air, to bounce off it.',
     ],
     map: join(
       seg(['             ooo      ', '                      ', '  P    T              ']),
@@ -4852,7 +4854,7 @@ G.VOICE = {
   // =====================================================================
   L['2-1'] = {
     world: 2, name: 'npm_install.sh', blurb: 'added 1,402 packages in 3s. 47 vulnerabilities.',
-    signs: ['New tool: BASH. Press [C] to dash. It smashes cracked blocks - and bugs.', 'BASH works in mid-air too. Jump, then bash across.'],
+    signs: ['New tool: BASH. Press [dash] to dash. It smashes cracked blocks - and bugs.', 'BASH works in mid-air too. Jump, then bash across.'],
     map: join(
       seg(['            ############', '              %%        ', '              %%   ooo  ', '  P    T      %%        '], 13),
       seg(['       ooo                ', '                          ', '    m       b    m   g    '], 13),
@@ -4878,7 +4880,7 @@ G.VOICE = {
   };
   L['2-3'] = {
     world: 2, name: 'version_hell.lock', blurb: 'Dependency hell goes down, not across. Bash through the floor.',
-    signs: ['The way on is DOWN. Jump, hold [DOWN] and press [C] to bash through the cracked floor.'],
+    signs: ['The way on is DOWN. Jump, hold [down] and press [dash] to bash through the cracked floor.'],
     map: [
       '##########################',
       '#                        #',
@@ -4944,7 +4946,7 @@ G.VOICE = {
   // =====================================================================
   L['3-1'] = {
     world: 3, name: 'malloc.c', blurb: 'malloc() without free(). Mind the puddles.',
-    signs: ['New tool: SUBAGENTS. Tokens and squashed bugs fill the meter. When it is full, press [V].'],
+    signs: ['New tool: SUBAGENTS. Tokens and squashed bugs fill the meter. When it is full, press [special].'],
     map: join(
       seg(['        ooo           ', '                      ', '  P    T       s      ']),
       seg(['##############################', '    i      i       i     i    ', '                              ', '                              ', '         o        o           ', '                s             ', '#####www####www#######www#####', '##############################', '##############################'], 0),
@@ -5258,7 +5260,7 @@ G.VOICE = {
           ug.fillStyle = '#0d0a12'; ug.fillRect(0, 0, W, 14); ug.fillRect(0, H - BAR - 8, W, BAR + 8);
           S.cap.draw(ug, H - 22);
           if (S.skip > 0.1) { G.text(ug, 'skipping', W - 44, 4, C.dim, { tiny: true }); ug.fillStyle = C.clawd; ug.fillRect(W - 44, 11, Math.min(34, S.skip / 0.9 * 34), 1); }
-          else if (S.total < 4) G.text(ug, 'HOLD ENTER TO SKIP', W - 6, 4, '#4a4458', { tiny: true, align: 'r' });
+          else if (S.total < 4) G.text(ug, 'HOLD ' + G.actionLabel('start') + ' TO SKIP', W - 6, 4, '#4a4458', { tiny: true, align: 'r' });
         }
       },
     };
@@ -5446,10 +5448,10 @@ G.VOICE = {
 
   // ---------- new tool ----------
   const TOOLS = {
-    bash: { name: 'Bash', voice: 'sys_bash', key: 'C', desc: 'Dash in any direction. Smashes through cracked blocks and bugs. Recharges when you land.' },
-    agents: { name: 'Subagents', voice: 'sys_agents', key: 'V', desc: 'Fill the context meter, then delegate: two tiny helpers hunt bugs for you.' },
-    sudo: { name: 'sudo', voice: 'sys_sudo', key: 'Z', desc: 'Elevated privileges. Jump again in mid-air.' },
-    opus: { name: 'Model upgrade', voice: 'sys_opus', key: 'X', desc: 'A bigger claw. Reaches further, hits twice as hard.' },
+    bash: { name: 'Bash', voice: 'sys_bash', act: 'dash', desc: 'Dash in any direction. Smashes through cracked blocks and bugs. Recharges when you land.' },
+    agents: { name: 'Subagents', voice: 'sys_agents', act: 'special', desc: 'Fill the context meter, then delegate: two tiny helpers hunt bugs for you.' },
+    sudo: { name: 'sudo', voice: 'sys_sudo', act: 'jump', desc: 'Elevated privileges. Jump again in mid-air.' },
+    opus: { name: 'Model upgrade', voice: 'sys_opus', act: 'attack', desc: 'A bigger claw. Reaches further, hits twice as hard.' },
   };
   G.TOOLS = TOOLS;
   G.CUT.tool = (key, end) => {
@@ -5469,9 +5471,9 @@ G.VOICE = {
           G.text(ug, tl.name, W / 2, 120, C.paper, { align: 'c', scale: 2, outline: K, shadow: K });
           const lines = G.wrap(tl.desc, 250);
           lines.forEach((ln, i) => G.text(ug, ln, W / 2, 146 + i * 11, '#c9bfd8', { align: 'c' }));
-          const kw = G.keycap(ug, W / 2 - 8, 146 + lines.length * 11 + 5, tl.key);
+          const kw = G.keycap(ug, W / 2 - 8, 146 + lines.length * 11 + 5, G.actionLabel(tl.act));
           void kw;
-          if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press Z', W / 2, H - 14, C.dim, { align: 'c', tiny: true });
+          if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press ' + G.actionLabel('jump'), W / 2, H - 14, C.dim, { align: 'c', tiny: true });
         },
       }],
       end,
@@ -5566,7 +5568,7 @@ G.VOICE = {
             G.ambient = '#f0d8c8';
             G.text(ug, 'exit code 0', W / 2, 86, C.okHi, { align: 'c', scale: 2, outline: K, shadow: K });
             G.text(ug, 'process finished successfully', W / 2, 112, C.paper, { align: 'c', outline: K });
-            if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press Z', W / 2, 150, C.paper, { align: 'c', tiny: true, outline: K });
+            if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press ' + G.actionLabel('jump'), W / 2, 150, C.paper, { align: 'c', tiny: true, outline: K });
           },
         },
       ],
@@ -5594,6 +5596,7 @@ G.VOICE = {
     let w = 0;
     for (const word of text.split(' ')) {
       const m = /^\[([^\]]+)\](.*)$/.exec(word);
+      if (m && G.isAction(m[1])) m[1] = G.actionLabel(m[1], m[1] === 'jump');     // [jump] -> the player's keys; anything else is drawn as written
       const it = m ? { key: m[1], tail: m[2], w: Math.max(11, G.textW(m[1], { tiny: true }) + 6) + (m[2] ? G.textW(m[2]) + 1 : 0) } : { s: word, w: G.textW(word) };
       if (w + it.w > maxW && lines[lines.length - 1].length) { lines.push([]); w = 0; }
       lines[lines.length - 1].push(it); w += it.w + 4;
@@ -5883,7 +5886,7 @@ G.VOICE = {
             G.text(ug, s, 250, y, on ? C.paper : '#8d8798', { outline: K });
           });
           if (confirm) { G.panel(ug, 92, 92, 200, 40, '#17131f', C.paper); G.text(ug, 'Start over? This erases your save.', W / 2, 100, C.paper, { align: 'c' }); G.text(ug, 'Z yes   X no', W / 2, 116, C.clawdHi, { align: 'c' }); }
-          G.text(ug, 'ARROWS + Z   •   F FULLSCREEN   •   M MUTE', W / 2, H - 10, '#6b6578', { align: 'c', tiny: true });
+          G.text(ug, G.actionLabel('move') + ' + ' + G.actionLabel('jump') + '   •   F FULLSCREEN   •   M MUTE', W / 2, H - 10, '#6b6578', { align: 'c', tiny: true });
           if (SV().finished) G.text(ug, '✓ build passing', 8, 8, C.ok, { tiny: true });
         }
         if (opts) opts.draw(ug);
@@ -5975,7 +5978,7 @@ G.VOICE = {
         if (SV().best[id]) G.text(g, 'best ' + G.fmtTime(SV().best[id]), px + pw, yb, C.dim, { align: 'r' });
         if (!def.boss) { const sp = SV().sparks[id] || []; for (let k = 0; k < 3; k++) g.drawImage((sp[k] ? S.spark : S.sparkGhost)[0], px + 62 + k * 13, yb - 4); }
         G.text(g, th.time + ' AM', px + pw, 4, '#6b6578', { tiny: true, align: 'r' });
-        G.keycap(g, px, H - 17, 'Z'); G.text(g, 'checkout', px + 15, H - 14, C.dim); G.keycap(g, px + 78, H - 17, 'ESC'); G.text(g, 'title', px + 101, H - 14, C.dim);
+        { let hx = px; for (const [a, txt] of [['jump', 'checkout'], ['pause', 'title']]) { const w = G.keycap(g, hx, H - 17, G.actionLabel(a)); G.text(g, txt, hx + w + 4, H - 14, C.dim); hx += w + 4 + G.textW(txt) + 10; } }
         G.ambient = null;
       },
     };
@@ -6159,7 +6162,7 @@ G.VOICE = {
           G.panel(ug, 6, hudY + 11, 46, 5, '#231d2e', K);
           ug.fillStyle = act ? '#ffe2c4' : full ? (((t * 6) | 0) % 2 ? '#ffffff' : C.clawdHi) : C.clawd;
           ug.fillRect(8, hudY + 13, Math.round(42 * (act ? p.agents[0].life / 11 : p.meter / 100)), 1);
-          if (full && !act) G.keycap(ug, 55, hudY + 8, 'V');
+          if (full && !act) G.keycap(ug, 55, hudY + 8, G.actionLabel('special'));
         }
         const tk = String(L.tokens), tw = G.textW(tk);
         ug.drawImage(S.token[0], W - 20 - tw, hudY - 1 - (tokPop > 0 ? 1 : 0)); G.text(ug, tk, W - 8, hudY, tokPop > 0 ? C.goldHi : C.paper, { align: 'r', outline: K });
@@ -6246,7 +6249,7 @@ G.VOICE = {
         if (res.shown > res.rows.length) {
           const yy = y + 30 + res.rows.length * 14;
           if (res.best) G.text(ug, 'new best time', x + 12, yy, C.gold);
-          if (((res.t * 2) | 0) % 2) { G.keycap(ug, x + pw - 66, yy - 3, 'Z'); G.text(ug, 'commit', x + pw - 12, yy, C.okHi, { align: 'r' }); }
+          if (((res.t * 2) | 0) % 2) { const cl = G.actionLabel('jump'); G.keycap(ug, x + pw - 12 - G.textW('commit') - 4 - Math.max(11, G.textW(cl, { tiny: true }) + 6), yy - 3, cl); G.text(ug, 'commit', x + pw - 12, yy, C.okHi, { align: 'r' }); }
         }
         ug.globalAlpha = 1;
       },
