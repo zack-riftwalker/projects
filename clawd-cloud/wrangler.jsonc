@@ -1,9 +1,0 @@
-{
-  "name": "clawd-coop",
-  "main": "src/worker.js",
-  "compatibility_date": "2026-10-07",
-  "assets": { "directory": "./public", "binding": "ASSETS" },
-  "durable_objects": { "bindings": [{ "name": "ROOM", "class_name": "Room" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
-  "vars": { "BOSS_HP": "", "NPC_HITS": "", "NPC_MULT": "", "LOCK": "", "ROOM_NAME": "main", "LOCATION_HINT": "" }
-}
