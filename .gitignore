@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.dev.vars
+coop-config.json
+version.txt
+_update/
+*.zip

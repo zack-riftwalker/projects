@@ -22,57 +22,44 @@
   body.touch #game { cursor: auto; }
   @media (orientation: portrait) { body.touch #stage { align-items: flex-start; padding-top: 10px; box-sizing: border-box; } }
 
-  #touch {
-    position: fixed; left: 0; right: 0; bottom: 0;
-    padding: 0 16px calc(14px + env(safe-area-inset-bottom, 0px));
-    display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none;
-  }
-  #touch .cluster { display: grid; gap: 8px; pointer-events: auto; }
-  /* round analog stick: drag anywhere inside the ring, the knob follows your thumb */
+  /* ---- touch controls: the whole screen is one input layer. Left half = floating stick (it appears where the thumb lands),
+          right side = round action buttons. Fingers can slide between buttons; every tap counts, however short. ---- */
+  #touch { position: fixed; inset: 0; z-index: 40; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #touch[hidden] { display: none; }
   #stick {
-    position: relative; width: 124px; height: 124px; border-radius: 50%; pointer-events: auto; touch-action: none;
-    background: radial-gradient(circle, color-mix(in srgb, var(--panel) 70%, transparent) 0 58%, color-mix(in srgb, var(--panel) 88%, transparent) 59% 100%);
-    border: 2px solid var(--paper); box-shadow: 0 3px 0 var(--ink); box-sizing: border-box;
+    position: fixed; left: 0; top: 0; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(244,237,224,0.07) 0 55%, rgba(244,237,224,0.13) 56% 100%);
+    border: 2px solid rgba(244,237,224,0.28); box-sizing: border-box; opacity: 0.45; transition: opacity 0.12s;
   }
-  #stick::before, #stick::after { content: ""; position: absolute; left: 50%; top: 50%; background: color-mix(in srgb, var(--paper) 22%, transparent); transform: translate(-50%, -50%); }
-  #stick::before { width: 70%; height: 1px; } #stick::after { width: 1px; height: 70%; }
+  #stick.on { opacity: 1; transition: none; }
   #knob {
-    position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
-    background: var(--paper); border: 2px solid var(--ink); box-sizing: border-box; box-shadow: 0 3px 0 var(--ink);
-    pointer-events: none; z-index: 1; will-change: transform;
+    position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.55), rgba(244,237,224,0.32) 60%, rgba(244,237,224,0.22));
+    border: 2px solid rgba(244,237,224,0.6); box-sizing: border-box; box-shadow: 0 4px 14px rgba(0,0,0,0.35); will-change: transform;
   }
-  #stick.on #knob { background: var(--clawd); }
-  #touch .acts { grid-template-columns: repeat(2, 58px); grid-template-rows: repeat(2, 46px); }
-  .k {
-    appearance: none; margin: 0; padding: 0; min-width: 0;
-    font: 700 10px/1 var(--label-face); letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--paper); background: color-mix(in srgb, var(--panel) 82%, transparent);
-    border: 2px solid var(--paper); border-radius: 0; box-shadow: 0 3px 0 var(--ink);
-    touch-action: none;
+  #stick.on #knob { background: radial-gradient(circle at 35% 30%, #ffd2bf, var(--clawd) 65%); border-color: #ffe3d6; }
+  .tb {
+    position: fixed; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-sizing: border-box; pointer-events: none;
+    width: 62px; height: 62px; font: 800 11px/1 var(--label-face); letter-spacing: 0.06em; color: rgba(255,247,238,0.92);
+    background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.16), rgba(35,29,46,0.55) 62%);
+    border: 2px solid rgba(244,237,224,0.42); box-shadow: 0 4px 12px rgba(0,0,0,0.35), inset 0 -3px 0 rgba(0,0,0,0.25);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); transition: transform 0.06s, background 0.06s;
   }
-  .k.on { background: var(--clawd); color: var(--ink); transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
-  .k:focus-visible { outline: 2px solid var(--clawd); outline-offset: 2px; }
-  .k.up { grid-column: 2; }
-  .k.left { grid-column: 1; grid-row: 2; } .k.down { grid-column: 2; grid-row: 2; } .k.right { grid-column: 3; grid-row: 2; }
-  #pause {
-    position: fixed; right: 16px; top: calc(8px + env(safe-area-inset-top, 0px)); width: 40px; height: 32px; pointer-events: auto;
-  }
-  /* in portrait the pause button sits just under the screen instead of on top of it */
-  @media (orientation: portrait) { #pause { top: calc(18px + (100vw - 32px) * 0.5625 + env(safe-area-inset-top, 0px)); } }
-  @media (prefers-reduced-motion: reduce) { .k.on { transform: none; } }
+  .tb.on { transform: scale(0.9); background: radial-gradient(circle at 35% 28%, #ffd2bf, var(--clawd) 70%); color: #1b1226; border-color: #ffe3d6; box-shadow: 0 0 18px rgba(215,119,87,0.7); }
+  .tb.big { width: 82px; height: 82px; font-size: 13px; }
+  .tb.sm { width: 46px; height: 38px; border-radius: 12px; font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .tb, .tb.on { transition: none; transform: none; } }
 </style>
 
 <div id="stage"><canvas id="game" width="384" height="216" tabindex="0" aria-label="CLAWD: EXIT CODE 0, a platform game"></canvas></div>
 
 <div id="touch" hidden>
-  <div id="stick" role="application" aria-label="movement stick"><div id="knob"></div></div>
-  <div class="cluster acts">
-    <button class="k" id="t-special" data-a="special">task</button>
-    <button class="k" id="t-dash" data-a="dash">bash</button>
-    <button class="k" id="t-attack" data-a="attack">claw</button>
-    <button class="k" id="t-jump" data-a="jump">jump</button>
-  </div>
-  <button class="k" id="pause" data-a="pause" aria-label="pause">II</button>
+  <div id="stick"><div id="knob"></div></div>
+  <div class="tb big" id="t-jump" data-a="jump">JUMP</div>
+  <div class="tb" id="t-attack" data-a="attack">CLAW</div>
+  <div class="tb" id="t-dash" data-a="dash">BASH</div>
+  <div class="tb" id="t-special" data-a="special">TASK</div>
+  <div class="tb sm" id="pause" data-a="pause">II</div>
 </div>
 
 <script>
@@ -131,17 +118,16 @@
   };
 
   // ---------- input ----------
-  const KEYMAP = {
-    ArrowLeft: 'left', KeyA: 'left',
-    ArrowRight: 'right', KeyD: 'right',
-    ArrowUp: 'up', KeyW: 'up',
-    ArrowDown: 'down', KeyS: 'down',
-    Space: 'jump', KeyZ: 'jump', KeyK: 'jump',
-    KeyX: 'attack', KeyJ: 'attack',
-    KeyC: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyL: 'dash',
-    KeyV: 'special', KeyE: 'special', KeyI: 'special',
-    Enter: 'start', Escape: 'pause', KeyP: 'pause',
+  // code -> action, rebuilt from the save (see input.rebuild). Two slots per action; null = unbound.
+  const KEYMAP = {};
+  const DEFAULT_KEYS = {
+    left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
+    jump: ['KeyZ', 'Space'], attack: ['KeyX', 'KeyJ'], dash: ['KeyC', 'ShiftLeft'], special: ['KeyV', 'KeyE'],
+    start: ['Enter', null], pause: ['Escape', 'KeyP'],
   };
+  const DEFAULT_PAD = { jump: [0], attack: [2], dash: [1, 5, 7], special: [3, 4], start: [9], pause: [8] };     // d-pad and left stick stay fixed for movement
+  const PAD_ACTIONS = Object.keys(DEFAULT_PAD);
+  const RESERVED_KEYS = ['KeyF', 'KeyM', 'Tab'];     // fullscreen, mute, focus: never bindable
   const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'dash', 'special', 'start', 'pause'];
   const held = {}, queued = {}, prev = {};
   const input = (G.input = { down: {}, pressed: {}, released: {}, any: false, padActive: false, locked: false });
@@ -153,6 +139,7 @@
     const a = KEYMAP[e.code];
     if (G.audio) G.audio.unlock();
     if (e.metaKey || e.ctrlKey) return;
+    if (input.capture) { e.preventDefault(); if (!e.repeat) input.capture(e.code); return; }   // the controls screen is listening for a key
     if (a) {
       e.preventDefault();
       if (!e.repeat) { held[a]++; queued[a] = true; anyQueued = true; held['_' + e.code] = a; }
@@ -167,6 +154,41 @@
   window.addEventListener('blur', () => { ACTIONS.forEach((a) => (held[a] = 0)); for (const k in held) if (k[0] === '_') held[k] = null; });
   window.addEventListener('pointerdown', () => { if (G.audio) G.audio.unlock(); anyQueued = true; });
 
+  input.defaultKeys = () => JSON.parse(JSON.stringify(DEFAULT_KEYS));
+  input.padActions = PAD_ACTIONS;
+  G.isAction = (n) => n === 'move' || ACTIONS.includes(n);
+  input.reserved = (code) => RESERVED_KEYS.includes(code);
+  input.rebuild = () => {
+    const sv = G.save && G.save.data.keys, b = (input.binds = {});
+    for (const c in KEYMAP) delete KEYMAP[c];
+    for (const a of ACTIONS) {
+      const src = sv && Array.isArray(sv[a]) ? sv[a] : DEFAULT_KEYS[a];
+      b[a] = [0, 1].map((i) => (typeof src[i] === 'string' && !RESERVED_KEYS.includes(src[i]) ? src[i] : null));
+      for (const c of b[a]) if (c) KEYMAP[c] = a;
+    }
+    const sp = (sv && sv.pad) || {}, pb = (input.padBinds = {});
+    for (const a of PAD_ACTIONS) pb[a] = (a in sp ? [].concat(sp[a]) : DEFAULT_PAD[a]).filter((i) => Number.isInteger(i) && i >= 0 && i < 32);
+    for (const a of ACTIONS) held[a] = 0;
+    for (const k in held) if (k[0] === '_') held[k] = null;
+  };
+  const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'BACK', 'START', 'L3', 'R3', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'HOME'];
+  G.padLabel = (i) => PAD_NAMES[i] || 'BTN' + i;
+  const KEY_NAMES = { ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN', Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', ControlLeft: 'CTRL', ControlRight: 'CTRL', AltLeft: 'ALT', AltRight: 'ALT', Escape: 'ESC', Enter: 'ENTER', NumpadEnter: 'ENTER', Backspace: 'BKSP', Delete: 'DEL', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Backquote: '`', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', CapsLock: 'CAPS', Insert: 'INS', Home: 'HOME', End: 'END', PageUp: 'PGUP', PageDown: 'PGDN' };
+  G.keyLabel = (code) => {
+    if (!code) return '';
+    if (KEY_NAMES[code]) return KEY_NAMES[code];
+    let m = /^Key([A-Z])$/.exec(code) || /^Digit(\d)$/.exec(code);
+    if (m) return m[1];
+    if ((m = /^Numpad(.+)$/.exec(code))) return 'N' + (KEY_NAMES[code.slice(6)] || m[1].toUpperCase());
+    return code.toUpperCase();
+  };
+  // label of an action's first bound key ('Z'), or both ('Z/SPACE') with both = true; '?' if unbound
+  G.actionLabel = (action, both) => {
+    if (action === 'move') { const b = input.binds, l = b.left[0] || b.left[1], r = b.right[0] || b.right[1]; return /^Arrow/.test(l) && /^Arrow/.test(r) ? 'ARROWS' : G.keyLabel(l) + '/' + G.keyLabel(r); }
+    const ks = ((input.binds && input.binds[action]) || []).filter(Boolean).map(G.keyLabel);
+    return ks.length ? (both ? ks.filter((k, i) => ks.indexOf(k) === i).join('/') : ks[0]) : '?';
+  };
+
   function pollPad(state) {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const p of pads) {
@@ -175,19 +197,21 @@
       const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
       const s = {
         left: b(14) || ax < -0.4, right: b(15) || ax > 0.4, up: b(12) || ay < -0.55, down: b(13) || ay > 0.55,
-        jump: b(0), attack: b(2), dash: b(1) || b(5) || b(7), special: b(3) || b(4), start: b(9), pause: b(8),
       };
+      for (const a of PAD_ACTIONS) s[a] = input.padBinds[a].some(b);
       for (const a of ACTIONS) if (s[a]) { state[a] = true; input.padActive = true; }
       break;
     }
   }
+  // after a rebinding: buttons held right now must not count as a fresh press under the new mapping
+  input.settle = () => { const st = {}; if (padSeen) pollPad(st); for (const a of ACTIONS) if (st[a]) prev[a] = true; };
   // called once per fixed update
   input.poll = () => {
     const state = {};
     for (const a of ACTIONS) state[a] = held[a] > 0 || !!queued[a];
     if (padSeen) pollPad(state);
     if (input.script) for (const a of ACTIONS) if (input.script[a]) state[a] = true;   // test harness
-    if (input.touch) for (const a of ACTIONS) if (input.touch[a]) state[a] = true;     // on-screen buttons
+    if (input.touch) for (const a of ACTIONS) if (input.touch[a] || (input.tq && input.tq[a])) state[a] = true;     // on-screen buttons (tq: a press the game has not seen yet)
     input.any = anyQueued;
     for (const a of ACTIONS) {
       const d = state[a] && !input.locked;
@@ -197,6 +221,7 @@
       prev[a] = d;
       if (input.pressed[a]) input.any = true;
       queued[a] = false;
+      if (input.tq) input.tq[a] = false;
     }
     anyQueued = false;
     // menu helpers: confirm/back on any of the usual keys
@@ -216,7 +241,9 @@
     seen: {},               // cutscenes / world cards / boss intros
     node: 0,                // cursor on the map
     deaths: 0, tokens: 0, finished: false,
-    opt: { music: 0.7, sfx: 0.8, voice: 1, shake: 1, min: 0 },
+    opt: { music: 0.7, sfx: 0.8, voice: 1, shake: 1, min: 0, diffPreset: 'normal', bossPct: 0, npcExtra: 0, npcMult: 100 },
+    coopDiff: { preset: 'coop', bossPct: 50, npcExtra: 0, npcMult: 100 },     // the difficulty profile used while hosting a co-op game
+    keys: null,             // custom key bindings { action: [code, code], pad: { action: [button, ...] } }; null = defaults. Survives "erase save", like opt.
   });
   G.save = {
     data: fresh(),
@@ -225,14 +252,16 @@
         const raw = localStorage.getItem(SAVE_KEY);
         if (raw) {
           const d = JSON.parse(raw), f = fresh();
-          this.data = Object.assign(f, d, { tools: Object.assign(f.tools, d.tools), opt: Object.assign(f.opt, d.opt) });
+          this.data = Object.assign(f, d, { tools: Object.assign(f.tools, d.tools), opt: Object.assign(f.opt, d.opt), coopDiff: Object.assign(f.coopDiff, d.coopDiff) });
         }
+        G.input.rebuild();
       } catch (e) { /* private mode etc. - play without saving */ }
     },
     write() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
-    reset() { const opt = this.data.opt; this.data = fresh(); this.data.opt = opt; this.write(); },
+    reset() { const opt = this.data.opt, coopDiff = this.data.coopDiff, keys = this.data.keys; this.data = fresh(); this.data.opt = opt; this.data.coopDiff = coopDiff; this.data.keys = keys; this.write(); },
     sparkCount() { let n = 0; for (const k in this.data.sparks) for (const s of this.data.sparks[k]) if (s) n++; return n; },
   };
+  input.rebuild();
 })();
 
 </script>
@@ -2673,7 +2702,15 @@ G.VOICE = {
       if (this.rise) this.liquidY = this.ph + 30;
       this.snapCam();
     }
+    // the players that count for level mechanics: everyone alive (just Clawd when playing alone)
+    players() { return (this.net === 'host' && this.p2 ? [this.me, this.p2] : [this.player]).filter((q) => !q.dead); }
     snapshot() { return { cp: this.cpIndex, tokens: this.tokens, got: Array.from(this.got), sparks: this.sparks.slice(), clock: this.clock, kills: this.kills, hits: this.hits }; }
+
+    // does any living player overlap this tile?
+    anyOn(tx, ty) {
+      for (const q of this.players()) if (q.x < tx * T + T && q.x + q.w > tx * T && q.y < ty * T + T && q.y + q.h > ty * T) return true;
+      return false;
+    }
 
     // ---------- tiles ----------
     tile(tx, ty) {
@@ -2850,9 +2887,13 @@ G.VOICE = {
     // ---------- update ----------
     update(dt) {
       if (this.net === 'guest') return G.coop.guestUpdate(this, dt);
+      if (G.diff) {                                   // new creatures (also runtime spawns) get the difficulty settings exactly once
+        const cfg = this._diff === undefined ? (this._diff = G.diff.cfgFor(this)) : this._diff;
+        if (cfg && !cfg.neutral) for (const e of this.ents) if (!e._scaled) G.diff.scale(e, cfg);
+      }
       this.trauma = Math.max(0, this.trauma - dt * 2.2);
       if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 3);
-      if (this.hitstop > 0) { this.hitstop -= dt; return; }
+      if (this.hitstop > 0) { this.hitstop -= dt; if (this.net === 'host') G.coop.hostIdle(this); return; }     // the world holds still, the partner does not
       this.time += dt;
       const p = this.player;
       if (!p.dead && !this.frozen) this.clock += dt;
@@ -2864,14 +2905,16 @@ G.VOICE = {
         if (this.hasBlink === undefined) this.hasBlink = this.tiles.includes(BLINK_A) || this.tiles.includes(BLINK_B);
         if (this.hasBlink) {
           const want = ph === 0 ? BLINK_A : BLINK_B;
-          const x0 = Math.floor(p.x / T), x1 = Math.floor((p.x + p.w) / T), y0 = Math.floor(p.y / T), y1 = Math.floor((p.y + p.h) / T);
-          for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (this.tile(tx, ty) === want) this.blinkHold.add(ty * this.w + tx);
+          for (const q of this.players()) {
+            const x0 = Math.floor(q.x / T), x1 = Math.floor((q.x + q.w) / T), y0 = Math.floor(q.y / T), y1 = Math.floor((q.y + q.h) / T);
+            for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (this.tile(tx, ty) === want) this.blinkHold.add(ty * this.w + tx);
+          }
           if (Math.abs(p.x - this.cam.x - W / 2) < W) G.audio.sfx(ph ? 'tock' : 'tick');
         }
       }
       if (this.blinkHold.size) for (const i of this.blinkHold) {
         const tx = i % this.w, ty = (i / this.w) | 0;
-        if (!(p.x < tx * T + T && p.x + p.w > tx * T && p.y < ty * T + T && p.y + p.h > ty * T)) this.blinkHold.delete(i);
+        if (!this.anyOn(tx, ty)) this.blinkHold.delete(i);
       }
       // crumbling blocks
       for (const [i, c] of this.crumble) {
@@ -2880,7 +2923,7 @@ G.VOICE = {
         const tx = i % this.w, ty = (i / this.w) | 0;
         if (c.s === 1) { c.s = 2; c.t = 2.6; this.burst(tx * T + 8, ty * T + 4, 7, ['#cbb894', '#8a7a5c'], 50, 260); G.audio.sfx('crumble'); }
         else if (c.s === 2) {
-          if (p.x < tx * T + T && p.x + p.w > tx * T && p.y < ty * T + T && p.y + p.h > ty * T) c.t = 0.2;
+          if (this.anyOn(tx, ty)) c.t = 0.2;
           else { this.crumble.delete(i); this.dust(tx * T + 8, ty * T + 8, 4); }
         }
       }
@@ -2896,9 +2939,10 @@ G.VOICE = {
       }
       // rising liquid
       if (this.rise) {
-        if (!this.rising && p.y < this.rise.trigger * T) { this.rising = true; G.audio.sfx('roar'); this.shake(0.5); }
-        if (this.rising && !p.dead && !this.frozen) {
-          const gap = this.liquidY - (p.y + p.h);
+        const ps = this.players().filter((q) => !q.lagging);
+        if (!this.rising && ps.some((q) => q.y < this.rise.trigger * T)) { this.rising = true; G.audio.sfx('roar'); this.shake(0.5); }
+        if (this.rising && ps.length && !this.frozen) {
+          const gap = this.liquidY - Math.max(...ps.map((q) => q.y + q.h));      // measured from the lowest player: nobody is left behind
           this.liquidY -= (this.rise.speed + Math.max(0, gap - 130) * 1.2) * dt;
           this.liquidY = Math.max(this.liquidY, (this.rise.top || 0) * T);
         }
@@ -2943,14 +2987,37 @@ G.VOICE = {
     interact() {
       const p = this.player;
       if (p.dead || p.gone) return;
+      this.interactCombat(p);
+      this.interactGoals(p);
+    }
+    // what is under a player's feet that hurts: false, true (spikes), 'liq' or 'pit'
+    hazardAt(p) {
+      const x0 = Math.floor((p.x + 1) / T), x1 = Math.floor((p.x + p.w - 1) / T), y0 = Math.floor((p.y + 1) / T), y1 = Math.floor((p.y + p.h - 1) / T);
+      let hz = false;
+      for (let ty = y0; ty <= y1 && !hz; ty++) for (let tx = x0; tx <= x1; tx++) {
+        const t = this.tile(tx, ty);
+        if (t === SPIKE_U) { if (p.y + p.h > ty * T + 9 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
+        else if (t === SPIKE_D) { if (p.y < ty * T + 7 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
+        else if (t === LIQ) { if (p.y + p.h > ty * T + 6) hz = 'liq'; }
+      }
+      if (this.liquidY !== null && p.y + p.h > this.liquidY + 5) hz = 'liq';
+      if (p.y > this.ph + 24) hz = 'pit';
+      return hz;
+    }
+    // give hit points back; in co-op the partner owns its own hit points, so it is told instead
+    heal(q, n, safe) {
+      if (this.net === 'host' && q === this.p2) { G.coop.healP2(n, safe); return; }
+      q.hp = Math.min(q.maxHp, q.hp + n);
+    }
+    interactCombat(p) {
       // claw
       if (p.atkT > 0 && p.atkLive) {
         const box = p.atkBox();
         for (const e of this.ents) {
-          if (e.dead || e.hitId === p.atkId || e.noHit) continue;
+          if (e.dead || e[p.hitKey] === p.atkId || e.noHit) continue;
           for (const b of e.hurtboxes()) {
             if (!G.overlap(box, b)) continue;
-            e.hitId = p.atkId;
+            e[p.hitKey] = p.atkId;
             const res = e.hit(p.atkDmg, p.atkDir === 'f' ? p.atkFace : 0, p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, 'swipe', b);
             if (res) p.onHit(e, res, b);
             break;
@@ -2972,9 +3039,9 @@ G.VOICE = {
         for (const b of e.harmboxes()) {
           if (!G.overlap(hb, b)) continue;
           if (p.dashT > 0 && e.dashable !== false) {
-            if (e.dashId !== p.dashId) { e.dashId = p.dashId; const res = e.hit(1, p.dashDx || p.face, 0, 'dash', b); if (res) { this.stop(0.05); this.shake(0.2); } }
+            if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; const res = e.hit(1, p.dashDx || p.face, 0, 'dash', b); if (res) { this.stop(0.05); this.shake(0.2); } }
           } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
-            const res = e.hit(1, 0, 1, 'stomp', b);
+            const res = e.hit(Math.max(1, e.hp), 0, 1, 'stomp', b);       // a stomp always kills in one hit, however tough the enemy has become
             p.y = b.y - p.h; p.bounce(1);
             if (res) { this.stop(0.05); }
           } else if (p.grace <= 0) p.hurt(e.dmg || 1, b.x + b.w / 2);
@@ -2982,26 +3049,22 @@ G.VOICE = {
         }
       }
       // spikes, liquid, pits
-      if (p.inv <= 0 || true) {
-        const x0 = Math.floor((p.x + 1) / T), x1 = Math.floor((p.x + p.w - 1) / T), y0 = Math.floor((p.y + 1) / T), y1 = Math.floor((p.y + p.h - 1) / T);
-        let hz = false;
-        for (let ty = y0; ty <= y1 && !hz; ty++) for (let tx = x0; tx <= x1; tx++) {
-          const t = this.tile(tx, ty);
-          if (t === SPIKE_U) { if (p.y + p.h > ty * T + 9 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
-          else if (t === SPIKE_D) { if (p.y < ty * T + 7 && p.x + p.w > tx * T + 2 && p.x < tx * T + 14) hz = true; }
-          else if (t === LIQ) { if (p.y + p.h > ty * T + 6) hz = 'liq'; }
-        }
-        if (this.liquidY !== null && p.y + p.h > this.liquidY + 5) hz = 'liq';
-        if (p.y > this.ph + 24) hz = 'pit';
-        if (hz) { if (hz === 'liq') { this.burst(p.x + 5, p.y + 8, 12, [this.th.liq, this.th.liqHi], 110, 300); G.audio.sfx('splash'); } p.hazard(); }
-      }
+      const hz = this.hazardAt(p);
+      if (hz) { if (hz === 'liq') { this.burst(p.x + 5, p.y + 8, 12, [this.th.liq, this.th.liqHi], 110, 300); G.audio.sfx('splash'); } p.hazard(); }
       // springs
       for (const s of this.springs) if (p.vy >= 0 && G.overlap(hb, s) && p.dashT <= 0 && !p.remote) p.spring(s);
+    }
+    interactGoals(p) {
       // checkpoints + exit + signs
       this.cps.forEach((c, i) => {
-        if (!c.on && Math.abs(p.x + p.w / 2 - c.x) < 12 && p.y + p.h > c.y - 34 && p.y < c.y) {
+        const inR = Math.abs(p.x + p.w / 2 - c.x) < 12 && p.y + p.h > c.y - 34 && p.y < c.y;
+        if (c.on && inR && this.net === 'host' && p === this.p2 && !c.healed2) {       // first visit of the partner to an active checkpoint
+          c.healed2 = true; this.heal(p, 99, { x: c.x - 5, y: c.y - p.h }); p.setSafe(c.x - 5, c.y - p.h); this.pop(p.x + 5, p.y - 12, 'committed ✓', C.okHi, true);
+        }
+        if (!c.on && inR) {
           for (const o of this.cps) o.on = false;
-          c.on = true; this.cpIndex = i; p.hp = Math.max(p.hp, p.maxHp); p.setSafe(c.x - 5, c.y - p.h);
+          c.on = true; this.cpIndex = i; this.heal(p, 99, { x: c.x - 5, y: c.y - p.h }); p.setSafe(c.x - 5, c.y - p.h);
+          if (this.net === 'host') { c.healed2 = true; for (const q of [this.me, this.p2]) if (q && !q.dead && q !== p) this.heal(q, 99); }
           this.ring(c.x, c.y - 22, 3, 26, C.ok, 0.4); this.burst(c.x, c.y - 22, 14, [C.ok, C.okHi, '#fff'], 100, 100, { glow: 1 });
           this.pop(c.x, c.y - 36, 'committed ✓', C.okHi, true);
           G.audio.sfx('checkpoint');
@@ -3016,13 +3079,15 @@ G.VOICE = {
     }
 
     updateItems(dt) {
-      const p = this.player, pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
+      const p = this.player, pcx = p.x + p.w / 2, pcy = p.y + p.h / 2, ps = this.players();
       for (const it of this.items) {
         if (it.dead) continue;
         if (it.loose) {
           it.t += dt;
-          if (it.t > 0.35 && !p.dead) {            // drawn to Clawd
-            const dx = pcx - it.x, dy = pcy - it.y, d = Math.hypot(dx, dy) || 1, pull = Math.min(700, 160 + it.t * 500);
+          if (it.t > 0.35 && ps.length) {            // drawn to the nearest living Clawd
+            let tg = ps[0];
+            if (ps.length > 1 && Math.hypot(ps[1].x - it.x, ps[1].y - it.y) < Math.hypot(tg.x - it.x, tg.y - it.y)) tg = ps[1];
+            const dx = tg.x + tg.w / 2 - it.x, dy = tg.y + tg.h / 2 - it.y, d = Math.hypot(dx, dy) || 1, pull = Math.min(700, 160 + it.t * 500);
             it.vx = G.damp(it.vx, (dx / d) * pull, 8, dt); it.vy = G.damp(it.vy, (dy / d) * pull, 8, dt);
           } else {
             it.vy += 520 * dt;
@@ -3044,7 +3109,7 @@ G.VOICE = {
         this.tokens++; p.addMeter(it.loose ? 2 : 3);
         this.spark(it.x, it.y, C.goldHi, 4); G.audio.sfx('token');
         // every 25 tokens buys back a pip
-        if (this.tokens % 25 === 0 && p.hp < p.maxHp) { p.hp++; this.pop(p.x + 5, p.y - 12, '25 tokens: +1', C.goldHi, true); G.audio.sfx('heal'); }
+        if (this.tokens % 25 === 0 && p.hp < p.maxHp) { this.heal(p, 1); this.pop(p.x + 5, p.y - 12, '25 tokens: +1', C.goldHi, true); G.audio.sfx('heal'); }
       } else if (it.kind === 'spark') {
         this.sparks[it.idx] = true;
         this.ring(it.x, it.y, 2, 30, C.clawdHi, 0.5); this.burst(it.x, it.y, 18, [C.clawd, C.clawdHi, '#fff3e4'], 130, 60, { glow: 1 });
@@ -3052,7 +3117,7 @@ G.VOICE = {
         this.stop(0.07); G.audio.sfx('spark'); p.addMeter(25);
         this.events.push('spark');
       } else if (it.kind === 'coffee') {
-        if (p.hp < p.maxHp) p.hp++;
+        if (p.hp < p.maxHp) this.heal(p, 1);
         this.pop(it.x, it.y - 10, '+1 coffee', C.paper); this.burst(it.x, it.y, 8, [C.paper, C.clawd], 70, 100);
         G.audio.sfx('heal');
       }
@@ -3141,9 +3206,10 @@ G.VOICE = {
       for (const e of this.ents) if (!e.dead && !e.front) e.draw(g, cx, cy);
       p.draw(g, cx, cy);
       if (this.partner) G.coop.drawPartner(g, this, cx, cy);
+      if (this.net) G.coop.drawDowned(g, this, cx, cy);
       for (const e of this.ents) if (!e.dead && e.front) e.draw(g, cx, cy);
       // projectiles
-      for (const q of this.projs) if (!q.dead) this.drawProj(g, q, cx, cy);
+      for (const q of this.projs) if (!q.dead && !(q.wait > 0)) this.drawProj(g, q, cx, cy);
       // particles
       for (const q of this.fx) {
         const x = Math.round(q.x) - cx, y = Math.round(q.y) - cy, u = q.life / q.max;
@@ -3279,6 +3345,7 @@ G.VOICE = {
   class Player {
     constructor(L, x, y) {
       this.L = L; this.x = x; this.y = y; this.w = 10; this.h = 10; this.vx = 0; this.vy = 0; this.face = 1;
+      this.hitKey = 'hitId'; this.dashKey = 'dashId';        // per-player marks on enemies, so two players never mask each other's hits
       this.tools = G.save.data.tools;
       this.maxHp = 5; this.hp = this.maxHp;
       this.onGround = false; this.coyote = 0; this.jumpBuf = 0; this.jumping = false;
@@ -3981,7 +4048,7 @@ G.VOICE = {
       super(L, 0, 0, w, h);
       this.x = x - w / 2; this.y = y - h;
       this.hp = this.maxHp = hp; this.active = false; this.passive = true; this.always = true; this.keep = true;
-      this.stompable = false; this.isBoss = true; this.phase = 1; this.st = 'wait'; this.st_t = 0; this.n = 0; this.kb = 0; this.dying = false; this.dieT = 0;
+      this.stompable = false; this.isBoss = true; this.dropN = 24; this.phase = 1; this.st = 'wait'; this.st_t = 0; this.n = 0; this.kb = 0; this.dying = false; this.dieT = 0;
     }
     set(st, t) { this.st = st; this.st_t = t || 0; this.n = 0; }
     start() { this.active = true; this.passive = false; this.set('idle', 1); }
@@ -4011,7 +4078,7 @@ G.VOICE = {
       if (this.dieT >= dur && !this.gone) {
         this.gone = true; this.dead = true; this.keep = true;
         this.L.explode(this.cx, this.cy, 46, cols); this.L.flashScreen(1); this.L.shake(1); G.audio.sfx('bigExplode');
-        this.L.drop(this.cx, this.cy, 24);
+        this.L.drop(this.cx, this.cy, this.dropN);
         this.L.events.push('bossDead');
         return true;
       }
@@ -4219,7 +4286,7 @@ G.VOICE = {
       if (this.dying) {
         this.dieT += dt;
         if (Math.random() < 0.3) { const h = G.pick(this.heads); L.explode(h.x + G.rand(-14, 14), h.y + G.rand(-10, 10), G.rand(8, 14), ['#fff', '#4ec9b0', '#e05a8a']); G.audio.sfx('explode', { vol: 0.5 }); }
-        if (this.dieT > 2.2 && !this.gone) { this.gone = true; this.dead = true; L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); for (const h of this.heads) L.explode(h.x, h.y, 34, ['#fff', h.def.hi, h.def.main]); L.drop(W / 2, 100, 24); L.events.push('bossDead'); }
+        if (this.dieT > 2.2 && !this.gone) { this.gone = true; this.dead = true; L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); for (const h of this.heads) L.explode(h.x, h.y, 34, ['#fff', h.def.hi, h.def.main]); L.drop(W / 2, 100, this.dropN); L.events.push('bossDead'); }
         for (const h of this.heads) { h.vy += 500 * dt; h.y = Math.min(FLOOR - 10, h.y + h.vy * dt); }
         return;
       }
@@ -4480,7 +4547,7 @@ G.VOICE = {
         this.dieT += dt;
         const k = Math.floor(this.dieT / 0.14);
         if (k !== this.lastK && k < this.N) { this.lastK = k; const s = this.segPos(this.N - 1 - k); L.explode(s.x, s.y, 12, ['#fff', '#f3d58a', '#c2924a']); G.audio.sfx('explode', { vol: 0.6 }); L.shake(0.3); this.popped = k + 1; }
-        if (this.dieT > this.N * 0.14 + 0.6 && !this.gone) { this.gone = true; this.dead = true; L.explode(this.hx, this.hy, 40, ['#fff', '#f3d58a', '#ff7a59']); L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); L.drop(this.hx, this.hy, 24); L.events.push('bossDead'); }
+        if (this.dieT > this.N * 0.14 + 0.6 && !this.gone) { this.gone = true; this.dead = true; L.explode(this.hx, this.hy, 40, ['#fff', '#f3d58a', '#ff7a59']); L.flashScreen(1); L.shake(1); G.audio.sfx('bigExplode'); L.drop(this.hx, this.hy, this.dropN); L.events.push('bossDead'); }
         return;
       }
       if (!this.active) { this.path = 'coil'; }
@@ -4723,10 +4790,10 @@ G.VOICE = {
   L['1-1'] = {
     world: 1, name: 'hello_world.py', blurb: "print('hello, world'). Then squash the first few bugs.",
     signs: [
-      'MOVE with the [ARROWS] and JUMP with [Z] or [SPACE] - hold it to go higher.',
-      'Bugs. Swipe them with [X] - or simply land on them.',
+      'MOVE with the [move] and JUMP with [jump] - hold it to go higher.',
+      'Bugs. Swipe them with [attack] - or simply land on them.',
       'Between two walls? Jump at one, then jump again. Clawd has grippy legs.',
-      'Land on a flying bug, or hold [DOWN] and swipe in mid-air, to bounce off it.',
+      'Land on a flying bug, or hold [down] and swipe in mid-air, to bounce off it.',
     ],
     map: join(
       seg(['             ooo      ', '                      ', '  P    T              ']),
@@ -4776,7 +4843,7 @@ G.VOICE = {
   // =====================================================================
   L['2-1'] = {
     world: 2, name: 'npm_install.sh', blurb: 'added 1,402 packages in 3s. 47 vulnerabilities.',
-    signs: ['New tool: BASH. Press [C] to dash. It smashes cracked blocks - and bugs.', 'BASH works in mid-air too. Jump, then bash across.'],
+    signs: ['New tool: BASH. Press [dash] to dash. It smashes cracked blocks - and bugs.', 'BASH works in mid-air too. Jump, then bash across.'],
     map: join(
       seg(['            ############', '              %%        ', '              %%   ooo  ', '  P    T      %%        '], 13),
       seg(['       ooo                ', '                          ', '    m       b    m   g    '], 13),
@@ -4802,7 +4869,7 @@ G.VOICE = {
   };
   L['2-3'] = {
     world: 2, name: 'version_hell.lock', blurb: 'Dependency hell goes down, not across. Bash through the floor.',
-    signs: ['The way on is DOWN. Jump, hold [DOWN] and press [C] to bash through the cracked floor.'],
+    signs: ['The way on is DOWN. Jump, hold [down] and press [dash] to bash through the cracked floor.'],
     map: [
       '##########################',
       '#                        #',
@@ -4868,7 +4935,7 @@ G.VOICE = {
   // =====================================================================
   L['3-1'] = {
     world: 3, name: 'malloc.c', blurb: 'malloc() without free(). Mind the puddles.',
-    signs: ['New tool: SUBAGENTS. Tokens and squashed bugs fill the meter. When it is full, press [V].'],
+    signs: ['New tool: SUBAGENTS. Tokens and squashed bugs fill the meter. When it is full, press [special].'],
     map: join(
       seg(['        ooo           ', '                      ', '  P    T       s      ']),
       seg(['##############################', '    i      i       i     i    ', '                              ', '                              ', '         o        o           ', '                s             ', '#####www####www#######www#####', '##############################', '##############################'], 0),
@@ -5182,7 +5249,7 @@ G.VOICE = {
           ug.fillStyle = '#0d0a12'; ug.fillRect(0, 0, W, 14); ug.fillRect(0, H - BAR - 8, W, BAR + 8);
           S.cap.draw(ug, H - 22);
           if (S.skip > 0.1) { G.text(ug, 'skipping', W - 44, 4, C.dim, { tiny: true }); ug.fillStyle = C.clawd; ug.fillRect(W - 44, 11, Math.min(34, S.skip / 0.9 * 34), 1); }
-          else if (S.total < 4) G.text(ug, 'HOLD ENTER TO SKIP', W - 6, 4, '#4a4458', { tiny: true, align: 'r' });
+          else if (S.total < 4) G.text(ug, 'HOLD ' + G.actionLabel('start') + ' TO SKIP', W - 6, 4, '#4a4458', { tiny: true, align: 'r' });
         }
       },
     };
@@ -5370,10 +5437,10 @@ G.VOICE = {
 
   // ---------- new tool ----------
   const TOOLS = {
-    bash: { name: 'Bash', voice: 'sys_bash', key: 'C', desc: 'Dash in any direction. Smashes through cracked blocks and bugs. Recharges when you land.' },
-    agents: { name: 'Subagents', voice: 'sys_agents', key: 'V', desc: 'Fill the context meter, then delegate: two tiny helpers hunt bugs for you.' },
-    sudo: { name: 'sudo', voice: 'sys_sudo', key: 'Z', desc: 'Elevated privileges. Jump again in mid-air.' },
-    opus: { name: 'Model upgrade', voice: 'sys_opus', key: 'X', desc: 'A bigger claw. Reaches further, hits twice as hard.' },
+    bash: { name: 'Bash', voice: 'sys_bash', act: 'dash', desc: 'Dash in any direction. Smashes through cracked blocks and bugs. Recharges when you land.' },
+    agents: { name: 'Subagents', voice: 'sys_agents', act: 'special', desc: 'Fill the context meter, then delegate: two tiny helpers hunt bugs for you.' },
+    sudo: { name: 'sudo', voice: 'sys_sudo', act: 'jump', desc: 'Elevated privileges. Jump again in mid-air.' },
+    opus: { name: 'Model upgrade', voice: 'sys_opus', act: 'attack', desc: 'A bigger claw. Reaches further, hits twice as hard.' },
   };
   G.TOOLS = TOOLS;
   G.CUT.tool = (key, end) => {
@@ -5393,9 +5460,9 @@ G.VOICE = {
           G.text(ug, tl.name, W / 2, 120, C.paper, { align: 'c', scale: 2, outline: K, shadow: K });
           const lines = G.wrap(tl.desc, 250);
           lines.forEach((ln, i) => G.text(ug, ln, W / 2, 146 + i * 11, '#c9bfd8', { align: 'c' }));
-          const kw = G.keycap(ug, W / 2 - 8, 146 + lines.length * 11 + 5, tl.key);
+          const kw = G.keycap(ug, W / 2 - 8, 146 + lines.length * 11 + 5, G.actionLabel(tl.act));
           void kw;
-          if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press Z', W / 2, H - 14, C.dim, { align: 'c', tiny: true });
+          if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press ' + G.actionLabel('jump'), W / 2, H - 14, C.dim, { align: 'c', tiny: true });
         },
       }],
       end,
@@ -5490,7 +5557,7 @@ G.VOICE = {
             G.ambient = '#f0d8c8';
             G.text(ug, 'exit code 0', W / 2, 86, C.okHi, { align: 'c', scale: 2, outline: K, shadow: K });
             G.text(ug, 'process finished successfully', W / 2, 112, C.paper, { align: 'c', outline: K });
-            if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press Z', W / 2, 150, C.paper, { align: 'c', tiny: true, outline: K });
+            if (t > 2 && ((t * 2) | 0) % 2) G.text(ug, 'press ' + G.actionLabel('jump'), W / 2, 150, C.paper, { align: 'c', tiny: true, outline: K });
           },
         },
       ],
@@ -5518,6 +5585,7 @@ G.VOICE = {
     let w = 0;
     for (const word of text.split(' ')) {
       const m = /^\[([^\]]+)\](.*)$/.exec(word);
+      if (m && G.isAction(m[1])) m[1] = G.actionLabel(m[1], m[1] === 'jump');     // [jump] -> the player's keys; anything else is drawn as written
       const it = m ? { key: m[1], tail: m[2], w: Math.max(11, G.textW(m[1], { tiny: true }) + 6) + (m[2] ? G.textW(m[2]) + 1 : 0) } : { s: word, w: G.textW(word) };
       if (w + it.w > maxW && lines[lines.length - 1].length) { lines.push([]); w = 0; }
       lines[lines.length - 1].push(it); w += it.w + 4;
@@ -5542,15 +5610,43 @@ G.VOICE = {
       { k: 'music', label: 'music' }, { k: 'sfx', label: 'sound' }, { k: 'voice', label: 'voices' },
       { k: 'min', label: 'minimum graphics', toggle: true }, { k: 'shake', label: 'screen shake', toggle: true }, { k: 'full', label: 'fullscreen', act: true },
     ];
+    // difficulty (solo). In a co-op game the host's co-op profile is used instead, so these rows are not shown then.
+    const range = (a, b, st) => { const r = []; for (let v = a; v <= b; v += st) r.push(v); return r; };
+    const hasDiff = !(G.coop && G.coop.open);
+    if (hasDiff) {
+      const at = items.findIndex((i) => i.k === 'full');
+      items.splice(at, 0,
+        { k: 'diffPreset', label: 'difficulty', choice: ['easy', 'normal', 'coop', 'hard', 'nightmare', 'custom'], fmt: (v) => v, wrap: true },
+        { k: 'bossPct', label: 'boss HP', choice: [0].concat(range(10, 100, 10)), fmt: (v) => (v ? '+' + v + '%' : 'off') },
+        { k: 'npcExtra', label: 'enemy hits', choice: range(0, 5, 1), fmt: (v) => '+' + v },
+        { k: 'npcMult', label: 'enemy HP', choice: range(100, 300, 25), fmt: (v) => v + '%' });
+    }
+    if (!G.mobile) items.push({ k: 'controls', label: 'controls', act: true });
     if (canErase) items.push({ k: 'erase', label: 'erase save', act: true });
     items.push({ k: 'back', label: 'back', act: true });
+    let sub = null;     // the controls screen, while open
+    const rh = items.length > 9 ? 11 : 14;
+    const cycle = (it, o, dir) => {
+      const c = it.choice; let i = c.indexOf(o[it.k]);
+      if (i < 0) { i = 0; for (let j = 0; j < c.length; j++) if (Math.abs(c[j] - o[it.k]) < Math.abs(c[i] - o[it.k])) i = j; }
+      i = it.wrap ? (i + dir + c.length) % c.length : G.clamp(i + dir, 0, c.length - 1);
+      o[it.k] = c[i];
+      if (it.k === 'diffPreset') { if (o.diffPreset !== 'custom') Object.assign(o, G.diff.PRESETS[o.diffPreset]); } else o.diffPreset = 'custom';   // editing a number leaves the preset
+      A.sfx('uiMove');
+    };
     let sel = 0, armed = false;
     return {
-      update() {
+      update(dt) {
+        if (sub) { sub.update(dt); return; }
         const I = G.input, o = SV().opt, it = items[sel];
         if (I.pressed.down) { sel = (sel + 1) % items.length; A.sfx('uiMove'); armed = false; }
         if (I.pressed.up) { sel = (sel + items.length - 1) % items.length; A.sfx('uiMove'); armed = false; }
         const dir = (I.pressed.right ? 1 : 0) - (I.pressed.left ? 1 : 0);
+        if (it.choice) {
+          if (dir) cycle(it, o, dir); else if (I.ok) cycle(it, o, 1);
+          else if (I.back) { G.save.write(); A.sfx('uiBack'); onClose(); }
+          return;
+        }
         if (dir && !it.act) {
           if (it.toggle) o[it.k] = o[it.k] ? 0 : 1; else o[it.k] = G.clamp(Math.round((o[it.k] + dir * 0.1) * 10) / 10, 0, 1);
           A.applyVolume(); if (it.k === 'min') G.applyMin(); A.sfx(it.k === 'voice' ? 'textSys' : 'uiMove');
@@ -5558,22 +5654,125 @@ G.VOICE = {
         if (I.ok) {
           if (it.toggle) { o[it.k] = o[it.k] ? 0 : 1; if (it.k === 'min') G.applyMin(); A.sfx('uiOk'); }
           else if (it.k === 'full') G.toggleFullscreen();
+          else if (it.k === 'controls') { A.sfx('uiOk'); sub = Controls(() => { sub = null; G.input.clear(); }); }
           else if (it.k === 'erase') { if (armed) { G.save.reset(); A.sfx('brk'); armed = false; onClose(true); } else { armed = true; A.sfx('warn'); } }
           else if (it.k === 'back') { G.save.write(); A.sfx('uiBack'); onClose(); }
         } else if (I.back) { G.save.write(); A.sfx('uiBack'); onClose(); }
       },
       draw(ug) {
-        const pw = 196, ph = items.length * 14 + 30, x = (W - pw) / 2, y = (H - ph) / 2;
+        if (sub) { sub.draw(ug); return; }
+        const pw = 196, ph = items.length * rh + 30 + (hasDiff ? 10 : 0), x = (W - pw) / 2, y = (H - ph) / 2;
         ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
         G.panel(ug, x, y, pw, ph, '#17131f', C.paper, '#0d0a12');
         G.text(ug, 'OPTIONS', x + 10, y + 8, C.clawd, { sp: 2 });
         items.forEach((it, i) => {
-          const yy = y + 26 + i * 14, on = i === sel, o = SV().opt;
-          if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(x + 4, yy - 3, pw - 8, 13); G.text(ug, '▸', x + 8, yy, C.clawd); }
+          const yy = y + 26 + i * rh, on = i === sel, o = SV().opt;
+          if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(x + 4, yy - 3, pw - 8, rh - 1); G.text(ug, '▸', x + 8, yy, C.clawd); }
           G.text(ug, it.k === 'erase' && armed && on ? 'really? press again' : it.label, x + 18, yy, on ? C.paper : C.dim);
-          if (!it.act && !it.toggle) for (let b = 0; b < 10; b++) { ug.fillStyle = b < Math.round(o[it.k] * 10) ? (on ? C.clawd : '#8a5a48') : '#3a3346'; ug.fillRect(x + pw - 74 + b * 6, yy + 1, 4, 6); }
+          if (it.choice) G.text(ug, it.fmt(o[it.k]), x + pw - 14, yy, on ? C.paper : C.dim, { align: 'r' });
+          else if (!it.act && !it.toggle) for (let b = 0; b < 10; b++) { ug.fillStyle = b < Math.round(o[it.k] * 10) ? (on ? C.clawd : '#8a5a48') : '#3a3346'; ug.fillRect(x + pw - 74 + b * 6, yy + 1, 4, 6); }
           else if (it.toggle) G.text(ug, o[it.k] ? 'on' : 'off', x + pw - 14, yy, o[it.k] ? C.ok : C.dim, { align: 'r' });
         });
+        if (hasDiff) G.text(ug, 'difficulty applies from the next level / restart', W / 2, y + ph - 11, '#6b6578', { tiny: true, align: 'c' });
+      },
+    };
+  }
+
+  // ---------- controls: rebind the keyboard (sub-screen of Options) ----------
+  function Controls(onClose) {
+    const ROWS = [['left', 'move left'], ['right', 'move right'], ['up', 'up / aim'], ['down', 'down'], ['jump', 'jump'], ['attack', 'swipe'], ['dash', 'bash'], ['special', 'subagents'], ['start', 'confirm'], ['pause', 'pause']];
+    const NEEDED = ['left', 'right', 'up', 'down', 'jump', 'attack', 'pause'];     // these keep at least one key, or the menus could not be reached
+    const n = ROWS.length + 2;
+    const clone = () => { const k = { pad: {} }; for (const [a] of ROWS) k[a] = G.input.binds[a].slice(); for (const a of G.input.padActions) k.pad[a] = G.input.padBinds[a].slice(); return k; };
+    const slots = () => (G.input.padActions.includes(ROWS[sel] && ROWS[sel][0]) ? 3 : 2);     // key 1, key 2, pad button(s)
+    let sel = 0, slot = 0, cap = false, capPad = null, note = '', noteT = 0;
+    const say = (t) => { note = t; noteT = 1.5; };
+    const commit = (keys) => { SV().keys = keys; G.save.write(); G.input.rebuild(); G.input.settle(); G.input.clear(); };
+    const assignPad = (a, btn) => {
+      const keys = clone(); let from = '';
+      if (btn >= 12 && btn <= 15) { say('the d-pad is fixed for moving'); A.sfx('warn'); return; }
+      for (const b of G.input.padActions) if (b !== a && keys.pad[b].includes(btn)) { keys.pad[b] = keys.pad[b].filter((x) => x !== btn); from = b; }
+      keys.pad[a] = [btn];
+      if (from) say(G.padLabel(btn) + ' taken from ' + from);
+      commit(keys); A.sfx('uiOk');
+    };
+    const assign = (a, i, code) => {
+      const keys = clone(), old = keys[a][i];
+      if (code === old) return;
+      let hit = null;
+      for (const [b] of ROWS) for (let j = 0; j < 2; j++) if (keys[b][j] === code) hit = [b, j];
+      if (hit) {
+        const [b, j] = hit;
+        if (!old && b !== a && NEEDED.includes(b) && !keys[b][1 - j]) { say(b + ' needs at least one key'); A.sfx('warn'); return; }
+        keys[b][j] = old;
+        say(old ? b + ' now uses ' + G.keyLabel(old) : G.keyLabel(code) + ' taken from ' + b);
+      }
+      keys[a][i] = code;
+      commit(keys); A.sfx('uiOk');
+    };
+    const clearSlot = (a, i) => {
+      const keys = clone();
+      if (i === 2) { keys.pad[a] = []; commit(keys); A.sfx('uiBack'); return; }
+      if (NEEDED.includes(a) && !keys[a][1 - i]) { say('needs at least one key'); A.sfx('warn'); return; }
+      keys[a][i] = null; commit(keys); A.sfx('uiBack');
+    };
+    const pads = () => { const l = []; for (const p of navigator.getGamepads ? navigator.getGamepads() : []) if (p && p.connected) { p.buttons.forEach((b, i) => { if (b.pressed) l.push(i); }); break; } return l; };
+    const listen = () => {
+      cap = true; capPad = slot === 2 ? pads() : null;     // buttons already down are ignored until they are let go
+      G.input.capture = (code) => {
+        if (slot === 2 && code !== 'Escape' && code !== 'Backspace' && code !== 'Delete') return;     // waiting for a pad button
+        G.input.capture = null; cap = false; capPad = null;
+        const a = ROWS[sel][0];
+        if (code === 'Escape') { A.sfx('uiBack'); return; }
+        if (code === 'Backspace' || code === 'Delete') { clearSlot(a, slot); return; }
+        if (G.input.reserved(code)) { say(G.keyLabel(code) + ' is reserved'); A.sfx('warn'); return; }
+        assign(a, slot, code);
+      };
+    };
+    return {
+      update(dt) {
+        if (noteT > 0) noteT -= dt;
+        if (cap) {
+          if (capPad) {
+            const now = pads(), fresh = now.filter((i) => !capPad.includes(i));
+            capPad = capPad.filter((i) => now.includes(i));
+            if (fresh.length) { const a = ROWS[sel][0]; G.input.capture = null; cap = false; capPad = null; assignPad(a, fresh[0]); }
+          }
+          return;
+        }
+        const I = G.input;
+        if (I.pressed.down) { sel = (sel + 1) % n; A.sfx('uiMove'); }
+        if (I.pressed.up) { sel = (sel + n - 1) % n; A.sfx('uiMove'); }
+        if (I.pressed.left || I.pressed.right) { if (sel < ROWS.length) slot = G.clamp(slot + (I.pressed.right ? 1 : -1), 0, slots() - 1); A.sfx('uiMove'); }
+        if (sel < ROWS.length) slot = Math.min(slot, slots() - 1);
+        if (I.ok) {
+          if (sel < ROWS.length) { A.sfx('uiOk'); listen(); }
+          else if (sel === ROWS.length) { commit(null); say('defaults restored'); A.sfx('uiOk'); }
+          else { A.sfx('uiBack'); onClose(); }
+        } else if (I.back) { A.sfx('uiBack'); onClose(); }
+      },
+      draw(ug) {
+        const rh = 11, pw = 290, ph = n * rh + 40, x = (W - pw) / 2, y = (H - ph) / 2;
+        ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
+        G.panel(ug, x, y, pw, ph, '#17131f', C.paper, '#0d0a12');
+        G.text(ug, 'CONTROLS', x + 10, y + 8, C.clawd, { sp: 2 });
+        for (let i = 0; i < n; i++) {
+          const yy = y + 24 + i * rh, on = i === sel;
+          if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(x + 4, yy - 3, pw - 8, rh - 1); G.text(ug, '▸', x + 8, yy, C.clawd); }
+          if (i >= ROWS.length) { G.text(ug, i === ROWS.length ? 'reset to defaults' : 'back', x + 18, yy + 1, on ? C.paper : C.dim); continue; }
+          const a = ROWS[i][0];
+          G.text(ug, ROWS[i][1], x + 18, yy + 1, on ? C.paper : C.dim);
+          for (let j = 0; j < 3; j++) {
+            const cx = x + 98 + j * 62, me = on && j === slot;
+            if (j === 2 && !G.input.padActions.includes(a)) { G.text(ug, 'fixed', cx, yy + 1, '#6b6578', { tiny: true }); continue; }
+            if (me && cap) { G.text(ug, j === 2 ? 'press button' : 'press a key...', cx, yy + 1, C.gold, { tiny: true }); continue; }
+            const code = j < 2 ? G.input.binds[a][j] : 1, label = j < 2 ? (code ? G.keyLabel(code) : '-') : (G.input.padBinds[a].map(G.padLabel).join('/') || '-');
+            const w = G.keycap(ug, cx, yy - 2, label, label === '-' ? '#9a8fa8' : undefined);
+            if (me) { ug.strokeStyle = C.clawd; ug.lineWidth = 1; ug.strokeRect(cx - 0.5, yy - 2.5, w + 1, 12); }
+          }
+        }
+        const hint = cap ? 'esc cancel   bksp clear' : noteT > 0 ? note : 'jump: change   left/right: key 1 / key 2 / pad';
+        G.text(ug, hint, W / 2, y + ph - 11, noteT > 0 && !cap ? C.gold : '#6b6578', { tiny: true, align: 'c' });
       },
     };
   }
@@ -5676,7 +5875,7 @@ G.VOICE = {
             G.text(ug, s, 250, y, on ? C.paper : '#8d8798', { outline: K });
           });
           if (confirm) { G.panel(ug, 92, 92, 200, 40, '#17131f', C.paper); G.text(ug, 'Start over? This erases your save.', W / 2, 100, C.paper, { align: 'c' }); G.text(ug, 'Z yes   X no', W / 2, 116, C.clawdHi, { align: 'c' }); }
-          G.text(ug, 'ARROWS + Z   •   F FULLSCREEN   •   M MUTE', W / 2, H - 10, '#6b6578', { align: 'c', tiny: true });
+          G.text(ug, G.actionLabel('move') + ' + ' + G.actionLabel('jump') + '   •   F FULLSCREEN   •   M MUTE', W / 2, H - 10, '#6b6578', { align: 'c', tiny: true });
           if (SV().finished) G.text(ug, '✓ build passing', 8, 8, C.ok, { tiny: true });
         }
         if (opts) opts.draw(ug);
@@ -5768,7 +5967,7 @@ G.VOICE = {
         if (SV().best[id]) G.text(g, 'best ' + G.fmtTime(SV().best[id]), px + pw, yb, C.dim, { align: 'r' });
         if (!def.boss) { const sp = SV().sparks[id] || []; for (let k = 0; k < 3; k++) g.drawImage((sp[k] ? S.spark : S.sparkGhost)[0], px + 62 + k * 13, yb - 4); }
         G.text(g, th.time + ' AM', px + pw, 4, '#6b6578', { tiny: true, align: 'r' });
-        G.keycap(g, px, H - 17, 'Z'); G.text(g, 'checkout', px + 15, H - 14, C.dim); G.keycap(g, px + 78, H - 17, 'ESC'); G.text(g, 'title', px + 101, H - 14, C.dim);
+        { let hx = px; for (const [a, txt] of [['jump', 'checkout'], ['pause', 'title']]) { const w = G.keycap(g, hx, H - 17, G.actionLabel(a)); G.text(g, txt, hx + w + 4, H - 14, C.dim); hx += w + 4 + G.textW(txt) + 10; } }
         G.ambient = null;
       },
     };
@@ -5788,7 +5987,7 @@ G.VOICE = {
   function Play(id, snap) {
     const def = G.LEVELS[id], L = new G.Level(def, snap), th = L.th, p = L.player;
     const cap = new G.Caption();
-    let state = 'play', t = 0, wait = 0, sel = 0, opts = null, intro = null, res = null, failMsg = '', bars = 0, hpShake = 0, lastHp = p.hp, tokPop = 0, lastTok = L.tokens;
+    let state = 'play', pausedBy = '', gpause = false, fz = false, frozenBefore = false, t = 0, wait = 0, sel = 0, opts = null, intro = null, res = null, failMsg = '', bars = 0, hpShake = 0, lastHp = p.hp, tokPop = 0, lastTok = L.tokens;
     const say = (vid) => G.speak(cap, vid);
     const startFight = () => { state = 'play'; p.frozen = false; L.boss.start(); SV().seen['b' + id] = true; G.save.write(); A.music(def.boss === 'mono' ? 'final' : 'boss', { fade: 0.3 }); cap.text = ''; };
     const finish = () => {
@@ -5817,6 +6016,12 @@ G.VOICE = {
     };
     return {
       L,
+      getState: () => state,
+      // used by the co-op layer: the partner pauses or resumes the game for both of us
+      pauseFor(on, by) {
+        if (on && state === 'play' && !p.dead && !G.transitioning()) { state = 'paused'; sel = 0; pausedBy = by || ''; A.sfx('pause'); A.duck(0.35); if (L.net === 'host') G.coop.setState(state, failMsg, res); }
+        else if (!on && state === 'paused') { state = 'play'; pausedBy = ''; opts = null; A.sfx('pause'); A.duck(1); }
+      },
       enter() {
         A.intensity = 0;
         if (G.coop) G.coop.playEnter(L, cap);
@@ -5835,10 +6040,27 @@ G.VOICE = {
           const hs = G.coop.hostState;
           if (hs.st !== state) {
             state = hs.st;
+            if (state !== 'paused' && !opts) gpause = false;
             if (state === 'dead') { wait = 0.5; failMsg = hs.fm; }
             if (state === 'clear' && hs.rs) { res = { rows: hs.rs.rows, best: hs.rs.best, shown: 0, t: 0 }; A.music('clear'); }
             if (state === 'bossIntro') intro = { t: 0 };
           }
+          // either player can pause for both; either can resume. The guest's menu is local, the pause itself lives on the host.
+          if (opts) opts.update(dt);
+          else if (gpause) {
+            if (I.pressed.down) { sel = (sel + 1) % 3; A.sfx('uiMove'); }
+            if (I.pressed.up) { sel = (sel + 2) % 3; A.sfx('uiMove'); }
+            if (I.pressed.pause || ((I.pressed.jump || I.pressed.attack || I.pressed.start) && sel === 0)) { gpause = false; G.coop.rel('pz', { on: false }); A.sfx('pause'); }
+            else if (I.pressed.jump || I.pressed.attack || I.pressed.start) {
+              A.sfx('uiOk');
+              if (sel === 1) opts = Options(() => { opts = null; });
+              else { gpause = false; G.coop.disconnect(); }
+            }
+          } else if ((state === 'play' || state === 'paused') && (I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) {
+            gpause = true; sel = 0; G.coop.rel('pz', { on: true }); A.sfx('pause');
+          }
+          const wantFz = state === 'paused' || gpause;
+          if (wantFz) { if (!fz) { fz = true; frozenBefore = p.frozen; } p.frozen = true; } else if (fz) { fz = false; p.frozen = frozenBefore; }      // every frame: a shown snapshot must not unfreeze me
           t += dt; cap.update(dt);
           bars = G.damp(bars, state === 'bossIntro' || (L.boss && L.boss.dying) ? 1 : 0, 6, dt);
           if (hpShake > 0) hpShake -= dt;
@@ -5851,15 +6073,16 @@ G.VOICE = {
           L.update(dt);
           return;
         }
-        if (opts) { opts.update(dt); return; }
+        if (opts) { if (state === 'paused' && L.net === 'host') { G.coop.setState(state, failMsg, res); G.coop.pauseTick(L, dt); } opts.update(dt); return; }
         if (state === 'paused') {
+          if (L.net === 'host') { G.coop.setState(state, failMsg, res); G.coop.pauseTick(L, dt); }
           const items = 4;
-          if (I.pressed.pause || I.pressed.start && sel === 0) { state = 'play'; A.sfx('pause'); A.duck(1); return; }
+          if (I.pressed.pause || I.pressed.start && sel === 0) { state = 'play'; pausedBy = ''; A.sfx('pause'); A.duck(1); return; }
           if (I.pressed.down) { sel = (sel + 1) % items; A.sfx('uiMove'); }
           if (I.pressed.up) { sel = (sel + items - 1) % items; A.sfx('uiMove'); }
           if (I.pressed.jump || I.pressed.attack || I.pressed.start) {
             A.sfx('uiOk'); A.duck(1);
-            if (sel === 0) state = 'play';
+            if (sel === 0) { state = 'play'; pausedBy = ''; }
             else if (sel === 1) G.go(() => Play(id, def.boss ? null : L.snapshot()));
             else if (sel === 2) opts = Options(() => { opts = null; });
             else G.go(() => MapScene());
@@ -5883,7 +6106,7 @@ G.VOICE = {
             else startFight();
           }
         } else if (state === 'play') {
-          if ((I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) { state = 'paused'; sel = 0; A.sfx('pause'); A.duck(0.35); return; }
+          if ((I.pressed.pause || I.pressed.start) && !p.dead && !G.transitioning()) { state = 'paused'; sel = 0; pausedBy = ''; A.sfx('pause'); A.duck(0.35); if (L.net === 'host') G.coop.setState(state, failMsg, res); return; }
         }
         L.update(dt);
         for (const ev of L.events.splice(0)) {
@@ -5921,13 +6144,14 @@ G.VOICE = {
           const jx = hpShake > 0 ? Math.round(Math.sin(t * 90 + i) * 1.5) : 0, low = p.hp === 1 && i === 0 && ((t * 4) | 0) % 2;
           ug.drawImage(i < p.hp ? (low ? G.tint(S.pip, '#ffffff') : p.blue ? G.tint(S.pip, '#6aa8ff') : S.pip) : S.pipOff, 6 + i * 9 + jx, hudY);
         }
+        if (L.net) { ug.fillStyle = '#0d0a12'; ug.fillRect(6 + p.maxHp * 9, hudY + 1, 6, 6); ug.fillStyle = G.coop.dotColor(false); ug.fillRect(6 + p.maxHp * 9 + 1, hudY + 2, 4, 4); }
         if (L.partner) G.coop.drawPartnerHud(ug, L, hudY, p.tools.agents ? 19 : 11);
         if (p.tools.agents) {
           const full = p.meter >= 100, act = p.agents.length > 0;
           G.panel(ug, 6, hudY + 11, 46, 5, '#231d2e', K);
           ug.fillStyle = act ? '#ffe2c4' : full ? (((t * 6) | 0) % 2 ? '#ffffff' : C.clawdHi) : C.clawd;
           ug.fillRect(8, hudY + 13, Math.round(42 * (act ? p.agents[0].life / 11 : p.meter / 100)), 1);
-          if (full && !act) G.keycap(ug, 55, hudY + 8, 'V');
+          if (full && !act) G.keycap(ug, 55, hudY + 8, G.actionLabel('special'));
         }
         const tk = String(L.tokens), tw = G.textW(tk);
         ug.drawImage(S.token[0], W - 20 - tw, hudY - 1 - (tokPop > 0 ? 1 : 0)); G.text(ug, tk, W - 8, hudY, tokPop > 0 ? C.goldHi : C.paper, { align: 'r', outline: K });
@@ -5939,6 +6163,7 @@ G.VOICE = {
           G.panel(ug, Math.round(-w + (w + 6) * k), 30, w, 15, '#17131f', '#3a3346');
           ug.fillStyle = th.accent; ug.fillRect(Math.round(-w + (w + 6) * k) + 2, 31, 2, 13);
           G.text(ug, label, Math.round(-w + (w + 6) * k) + 9, 34, C.paper);
+          if (L.net && G.coop.diffLine) G.text(ug, G.coop.diffLine, Math.round(-w + (w + 6) * k) + 9, 49, '#ffd27a', { tiny: true });
         }
         // sign bubbles
         if (L.sign && state === 'play') {
@@ -5976,10 +6201,19 @@ G.VOICE = {
           G.text(ug, 'RESTORING LAST COMMIT', W / 2, 109, C.dim, { align: 'c', tiny: true });
         }
         if (state === 'clear') this.drawResults(ug);
-        if (state === 'paused') {
+        if (L.net === 'guest' && (state === 'paused' || gpause)) {
+          ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
+          if (!gpause) G.text(ug, 'PAUSED', W / 2, H / 2 - 4, C.clawd, { align: 'c', scale: 2 });
+          else {
+            G.panel(ug, 112, 62, 160, 70, '#17131f', C.paper, '#0d0a12');
+            G.text(ug, 'PAUSED', 122, 70, C.clawd, { sp: 2 });
+            ['resume', 'options', 'leave co-op'].forEach((s2, i) => { const on = i === sel, y = 90 + i * 14; if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(116, y - 3, 152, 13); G.text(ug, '▸', 120, y, C.clawd); } G.text(ug, s2, 130, y, on ? C.paper : C.dim); });
+            if (opts) opts.draw(ug);
+          }
+        } else if (state === 'paused') {
           ug.fillStyle = 'rgba(13,10,18,0.72)'; ug.fillRect(0, 0, W, H);
           G.panel(ug, 112, 52, 160, 112, '#17131f', C.paper, '#0d0a12');
-          G.text(ug, 'PAUSED', 122, 60, C.clawd, { sp: 2 }); G.text(ug, 'esc to resume', 262, 62, '#6b6578', { tiny: true, align: 'r' });
+          G.text(ug, pausedBy ? 'PAUSED BY ' + pausedBy : 'PAUSED', 122, 60, C.clawd, { sp: 2 }); G.text(ug, 'esc to resume', 262, 62, '#6b6578', { tiny: true, align: 'r' });
           ['resume', 'retry from last commit', 'options', 'back to git log'].forEach((s, i) => { const on = i === sel, y = 80 + i * 14; if (on) { ug.fillStyle = '#2a2338'; ug.fillRect(116, y - 3, 152, 13); G.text(ug, '▸', 120, y, C.clawd); } G.text(ug, s, 130, y, on ? C.paper : C.dim); });
           const tl = SV().tools;
           G.text(ug, 'Z JUMP  X CLAW' + (tl.bash ? '  C BASH' : '') + (tl.agents ? '  V AGENTS' : ''), W / 2, 146, '#6b6578', { tiny: true, align: 'c' });
@@ -6004,7 +6238,7 @@ G.VOICE = {
         if (res.shown > res.rows.length) {
           const yy = y + 30 + res.rows.length * 14;
           if (res.best) G.text(ug, 'new best time', x + 12, yy, C.gold);
-          if (((res.t * 2) | 0) % 2) { G.keycap(ug, x + pw - 66, yy - 3, 'Z'); G.text(ug, 'commit', x + pw - 12, yy, C.okHi, { align: 'r' }); }
+          if (((res.t * 2) | 0) % 2) { const cl = G.actionLabel('jump'); G.keycap(ug, x + pw - 12 - G.textW('commit') - 4 - Math.max(11, G.textW(cl, { tiny: true }) + 6), yy - 3, cl); G.text(ug, 'commit', x + pw - 12, yy, C.okHi, { align: 'r' }); }
         }
         ug.globalAlpha = 1;
       },
@@ -6107,55 +6341,161 @@ G.VOICE = {
 </script>
 
 <script>
-// On-screen buttons for phones and tablets. They feed the same input the keyboard does.
+// On-screen controls for phones and tablets. They feed the same input the keyboard does.
+// One input layer for the whole screen, so several fingers, sliding from one button to another and very short taps all work:
+//  * left half: a floating stick, its centre is wherever the thumb lands (and it follows the thumb if it goes too far)
+//  * right side: round buttons; a finger belongs to the button under it and moves to another one when it slides onto it
+//  * every press is latched until the game has seen it (a tap shorter than a frame is never lost) and lasts at least MIN_HOLD
 (function () {
   'use strict';
   var G = window.G, pad = document.getElementById('touch'), on = false;
+  var stick = document.getElementById('stick'), knob = document.getElementById('knob');
+  var BTN = Array.prototype.map.call(pad.querySelectorAll('.tb'), function (el) { return { el: el, a: el.getAttribute('data-a'), x: 0, y: 0, r: 0 }; });
+  var R = 50, MIN_HOLD = 90;              // stick travel (px), shortest press the game sees (ms) - a quick tap still gives a proper jump
+  var held = {}, downAt = {}, timers = {}, ptr = {}, stickId = null, ox = 0, oy = 0;
   function enable() {
     if (on) return;
-    on = true; G.mobile = true; G.input.touch = {}; pad.hidden = false; document.body.classList.add('touch');
-    window.dispatchEvent(new Event('resize'));
+    on = true; G.mobile = true; G.input.touch = {}; G.input.tq = {}; pad.hidden = false; document.body.classList.add('touch');
+    layout(); window.dispatchEvent(new Event('resize'));
   }
+  // buttons sit in an arc around the right thumb; sizes follow the screen a little
+  function layout() {
+    var w = window.innerWidth, h = window.innerHeight, k = Math.max(0.8, Math.min(1.25, Math.min(w, h) / 380));
+    var sr = 'env(safe-area-inset-right, 0px)', sb = 'env(safe-area-inset-bottom, 0px)';
+    var spots = { jump: [22, 26, 82], attack: [116, 30, 62], dash: [34, 120, 62], special: [118, 112, 54], pause: [16, h - 54 - 16, 0] };
+    BTN.forEach(function (b) {
+      var sp = spots[b.a]; if (!sp) return;
+      if (b.a === 'pause') {     // landscape: top-right corner; portrait: just under the game screen
+        b.el.style.right = 'calc(' + sp[0] + 'px + ' + sr + ')';
+        b.el.style.top = h > w ? 'calc(' + Math.round(18 + (w - 32) * 0.5625) + 'px + env(safe-area-inset-top, 0px))' : 'calc(10px + env(safe-area-inset-top, 0px))';
+      }
+      else {
+        var size = Math.round(sp[2] * k);
+        b.el.style.width = b.el.style.height = size + 'px';
+        b.el.style.right = 'calc(' + Math.round(sp[0] * k) + 'px + ' + sr + ')'; b.el.style.bottom = 'calc(' + Math.round(sp[1] * k) + 'px + ' + sb + ')';
+      }
+    });
+    R = Math.round(50 * k);
+    idleStick();
+    requestAnimationFrame(measure);
+  }
+  function measure() { BTN.forEach(function (b) { var r = b.el.getBoundingClientRect(); b.x = r.left + r.width / 2; b.y = r.top + r.height / 2; b.r = Math.max(r.width, r.height) / 2; }); }
+  function idleStick() { if (stickId !== null) return; var h = window.innerHeight; stick.style.transform = 'translate(' + (90) + 'px,' + (h - 96) + 'px)'; knob.style.transform = ''; }
+  // the button a finger at (x, y) is on: the nearest one whose (generously enlarged) circle contains it
+  function hit(x, y) {
+    var best = null, bd = 1e9;
+    BTN.forEach(function (b) { var d = Math.hypot(x - b.x, y - b.y), lim = b.r * 1.18 + 8; if (d < lim && d < bd) { bd = d; best = b; } });
+    return best;
+  }
+  function press(a) {
+    var T = G.input.touch; if (!T) return;
+    clearTimeout(timers[a]);
+    held[a] = (held[a] || 0) + 1; downAt[a] = performance.now(); T[a] = true; G.input.tq[a] = true;
+    show(a, true);
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* not allowed */ } }
+  }
+  function release(a) {
+    var T = G.input.touch; if (!T || !held[a]) return;
+    if (--held[a] > 0) return;
+    var left = MIN_HOLD - (performance.now() - downAt[a]);
+    var up = function () { if (!held[a]) { T[a] = false; show(a, false); } };
+    if (left > 0) timers[a] = setTimeout(up, left); else up();
+  }
+  function show(a, v) { BTN.forEach(function (b) { if (b.a === a) b.el.classList.toggle('on', v); }); }
+  function dirs(l, r, u, d) { var t = G.input.touch; if (!t) return; t.left = l; t.right = r; t.up = u; t.down = d; }
+  function moveStick(x, y) {
+    var dx = x - ox, dy = y - oy, d = Math.hypot(dx, dy);
+    if (d > R) { ox = x - dx / d * R; oy = y - dy / d * R; dx = x - ox; dy = y - oy; d = R; }     // the base follows a thumb that goes too far
+    stick.style.transform = 'translate(' + ox + 'px,' + oy + 'px)';
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    // walking reacts early; up/down only for a firm, nearly vertical push (within ~35 degrees of straight up/down).
+    // A thumb pushed diagonally towards an enemy must walk, not aim: "up" turns the claw into an upward swipe that misses
+    // everything on the ground (small slimes), "down" in the air turns it into a pogo swipe.
+    var m = d / R, ux = d ? dx / d : 0, uy = d ? dy / d : 0;
+    dirs(m > 0.28 && ux < -0.38, m > 0.28 && ux > 0.38, m > 0.55 && uy < -0.82, m > 0.55 && uy > 0.82);
+  }
+  function endStick() { stickId = null; stick.classList.remove('on'); dirs(false, false, false, false); idleStick(); }
+
+  pad.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    if (!on) enable();
+    try { pad.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
+    var b = hit(e.clientX, e.clientY);
+    if (b) { ptr[e.pointerId] = b.a; press(b.a); return; }
+    if (e.clientX < window.innerWidth * 0.5 && stickId === null) {
+      stickId = e.pointerId; stick.classList.add('on');
+      ox = Math.max(R + 6, Math.min(window.innerWidth * 0.5 - R, e.clientX)); oy = Math.max(R + 6, Math.min(window.innerHeight - R - 6, e.clientY));
+      moveStick(e.clientX, e.clientY);
+    }
+  });
+  pad.addEventListener('pointermove', function (e) {
+    if (e.pointerId === stickId) { e.preventDefault(); moveStick(e.clientX, e.clientY); return; }
+    var cur = ptr[e.pointerId]; if (cur === undefined) return;
+    var b = hit(e.clientX, e.clientY);
+    if (b && b.a !== cur) { ptr[e.pointerId] = b.a; release(cur); press(b.a); }      // slid onto another button
+  });
+  function up(e) {
+    if (e.pointerId === stickId) { endStick(); return; }
+    var cur = ptr[e.pointerId]; if (cur === undefined) return;
+    delete ptr[e.pointerId]; release(cur);
+  }
+  pad.addEventListener('pointerup', up);
+  pad.addEventListener('pointercancel', up);
+  pad.addEventListener('lostpointercapture', up);
+  pad.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  window.addEventListener('blur', function () { endStick(); Object.keys(ptr).forEach(function (id) { up({ pointerId: +id }); }); });
+  window.addEventListener('resize', function () { if (on) layout(); });
+  window.addEventListener('orientationchange', function () { if (on) setTimeout(layout, 300); });
   if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) enable();
   window.addEventListener('pointerdown', function (e) { if (e.pointerType === 'touch') enable(); window.focus(); }, { passive: true });
-  Array.prototype.forEach.call(pad.querySelectorAll('.k'), function (b) {
-    var a = b.getAttribute('data-a');
-    function set(v) { return function (e) { e.preventDefault(); if (!G.input.touch) return; G.input.touch[a] = v; b.classList.toggle('on', v); if (v && b.setPointerCapture) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* fine */ } } }; }
-    b.addEventListener('pointerdown', set(true));
-    b.addEventListener('pointerup', set(false));
-    b.addEventListener('pointercancel', set(false));
-    b.addEventListener('lostpointercapture', set(false));
-    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  });
+  G.touchPad = { layout: layout, measure: measure, hit: hit };     // (for tests)
+})();
+</script>
 
-  // round analog stick -> left/right/up/down, with a dead zone so a resting thumb does nothing
-  var stick = document.getElementById('stick'), knob = document.getElementById('knob'), sid = null;
-  function dirs(l, r, u, d) { var t = G.input.touch; if (!t) return; t.left = l; t.right = r; t.up = u; t.down = d; }
-  function move(e) {
-    var b = stick.getBoundingClientRect(), R = b.width / 2;
-    var dx = e.clientX - (b.left + R), dy = e.clientY - (b.top + R), d = Math.hypot(dx, dy), max = R * 0.62;
-    if (d > max) { dx = dx / d * max; dy = dy / d * max; }
-    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    var nx = dx / max, ny = dy / max;
-    // horizontal triggers early (walking is what matters); up/down need a firmer push so running never ducks or looks up
-    dirs(nx < -0.3, nx > 0.3, ny < -0.55, ny > 0.55);
-  }
-  function release(e) {
-    if (sid === null || (e && e.pointerId !== sid)) return;
-    sid = null; stick.classList.remove('on'); knob.style.transform = ''; dirs(false, false, false, false);
-  }
-  stick.addEventListener('pointerdown', function (e) {
-    e.preventDefault(); if (sid !== null) return;
-    sid = e.pointerId; stick.classList.add('on');
-    try { stick.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
-    move(e);
-  });
-  stick.addEventListener('pointermove', function (e) { if (e.pointerId === sid) { e.preventDefault(); move(e); } });
-  stick.addEventListener('pointerup', release);
-  stick.addEventListener('pointercancel', release);
-  stick.addEventListener('lostpointercapture', release);
-  stick.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  window.addEventListener('blur', function () { release(); });
+<script>
+// js/diff.js - difficulty: one central place that makes enemies and bosses tougher (solo settings and the co-op profile)
+(function () {
+  'use strict';
+  const G = window.G;
+  const PRESETS = {
+    easy: { bossPct: 0, npcExtra: 0, npcMult: 100 }, normal: { bossPct: 0, npcExtra: 0, npcMult: 100 }, coop: { bossPct: 50, npcExtra: 0, npcMult: 100 },
+    hard: { bossPct: 80, npcExtra: 1, npcMult: 100 }, nightmare: { bossPct: 100, npcExtra: 2, npcMult: 150 },
+  };
+  const clean = (c) => { const o = { bossPct: G.clamp(Math.round(+c.bossPct || 0), 0, 100), npcExtra: G.clamp(Math.round(+c.npcExtra || 0), 0, 5), npcMult: G.clamp(Math.round(+c.npcMult || 100), 100, 300) }; o.neutral = !o.bossPct && !o.npcExtra && o.npcMult === 100; return o; };
+  const diff = G.diff = {
+    PRESETS, clean,
+    solo: () => clean(G.save.data.opt),
+    // which settings apply to this level? null = none (the guest does not scale anything, the host's numbers arrive with the creatures)
+    cfgFor(L) {
+      if (L.net === 'guest') return null;
+      return clean(L.net === 'host' && G.coop ? G.coop.diffCfg() : G.save.data.opt);
+    },
+    // idempotent: every creature is scaled once
+    scale(e, cfg) {
+      if (e._scaled) return;
+      e._scaled = true;
+      if (e.noHit || typeof e.hp !== 'number') return;
+      if (e.isBoss) {
+        const k = 1 + cfg.bossPct / 100;
+        if (k === 1) return;
+        e.hp = e.maxHp = Math.round(e.maxHp * k);
+        if (e.heads) for (const h of e.heads) h.hp = Math.round(h.hp * k);          // merge conflict: the boss hp is the sum of its heads
+        e.dropN = Math.round(e.dropN * k);
+      } else {
+        const base = e.hp;
+        e.hp = Math.ceil(base * cfg.npcMult / 100) + cfg.npcExtra;
+        if (e.loot > 0 && base > 0) e.loot = Math.round(e.loot * e.hp / base);       // tougher creatures drop more tokens
+      }
+    },
+    label(c) {
+      if (!c || c.neutral) return '';
+      const a = [];
+      if (c.bossPct) a.push('BOSS +' + c.bossPct + '%');
+      if (c.npcExtra) a.push('ENEMIES +' + c.npcExtra + (c.npcExtra > 1 ? ' hits' : ' hit'));
+      if (c.npcMult > 100) a.push('ENEMY HP x' + (c.npcMult / 100));
+      return a.join(' \u00b7 ');
+    },
+  };
 })();
 </script>
 
@@ -6166,143 +6506,271 @@ G.VOICE = {
   const G = window.G, Level = G.Level, Player = G.Player, W = G.W, H = G.H, A = G.audio;
   const coop = G.coop = {
     role: null, ws: null, open: false, peer: false, building: false, tools: null,
-    q: [], ev: [], inbox: [], rAll: {}, rAck: 0, rHas: false, fxSeq: 0, fxAck: 0,
+    pred: new Map(), skipped: 0, stalls: [], stallLog: [], lastStamp: undefined, lastRx: 0, mute: 0, quiet: 0, q: [], ev: [], inbox: [], rAll: {}, rHas: false,
     hostState: { st: 'play', fm: '', rs: null }, startMsg: null, leaveMsg: false,
-    cap: null, ping: 0, tickN: 0, status: 'offline', code: '', gs: {},
+    cap: null, ping: 0, tickN: 0, epoch: 0, startEpoch: 0, status: 'offline', code: '', gs: {},
+    relQ: [], txN: 0, rxN: 0, lost: 0, latestTm: 0, latestAt: 0, dbg: {}, testLog: [],
   };
   const r2 = (v) => Math.round(v * 100) / 100;
-  const SKIP = new Set(['L', '_id', '_sm', 'ride', 'agents', 'ghosts', 'tools']);
-  const SM = ['x', 'y', 'cx', 'cy', 'hx', 'hy'];
-  const HOSTOWN = new Set(['hp', 'maxHp', 'inv', 'hurtT', 'dead', 'gone', 'goneT', 'frozen', 'celebrate', 'auto', 'grace', 'meter', 'remote', 'blue']);
-  const isPlain = (v) => { const p = Object.getPrototypeOf(v); return p === Object.prototype || p === null; };
+  const BUILD = coop.build = Array.from(document.scripts).reduce((a, sc) => a + sc.text.length, 0);
+  // ?debug: a few lines on screen about the partner's hits (host: what happened to each one; guest: what was sent)
+  coop.dbgOn = /[?&]debug\b/.test(location.search); coop.dlog = [];
+  const dlog = (t) => { if (!coop.dbgOn) return; coop.dlog.push(t); if (coop.dlog.length > 7) coop.dlog.shift(); console.log('[coop] ' + t); };
+  // the level (host) decides these for the partner; everything else about the partner's body is the partner's own
+  const HOSTOWN = new Set(['frozen', 'celebrate', 'auto', 'remote', 'blue', 'away']);
 
-  // ---------- generic state dump / merge ----------
-  function dump(o, depth, seen, path) {
-    const out = {};
-    for (const k of Object.keys(o)) {
-      if (SKIP.has(k)) continue;
-      const v = o[k], t = typeof v;
-      if (t === 'number') { if (isFinite(v)) out[k] = Number.isInteger(v) ? v : r2(v); }
-      else if (t === 'string' || t === 'boolean' || v === null) out[k] = v;
-      else if (t === 'object') {
-        if (depth >= 3) continue;
-        if (seen.has(v)) { out[k] = { $r: seen.get(v) }; continue; }
-        const arr = Array.isArray(v);
-        if (!arr && !isPlain(v)) continue;
-        const pp = path ? path + '.' + k : k;
-        seen.set(v, pp);
-        out[k] = arr ? dumpArr(v, depth + 1, seen, pp) : dump(v, depth + 1, seen, pp);
-      }
-    }
-    return out;
+  // ---------- compact encoding ----------
+  // Every creature class lists the fields the OTHER screen needs to draw it and to touch it (bounding boxes, flags the fight logic reads).
+  // They travel in that fixed order as small integers: x4 for positions, x100 for timers, ... Nothing else is sent; the rest is rebuilt locally.
+  // types: p position (1/4 px)  v speed  t timer (1/100 s)  u coarse timer (1/10 s)  h hit points (1/10)  f fraction (1/100)  n integer
+  //        b flag  s short string  o object {keys}  a list of objects {keys}
+  const QM = { p: 4, v: 1, t: 100, u: 10, h: 10, f: 100, n: 1 };
+  const spec = (str) => str.split(' ').filter(Boolean).map((x) => { const [k, t, keys] = x.split(':'); return { k, t, keys: keys ? keys.split(',') : null }; });
+  const jq = (v) => (typeof v === 'number' ? Math.round(v * 4) / 4 : v && typeof v === 'object' ? (Array.isArray(v) ? v.map(jq) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, jq(x)]))) : v);
+  const pickKeys = (o, keys) => keys.map((k) => jq(o[k]));
+  const unpickKeys = (arr, keys) => { const o = {}; keys.forEach((k, i) => { if (arr[i] !== undefined && arr[i] !== null) o[k] = arr[i]; }); return o; };
+  function encOne(f, v) {
+    const t = f.t;
+    if (QM[t]) return typeof v === 'number' && isFinite(v) ? Math.round(v * QM[t]) : 0;
+    if (t === 'b') return v ? 1 : 0;
+    if (t === 's') return v === undefined || v === null ? '' : v;
+    if (t === 'o') return v ? pickKeys(v, f.keys) : 0;
+    if (t === 'a') return Array.isArray(v) ? v.slice(0, 16).map((x) => pickKeys(x, f.keys)) : [];
+    return 0;
   }
-  function dumpArr(a, depth, seen, path) {
-    const out = [];
-    for (let i = 0; i < a.length && i < 64; i++) {
-      const v = a[i], t = typeof v;
-      if (t === 'number') out.push(isFinite(v) ? (Number.isInteger(v) ? v : r2(v)) : 0);
-      else if (t === 'string' || t === 'boolean' || v === null) out.push(v);
-      else if (t === 'object') {
-        if (depth >= 3) { out.push(null); continue; }
-        if (seen.has(v)) { out.push({ $r: seen.get(v) }); continue; }
-        const arr = Array.isArray(v);
-        if (!arr && !isPlain(v)) { out.push(null); continue; }
-        const pp = path + '.' + i;
-        seen.set(v, pp);
-        out.push(arr ? dumpArr(v, depth + 1, seen, pp) : dump(v, depth + 1, seen, pp));
-      } else out.push(null);
-    }
-    return out;
+  function decOne(f, w) {
+    const t = f.t;
+    if (QM[t]) return w / QM[t];
+    if (t === 'b') return !!w;
+    if (t === 'o') return w ? unpickKeys(w, f.keys) : null;
+    if (t === 'a') return w.map((x) => unpickKeys(x, f.keys));
+    return w;
   }
-  function merge(t, d, fix) {
+  const encAll = (sp, o) => sp.map((f) => encOne(f, o[f.k]));
+  const decAll = (sp, vals) => { const o = {}; for (let i = 0; i < sp.length; i++) o[sp[i].k] = decOne(sp[i], vals[i]); return o; };
+
+  const ENT = 'x:p y:p vx:v vy:v face:n flash:t passive:b hp:h';      // hp: the guest can tell when its own hit is a kill
+  const BOSS = 'x:p y:p hp:h maxHp:h flash:t active:b passive:b phase:n st:s dying:b gone:b';
+  const NETSPEC = {
+    Bug: ENT, Typo: ENT + ' onGround:b wait:u', Flaky: ENT + ' st:s', Lint: 'x:p y:p flash:t hp:h', Logger: ENT + ' open:u', Mimic: ENT + ' awake:b onGround:b',
+    Noodle: ENT + ' st:s onGround:b', Slime: ENT + ' land:u onGround:b wait:u', Ghost: ENT + ' a:f shy:b', Racer: ENT + ' pause:u', Drone: ENT + ' aim:u',
+    Dripper: 'x:p y:p grow:t',
+    Null: BOSS + ' cur:o:x,y,a,mode marks:a:x,t aim:o:x,y dir:n',
+    Merge: BOSS + ' heads:a:x,y,st,open,flash,dead,aim,n',
+    Leak: BOSS + ' sq:f level:n floodY:p marks:a:x,t geyser:o:x,top,on',
+    Loop: 'hx:p hy:p ang:f hp:h maxHp:h flash:t tailFlash:t popped:n phase:n dying:b gone:b active:b passive:b',
+    Monolith: BOSS + ' open:f look:o:x,y crack:n beam:o:y,on boltN:n marks:a:x,t fists:a:x,y,st',
+  };
+  const NETC = Object.keys(NETSPEC);                                      // class -> number on the wire
+  const NSP = {}; for (const c of NETC) NSP[c] = spec(NETSPEC[c]);
+  const ITEMSP = spec('kind:s x:p y:p vx:v vy:v loose:b ghost:b dead:b ph:f idx:n');
+  // the body of a player, both directions (each side owns its own, the other side only looks at it)
+  const PLAYERSP = spec('x:p y:p vx:v vy:v face:n onGround:b dashT:t atkT:t atkDir:s atkFace:n hurtT:t inv:u gone:b goneT:u dead:b hp:n maxHp:n wallDir:n dn:n');      // dn: how many times this body died (lets the host catch a death it missed)
+  // hazards that only depend on the level clock are not sent at all: every screen runs them itself
+  const LOCALRUN = new Set(['Pendulum', 'Gear', 'FireJet']);
+  coop.netspec = NETSPEC; coop.localrun = LOCALRUN;                       // (read by the dev test that checks the lists are complete)
+  const CTORARG = { Bug: (e) => (e.spiky ? 1 : 0), Slime: (e) => (e.small ? 1 : 0), Lint: (e) => (e.v ? 1 : 0) };
+  const same = (a, b) => a === b || (a !== null && b !== null && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+  // sparse list of what changed: [index, value, index, value, ...]
+  function sparse(prev, cur) { let d = null; for (let i = 0; i < cur.length; i++) if (!prev || !same(prev[i], cur[i])) (d || (d = [])).push(i, cur[i]); return d; }
+  function patch(base, d) { const v = base ? base.slice() : []; for (let i = 0; i < d.length; i += 2) v[d[i]] = d[i + 1]; return v; }
+  const fOf = (ent, sp, key, vals) => { const k = key || 'f'; return ent[k] || (ent[k] = decAll(sp, vals || ent.v)); };        // decoded fields, made once per state entry
+
+  // plain recursive merge of decoded values into a live object (keeps whatever else the object has, e.g. sprites)
+  function merge(t, d) {
     for (const k in d) {
       const v = d[k];
       if (v !== null && typeof v === 'object') {
-        if (v.$r !== undefined) { fix.push([t, k, v.$r]); continue; }
-        if (Array.isArray(v)) { let a = t[k]; if (!Array.isArray(a)) a = t[k] = []; mergeArr(a, v, fix); }
-        else { let o = t[k]; if (o === null || typeof o !== 'object') o = t[k] = {}; merge(o, v, fix); }
+        if (Array.isArray(v)) { let a = t[k]; if (!Array.isArray(a)) a = t[k] = []; mergeArr(a, v); }
+        else { let o = t[k]; if (o === null || typeof o !== 'object') o = t[k] = {}; merge(o, v); }
       } else t[k] = v;
     }
   }
-  function mergeArr(a, v, fix) {
+  function mergeArr(a, v) {
     a.length = v.length;
     for (let i = 0; i < v.length; i++) {
       const x = v[i];
       if (x !== null && typeof x === 'object') {
-        if (x.$r !== undefined) { fix.push([a, i, x.$r]); continue; }
-        if (Array.isArray(x)) { if (!Array.isArray(a[i])) a[i] = []; mergeArr(a[i], x, fix); }
-        else { if (a[i] === null || typeof a[i] !== 'object') a[i] = {}; merge(a[i], x, fix); }
+        if (Array.isArray(x)) { if (!Array.isArray(a[i])) a[i] = []; mergeArr(a[i], x); }
+        else { if (a[i] === null || typeof a[i] !== 'object') a[i] = {}; merge(a[i], x); }
       } else a[i] = x;
     }
   }
-  function mergeTop(obj, d, smooth) {
-    if (smooth) {
-      const sm = obj._sm || (obj._sm = {});
-      for (const k of SM) if (typeof d[k] === 'number' && typeof obj[k] === 'number') { const off = (sm[k] || 0) + obj[k] - d[k]; sm[k] = Math.abs(off) > 40 ? 0 : off; }
-    }
-    const fix = [];
-    merge(obj, d, fix);
-    for (const [t, k, path] of fix) { let o = obj; if (path) for (const s of path.split('.')) o = o == null ? o : o[s]; if (o != null) t[k] = o; }
-  }
-  function deltaDump(store, id, obj) {
-    const d = dump(obj, 0, new Map([[obj, '']]), '');
-    const last = store[id] || (store[id] = {});
-    const out = {}; let n = 0;
-    for (const k in d) { const s = JSON.stringify(d[k]); if (last[k] !== s) { last[k] = s; out[k] = d[k]; n++; } }
-    return n ? out : null;
-  }
-  const prim = (o) => { const r = {}; for (const k of Object.keys(o)) { const v = o[k], t = typeof v; if (t === 'number' || t === 'boolean' || t === 'string') r[k] = v; } return r; };
-  function primDiff(before, o) { const d = {}; let n = 0; for (const k of Object.keys(o)) { const v = o[k], t = typeof v; if ((t === 'number' || t === 'boolean' || t === 'string') && before[k] !== v) { d[k] = typeof v === 'number' ? r2(v) : v; n++; } } return n ? d : null; }
+  const mergeTop = merge;
 
   function ensureIds(L) {
     if (L._eid === undefined) { L._eid = 0; L._iid = 0; }
     for (const e of L.ents) if (e._id === undefined) e._id = L._eid++;
     for (const it of L.items) if (it._id === undefined) it._id = L._iid++;
   }
-  const send = (o) => { if (coop.ws && coop.ws.readyState === 1) coop.ws.send(JSON.stringify(o)); };
+  const send = (o) => { if (coop.ws && coop.ws.readyState === 1) { const t = JSON.stringify(o); coop.bytesOut += t.length; coop.ws.send(t); } };
   coop.send = send;
 
+  // ---------- protocol envelope + two event channels ----------
+  // Every game message carries {e: epoch, n: sequence, ra: ack}. Two kinds of events ride along:
+  //  * reliable events ({i,k,...}) are kept and re-sent inside every message until the other side acknowledges them (ra);
+  //    the receiver applies each id once and in order. Used for everything that must never be lost (hits, deaths, tile breaks, pause...).
+  //  * cosmetic events (sound, particles, shake) are stamped with the host clock; the guest drops them when they are older than 300 ms.
+  const R = coop.R = { out: [], seq: 0, hi: 0, resend: 220 };
+  const curEpoch = () => (coop.role === 'host' ? coop.epoch : (G.scene && G.scene.L && G.scene.L._ep !== undefined ? G.scene.L._ep : coop.startEpoch));
+  coop.rel = (k, f) => {
+    if (k === 'hit' && coop.dbgOn && coop.role === 'guest') dlog('sent ' + f.how + ' #' + f.eid); R.out.push({ ev: Object.assign({ i: ++R.seq, k }, f), at: 0 }); coop.relWake = true; };
+  coop.resetNet = () => { if (coop.rate) Object.assign(coop.rate, RATES[0], { level: 0, since: 0 }); coop.stalls = []; coop.stallLog = []; coop.lastStamp = undefined; coop.lastRx = 0; R.out.length = 0; R.seq = 0; R.hi = 0; coop.txN = 0; coop.rxN = 0; coop.lost = 0; coop.relQ.length = 0; coop.relWake = false; };
+  // game message out: stamps the envelope and attaches every unacknowledged reliable event that is due
+  function gsend(o) {
+    // a clogged line (socket buffer filling up) gets no more snapshots / body reports; events and everything else always go
+    const hasEv = R.out.length > 0 && R.out.some((x) => performance.now() - x.at > R.resend);
+    if (!hasEv && (o.t === 's' || o.t === 'st') && coop.ws && coop.ws.bufferedAmount > 4096) { coop.skipped++; return false; }
+    o.n = ++coop.txN; if (o.e === undefined) o.e = curEpoch(); o.ra = R.hi;
+    if (R.out.length) {
+      const now = performance.now();
+      if (R.out.some((x) => now - x.at > R.resend)) { o.r = R.out.map((x) => x.ev); for (const x of R.out) x.at = now; }
+    } else o.u = 1;                                   // nothing that must arrive: the relay may drop this message when the line is clogged
+    coop.relWake = false; coop.lastTx = performance.now();
+    if (coop.dbg.stat) { const st = coop.dbg.stat; for (const k in o) st[k] = (st[k] || 0) + JSON.stringify(o[k]).length + k.length + 4; }
+    send(o);
+    return true;
+  }
+  coop.gsend = gsend;
+  // game message in: acknowledgements, reliable events (once, in order), loss accounting
+  function rx(m) {
+    if (coop.dbg.dropRx && Math.random() < coop.dbg.dropRx) return false;       // test hook: pretend this message was lost
+    if (m.ra !== undefined) while (R.out.length && R.out[0].ev.i <= m.ra) R.out.shift();
+    if (m.r) for (const ev of m.r) if (ev.i === R.hi + 1) { R.hi = ev.i; coop.onRel(ev, m); }
+    if (m.n !== undefined) { if (m.n > coop.rxN + 1 && coop.rxN) coop.lost += m.n - coop.rxN - 1; if (m.n > coop.rxN) coop.rxN = m.n; }
+    return true;
+  }
+  coop.onRel = (ev, m) => {
+    if (ev.k === 'test') { coop.testLog.push(ev.n); return; }
+    if (coop.role === 'host') {
+      if (ev.k === 'bt' || ev.k === 'cr' || ev.k === 'hit' || ev.k === 'hurt' || ev.k === 'hazard' || ev.k === 'die' || ev.k === 'cut' || ev.k === 'projHit') coop.inbox.push(Object.assign({ t: ev.k, e: m.e }, ev));
+      else if (ev.k === 'pz') { const sc = G.scene; if (m.e === coop.epoch && sc && sc.pauseFor) sc.pauseFor(!!ev.on, 'P2'); }
+      else if (ev.k === 'away') { const L = G.scene && G.scene.L; if (L && L.p2) L.p2.away = !!ev.on; }
+    } else coop.relQ.push({ ev, e: m.e });
+  };
+
+  // hazards that run on both screens by themselves must not also be relayed as sounds/effects
+  const oSpawn = G.spawnEnemy;
+  G.spawnEnemy = (ch, x, y, L) => {
+    const e = oSpawn(ch, x, y, L);
+    if (e && LOCALRUN.has(e.constructor.name)) { const u = e.update; e.update = function (dt) { coop.mute++; try { return u.call(this, dt); } finally { coop.mute--; } }; }
+    return e;
+  };
+
   // ---------- level setup ----------
-  class HookMap extends Map { set(k, v) { if (coop.hookCr) send({ t: 'cr', i: k, v }); return super.set(k, v); } }
+  class HookMap extends Map { set(k, v) { if (coop.hookCr) coop.rel('cr', { i: k, v }); return super.set(k, v); } }
+  function hostSetup(L, x, y) {
+    L.net = 'host'; L._ctx = 'all'; coop.epoch++;                       // every level start is a new epoch: stale messages are told apart by it
+    const p2 = new Player(L, x, y); p2.remote = true; p2.blue = true; p2.hitKey = 'hitId2'; p2.dashKey = 'dashId2';
+    p2.tools = Object.assign({}, G.save.data.tools, { agents: false });     // the partner has no sub-agent meter (for now): no "subagents ready" pop, no meter effects
+    L.p2 = p2; L.partner = p2; L.reviveQ = [];
+    coop.diffLine = G.diff.label(G.diff.clean(coop.diffCfg()));
+    coop.rAll = {}; coop.rHas = false; coop.ev = []; coop.pbReset();
+  }
+  // a partner joins a level that is already running: no restart, they get the live state
+  coop.attachPartner = (L) => {
+    if (L.net || !coop.peer || !coop.open) return;
+    hostSetup(L, L.me.x - 8, L.me.y);
+    ensureIds(L);
+    L._net = null;
+    send({ t: 'start', v: BUILD, id: L.id, snap: L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()), join: true, spawn: { x: L.me.x, y: L.me.y } });
+  };
+  // ---------- difficulty profile of this co-op game ----------
+  coop.srv = null;                                            // numbers from the server (BOSS_HP / NPC_HITS / NPC_MULT / LOCK), host only
+  coop.diffCfg = () => (coop.srv && coop.srv.lock ? G.diff.clean(Object.assign({}, G.save.data.coopDiff, G.diffPick(coop.srv))) : G.save.data.coopDiff);
+  G.diffPick = (o) => { const r = {}; for (const k of ['bossPct', 'npcExtra', 'npcMult']) if (o[k] !== null && o[k] !== undefined) r[k] = o[k]; return r; };
+  coop.diffLine = '';
+  coop.sendCfg = () => { const d = G.diff.clean(coop.diffCfg()); coop.diffLine = G.diff.label(d); if (coop.role === 'host' && coop.open && coop.peer) send({ t: 'cfg', diff: d }); };
   coop.initLevel = (L, start) => {
     L._tiles0 = L.tiles.slice();
     if (coop.role === 'host' && coop.peer && coop.open) {
-      L.net = 'host';
-      const p2 = new Player(L, start.x - 8, start.y); p2.remote = true; p2.blue = true;
-      L.p2 = p2; L.partner = p2; L.reviveQ = [];
-      coop.rAll = {}; coop.rHas = false; coop.fxSeq = 0; coop.fxAck = 0; coop.ev = [];
+      hostSetup(L, start.x - 8, start.y);
     } else if (coop.role === 'guest' && coop.building) {
-      L.net = 'guest';
+      L.net = 'guest'; L._ctx = 'all';
       const remote = L.player; remote.remote = true;
-      const me = new Player(L, start.x - 8, start.y); me.blue = true;
+      const sp = coop.startSpawn, me = new Player(L, sp ? sp.x : start.x - 8, sp ? sp.y : start.y); me.blue = true;
       const tools = Object.assign({}, coop.tools || me.tools, { agents: false });
       me.tools = tools; remote.tools = tools;
-      L.player = L.me = me; L.partner = remote; L.p1 = remote;
+      L.player = L.me = me; L.partner = remote; L.p1 = remote; L._ep = coop.startEpoch;
       L.crumble = new HookMap(); coop.hookCr = true;
-      L.breakTile = function (tx, ty) { send({ t: 'bt', tx, ty }); return false; };
-      coop.gs = {};
-      coop.gTick = 0; coop.fxAck = 0;
+      L.stop = function (t) { this.hitstop = Math.max(this.hitstop, Math.min(t, 0.03)); };       // my own hits freeze my screen for a moment (30 ms)
+      // cracked walls: the guest breaks the tile at once (prediction) and tells the host, which owns the real world
+      // a tile that vanished/appeared under or inside me must not trap me: hold it open for as long as I overlap it
+      L._myHold = new Set();
+      const solid0 = L.solid;
+      L.solid = function (tx, ty) { return this._myHold.size && this._myHold.has(ty * this.w + tx) ? false : solid0.call(this, tx, ty); };
+      L._predBroken = new Map();
+      L.breakTile = function (tx, ty) {
+        if (this.tile(tx, ty) !== G.TILE.CRACK) return false;
+        const i = ty * this.w + tx;
+        this.tiles[i] = G.TILE.E; this._predBroken.set(i, this.time + 1);
+        this.burst(tx * 16 + 8, ty * 16 + 8, 12, ['#8d8798', '#c3bccd', '#4c4658'], 90, 300);
+        this.shake(0.3); A.sfx('brk');
+        coop.rel('bt', { tx, ty });
+        return true;
+      };
+      // my hit points and my death are mine: whatever happens to my body is announced to the host
+      const hurt0 = me.hurt, haz0 = me.hazard, die0 = me.die;
+      me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) { coop.rel('hurt', { x, y, d }); if (laggy()) this.inv += 0.4; } return r; };
+      me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
+      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; this._downAt = performance.now(); this._downX = x; this._downY = y; this.dn = (this.dn || 0) + 1; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent, dn: this.dn }); };
+      coop.gsPrev = null;
+      coop.gTick = 0;
     }
   };
-  coop.playEnter = (L, cap) => { coop.cap = cap; if (L.net) ensureIds(L); };
+  // ids are handed out in construction order, so a partner who joins later builds the same ids from the same level definition
+  coop.playEnter = (L, cap) => { coop.cap = cap; ensureIds(L); };
   coop.setState = (st, fm, res) => {
-    if (st === 'paused') st = 'play';
     coop.hostState = { st, fm: fm || '', rs: st === 'clear' && res ? { rows: res.rows, best: res.best } : null };
+  };
+  // while paused the level does not tick, so the host keeps the guest informed from here
+  coop.pauseTick = (L, dt) => {
+    if (!coop.peer || !coop.open) return;
+    coop.pT = (coop.pT || 0) - dt;
+    if (coop.pT > 0) return;
+    coop.pT = 0.25;
+    if (L._net) L._net.hs = null;                  // the first snapshot after resuming must carry the state again
+    gsend({ t: 'hs', hs: coop.hostState, tm: r2(G.time) });
   };
   coop.aimAt = (L, e) => {
     const a = L.me, b = L.p2;
-    if (!b || b.dead) return a;
+    if (!b || b.dead || b.away || b.lagging) return a;
     if (a.dead) return b;
     const cx = e.x + (e.w || 0) / 2, cy = e.y + (e.h || 0) / 2;
     return Math.hypot(a.x - cx, a.y - cy) <= Math.hypot(b.x - cx, b.y - cy) ? a : b;
   };
-  coop.nearP2 = (L, e) => { const p = L.p2; return !!p && !p.dead && Math.abs(e.x + (e.w || 0) / 2 - p.x) < W / 2 + 120 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < H / 2 + 120; };
+  coop.nearP2 = (L, e) => { const p = L.p2; return !!p && !p.dead && !p.lagging && Math.abs(e.x + (e.w || 0) / 2 - p.x) < W / 2 + 120 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < H / 2 + 120; };
+  // the partner is gone (left, crashed, or the host closed): never leave the survivor stuck waiting for a revive
+  coop.partnerLost = (L) => {
+    if (!L || !L.net) return;
+    if (L.net === 'host') {
+      if (L.me.dead && L.reviveQ && L.reviveQ.some((q) => q.p === L.me)) L.events.push('death');
+      L.reviveQ = [];
+    }
+    L.net = null; L.partner = null; L.p2 = null;
+  };
+  coop.notice = null;
+  (function () {
+    let lastErr = 0;
+    const report = (msg) => {
+      const now = performance.now(); if (now - lastErr < 5000) return; lastErr = now;
+      msg = String(msg || 'error').slice(0, 160);
+      if (coop.role === 'guest' && coop.open) send({ t: 'err', m: msg });
+      else if (coop.role === 'host') coop.say('error: ' + msg.slice(0, 44));
+    };
+    window.addEventListener('error', (e) => report((e.message || e) + (e.lineno ? ' @' + e.lineno : '')));
+    window.addEventListener('unhandledrejection', (e) => report('promise: ' + (e.reason && e.reason.message || e.reason)));
+  })();
+  coop.say = (text) => { coop.notice = { text, t: 2 }; };
+  // one simple rule: a fallen player comes back after REVIVE_T seconds if the other one is still alive; both down = the level restarts
+  const REVIVE_T = coop.REVIVE_T = 6;
   coop.holdDeath = (p) => {
     const L = p.L;
+    if (p._downX === undefined || !p.dead || p._dnT !== p.dn) { p._downX = p.x; p._downY = p.y; p._dnT = p.dn; }
     if (!L.net || !L.reviveQ) return false;
     const other = p === L.me ? L.partner : L.me;
     if (!other || other.dead) return false;
-    L.reviveQ.push({ p, t: 4 });
+    L.reviveQ.push({ p, t: REVIVE_T });
     return true;
   };
 
@@ -6311,32 +6779,101 @@ G.VOICE = {
     for (const p of [L.me, L.p2]) if (p && Math.abs(e.x + (e.w || 0) / 2 - p.x) < 320 && Math.abs(e.y + (e.h || 0) / 2 - p.y) < 260) return true;
     return false;
   };
+  // the partner's body is the partner's own: speed, attacks, hit points are taken over as reported;
+  // its position is shown a few frames in the past, blended between two reports, so it moves smoothly whatever the line does
+  const pb = { list: [], off: null, jit: 0.01, D: 0.06, last: 0 };
+  coop.pJit = () => pb.jit;
+  coop.pbReset = () => { pb.list = []; pb.off = null; pb.jit = 0.01; pb.D = 0.06; pb.last = 0; };
+  function pNote(gt, at) {
+    const now = at / 1000, d = now - gt;
+    if (pb.off === null) pb.off = d;
+    else { const dev = d - pb.off; if (dev < 0) pb.off = d; else pb.off += dev * 0.02; if (gt - pb.last <= 0.1) pb.jit += (Math.min(Math.abs((now - pb.lastAt) - (gt - pb.last)), 0.5) - pb.jit) * 0.1; }
+    pb.last = gt; pb.lastAt = now; pb.D += (G.clamp(0.033 + 2 * pb.jit, 0.05, 0.25) - pb.D) * 0.05;
+    coop.pDelay = pb.D;
+    const r = coop.rAll; pb.list.push({ gt, x: r.x, y: r.y, vx: r.vx, vy: r.vy }); if (pb.list.length > 40) pb.list.shift();
+  }
   function applyRemote(L) {
     const p2 = L.p2, d = coop.rAll;
-    const sm = p2._sm || (p2._sm = {});
     for (const k in d) {
-      if (HOSTOWN.has(k)) continue;
-      let v = d[k];
+      if (HOSTOWN.has(k) || k === 'x' || k === 'y' || k === 'dead' || k === 'dn') continue;      // death goes through p2Down (so it always reaches holdDeath / the revive timer); only the host revives
+      const v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
-      if (k === 'atkId' || k === 'dashId') v += 1e6;
-      if ((k === 'x' || k === 'y') && typeof p2[k] === 'number') { const off = (sm[k] || 0) + p2[k] - v; sm[k] = Math.abs(off) > 40 ? 0 : off; }
       p2[k] = v;
     }
+    if (typeof d.dn === 'number' && d.dn > (p2._dnSeen || 0)) p2Down(L, d.dn, d.x, d.y, false);      // the 'die' event is late or lost: the body report says it fell
+    if (p2.dead) return;                                                                                 // a fallen body stays where it fell
+    if (pb.off === null || !pb.list.length) { if (typeof d.x === 'number') { p2.x = d.x; p2.y = d.y; } return; }
+    const rt = performance.now() / 1000 - pb.off - pb.D;
+    let A = null, B = null;
+    for (let i = pb.list.length - 1; i >= 0; i--) if (pb.list[i].gt <= rt) { A = pb.list[i]; B = pb.list[i + 1] || null; break; }
+    if (!A) A = pb.list[0];
+    const u = B ? G.clamp((rt - A.gt) / (B.gt - A.gt), 0, 1) : 0, ex = B ? 0 : G.clamp(rt - A.gt, 0, 0.25);
+    const at = (k, vk) => { const v = A[k]; if (typeof v !== 'number') return null; if (B && typeof B[k] === 'number') return Math.abs(B[k] - v) > 60 ? v : v + (B[k] - v) * u; return v + (A[vk] || 0) * ex; };
+    const nx = at('x', 'vx'), ny = at('y', 'vy');
+    if (nx !== null) p2.x = nx; if (ny !== null) p2.y = ny;
   }
-  function sendFx(d) { coop.fxSeq++; send({ t: 'fx', d, q: coop.fxSeq }); }
+  const entById = (L, id) => { for (const e of L.ents) if (e._id === id) return e; return null; };
+  // run something the partner did (or that happened to the partner) so the host world shows it; nothing is sent back for it
+  const asP2 = (L, f) => { const c = L._ctx, pl = L.player; L._ctx = 'p2'; L.player = L.p2; coop.mute++; try { return f(); } finally { L._ctx = c; L.player = pl; coop.mute--; } };
+  // the partner says it hit something: check it is plausible, then apply the damage to the real creature
+  function hostHit(L, ev) {
+    const p2 = L.p2, e = entById(L, ev.eid), tag = 'P2 ' + ev.how + ' #' + ev.eid + ' ' + (e ? CLS(e) : '?') + ': ';
+    if (!e) return dlog(tag + 'NO SUCH CREATURE');
+    if (e.dead) return dlog(tag + 'already dead');
+    if (e.noHit || (ev.how !== 'swipe' && ev.how !== 'dash' && ev.how !== 'stomp')) return dlog(tag + 'not hittable');
+    const key = ev.how === 'swipe' ? p2.hitKey : ev.how === 'dash' ? p2.dashKey : 'stompId2';
+    if (e[key] === ev.atk) return dlog(tag + 'same attack twice');                                   // each attack hurts a creature once
+    if (ev.how === 'stomp' && !e.stompable) return dlog(tag + 'not stompable');
+    const boxes = e.hurtboxes(); if (!boxes.length) return dlog(tag + 'no hurtbox');
+    const cx = p2.x + p2.w / 2, cy = p2.y + p2.h / 2;
+    let best = boxes[0], bd = 1e9;
+    for (const b of boxes) { const d = Math.hypot(Math.max(b.x - cx, 0, cx - (b.x + b.w)), Math.max(b.y - cy, 0, cy - (b.y + b.h))); if (d < bd) { bd = d; best = b; } }
+    const lim = 64 + (Math.abs(e.vx || 0) + Math.abs(e.vy || 0) + Math.abs(p2.vx || 0)) * (0.3 + coop.ping / 1000) + 120 * coop.ping / 1000;
+    if (bd > lim) return dlog(tag + 'TOO FAR ' + Math.round(bd) + '>' + Math.round(lim));      // the partner is nowhere near it
+    e[key] = ev.atk;
+    const b = ev.bi >= 0 && boxes[ev.bi] ? boxes[ev.bi] : best;
+    const dmg = ev.how === 'swipe' ? G.clamp(+ev.dmg || 1, 1, 2) : ev.how === 'dash' ? 1 : Math.max(1, e.hp);
+    L._atk = (ev.how === 'swipe' ? 'w' : ev.how[0]) + ev.atk;
+    const hp0 = e.hp; let res;
+    try { res = asP2(L, () => e.hit(dmg, +ev.dx || 0, +ev.dy || 0, ev.how, b)); } finally { L._atk = 0; }
+    dlog(tag + (res || 'hit') + ' hp ' + hp0 + '>' + e.hp + (e.dead ? ' DEAD' : ''));
+  }
+  // the partner took damage / fell in spikes / died on its own screen: show it here too
+  function hostMirror(L, ev) {
+    const p2 = L.p2;
+    if (ev.t === 'hurt') {
+      L.hits++;
+      if (!p2.dead) asP2(L, () => { L.burst(ev.x + 5, ev.y + 5, 8, ['#6aa8ff', '#cfe3ff', '#fff'], 120, 300); A.sfx('hurt'); });
+    } else if (ev.t === 'hazard') {
+      L.hits++;
+      asP2(L, () => { const ox = p2.x, oy = p2.y; p2.x = ev.x; p2.y = ev.y; p2.scatter(0, 0); p2.x = ox; p2.y = oy; A.sfx('hurt'); });
+      if (L.rise && L.rising) L.liquidY += 72;                      // the tide backs off a little, same as for the host player
+    } else if (ev.t === 'die') p2Down(L, ev.dn, ev.x, ev.y, !!ev.silent);
+  }
+  function p2Down(L, dn, x, y, silent) {
+    const p2 = L.p2;
+    if (dn !== undefined) { if (dn <= (p2._dnSeen || 0)) return; p2._dnSeen = dn; }
+    if (p2.dead) return;
+    asP2(L, () => { p2.x = x; p2.y = y; p2.die(silent); });
+  }
   coop.hostTick = (L, dt) => {
     const p2 = L.p2; if (!p2 || !coop.peer) return;
     ensureIds(L);
     for (const m of coop.inbox.splice(0)) {
+      if (m.e !== coop.epoch) continue;                          // belongs to another level
       if (m.t === 'cr') { if (!L.crumble.has(m.i)) L.crumble.set(m.i, m.v); }
       else if (m.t === 'bt') L.breakTile(m.tx, m.ty);
+      else if (m.t === 'hit') hostHit(L, m);
+      else if (m.t === 'cut' || m.t === 'projHit') hostProj(L, m);
+      else hostMirror(L, m);
     }
-    if (coop.rHas && coop.rAck >= coop.fxSeq) applyRemote(L);
+    if (coop.rHas) applyRemote(L);
     p2.frozen = L.me.frozen; p2.celebrate = L.me.celebrate;
-    if (p2.inv > 0) p2.inv -= dt;
-    if (p2.hurtT > 0) p2.hurtT -= dt;
-    if (p2.gone) { p2.goneT -= dt; if (p2.goneT <= 0) { p2.gone = false; p2.inv = 1.4; L.ring(p2.x + 5, p2.y + 5, 2, 18, '#6aa8ff', 0.3); } }
+    tickBody(p2, dt);
+    const idle = coop.lastRx ? performance.now() - coop.lastRx : 0;
+    p2.lagging = idle > 1000 || !!coop.peerLag;
+    if (idle > 10000 && !p2.away) { p2.away = true; p2.lagAway = true; } else if (p2.lagAway && idle < 1000) { p2.away = false; p2.lagAway = false; }
     // revive the fallen partner after a few seconds
     for (let i = L.reviveQ.length - 1; i >= 0; i--) {
       const q = L.reviveQ[i]; q.t -= dt;
@@ -6344,30 +6881,28 @@ G.VOICE = {
       L.reviveQ.splice(i, 1);
       const other = q.p === L.me ? p2 : L.me;
       if (!q.p.dead || other.dead) continue;
-      const before = prim(q.p);
       q.p.dead = false; q.p.hp = Math.min(3, q.p.maxHp); q.p.x = other.x; q.p.y = other.y - 2; q.p.vx = q.p.vy = 0; q.p.inv = 2; q.p.gone = false; q.p.hurtT = 0;
       L.ring(q.p.x + 5, q.p.y + 5, 2, 26, '#6aa8ff', 0.4); L.pop(q.p.x + 5, q.p.y - 12, 'revived', '#cfe3ff', true);
-      if (q.p === p2) { const d = primDiff(before, p2); if (d) sendFx(d); }
+      if (q.p === p2) { p2._rg = (p2._rg || 0) + 1; p2._rv = { x: p2.x, y: p2.y, hp: p2.hp }; coop.rel('revive', { x: p2.x, y: p2.y, hp: p2.hp, rg: p2._rg }); }          // its body is its own: tell it
     }
-    if (++coop.tickN % 4 === 0) sendSnap(L);
+    if (++coop.tickN % coop.rate.snap === 0) sendSnap(L);
   };
-  function withFx(L, fn) {
-    const p2 = L.p2, before = prim(p2);
-    L.player = p2;
-    try { fn(); } finally { L.player = L.me; }
-    const d = primDiff(before, p2);
-    if (d) sendFx(d);
-  }
+  coop.hostIdle = (L) => { if (L.p2 && coop.peer && coop.rHas) applyRemote(L); };
+  // hit points for the partner (checkpoint, coffee, 25 tokens): it owns them, so it is told how many to add
+  coop.healP2 = (n, safe) => coop.rel('heal', { n, safe: safe || null });
   const oInteract = Level.prototype.interact, oItems = Level.prototype.updateItems, oProjs = Level.prototype.updateProjs;
+  const asP1 = (L, f) => { if (L.net !== 'host') return f(); const c = L._ctx; L._ctx = 'p1'; try { return f(); } finally { L._ctx = c; } };
+  // the partner's checkpoints, exit and pickups are decided here (the host owns the world); its fights and hazards are its own
+  const asPartner = (L, f) => { const c = L._ctx, pl = L.player, sign = L.sign; L.player = L.p2; L._ctx = 'p2'; try { return f(); } finally { L.player = pl; L._ctx = c; L.sign = sign; } };
   Level.prototype.interact = function (dt) {
-    oInteract.call(this, dt);
+    asP1(this, () => oInteract.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
-    const sign = this.sign;
-    withFx(this, () => oInteract.call(this, dt));
-    this.sign = sign;
+    const p2 = this.p2;
+    if (p2.dead || p2.gone) return;
+    asPartner(this, () => this.interactGoals(p2));
   };
   Level.prototype.updateItems = function (dt) {
-    oItems.call(this, dt);
+    asP1(this, () => oItems.call(this, dt));
     if (this.net !== 'host' || !coop.peer) return;
     const p2 = this.p2;
     if (p2.dead || p2.gone) return;
@@ -6375,126 +6910,449 @@ G.VOICE = {
     for (const it of this.items) {
       if (it.dead) continue;
       const r = it.kind === 'spark' ? 11 : 9;
-      if (Math.abs(pcx - it.x) < r + 3 && Math.abs(pcy - it.y) < r && (!it.loose || it.t > 0.2)) withFx(this, () => this.collect(it));
+      if (Math.abs(pcx - it.x) < r + 3 && Math.abs(pcy - it.y) < r && (!it.loose || it.t > 0.2)) asPartner(this, () => this.collect(it));
     }
   };
-  Level.prototype.updateProjs = function (dt) {
-    oProjs.call(this, dt);
-    if (this.net !== 'host' || !coop.peer) return;
-    const p2 = this.p2;
-    if (p2.dead || p2.gone) return;
-    const hb = p2.hurtbox();
-    for (const q of this.projs) {
-      if (q.dead || q.friendly) continue;
-      if (q.x + q.r > hb.x && q.x - q.r < hb.x + hb.w && q.y + q.r > hb.y && q.y - q.r < hb.y + hb.h) {
-        if (p2.dashT > 0) continue;
-        withFx(this, () => { if (p2.hurt(q.dmg, q.x) && !q.pierce) { q.dead = true; this.spark(q.x, q.y, q.col, 5); } });
-      }
-    }
-  };
+  Level.prototype.updateProjs = function (dt) { asP1(this, () => oProjs.call(this, dt)); };
 
-  function sendSnap(L) {
-    const N = L._net || (L._net = { e: {}, i: {}, p: {}, seq: 0 });
-    const me = L.me, p2 = L.p2, s = { t: 's', n: ++N.seq };
-    s.tm = r2(L.time); s.ly = L.liquidY; s.rs = L.rising ? 1 : 0; s.ck = r2(L.clock); s.tk = L.tokens; s.ht = L.hits; s.ci = L.cpIndex;
-    s.cp = L.cps.map((c) => (c.on ? 1 : 0)); s.ex = L.exit && L.exit.done ? 1 : 0; s.sk = L.sparks;
+  // ---------- projectiles are events: the host announces spawn and (non-natural) death, the guest simulates the flight itself ----------
+  const PROJ_KEYS = ['x', 'y', 'vx', 'vy', 'g', 'r', 'kind', 'col', 'life', 'tile', 'cut', 'pierce', 'dmg', 'friendly', 'hgt', 't'];
+  const oShoot = Level.prototype.shoot;
+  Level.prototype.shoot = function (x, y, vx, vy, o) {
+    const q = oShoot.call(this, x, y, vx, vy, o);
+    if (this.net !== 'host' || !coop.peer) return q;
+    q.pid = this._pid = (this._pid || 0) + 1;
+    let dead = !!q.dead;
+    // every way a projectile can die (hit, cut, boss death, ...) passes through here, so none can be missed
+    Object.defineProperty(q, 'dead', { enumerable: false, configurable: true, get: () => dead, set: (v) => { if (v && !dead) projGone(this, q); dead = !!v; } });
+    coop.rel('proj', Object.assign({ pid: q.pid, tm: r2(G.time) }, projData(q)));
+    return q;
+  };
+  function projData(q) { const d = {}; for (const k of PROJ_KEYS) if (q[k] !== undefined && q[k] !== null && q[k] !== false) d[k] = typeof q[k] === 'number' ? r2(q[k]) : q[k]; return d; }
+  function projGone(L, q) {
+    if (q._quiet || !coop.peer) return;
+    // things the guest's own simulation notices by itself need no message: running out of life, leaving the map, hitting a wall, drowning
+    if (q.life <= 0 || q.y > L.ph + 60 || q.x < -60 || q.x > L.pw + 60) return;
+    if (q.tile && L.solidAt(q.x, q.y)) return;
+    if (q.kind === 'drip' && L.liquidY !== null && q.y > L.liquidY + 3) return;
+    coop.rel('projDead', { pid: q.pid });
+  }
+  // the partner shot a projectile down / got hit by one: the host removes the real one (without telling the partner back)
+  function hostProj(L, ev) {
+    const p2 = L.p2; let q = null;
+    for (const x of L.projs) if (x.pid === ev.pid && !x.dead) { q = x; break; }
+    if (!q) return;
+    if (Math.hypot(q.x - (p2.x + p2.w / 2), q.y - (p2.y + p2.h / 2)) > 90 + Math.hypot(q.vx, q.vy) * (0.8 + coop.ping / 1000)) return;      // not anywhere near the partner (allowing for the line's delay)
+    if (ev.t === 'cut' && (!q.cut || q.friendly)) return;
+    if (ev.t === 'projHit' && q.friendly) return;
+    q._quiet = true; q.dead = true;
+    asP2(L, () => L.spark(q.x, q.y, q.col, ev.t === 'cut' ? 6 : 5));
+  }
+
+  // ---------- snapshots: full state, sent as a delta against a baseline the guest has acknowledged ----------
+  // The host rebuilds the complete state S each time and keeps the last 32 in a ring. The guest tells the host which snapshot it
+  // last applied (`sa`); the next snapshot only contains what differs from that one (`b`). If the guest's baseline is missing or too old,
+  // or every 5 s, a keyframe (`b: 0`, everything) is sent instead. Any message can therefore be lost or skipped without a desync.
+  const EMPTY = { w: {}, ents: new Map(), items: new Map(), p: null };
+  const CLS = (e) => e.constructor.name;
+  function buildState(L, N) {
+    const p2 = L.p2, w = {};
+    w.rv = L.reviveQ.map((q) => [q.p === L.me ? 1 : 2, Math.ceil(q.t * 10)]);
+    w.ly = L.liquidY; w.rs = L.rising ? 1 : 0; w.tk = L.tokens; w.ht = L.hits; w.ci = L.cpIndex;
+    w.cp = L.cps.map((c) => (c.on ? 1 : 0)); w.ex = L.exit && L.exit.done ? 1 : 0; w.sk = L.sparks.slice();
     const T0 = L._tiles0, tl = [];
     for (let i = 0; i < T0.length; i++) if (L.tiles[i] !== T0[i]) tl.push(i, L.tiles[i]);
-    let k = tl.join(','); if (k !== N.tl) { N.tl = k; s.tl = tl; }
     const cr = []; for (const [i, c] of L.crumble) cr.push(i, c.s, r2(c.t));
-    k = cr.join(','); if (k !== N.cr) { N.cr = k; s.cr = cr; }
-    const bh = Array.from(L.blinkHold); k = bh.join(','); if (k !== N.bh) { N.bh = k; s.bh = bh; }
-    const ids = [], eu = [];
+    const S = { tm: r2(G.time), w, tl, cr, bh: Array.from(L.blinkHold), ei: [], ii: [], ents: new Map(), items: new Map(), pj: [] };
     for (const e of L.ents) {
-      ids.push(e._id);
+      const c = CLS(e);
+      if (LOCALRUN.has(c)) continue;
+      S.ei.push(e._id);
       if (!(e.always || e.isBoss || near(L, e))) continue;
-      const isNew = !(e._id in N.e), d = deltaDump(N.e, e._id, e);
-      if (isNew) eu.push({ i: e._id, c: e.constructor.name, d: d || {} }); else if (d) eu.push({ i: e._id, d });
+      S.ents.set(e._id, { c, a: CTORARG[c] ? CTORARG[c](e) : 0, v: encAll(NSP[c] || NSP.Bug, e) });
     }
-    k = ids.join(','); if (k !== N.ei) { N.ei = k; s.ei = ids; }
-    if (eu.length) s.eu = eu;
-    const iids = [], iu = [];
-    for (const it of L.items) {
-      iids.push(it._id);
-      const isNew = !(it._id in N.i), d = deltaDump(N.i, it._id, it);
-      if (isNew) iu.push({ i: it._id, d: d || {} }); else if (d) iu.push({ i: it._id, d });
+    for (const it of L.items) { S.ii.push(it._id); S.items.set(it._id, { v: encAll(ITEMSP, it) }); }
+    for (const q of L.projs) if (!q.dead && q.pid && S.pj.length < 60) S.pj.push(Object.assign({ pid: q.pid }, projData(q)));      // only sent with keyframes
+    S.p = encAll(PLAYERSP, L.me);
+    S.ph = { frozen: p2.frozen, celebrate: p2.celebrate };        // the rest of the partner's body belongs to the partner
+    if (p2._rg) { S.ph.rg = p2._rg; S.ph.rx = p2._rv.x; S.ph.ry = p2._rv.y; S.ph.rh = p2._rv.hp; }      // the last revive, in case its event was lost
+    S.hs = coop.hostState;
+    return S;
+  }
+  // the level clock and the run time only matter to the second: send them about once a second (and with every keyframe)
+  function diffState(B, S) {
+    const d = { w: {} };
+    for (const k in S.w) if (!same(B.w[k], S.w[k])) d.w[k] = S.w[k];
+    for (const k of ['tl', 'cr', 'bh', 'ei', 'ii', 'ph', 'hs']) if (!same(B[k], S[k])) d[k] = S[k];
+    const en = [], eu = [], inn = [], iu = [];
+    for (const [id, e] of S.ents) {
+      const be = B.ents.get(id);
+      if (!be || be.c !== e.c) en.push([id, NETC.indexOf(e.c), e.a].concat(e.v));
+      else { const df = sparse(be.v, e.v); if (df) eu.push([id].concat(df)); }
     }
-    k = iids.join(','); if (k !== N.ii) { N.ii = k; s.ii = iids; }
-    if (iu.length) s.iu = iu;
-    const pj = []; for (const q of L.projs) if (!q.dead && pj.length < 40) pj.push(dump(q, 0, new Map([[q, '']]), ''));
-    if (pj.length || N.pjn) { s.pj = pj; N.pjn = pj.length; }
-    const pd = deltaDump(N.p, 'me', me); if (pd) s.p = pd;
-    const ph = { hp: p2.hp, maxHp: p2.maxHp, inv: r2(p2.inv), hurtT: r2(p2.hurtT), dead: p2.dead, gone: p2.gone, goneT: r2(p2.goneT), frozen: p2.frozen, celebrate: p2.celebrate };
-    k = JSON.stringify(ph); if (k !== N.ph) { N.ph = k; s.ph = ph; }
-    k = JSON.stringify(coop.hostState); if (k !== N.hs) { N.hs = k; s.hs = coop.hostState; }
+    for (const [id, it] of S.items) {
+      const bi = B.items.get(id);
+      if (!bi) inn.push([id].concat(it.v)); else { const df = sparse(bi.v, it.v); if (df) iu.push([id].concat(df)); }
+    }
+    if (en.length) d.en = en;
+    if (eu.length) d.eu = eu;
+    if (inn.length) d.in = inn;
+    if (iu.length) d.iu = iu;
+    const pd = sparse(B.p, S.p); if (pd) d.p = pd;
+    return d;
+  }
+  function sendSnap(L) {
+    const N = L._net || (L._net = { ring: new Map(), acked: 0, sn: 0, kfAt: -99, slowAt: -99 });
+    const S = buildState(L, N), sn = ++N.sn;
+    let B = N.acked ? N.ring.get(N.acked) : null;
+    const kf = !B || coop.kfNext || S.tm - N.kfAt > 5;
+    if (kf) { B = EMPTY; N.kfAt = S.tm; coop.kfNext = false; }
+    const d = diffState(B, S);
+    if (kf) d.pjk = S.pj;
+    const s = Object.assign({ t: 's', sn, b: kf ? 0 : N.acked, tm: S.tm }, d);
+    if (kf || S.tm - N.slowAt >= 1) { s.lt = r2(L.time); N.slowAt = S.tm; }
+    S.sn = sn; N.ring.set(sn, S); N.ring.delete(sn - 96);
+    if (kf) s.kf = 1;
     if (coop.ev.length) { s.ev = coop.ev.slice(0, 60); coop.ev = []; }
-    send(s);
+    gsend(s);
   }
 
-  // events from the host (effects, sounds, voice) are relayed to the guest
-  const rec = (a) => { if (coop.role === 'host' && coop.peer && coop.open && coop.ev.length < 80) coop.ev.push(a); };
+  // events from the host (effects, sounds, voice) are relayed to the guest. Each carries who caused it ('p1' host player,
+  // 'p2' partner, 'all' world) as its last element, so shakes/flashes/loud sounds of one player do not hit the other's screen.
+  const rec = (a) => { if (coop.role === 'host' && coop.peer && coop.open && !coop.mute && coop.ev.length < 80) coop.ev.push(a); };
+  const ctxNow = () => { const L = G.scene && G.scene.L; return (L && L._ctx) || 'all'; };
+  const tagOf = (L) => ((L._ctx || 'all') + (L._atk ? '#' + L._atk : ''));          // 'p2#s12': an echo of the partner's swing no. 12
+  const near2 = (L) => (L.p2 && L.me ? Math.hypot(L.me.x - L.p2.x, L.me.y - L.p2.y) : 0);
+  const hear = (d) => G.clamp(1 - d / 320, 0.25, 1);                 // how loud the other player's actions are
   for (const n of ['burst', 'ring', 'spark', 'pop', 'explode', 'dust', 'shake', 'flashScreen']) {
     const o = Level.prototype[n];
-    Level.prototype[n] = function (...a) { if (this.net === 'host') rec(['L', n].concat(a)); return o.apply(this, a); };
+    Level.prototype[n] = function (...a) {
+      if (this.net === 'host') {
+        if (!(coop.inExplode && (n === 'ring' || n === 'burst'))) rec(['L', n].concat(a, tagOf(this)));   // explode already carries its rings/bursts
+        if ((n === 'shake' || n === 'flashScreen') && this._ctx === 'p2') return;                              // the partner's hits shake the partner only
+        if (n === 'explode') { coop.inExplode = true; try { return o.apply(this, a); } finally { coop.inExplode = false; } }
+      }
+      return o.apply(this, a);
+    };
   }
+  const oStop = Level.prototype.stop;
+  Level.prototype.stop = function (t) { if (this.net === 'host' && this._ctx === 'p2') return; return oStop.call(this, t); };   // no hitstop on my screen for the partner's hits
   const oSfx = A.sfx, oMus = A.music, oSpeak = G.speak;
-  A.sfx = function (name, o) { if (name !== 'tick' && name !== 'tock') rec(['S', name, o]); return oSfx.apply(this, arguments); };
+  const UI_SFX = new Set(['uiMove', 'uiOk', 'uiBack', 'pause', 'tick', 'tock']);
+  A.sfx = function (name, o) {
+    if (coop.quiet) return;                                   // a hazard the guest runs itself: the host's sound is not relayed for it either
+    if (coop.role === 'host' && !UI_SFX.has(name)) {
+      const L = G.scene && G.scene.L, ctx = ctxNow();
+      rec(['S', name, o, L ? tagOf(L) : ctx]);
+      if (ctx === 'p2' && L && L.net === 'host') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(near2(L)) });
+    }
+    return oSfx.call(this, name, o);
+  };
   A.music = function (name, o) { rec(['M', name, o]); return oMus.apply(this, arguments); };
   G.speak = function (cap, id, fb) { rec(['V', id]); return oSpeak.apply(this, arguments); };
 
+  // who is "me" for effects: the host's own player is p1, the partner (host's L.p2, or the guest's own body) is p2
+  const ctxOf = (L, q) => (q === L.p2 ? 'p2' : L.net === 'guest' ? 'p2' : 'p1');
+  for (const n of ['update', 'hurt', 'hazard', 'die', 'onHit', 'bounce', 'spring']) {
+    const o = Player.prototype[n];
+    Player.prototype[n] = function (...a) {
+      const L = this.L;
+      if (!L.net) return o.apply(this, a);
+      const prev = L._ctx; L._ctx = ctxOf(L, this);
+      try { return o.apply(this, a); } finally { L._ctx = prev; }
+    };
+  }
+
   // ---------- guest side ----------
+  // rebuild the full state S(n) = S(b) + delta, remember it, then show it
+  function applyDelta(B, s) {
+    const S = { sn: s.sn, tm: s.tm, w: Object.assign({}, B.w, s.w), tl: B.tl, cr: B.cr, bh: B.bh, ei: B.ei, ii: B.ii, ph: B.ph, hs: B.hs, p: B.p, ents: new Map(B.ents), items: new Map(B.items), lt: s.lt };
+    for (const k of ['tl', 'cr', 'bh', 'ei', 'ii', 'ph', 'hs']) if (s[k] !== undefined) S[k] = s[k];
+    if (s.en) for (const r of s.en) S.ents.set(r[0], { c: NETC[r[1]], a: r[2], v: r.slice(3) });
+    if (s.eu) for (const r of s.eu) { const be = S.ents.get(r[0]); if (be) S.ents.set(r[0], { c: be.c, a: be.a, v: patch(be.v, r.slice(1)) }); }
+    if (s.in) for (const r of s.in) S.items.set(r[0], { v: r.slice(1) });
+    if (s.iu) for (const r of s.iu) { const bi = S.items.get(r[0]); if (bi) S.items.set(r[0], { v: patch(bi.v, r.slice(1)) }); }
+    if (s.p) S.p = patch(B.p, s.p);
+    if (S.ei) { const keep = new Set(S.ei); for (const id of S.ents.keys()) if (!keep.has(id)) S.ents.delete(id); }
+    if (S.ii) { const keep = new Set(S.ii); for (const id of S.items.keys()) if (!keep.has(id)) S.items.delete(id); }
+    return S;
+  }
+  // ---------- the guest shows the host's world a little in the past, so motion can be interpolated between two snapshots ----------
+  // The delay D follows the line: one snapshot interval plus twice the measured jitter (0.08 .. 0.3 s). If the newest snapshot is older
+  // than the render time the entity keeps going at its last speed for at most 0.25 s, then holds.
+  function noteArrival(g, S, at) {
+    const now = at / 1000, d = now - S.tm;
+    if (g.off === null) g.off = d;
+    else {
+      const dev = d - g.off;
+      if (dev < 0) g.off = d; else g.off += dev * 0.02;
+      const dt = S.tm - g.lastTm; if (dt > 0 && dt < 0.5) g.si += (dt - g.si) * 0.1;
+      // jitter: how far the gap between two arrivals is from the gap the sender made (immune to a slow-running host clock)
+      g.jit += (Math.min(Math.abs((now - g.lastAt) - dt), 0.5) - g.jit) * 0.1;
+    }
+    g.lastTm = S.tm; g.lastAt = now;
+    g.list.push(S); if (g.list.length > 40) g.list.shift();
+    g.D += (G.clamp(g.si + 2 * g.jit, 0.08, 0.3) - g.D) * 0.05;
+    coop.delay = g.D; coop.jitter = g.jit;
+  }
+  const NESTPOS = new Set(['x', 'y', 'top', 'a', 'hx', 'hy']);
+  const POSK = ['x', 'y', 'hx', 'hy', 'bx', 'by'];
+  // numbers that mean "where" inside nested state (boss heads, fists, cursors...) are blended in place
+  function lerpInto(t, a, b, u) {
+    if (Array.isArray(a)) { for (let i = 0; i < a.length; i++) { const ai = a[i]; if (ai && typeof ai === 'object' && t[i] && typeof t[i] === 'object') lerpInto(t[i], ai, b && b[i], u); } return; }
+    for (const k in a) {
+      const av = a[k];
+      if (typeof av === 'number') { if (NESTPOS.has(k) && typeof t[k] === 'number') { const bv = b && typeof b[k] === 'number' ? b[k] : av; t[k] = Math.abs(bv - av) > 60 ? av : av + (bv - av) * u; } }
+      else if (av && typeof av === 'object' && t[k] && typeof t[k] === 'object') lerpInto(t[k], av, b && b[k], u);
+    }
+  }
+  // seg = seconds between the two snapshots, dt = this frame. After a stall the target can be far ahead of what is on screen:
+  // it is then caught up at a limited speed (a bit faster than the thing really moves) instead of lurching.
+  function posInto(o, fa, fb, u, ex, seg, dt) {
+    for (const k of POSK) {
+      const v = fa[k]; if (typeof v !== 'number') continue;
+      let r = v, sp = 0;
+      if (fb && typeof fb[k] === 'number') { if (Math.abs(fb[k] - v) > 60) r = v; else { r = v + (fb[k] - v) * u; sp = Math.abs(fb[k] - v) / (seg || 0.066); } }      // a jump (teleport, wrap-around) is not blended
+      else { const vel = k === 'x' ? fa.vx : k === 'y' ? fa.vy : 0; if (typeof vel === 'number') { sp = Math.abs(vel); if (ex > 0) r += vel * ex; } }
+      const rr = o._rp || (o._rp = {}), last = rr[k];
+      if (last !== undefined && Math.abs(r - last) <= 60) { const lim = Math.max(1.4, sp * dt * 1.5 + 0.5); if (r - last > lim) r = last + lim; else if (last - r > lim) r = last - lim; }
+      rr[k] = r; o[k] = r;
+    }
+    for (const k in fa) { const v = fa[k]; if (v !== null && typeof v === 'object' && o[k] && typeof o[k] === 'object') lerpInto(o[k], v, fb && fb[k], u); }
+  }
+  function renderTimeline(L) {
+    const g = L._rg; if (!g || g.off === null || !g.list.length) return;
+    const rt = (g.rt = performance.now() / 1000 - g.off - g.D);
+    let A = null, B = null;
+    for (let i = g.list.length - 1; i >= 0; i--) if (g.list[i].tm <= rt) { A = g.list[i]; B = g.list[i + 1] || null; break; }
+    if (!A) A = g.list[0];
+    if (g.shown !== A) { showState(L, A, g.shown); g.shown = A; }
+    const u = B ? G.clamp((rt - A.tm) / (B.tm - A.tm), 0, 1) : 0, ex = B ? 0 : G.clamp(rt - A.tm, 0, 0.25);
+    const seg = B ? B.tm - A.tm : 0.066, fdt = g.dt || 1 / 60;
+    for (const e of L.ents) { const a = A.ents.get(e._id); if (a) { const b = B && B.ents.get(e._id); e._ex = !b; posInto(e, fOf(a, NSP[a.c] || NSP.Bug), b && fOf(b, NSP[b.c] || NSP.Bug), u, ex, seg, fdt); } }
+    for (const it of L.items) { const a = A.items.get(it._id); if (a) { const b = B && B.items.get(it._id); posInto(it, fOf(a, ITEMSP), b && fOf(b, ITEMSP), u, ex, seg, fdt); } }
+    if (A.p) posInto(L.partner, fOf(A, PLAYERSP, 'pf', A.p), B && B.p && fOf(B, PLAYERSP, 'pf', B.p), u, ex, seg, fdt);
+    while (g.evq.length && g.evq[0].tm <= rt) { const q = g.evq.shift(); if (rt - q.tm <= 0.3) playEvents(L, q.ev); }      // sounds/effects belong to their moment; old ones are dropped
+  }
+  // things the host does not send are re-created here every frame
+  const TICK = {
+    Loop: (e) => { e.x = e.hx - 9; e.y = e.hy - 9; const h0 = e.hist[0]; if (G.dist(h0.x, h0.y, e.hx, e.hy) >= 2.2) { e.hist.unshift({ x: e.hx, y: e.hy }); e.hist.pop(); } },
+    Null: (e, dt) => {
+      const c = e.cur; if (c && c.mode === 'fly') e.trail.push({ x: c.x, y: c.y, a: c.a, life: 0.15 });
+      if (e.st === 'sweep') e.trail.push({ x: e.x, y: e.y, body: 1, life: 0.2 });
+      for (const q of e.trail) q.life -= dt; e.trail = e.trail.filter((q) => q.life > 0);
+    },
+  };
+  function tickBody(q, dt) {
+    q.t += dt; q.blinkT -= dt; if (q.blinkT < -0.12) q.blinkT = G.rand(1.5, 4.5);
+    if (q.onGround && Math.abs(q.vx) > 30) q.runT += dt * Math.abs(q.vx) / 118; else q.runT = 0;
+  }
+  function localTick(L, dt) {
+    for (const e of L.ents) {
+      const c = CLS(e);
+      if (LOCALRUN.has(c)) { coop.quiet++; try { e.update(dt); } finally { coop.quiet--; } continue; }
+      e.t += dt; if (e.flash > 0) e.flash -= dt;
+      if (TICK[c]) TICK[c](e, dt);
+    }
+    const q = L.partner;                                          // the other player's animation clocks (it is never updated here)
+    tickBody(q, dt);
+  }
   function applySnap(L, s) {
-    if (s.tm !== undefined) { if (L._tm === undefined || Math.abs(s.tm - L.time) > 0.3) L.time = s.tm; else L.time += (s.tm - L.time) * 0.15; L._tm = 1; }
-    if (s.ly === null) L.liquidY = null; else if (s.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - s.ly) > 60 ? s.ly : L.liquidY + (s.ly - L.liquidY) * 0.5;
-    L.rising = !!s.rs; L.clock = s.ck; L.tokens = s.tk; L.hits = s.ht; L.cpIndex = s.ci;
-    s.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
-    if (L.exit) L.exit.done = !!s.ex;
-    if (s.sk) L.sparks = s.sk;
-    if (s.tl) { L.tiles.set(L._tiles0); for (let i = 0; i < s.tl.length; i += 2) L.tiles[s.tl[i]] = s.tl[i + 1]; }
-    if (s.cr) { Map.prototype.clear.call(L.crumble); for (let i = 0; i < s.cr.length; i += 3) Map.prototype.set.call(L.crumble, s.cr[i], { s: s.cr[i + 1], t: s.cr[i + 2] }); }
-    if (s.bh) L.blinkHold = new Set(s.bh);
-    if (s.ei) { const keep = new Set(s.ei); L.ents = L.ents.filter((e) => keep.has(e._id)); }
-    if (s.eu) {
-      const map = new Map(); for (const e of L.ents) map.set(e._id, e);
-      for (const u of s.eu) {
-        let e = map.get(u.i);
-        if (!e) {
-          const C = G.Enemies[u.c]; if (!C) continue;
-          try { e = new C(L, u.d.x || 0, u.d.y || 0, !!u.d.small); } catch (err) { continue; }
-          e._id = u.i; L.ents.push(e);
-        }
-        mergeTop(e, u.d, true);
-      }
+    const g = L._rg || (L._rg = { ring: new Map(), last: 0, shown: null, list: [], off: null, jit: 0.02, si: 0.066, D: 0.12, lastTm: 0, evq: [], rt: 0 });
+    if (s.sn <= g.last) return;                                   // older than what is already known
+    let B = EMPTY;
+    if (s.b) { B = g.ring.get(s.b); if (!B) { coop.needFull = true; return; } }   // baseline unknown: ask for a keyframe
+    const S = applyDelta(B, s);
+    g.ring.set(s.sn, S); g.ring.delete(s.sn - 96); g.last = s.sn;
+    if (s.kf) coop.needFull = false;
+    if (s.lt !== undefined) S.lt = s.lt; if (s.ck !== undefined) S.ck = s.ck;
+    noteArrival(g, S, s._at || performance.now());
+    if (s.pjk) syncProjs(L, s.pjk, s.tm);
+    if (s.ev) g.evq.push({ tm: s.tm, ev: s.ev });
+  }
+  function showState(L, S, prev) {
+    const w = S.w;
+    if (S.lt !== undefined) { if (L._tm === undefined || Math.abs(S.lt - L.time) > 0.3) L.time = S.lt; else L.time += (S.lt - L.time) * 0.5; L._tm = 1; }
+    if (w.ly === null) L.liquidY = null; else if (w.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - w.ly) > 60 ? w.ly : L.liquidY + (w.ly - L.liquidY) * 0.5;
+    L._rv = w.rv || []; L._rvAt = performance.now();
+    L.rising = !!w.rs; L.tokens = w.tk; L.hits = w.ht; L.cpIndex = w.ci;
+    if (w.cp) w.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
+    if (L.exit) L.exit.done = !!w.ex;
+    if (w.sk) L.sparks = w.sk.slice();
+    if (!prev || S.tl !== prev.tl) {
+      L.tiles.set(L._tiles0); for (let i = 0; i < S.tl.length; i += 2) L.tiles[S.tl[i]] = S.tl[i + 1];
+      for (const [i, exp] of L._predBroken) { if (exp < L.time) L._predBroken.delete(i); else if (L.tiles[i] === G.TILE.CRACK) L.tiles[i] = G.TILE.E; }   // my own breaks the host has not confirmed yet
     }
-    if (s.ii) { const keep = new Set(s.ii); L.items = L.items.filter((it) => keep.has(it._id)); }
-    if (s.iu) {
-      const map = new Map(); for (const it of L.items) map.set(it._id, it);
-      for (const u of s.iu) {
-        let it = map.get(u.i);
-        if (!it) { it = { _id: u.i }; L.items.push(it); }
-        mergeTop(it, u.d, false);
+    if (!prev || S.cr !== prev.cr) { Map.prototype.clear.call(L.crumble); for (let i = 0; i < S.cr.length; i += 3) Map.prototype.set.call(L.crumble, S.cr[i], { s: S.cr[i + 1], t: S.cr[i + 2] }); }
+    if (!prev || S.bh !== prev.bh) L.blinkHold = new Set(S.bh);
+    const keep = new Set(S.ei); L.ents = L.ents.filter((e) => keep.has(e._id) || LOCALRUN.has(CLS(e)));
+    const map = new Map(); for (const e of L.ents) map.set(e._id, e);
+    for (const [id, u] of S.ents) {
+      const f = fOf(u, NSP[u.c] || NSP.Bug);
+      let e = map.get(id);
+      if (!e) {
+        const C = G.Enemies[u.c]; if (!C) continue;
+        try { e = new C(L, f.x || 0, f.y || 0, !!u.a); } catch (err) { continue; }
+        e._id = id; L.ents.push(e);
       }
+      merge(e, f);
     }
-    if (s.pj) L.projs = s.pj;
-    if (s.p) mergeTop(L.partner, s.p, true);
-    if (s.ph) Object.assign(L.me, s.ph);
-    if (s.hs) coop.hostState = s.hs;
-    if (s.ev) for (const e of s.ev) {
-      if (e[0] === 'L') { if (typeof L[e[1]] === 'function') L[e[1]].apply(L, e.slice(2)); }
-      else if (e[0] === 'S') oSfx.call(A, e[1], e[2]);
+    const ki = new Set(S.ii); L.items = L.items.filter((it) => ki.has(it._id));
+    const imap = new Map(); for (const it of L.items) imap.set(it._id, it);
+    for (const [id, u] of S.items) {
+      let it = imap.get(id);
+      if (!it) { it = { _id: id }; L.items.push(it); }
+      merge(it, fOf(u, ITEMSP));
+    }
+    if (S.p) merge(L.partner, fOf(S, PLAYERSP, 'pf', S.p));
+    if (S.ph) { L.me.frozen = S.ph.frozen; L.me.celebrate = S.ph.celebrate; if (S.ph.rg) guestRevive(L, { x: S.ph.rx, y: S.ph.ry, hp: S.ph.rh, rg: S.ph.rg }); }
+    if (S.hs && !(S.tm < coop.hsTm)) coop.hostState = S.hs;          // a newer 'hs' message beats an older snapshot shown with delay
+  }
+  const ECHO = new Set(['hit', 'clang', 'squish', 'bossHit']);
+  function playEvents(L, evs) {
+    for (const e of evs) {
+      if (e[0] === 'L') {
+        const ctx = String(e[e.length - 1]).split('#')[0];
+        if ((e[1] === 'shake' || e[1] === 'flashScreen') && ctx === 'p1') continue;       // the host player's hits do not shake my screen
+        if (typeof L[e[1]] === 'function') L[e[1]].apply(L, e.slice(2, -1));
+      }
+      else if (e[0] === 'S') {
+        let o = e[2];
+        const tag = String(e[3]).split('#');
+        if (tag[1] && coop.pred.has(tag[1]) && ECHO.has(e[1])) continue;                     // my own screen already played this hit sound
+        if (tag[0] === 'p1') o = Object.assign({}, o, { vol: (o && o.vol !== undefined ? o.vol : 1) * hear(Math.hypot(L.me.x - L.partner.x, L.me.y - L.partner.y)) });
+        oSfx.call(A, e[1], o);
+      }
       else if (e[0] === 'M') oMus.call(A, e[1], e[2]);
       else if (e[0] === 'V' && coop.cap) oSpeak(coop.cap, e[1]);
     }
   }
+  // ---------- guest projectiles ----------
+  function stepProj(L, q, dt) {
+    if (q.wait > 0) { q.wait -= dt; return; }
+    q.t = (q.t || 0) + dt; q.life -= dt; q.vy += (q.g || 0) * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+    if (q.life <= 0 || q.y > L.ph + 60 || q.x < -60 || q.x > L.pw + 60) { q.dead = true; return; }
+    if (q.tile && L.solidAt(q.x, q.y)) { q.dead = true; return; }        // the host shows the splash/spark (cosmetic event)
+    if (q.kind === 'drip' && L.liquidY !== null && q.y > L.liquidY + 3) q.dead = true;
+  }
+  function newProj(L, d, tm) {
+    const q = Object.assign({ x: 0, y: 0, vx: 0, vy: 0, r: 3, kind: 'orb', col: '#ff5d5d', life: 4, g: 0, dmg: 1, t: 0, tile: false, cut: false, pierce: false, friendly: false }, d);
+    // it has been flying for a while by the time the news arrives: catch up to what the screen shows now (or wait if it is not due yet)
+    const g = L._rg, age = g && g.off !== null ? performance.now() / 1000 - g.off - g.D - tm : 0;
+    if (age < 0) q.wait = -age;
+    for (let a = Math.min(0.5, age); a > 0 && !q.dead; a -= 1 / 60) stepProj(L, q, Math.min(1 / 60, a));
+    return q;
+  }
+  // a keyframe lists every live projectile: add the ones I missed, drop the ones that are gone
+  function syncProjs(L, list, tm) {
+    const have = new Map(); for (const q of L.projs) if (q.pid) have.set(q.pid, q);
+    L.projs = list.map((d) => have.get(d.pid) || newProj(L, d, tm));
+  }
+  // reliable events from the host about my body and the world around me
+  coop.guestRel = (L, ev) => {
+    const p = L.me;
+    if (ev.k === 'proj') { if (!L.projs.some((q) => q.pid === ev.pid)) L.projs.push(newProj(L, ev, ev.tm)); return; }
+    if (ev.k === 'projDead') { for (const q of L.projs) if (q.pid === ev.pid) q.dead = true; return; }
+    if (ev.k === 'heal') { p.hp = Math.min(p.maxHp, p.hp + ev.n); if (ev.safe) p.setSafe(ev.safe.x, ev.safe.y); }
+    else if (ev.k === 'revive') guestRevive(L, ev);
+  };
+  // each revive is numbered: the event and the snapshot copy of it are applied once, whichever comes first
+  function guestRevive(L, ev) {
+    const p = L.me;
+    if (ev.rg !== undefined && ev.rg <= (p._rg || 0)) return;
+    if (ev.rg !== undefined) p._rg = ev.rg;
+    if (!p.dead) return;
+    p.dead = false; p.hp = ev.hp; p.x = ev.x; p.y = ev.y; p.vx = p.vy = 0; p.inv = 2; p.gone = false; p.hurtT = 0;
+  }
+  // ---------- the guest runs its own body: fights, hurts and hazards are decided here, at once, against what this screen shows ----------
+  // Damage dealt is only *announced* (reliable 'hit' event); the host owns the creatures and applies it after checking it makes sense.
+  // remember which hits this screen already showed, so the host's echo of the same hit is not played a second time
+  function predicted(key) { const now = performance.now(); coop.pred.set(key, now + 2000); if (coop.pred.size > 40) for (const [k, t] of coop.pred) if (t < now) coop.pred.delete(k); }
+  // a bad line (RTT over 250 ms or a stall in the last 5 s): a little more mercy after each hit, and no damage from creatures that are only being guessed at
+  const laggy = () => coop.ping > 250 || coop.stalls.length > 0;
+  // my hit kills it (as far as this screen knows): it can no longer hurt me, even though the host's word of its death is a round trip away.
+  // The guess expires after 1 s, so a hit the host rejects only costs a moment of safety.
+  function predictHit(e, d) {
+    if (e.isBoss || typeof e.hp !== 'number') return;
+    const now = performance.now(), base = e._phT > now ? e._ph : e.hp;
+    e._ph = base - d; e._phT = now + 1000;
+    if (e._ph <= 0) e._pdead = now + 1000;
+  }
+  const predDead = (e) => e._pdead > performance.now();
+  function guestCombat(L, p) {
+    if (p.dead || p.gone) return;
+    if (L.boss && (L.boss.dying || L.boss.dead)) p.inv = Math.max(p.inv, 99);       // the boss is going down: nothing hurts any more
+    const canHit = (e) => !(e.isBoss && (!e.active || e.dying));
+    if (p.atkT > 0 && p.atkLive) {
+      const box = p.atkBox();
+      for (const e of L.ents) {
+        if (e.dead || e[p.hitKey] === p.atkId || e.noHit || predDead(e)) continue;
+        const hbs = e.hurtboxes();
+        for (let bi = 0; bi < hbs.length; bi++) {
+          const b = hbs[bi];
+          if (!G.overlap(box, b)) continue;
+          e[p.hitKey] = p.atkId;
+          if (canHit(e) && (!e.isBoss || b.head !== undefined || !e.heads)) {
+            if (!b.armor) { coop.rel('hit', { eid: e._id, how: 'swipe', dmg: p.atkDmg, dx: p.atkDir === 'f' ? p.atkFace : 0, dy: p.atkDir === 'u' ? -1 : p.atkDir === 'd' ? 1 : 0, atk: p.atkId, bi }); predictHit(e, p.atkDmg); }
+            predicted('w' + p.atkId);
+            if (!b.armor) A.sfx('hit');                                                // sound at the moment of contact, not a round trip later
+            p.onHit(e, b.armor ? 'block' : 'hit', b);                              // my own reactions: recoil, pogo, sparks, a 30 ms hitstop
+          }
+          break;
+        }
+      }
+      for (const q of L.projs) {
+        if (q.dead || !q.cut || q.friendly) continue;
+        if (q.x + q.r > box.x && q.x - q.r < box.x + box.w && q.y + q.r > box.y && q.y - q.r < box.y + box.h) {
+          q.dead = true; L.spark(q.x, q.y, q.col, 6); A.sfx('clang'); L.stop(0.03); coop.rel('cut', { pid: q.pid });
+          if (p.atkDir === 'd') p.bounce(0.85);
+        }
+      }
+      for (const s of L.springs) if (p.atkDir === 'd' && G.overlap(box, s)) p.spring(s);
+    }
+    const hb = p.hurtbox();
+    for (const e of L.ents) {
+      if (e.dead || e.passive || predDead(e)) continue;
+      for (const b of e.harmboxes()) {
+        if (!G.overlap(hb, b)) continue;
+        if (p.dashT > 0 && e.dashable !== false) {
+          if (e[p.dashKey] !== p.dashId) { e[p.dashKey] = p.dashId; if (canHit(e)) { coop.rel('hit', { eid: e._id, how: 'dash', dmg: 1, dx: p.dashDx || p.face, dy: 0, atk: p.dashId, bi: -1 }); predictHit(e, 1); predicted('d' + p.dashId); A.sfx('hit'); L.spark(Math.max(b.x, Math.min(p.x + 5, b.x + b.w)), Math.max(b.y, Math.min(p.y + 5, b.y + b.h)), '#fff3e4', 6); L.stop(0.05); L.shake(0.2); } }
+        } else if (e.stompable && p.vy > 30 && p.prevBottom <= b.y + Math.min(8, b.h * 0.6)) {
+          coop.rel('hit', { eid: e._id, how: 'stomp', dmg: 1, dx: 0, dy: 1, atk: (p._stompN = (p._stompN || 0) + 1), bi: -1 });
+          predictHit(e, 1e9); predicted('s' + p._stompN); A.sfx('squish'); L.spark(p.x + 5, b.y, '#fff3e4', 6);
+          p.y = b.y - p.h; p.bounce(1); L.stop(0.05);
+        } else if (p.grace <= 0 && !(e._ex && laggy())) p.hurt(e.dmg || 1, b.x + b.w / 2);
+        break;
+      }
+    }
+    const hz = L.hazardAt(p);
+    if (hz) { if (hz === 'liq') { L.burst(p.x + 5, p.y + 8, 12, [L.th.liq, L.th.liqHi], 110, 300); A.sfx('splash'); } p.hazard(); }
+  }
   coop.guestUpdate = (L, dt) => {
     if (!L._tiles0) return;
     ensureIds(L);
+    const ms = [];
     while (coop.q.length) {
-      const m = coop.q.shift();
-      if (m.t === 'fx') { Object.assign(L.me, m.d); coop.fxAck = m.q; } else applySnap(L, m);
+      const m = coop.q[0];
+      if (m.e < L._ep) { coop.q.shift(); continue; }      // belongs to an earlier level
+      if (m.e > L._ep) break;                              // belongs to the next level: keep it for that scene
+      coop.q.shift(); ms.push(m);
     }
+    // sounds and effects older than 300 ms (a backlog after a stall) are not played
+    ms.forEach((m) => { if (m.t === 's') applySnap(L, m); });
+    if (L._rg) L._rg.dt = dt;
+    renderTimeline(L);
+    // paused on the host: the host's world stands still, so everything this screen simulates by itself (projectiles, clock hazards,
+    // platforms, my own body and fights) must stand still too, or I would be hurt by things that are frozen on the host
+    const held = coop.hostState.st === 'paused';
+    if (!held) localTick(L, dt);
+    while (coop.relQ.length) { const r = coop.relQ[0]; if (r.e > L._ep) break; coop.relQ.shift(); if (r.e === L._ep) coop.guestRel(L, r.ev); }
+    // lost track of the host's state (dropped messages): ask for a complete snapshot, at most once a second
+    if (coop.needFull && performance.now() - (coop.lastFull || 0) > 1000) { coop.lastFull = performance.now(); gsend({ t: 'full', e: L._ep }); }
     L.trauma = Math.max(0, L.trauma - dt * 2.2);
     if (L.flash > 0) L.flash = Math.max(0, L.flash - dt * 3);
+    const p = L.me;
+    if (!held) {
     L.time += dt;
     L.blinkPhase = Math.floor(L.time / L.blinkPeriod) % 2;
     for (const m of L.plats) {
@@ -6503,18 +7361,29 @@ G.VOICE = {
       const period = (span / m.speed) * 2, u = 0.5 - 0.5 * Math.cos(((L.time / period + m.ph) % 1) * Math.PI * 2), v = G.lerp(m.a, m.b, u);
       if (m.ax) { m.dx = v - m.x; m.dy = 0; m.x = v; } else { m.dy = v + 2 - m.y; m.dx = 0; m.y = v + 2; }
     }
-    const p = L.me;
-    p.update(dt);
+    {
+      const T = G.TILE, x0 = Math.floor(p.x / 16), x1 = Math.floor((p.x + p.w - 0.001) / 16), y0 = Math.floor(p.y / 16), y1 = Math.floor((p.y + p.h - 0.001) / 16);
+      for (const i of L._myHold) { const tx = i % L.w, ty = (i / L.w) | 0; if (tx < x0 || tx > x1 || ty < y0 || ty > y1) L._myHold.delete(i); }
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+        const tt = L.tile(tx, ty);
+        if ((tt === T.CRUMBLE || tt === T.BLINK_A || tt === T.BLINK_B) && !Level.prototype.solid.call(L, tx, ty)) L._myHold.add(ty * L.w + tx);
+      }
+    }
+    if (L.hitstop > 0) L.hitstop -= dt;
+    else { p.update(dt); guestCombat(L, p); }
     const hb = p.hurtbox();
     for (const sp of L.springs) { if (sp.t > 0) sp.t -= dt; if (p.vy >= 0 && G.overlap(hb, sp) && p.dashT <= 0 && !p.dead) p.spring(sp); }
     L.sign = null;
     for (const sg of L.signs) if (Math.abs(p.x + p.w / 2 - sg.x) < 26 && Math.abs(p.y + p.h - sg.y) < 30) L.sign = sg;
-    // smoothing offsets decay
-    const f = Math.exp(-dt * 20);
-    const decay = (o) => { const sm = o._sm; if (!sm) return; for (const k in sm) { sm[k] *= f; if (Math.abs(sm[k]) < 0.05) delete sm[k]; } };
-    for (const e of L.ents) decay(e);
-    decay(L.partner);
-    for (const q of L.projs) { q.t = (q.t || 0) + dt; q.vy += (q.g || 0) * dt; q.x += q.vx * dt; q.y += q.vy * dt; }
+    for (const q of L.projs) {
+      if (q.dead) continue;
+      stepProj(L, q, dt);
+      const hb2 = p.hurtbox();
+      if (!q.dead && !(q.wait > 0) && !q.friendly && !p.dead && !p.gone && q.x + q.r > hb2.x && q.x - q.r < hb2.x + hb2.w && q.y + q.r > hb2.y && q.y - q.r < hb2.y + hb2.h && p.dashT <= 0) {
+        if (p.hurt(q.dmg, q.x) && !q.pierce) { q.dead = true; L.spark(q.x, q.y, q.col, 5); coop.rel('projHit', { pid: q.pid }); }
+      }
+    }
+    if (L.projs.length > 30 && L.projs.some((q) => q.dead)) L.projs = L.projs.filter((q) => !q.dead);
     const fx = L.fx;
     for (let i = fx.length - 1; i >= 0; i--) {
       const q = fx[i]; q.life -= dt;
@@ -6526,92 +7395,271 @@ G.VOICE = {
         if (q.bounce && q.vy > 0 && L.solidAt(q.x, q.y + 1)) { q.vy *= -0.45; q.vx *= 0.7; q.y -= 1; }
       }
     }
+    }
     L.events.length = 0;
     if (!L.cam.frozen) L.updateCam(dt);
     // my state -> host, 30 times a second
-    if ((coop.gTick = (coop.gTick || 0) + 1) % 2 === 0) {
-      const d = deltaDump(coop.gs, 'me', p);
-      if (d) send({ t: 'st', d, a: coop.fxAck });
-      else if (coop.gTick % 30 === 0) send({ t: 'st', d: {}, a: coop.fxAck });
+    if ((coop.gTick = (coop.gTick || 0) + 1) % coop.rate.st === 0) {
+      if (coop.gTick % 150 === 0) coop.gsPrev = null;                 // now and then the whole body again, so a lost message cannot leave the host with a stale field
+      const cur = encAll(PLAYERSP, p), d = sparse(coop.gsPrev, cur);
+      const sa = L._rg ? L._rg.last : 0;
+      const gt = r2(performance.now() / 1000);
+      if (d) { if (gsend({ t: 'st', d, sa, gt })) coop.gsPrev = cur; }
+      else if (coop.gTick % 30 === 0 || coop.relWake || (R.out.length && coop.gTick % 6 === 0)) gsend({ t: 'st', d: [], sa, gt });
     }
   };
 
-  // smoothing offsets applied only while drawing
-  const oDraw = Level.prototype.draw;
-  Level.prototype.draw = function (g) {
-    if (!this.net) return oDraw.call(this, g);
-    const objs = this.net === 'guest' ? this.ents.concat([this.partner]) : [this.partner];
-    for (const o of objs) if (o && o._sm) for (const k in o._sm) o[k] += o._sm[k];
-    try { return oDraw.call(this, g); } finally { for (const o of objs) if (o && o._sm) for (const k in o._sm) o[k] -= o._sm[k]; }
+  coop.reviveLeft = (L, q) => {
+    if (!q || !q.dead) return null;
+    if (L.net === 'host') { const e = (L.reviveQ || []).find((r) => r.p === q); return e ? Math.max(0, e.t) : null; }
+    const who = q === L.me ? 2 : 1, e = (L._rv || []).find((r) => r[0] === who);
+    if (e) return Math.max(0, e[1] / 10 - (performance.now() - (L._rvAt || 0)) / 1000);
+    return q === L.me && q._downAt ? Math.max(0, REVIVE_T - (performance.now() - q._downAt) / 1000) : null;
+  };
+  // a fallen player stays visible: a faint ghost where it fell, with a ring that empties as the revive comes closer
+  coop.drawDowned = (g, L, cx, cy) => {
+    for (const q of [L.me, L.partner]) {
+      if (!q || !q.dead) continue;
+      const left = coop.reviveLeft(L, q);
+      const x = q._downX !== undefined ? q._downX : q.x, y = Math.min(q._downY !== undefined ? q._downY : q.y, L.ph - 20);
+      const ox = q.x, oy = q.y, gone = q.gone; q.x = x; q.y = y; q.dead = false; q.gone = false;
+      g.globalAlpha = 0.35; try { q.draw(g, cx, cy); } finally { g.globalAlpha = 1; q.dead = true; q.gone = gone; q.x = ox; q.y = oy; }
+      const px = Math.round(x + q.w / 2) - cx, py = Math.round(y) - cy - 14;
+      const col = q === L.me ? '#ffb38a' : '#9cc4ff';
+      g.lineWidth = 2; g.strokeStyle = 'rgba(13,10,18,0.8)'; g.beginPath(); g.arc(px, py, 7, 0, Math.PI * 2); g.stroke();
+      if (left !== null) {
+        g.strokeStyle = col; g.beginPath(); g.arc(px, py, 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - left / REVIVE_T)); g.stroke();
+        G.text(g, left > 0 ? String(Math.ceil(left)) : '..', px, py - 3, col, { tiny: true, align: 'c' });
+      } else G.text(g, '!', px, py - 3, col, { tiny: true, align: 'c' });
+    }
   };
   coop.drawPartner = (g, L, cx, cy) => {
     const q = L.partner;
     if (q.dead || q.gone) return;
+    if (q.away || q.lagging) g.globalAlpha = 0.4;
     q.draw(g, cx, cy);
+    g.globalAlpha = 1;
     const px = Math.round(q.x + q.w / 2) - cx, py = Math.round(q.y) - cy;
-    G.text(g, L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
+    G.text(g, q.away ? 'away' : q.lagging ? 'lag' : L.net === 'host' ? 'P2' : 'P1', px, py - 9, L.net === 'host' ? '#9cc4ff' : '#ffb38a', { tiny: true, align: 'c' });
+  };
+  // little dot beside each player's hit points: how good the line is (green < 120 ms and no stalls, yellow < 250 ms, red worse; grey = partner not answering)
+  coop.dotColor = (partner) => {
+    if (partner) { const q = G.scene && G.scene.L && G.scene.L.partner; if (q && (q.lagging || q.away)) return '#8d8798'; }
+    const rtt = coop.ping, st = coop.stalls.length;
+    return rtt < 120 && !st ? '#7fe08a' : rtt < 250 ? '#ffd27a' : '#ff6b6b';
   };
   coop.drawPartnerHud = (ug, L, hudY, dy) => {
     const q = L.partner, S = G.SPR, on = L.net === 'host' ? G.tint(S.pip, '#6aa8ff') : S.pip;
     for (let i = 0; i < q.maxHp; i++) ug.drawImage(i < q.hp ? on : S.pipOff, 6 + i * 9, hudY + dy);
-    if (q.dead) G.text(ug, 'down...', 6 + q.maxHp * 9 + 2, hudY + dy, '#8d8798', { tiny: true });
+    ug.fillStyle = '#0d0a12'; ug.fillRect(6 + q.maxHp * 9, hudY + dy + 1, 6, 6); ug.fillStyle = coop.dotColor(true); ug.fillRect(6 + q.maxHp * 9 + 1, hudY + dy + 2, 4, 4);
+    if (q.dead) { const l = coop.reviveLeft(L, q); G.text(ug, l !== null && !L.me.dead ? 'back in ' + Math.ceil(l || 0.01) : 'down', 6 + q.maxHp * 9 + 9, hudY + dy, '#8d8798', { tiny: true }); }
+    // my own body is down: say so, and when I come back
+    if (L.me.dead) {
+      const l = coop.reviveLeft(L, L.me), both = q.dead;
+      const t = both ? 'BOTH DOWN' : l !== null && l > 0 ? 'DOWN  -  BACK IN ' + Math.ceil(l) : l !== null ? 'DOWN  -  REVIVING...' : 'DOWN';
+      const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), 40, w, 15, '#17131f', '#ffb38a', '#0d0a12');
+      G.text(ug, t, W / 2, 44, '#ffd9c4', { align: 'c' });
+    }
   };
+
+  // ---------- line quality: measured every 2 s, rates follow it ----------
+  // good: host 15 Hz / guest 30 Hz.  RTT > 200 ms or jitter > 40 ms: 10 / 20 Hz.  RTT > 350 ms or recent stalls: 6 / 15 Hz.
+  // A change needs the previous one to be at least 3 s old, so the rate does not flap.
+  const RATES = [{ snap: 4, st: 2 }, { snap: 6, st: 3 }, { snap: 10, st: 4 }];
+  coop.rate = Object.assign({ level: 0, since: 0 }, RATES[0]);
+  coop.net = { rtt: 0, jit: 0, stalls: 0, lost: 0, hz: 0, kbIn: 0, kbOut: 0, level: 0 };
+  coop.bytesIn = 0; coop.bytesOut = 0;
+  function netTick() {
+    const now = performance.now(), N = coop.net, win = 2;
+    coop.stalls = coop.stalls.filter((t) => now - t < 5000);
+    const g = G.scene && G.scene.L && G.scene.L._rg;
+    N.rtt = coop.ping; N.jit = Math.round((coop.role === 'host' ? coop.pJit() : g ? g.jit : 0) * 1000); N.stalls = coop.stalls.length; N.lost = coop.lost;
+    N.kbIn = +(coop.bytesIn / 1024 / win).toFixed(2); N.kbOut = +(coop.bytesOut / 1024 / win).toFixed(2); coop.bytesIn = coop.bytesOut = 0;
+    const want = N.rtt > 350 || N.stalls > 0 ? 2 : N.rtt > 200 || N.jit > 40 ? 1 : 0;
+    if (want !== coop.rate.level && now - coop.rate.since >= 3000) { Object.assign(coop.rate, RATES[want], { level: want, since: now }); }
+    N.level = coop.rate.level; N.hz = coop.role === 'host' ? Math.round(60 / coop.rate.snap) : Math.round(60 / coop.rate.st);
+    ui.render();
+  }
 
   // ---------- connection ----------
   const wait = () => ({
-    t: 0,
+    t: 0, isWait: true,
     update(dt) { this.t += dt; },
     draw(g, ug) {
       g.fillStyle = '#0d0a12'; g.fillRect(0, 0, W, H);
       G.text(ug, 'CO-OP', W / 2, H / 2 - 22, '#6aa8ff', { align: 'c', scale: 2 });
       G.text(ug, coop.hostOn ? 'waiting for the host to start a level' + '.'.repeat(1 + ((this.t * 2) | 0) % 3) : 'host is offline', W / 2, H / 2 + 2, '#fff3e4', { align: 'c' });
       G.text(ug, coop.ping ? 'ping ' + coop.ping + ' ms' : '', W / 2, H / 2 + 16, '#8d8798', { align: 'c', tiny: true });
+      if (coop.diffLine) G.text(ug, coop.diffLine, W / 2, H / 2 + 28, '#ffd27a', { align: 'c', tiny: true });
     },
   });
+  // short on-screen message ("host disconnected"), drawn over whatever scene is showing
+  const drawNotice = (ug) => {
+    if (coop.verBad && coop.open) { const t = 'THE OTHER SCREEN RUNS ANOTHER VERSION - RELOAD BOTH PAGES'; const w = G.textW(t, { tiny: true }) + 12; G.panel(ug, Math.round((W - w) / 2), 12, w, 11, '#3a0f14', '#ff6b6b', '#0d0a12'); G.text(ug, t, W / 2, 15, '#ffd9d9', { align: 'c', tiny: true }); }
+    if (coop.dbgOn) coop.dlog.forEach((t, i) => G.text(ug, t, 6, 70 + i * 8, '#9cc4ff', { tiny: true }));
+    if (coop.reconnecting || coop.hostLag) { const t = (coop.hostLag && !coop.reconnecting ? 'host reconnecting' : 'reconnecting') + '.'.repeat(1 + ((G.time * 2) | 0) % 3); const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), H - 22, w, 15, '#17131f', '#ffd27a', '#0d0a12'); G.text(ug, t, W / 2, H - 18, '#ffd27a', { align: 'c' }); }
+    const n = coop.notice; if (!n) return;
+    const w = G.textW(n.text) + 16; ug.globalAlpha = Math.min(1, n.t * 3);
+    G.panel(ug, Math.round((W - w) / 2), 26, w, 15, '#17131f', '#ffb3b3', '#0d0a12');
+    G.text(ug, n.text, W / 2, 30, '#ffd9d9', { align: 'c' }); ug.globalAlpha = 1;
+  };
   coop.waitScene = wait;
+  function qDrop() { /* dropped snapshots need no acknowledgement: the next one is built against the last one the guest really applied */ }
   function onMsg(m) {
     if (m.t === 'pg') { send({ t: 'po', ts: m.ts }); return; }
     if (m.t === 'po') { coop.ping = Math.round(performance.now() - m.ts); ui.render(); return; }
+    if (m.t === 's' || m.t === 'st') {
+      // a stall = this message came much later than the sender's own clock says it should have (a gap the sender did not make)
+      const now = performance.now(), stamp = m.t === 's' ? m.tm : m.gt;
+      if (coop.lastRx && stamp !== undefined && coop.lastStamp !== undefined && (now - coop.lastRx) - (stamp - coop.lastStamp) * 1000 > 250) { coop.stalls.push(now); coop.stallLog.push(now); }
+      coop.lastRx = now; if (stamp !== undefined) coop.lastStamp = stamp;
+    }
+    if ((m.t === 's' || m.t === 'st' || m.t === 'hs' || m.t === 'full' || m.t === 'ack') && !rx(m)) return;
     if (coop.role === 'host') {
-      if (m.t === 'peer') {
-        coop.peer = !!m.on; ui.render();
+      if (m.t === 'code') { coop.code = m.v; ui.showCode(); }
+      else if (m.t === 'peer') {
         const sc = G.scene;
-        if (m.on) { if (sc && sc.L && !sc.L.net) G.go(() => G.Scenes.play(sc.L.id, sc.L.def.boss ? null : sc.L.snapshot())); }
-        else if (sc && sc.L && sc.L.net) { sc.L.net = null; sc.L.partner = null; sc.L.p2 = null; }
-      } else if (m.t === 'st') { Object.assign(coop.rAll, m.d); coop.rAck = m.a || 0; coop.rHas = true; }
-      else if (m.t === 'cr' || m.t === 'bt') coop.inbox.push(m);
+        if (m.lag) { coop.peerLag = true; ui.render(); return; }                          // the friend's line dropped: they have 15 s to come back
+        coop.peerLag = false;
+        if (m.on && m.resume) { coop.peer = true; coop.kfNext = true; coop.lastRx = 0; coop.say('partner is back'); ui.render(); return; }
+        if (m.on && sc && sc.L && sc.L.net) coop.partnerLost(sc.L);                      // a different friend (or a fresh start): begin cleanly
+        coop.peer = !!m.on; ui.render(); if (m.on) { coop.resetNet(); coop.sendCfg(); }
+        if (m.on) { if (sc && sc.L && !sc.L.net) { if (G.transitioning()) coop.pendingAttach = true; else coop.attachPartner(sc.L); } }
+        else if (sc && sc.L && sc.L.net) coop.partnerLost(sc.L);
+      } else if (m.t === 'st') {
+        for (let i = 0; i < m.d.length; i += 2) { const f = PLAYERSP[m.d[i]]; if (f) coop.rAll[f.k] = decOne(f, m.d[i + 1]); }
+        coop.rHas = true;
+        if (m.gt !== undefined) pNote(m.gt, performance.now());
+        const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
+      }
+      else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
+      else if (m.t === 'ver') coop.verBad = m.v !== BUILD;
+      else if (m.t === 'err') { console.error('P2 error: ' + m.m); coop.say('P2 error: ' + String(m.m).slice(0, 40)); }
     } else {
-      if (m.t === 'host') { coop.hostOn = !!m.on; ui.render(); }
-      else if (m.t === 'start') { coop.q.length = 0; coop.startMsg = m; coop.leaveMsg = false; }
+      if (m.t === 'host' && m.lag) {                                                      // the host's line dropped: it has 15 s to come back
+        const L = G.scene && G.scene.L; if (L && L.net === 'guest' && L.partner) L.partner.lagging = true;
+        coop.hostLag = true; coop.say('host reconnecting...'); ui.render();
+      }
+      else if (m.t === 'host') {
+        const L = G.scene && G.scene.L; coop.hostLag = false;
+        if (L && L.net === 'guest' && L.partner) L.partner.lagging = false;
+        if (m.on && m.resume) { coop.needFull = true; coop.lastFull = 0; coop.say('host is back'); }
+        coop.hostOn = !!m.on; ui.render();
+        if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
+      }
+      else if (m.t === 'start') { coop.verBad = m.v !== BUILD; coop.hsTm = -1; coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
+      else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) { coop.hostState = m.hs; if (m.tm !== undefined) coop.hsTm = m.tm; } }
+      else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
+      else if (m.t === 'tok') { if (m.v !== coop.token) { if (coop.token) coop.resetNet(); coop.token = m.v; } }
       else if (m.t === 'leave') { coop.q.length = 0; coop.leaveMsg = true; }
-      else if (m.t === 's' || m.t === 'fx') { if (coop.q.length < 400) coop.q.push(m); }
+      else if (m.t === 's') {
+        coop.latestTm = m.tm; coop.latestAt = m._at = performance.now();
+        coop.q.push(m);
+        if (coop.q.length > 400) { qDrop(coop.q.splice(0, coop.q.length - 400)); coop.needFull = true; }   // keep the newest, ask for a keyframe
+      }
     }
   }
-  coop.connect = (role, code) => {
-    if (coop.ws) { try { coop.ws.close(); } catch (e) {} }
-    coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = 'connecting...'; ui.render();
-    const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + '&code=' + encodeURIComponent(code || ''));
+  // A guest whose line drops keeps its level and tries again (0.5 s, 1 s, 2 s ... 15 s). The relay keeps its seat for 15 s and hands back
+  // the same token, so the host never sees it leave: the fight goes on where it was and nothing is restarted.
+  // the host key lives in this browser only (localStorage may be blocked: then it is asked for every time)
+  const hostKey = (set) => {
+    try { if (set === null) localStorage.removeItem('clawd.hostKey'); else if (set !== undefined) localStorage.setItem('clawd.hostKey', set); else return localStorage.getItem('clawd.hostKey') || ''; } catch (e) { /* blocked */ }
+    return '';
+  };
+  coop.hostKey = hostKey;
+  const FATAL = new Set([4000, 4001, 4002, 4003, 4004, 4005, 4010]);       // 4011 (silent line) is not fatal: reconnect
+  // The host does the same (the relay keeps its seat for 15 s): its level, partner and unacknowledged events stay where they are.
+  function reconnect() {
+    clearTimeout(coop.rcT);
+    const role = coop.role, n = coop.rc = (coop.rc || 0) + 1, delay = Math.min(15000, 500 * Math.pow(2, n - 1));
+    coop.reconnecting = true; ui.render();
+    coop.rcT = setTimeout(() => { if (coop.reconnecting) coop.connect(role, coop.lastCode, true); }, delay);
+  }
+  coop.connect = (role, code, resume) => {
+    if (coop.ws) { coop.ws.onclose = null; try { coop.ws.close(); } catch (e) {} }
+    clearInterval(coop.pgT);
+    if (!resume) { coop.token = null; coop.rc = 0; coop.reconnecting = false; clearTimeout(coop.rcT); coop.hostUp = false; }
+    coop.lastCode = code; coop.hostLag = false; coop.role = role; coop.open = false; coop.peer = false; coop.hostOn = false; coop.status = resume ? 'reconnecting...' : 'connecting...'; ui.render();
+    const ws = coop.ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?role=' + role + (role === 'host' ? '&key=' + encodeURIComponent(code || '') + (resume ? '&resume=1' : '') : '&code=' + encodeURIComponent(code || '') + (resume && coop.token ? '&token=' + coop.token : '')));
     ws.onopen = () => {
-      coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected'; ui.render();
-      if (role === 'guest') G.go(() => wait(), { speed: 3 });
-      coop.pgT = setInterval(() => send({ t: 'pg', ts: performance.now() }), 2000);
+      coop.open = true; coop.status = role === 'host' ? 'hosting' : 'connected';
+      if (resume) { coop.reconnecting = false; coop.rc = 0; if (role === 'guest') { coop.needFull = true; coop.lastFull = 0; } coop.say('back online'); } else coop.resetNet();
+      if (role === 'host') coop.hostUp = true;
+      ui.render();
+      if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
+      if (role === 'host' && !resume) coop.fetchCfg();
+      if (role === 'guest') send({ t: 'ver', v: BUILD });
+      if (role === 'guest' && !resume) G.go(() => wait(), { speed: 3 });
+      coop.lastMsgAt = performance.now();
+      coop.pgT = setInterval(() => {
+        // the relay sends a heartbeat every 2 s: 6 s of total silence means the line is dead even if the socket still looks open
+        if (performance.now() - coop.lastMsgAt > 6000) { const h = ws.onclose; ws.onclose = null; try { ws.close(); } catch (e) { /* */ } if (h) h.call(ws, { code: 1006 }); return; }
+        send({ t: 'pg', ts: performance.now() });
+      }, 2000);
+      // when the game loop is not running (background tab, pause) events still need a carrier
+      clearInterval(coop.kaT);
+      clearInterval(coop.mtT); coop.mtT = setInterval(netTick, 2000);
+      coop.kaT = setInterval(() => { if (R.out.length && performance.now() - (coop.lastTx || 0) > R.resend) gsend({ t: 'ack' }); }, 150);
     };
-    ws.onmessage = (ev) => { try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
+    ws.onmessage = (ev) => { coop.bytesIn += ev.data.length; coop.lastMsgAt = performance.now(); if (ev.data === '{"t":"hb"}') return; try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
-      clearInterval(coop.pgT); coop.open = false; coop.peer = false; coop.ping = 0;
-      coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4003 ? 'host is not online yet' : 'offline';
-      const L = G.scene && G.scene.L; if (L && L.net === 'host') { L.net = null; L.partner = null; L.p2 = null; }
-      coop.role = null; ui.render();
+      clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false; coop.ping = 0;
+      coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4003 ? 'wrong host key' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
+      const L = G.scene && G.scene.L;
+      if (coop.role === 'host') {
+        // a host whose line drops keeps its world and its partner (the relay holds both seats for 15 s) and tries again with the saved key
+        if (coop.hostUp && !FATAL.has(ev.code)) {
+          if (L && L.net === 'host' && L.p2) L.p2.lagging = true;
+          coop.say('connection lost - reconnecting'); reconnect(); ui.render(); return;
+        }
+        if (ev.code === 4003) { hostKey(null); ui.askKey(); }
+        if (L && L.net === 'host') coop.partnerLost(L);
+      } else if (coop.role === 'guest') {
+        if (coop.token && !FATAL.has(ev.code)) { coop.say('connection lost - reconnecting'); reconnect(); ui.render(); return; }
+        if (L && L.net === 'guest') coop.kick = 'map'; else if (G.scene && G.scene.isWait) coop.kick = 'map'; coop.say('connection lost');
+      }
+      coop.reconnecting = false; coop.role = null; ui.render();
     };
   };
-  coop.disconnect = () => { const w = coop.ws; coop.ws = null; if (w) w.close(); clearInterval(coop.pgT); coop.open = false; coop.peer = false; coop.role = null; coop.status = 'offline'; ui.render(); };
+  coop.fetchCfg = () => fetch('/config').then((r) => r.json()).then((c) => {
+    coop.srv = c;
+    const d = G.diffPick(c);
+    if (Object.keys(d).length) {
+      const cd = G.save.data.coopDiff; Object.assign(cd, d);
+      cd.preset = Object.keys(G.diff.PRESETS).find((k) => ['bossPct', 'npcExtra', 'npcMult'].every((f) => G.diff.PRESETS[k][f] === cd[f])) || 'custom';
+    }
+    ui.renderDiff(); coop.sendCfg();
+  }).catch(() => {});
+  coop.disconnect = () => {
+    const w = coop.ws, L = G.scene && G.scene.L, wasGuest = coop.role === 'guest';
+    coop.ws = null; coop.token = null; coop.hostUp = false; coop.hostLag = false; coop.reconnecting = false; clearTimeout(coop.rcT); if (w) w.close(4010, 'bye'); clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false;
+    if (L && L.net === 'host') coop.partnerLost(L);
+    else if (wasGuest && ((L && L.net === 'guest') || (G.scene && G.scene.isWait))) coop.kick = 'map';
+    coop.role = null; coop.status = 'offline'; ui.render();
+  };
 
+  // a background tab stops rendering: tell the host, and resync from a keyframe when it comes back
+  document.addEventListener('visibilitychange', () => {
+    if (coop.role !== 'guest' || !coop.open) return;
+    if (document.hidden) coop.rel('away', { on: true });
+    else {
+      const L = G.scene && G.scene.L;
+      if (L && L.net === 'guest') { qDrop(coop.q); coop.q = coop.q.filter((m) => m.e > L._ep); coop.needFull = true; coop.lastFull = 0; }
+      coop.rel('away', { on: false });
+    }
+  });
   const oStep = G.step;
   G.step = function (n, quiet) {
+    if (coop.notice && (coop.notice.t -= n / 60) <= 0) coop.notice = null;
+    if (coop.pendingAttach && !G.transitioning()) { coop.pendingAttach = false; const L = G.scene && G.scene.L; if (L && !L.net) coop.attachPartner(L); }
+    if (coop.kick && !G.transitioning()) {
+      const k = coop.kick; coop.kick = null;
+      if (k === 'wait' && coop.open) G.go(() => wait(), { speed: 3.2 }); else G.go(() => G.Scenes.map(), { speed: 3.2 });
+    }
     if (coop.role === 'guest' && coop.open && !G.transitioning()) {
       if (coop.startMsg) {
-        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools;
+        const m = coop.startMsg; coop.startMsg = null; coop.tools = m.tools; coop.startEpoch = m.e || 0; coop.startSpawn = m.spawn || null; coop.diffLine = G.diff.label(m.diff);
         G.go(() => { coop.building = true; try { return G.Scenes.play(m.id, m.snap); } finally { coop.building = false; } }, { speed: 3.2 });
       } else if (coop.leaveMsg) { coop.leaveMsg = false; if (G.scene.L) G.go(() => wait(), { speed: 3.2 }); }
     }
@@ -6620,50 +7668,95 @@ G.VOICE = {
   const oSet = G.setScene;
   G.setScene = function (s) {
     const old = G.scene;
+    if (s && s.draw && !s._cn) { const d = s.draw; s._cn = 1; s.draw = function (g, ug) { d.call(this, g, ug); drawNotice(ug); }; }
     oSet.call(this, s);
     if (coop.role === 'host' && coop.open && coop.peer) {
-      if (s.L && s.L.net === 'host') send({ t: 'start', id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools });
+      if (s.L && s.L.net === 'host') send({ t: 'start', v: BUILD, id: s.L.id, snap: s.L.snapshot(), tools: G.save.data.tools, e: coop.epoch, diff: G.diff.clean(coop.diffCfg()) });
       else if (old && old.L && !s.L) send({ t: 'leave' });
     }
   };
 
   // ---------- tiny overlay UI ----------
   const ui = {
+    showCode() { /* replaced when the panel exists */ },
+    askKey() { /* replaced when the panel exists */ },
     render() {
       if (!this.btn) return;
+      this.showCode();
       const on = coop.open;
-      this.btn.textContent = on ? '2P \u25CF' + (coop.ping ? ' ' + coop.ping : '') : '2P';
-      this.btn.style.color = on ? (coop.role === 'host' && !coop.peer ? '#ffd27a' : '#7fe08a') : '#fff';
+      // the dot shows the connection quality: green < 120 ms, yellow < 250 ms, red above (yellow while the host waits for a friend)
+      const dot = !on ? '' : coop.role === 'host' && !coop.peer ? '#ffd27a' : !coop.ping ? '#7fe08a' : coop.ping < 120 ? '#7fe08a' : coop.ping < 250 ? '#ffd27a' : '#ff6b6b';
+      this.btn.innerHTML = on ? '2P <span style="color:' + dot + '">\u25CF</span>' + (coop.ping ? ' ' + coop.ping : '') : '2P';
+      this.btn.style.color = '#fff';
       let s = coop.status;
       if (coop.role === 'host' && on) s = coop.peer ? 'friend connected - pick a level' : 'waiting for your friend (give them the link and code)';
-      if (coop.role === 'guest' && on) s = coop.hostOn ? 'connected to host' : 'host is not online yet';
+      if (coop.role === 'guest' && on) s = coop.hostLag ? 'host reconnecting...' : coop.hostOn ? 'connected to host' : 'host is not online yet';
+      if (coop.reconnecting && !on) s = 'reconnecting...';
       this.stat.textContent = s;
+      if (this.net) {
+        const N = coop.net, now = performance.now(); coop.stallLog = coop.stallLog.filter((t) => now - t < 60000);
+        this.net.style.display = on && (coop.role === 'guest' || coop.peer) ? '' : 'none';
+        this.net.innerHTML = 'ping <b style="color:' + coop.dotColor(false) + '">' + (coop.ping || '-') + ' ms</b> &middot; jitter ' + N.jit + ' ms &middot; stalls ' + coop.stallLog.length + '/min<br>' +
+          'sending ' + N.hz + ' Hz (' + ['good', 'slow line', 'bad line'][N.level] + ') &middot; in ' + N.kbIn + ' / out ' + N.kbOut + ' KB/s';
+      }
       this.hostRow.style.display = on ? 'none' : '';
       this.codeBox.style.display = on && coop.role === 'host' ? '' : 'none';
       this.off.style.display = on ? '' : 'none';
+      if (this.diffBox) { this.diffBox.style.display = on && coop.role === 'host' && coop.peer ? '' : 'none'; if (this.renderDiff) this.renderDiff(); }
     },
   };
   if (/^https?:$/.test(location.protocol)) {
     const css = document.createElement('style');
-    css.textContent = '#coopBtn{position:fixed;top:6px;left:6px;z-index:60;font:bold 12px monospace;padding:4px 8px;background:rgba(20,16,30,.75);border:1px solid #555;border-radius:6px;opacity:.75}#coopBtn:hover{opacity:1}#coopP{position:fixed;top:34px;left:6px;z-index:60;width:230px;padding:10px;background:#17131f;color:#fff3e4;border:1px solid #6aa8ff;border-radius:8px;font:12px monospace;display:none}#coopP button,#coopP input{font:12px monospace;margin:3px 2px;padding:5px 8px;border-radius:5px;border:1px solid #555;background:#2a2338;color:#fff}#coopP input{width:70px}';
+    css.textContent = '#coopBtn{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:60;font:bold 12px monospace;padding:4px 8px;background:rgba(20,16,30,.75);border:1px solid #555;border-radius:6px;opacity:.75}#coopBtn:hover{opacity:1}body.touch #coopBtn{font-size:10px;padding:2px 6px;opacity:.55}#coopP{position:fixed;top:30px;left:50%;transform:translateX(-50%);z-index:60;max-width:92vw;width:230px;padding:10px;background:#17131f;color:#fff3e4;border:1px solid #6aa8ff;border-radius:8px;font:12px monospace;display:none}#coopP button,#coopP input{font:12px monospace;margin:3px 2px;padding:5px 8px;border-radius:5px;border:1px solid #555;background:#2a2338;color:#fff}#coopP input{width:70px}';
     document.head.appendChild(css);
     const btn = document.createElement('button'); btn.id = 'coopBtn'; btn.textContent = '2P'; btn.style.color = '#fff';
     const panel = document.createElement('div'); panel.id = 'coopP';
-    panel.innerHTML = '<div style="color:#6aa8ff;font-weight:bold">CO-OP (2 players)</div><div id="cStat" style="margin:6px 0;color:#bbb">offline</div>' +
-      '<div id="cRow"><button id="cHost">Host</button> <span>or</span><br><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
-      '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b></div><button id="cOff" style="display:none">Disconnect</button>';
+    panel.innerHTML = '<div style="color:#6aa8ff;font-weight:bold">CO-OP (2 players)</div><div id="cStat" style="margin:6px 0;color:#bbb">offline</div><div id="cNet" style="display:none;margin:4px 0;color:#8d8798;font-size:11px;line-height:1.5"></div>' +
+      '<div id="cRow"><span id="cHostWrap"><button id="cHost">Host</button> <span>or</span><br></span><input id="cCode" placeholder="code" maxlength="6" inputmode="numeric"><button id="cJoin">Join</button></div>' +
+      '<div id="cKeyRow" style="display:none;margin:4px 0">host key<br><input id="cKey" type="password" autocomplete="off" style="width:120px"><button id="cKeyOk">OK</button></div>' +
+      '<div id="cInfo" style="display:none;margin:4px 0">code: <b id="cShow" style="color:#ffd27a;font-size:16px"></b> <button id="cNew" title="new code (the friend is disconnected)">new code</button></div>' +
+      '<div id="cDiff" style="display:none;margin:6px 0;border-top:1px solid #333;padding-top:6px"><div style="color:#ffd27a">difficulty <span id="cLock" style="color:#888"></span></div>' +
+      '<select id="cPre"><option>easy</option><option>normal</option><option>coop</option><option>hard</option><option>nightmare</option><option>custom</option></select>' +
+      '<div>boss HP <b id="cBv"></b><input id="cB" type="range" min="0" max="100" step="10" style="width:100%"></div>' +
+      '<div>enemy hits <b id="cEv"></b><input id="cE" type="range" min="0" max="5" step="1" style="width:100%"></div>' +
+      '<div>enemy HP <b id="cMv"></b><input id="cM" type="range" min="100" max="300" step="25" style="width:100%"></div></div>' +
+      '<button id="cOff" style="display:none">Disconnect</button>';
     document.body.appendChild(btn); document.body.appendChild(panel);
-    ui.btn = btn; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
+    ui.diffBox = panel.querySelector('#cDiff');
+    const $ = (id) => panel.querySelector(id), cd = () => G.save.data.coopDiff;
+    ui.renderDiff = () => {
+      const d = cd(), lock = !!(coop.srv && coop.srv.lock), eff = G.diff.clean(coop.diffCfg());
+      $('#cPre').value = lock ? 'custom' : d.preset; $('#cB').value = eff.bossPct; $('#cE').value = eff.npcExtra; $('#cM').value = eff.npcMult;
+      $('#cBv').textContent = eff.bossPct ? '+' + eff.bossPct + '%' : 'off'; $('#cEv').textContent = '+' + eff.npcExtra; $('#cMv').textContent = eff.npcMult + '%';
+      for (const id of ['#cPre', '#cB', '#cE', '#cM']) $(id).disabled = lock;
+      $('#cLock').textContent = lock ? '(locked by the server)' : '';
+    };
+    const edit = () => { const d = cd(); d.bossPct = +$('#cB').value; d.npcExtra = +$('#cE').value; d.npcMult = +$('#cM').value; d.preset = 'custom'; G.save.write(); ui.renderDiff(); coop.sendCfg(); };
+    for (const id of ['#cB', '#cE', '#cM']) $(id).addEventListener('input', edit);
+    $('#cPre').addEventListener('change', () => { const d = cd(), v = $('#cPre').value; d.preset = v; if (G.diff.PRESETS[v]) Object.assign(d, G.diff.PRESETS[v]); G.save.write(); ui.renderDiff(); coop.sendCfg(); });
+    ui.net = panel.querySelector('#cNet');
+    ui.btn = btn; ui.panel = panel; ui.stat = panel.querySelector('#cStat'); ui.hostRow = panel.querySelector('#cRow'); ui.codeBox = panel.querySelector('#cInfo'); ui.off = panel.querySelector('#cOff');
     for (const el of [btn, panel]) for (const ev of ['keydown', 'keyup', 'pointerdown']) el.addEventListener(ev, (e) => e.stopPropagation());
     btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; });
-    const host = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-    panel.querySelector('#cHost').style.display = host ? '' : 'none';
+    // Who may host: on the PC that runs server.js (localhost) nobody needs a key. On Cloudflare only people who know the host key:
+    // the button shows up when a key is saved in this browser or the link ends in ?host
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    const canHost = local || !!hostKey() || /[?&]host\b/.test(location.search);
+    panel.querySelector('#cHostWrap').style.display = canHost ? '' : 'none';
+    ui.showCode = () => { panel.querySelector('#cShow').textContent = coop.code || ''; };
+    const startHost = (k) => { panel.querySelector('#cKeyRow').style.display = 'none'; coop.connect('host', k); };
     panel.querySelector('#cHost').addEventListener('click', () => {
-      fetch('/code').then((r) => r.text()).then((c) => { panel.querySelector('#cShow').textContent = c; coop.connect('host', c); });
+      const k = hostKey();
+      if (k || local) startHost(k); else ui.askKey();       // first time on Cloudflare: ask for the key (a local server answers 4003 only when it wants one)
     });
+    ui.askKey = () => { panel.querySelector('#cKeyRow').style.display = ''; panel.querySelector('#cKey').focus(); };      // not prompt(): blocked on some phones
+    const keyOk = () => { const k = panel.querySelector('#cKey').value.trim(); if (!k) return; hostKey(k); panel.querySelector('#cKey').value = ''; startHost(k); };
+    panel.querySelector('#cKeyOk').addEventListener('click', keyOk);
+    panel.querySelector('#cKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') keyOk(); });
+    panel.querySelector('#cNew').addEventListener('click', () => send({ t: 'newcode' }));      // plain send(), not gsend(): not a game message
     panel.querySelector('#cJoin').addEventListener('click', () => coop.connect('guest', panel.querySelector('#cCode').value.trim()));
     ui.off.addEventListener('click', () => coop.disconnect());
-    if (!host) { panel.style.display = 'block'; }
+    if (!canHost) { panel.style.display = 'block'; }
     ui.render();
   }
 })();
