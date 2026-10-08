@@ -214,9 +214,9 @@ S['softlock'] = async () => {
     const q = await T.host.evaluate(() => G.scene.L.reviveQ.length);
     await T.guest.close();
     const t0 = Date.now(); let restarted = false;
-    while (Date.now() - t0 < 6000) { if (await T.host.evaluate(() => G.scene.L !== window.__L0 && !!G.scene.L)) { restarted = true; break; } await sleep(100); }
-    const st = await T.host.evaluate(() => ({ dead: G.scene.L.me.dead, rq: (G.scene.L.reviveQ || []).length }));
-    return R(restarted, 'reviveQ before=' + q + ' restarted=' + restarted + ' after ' + (Date.now() - t0) + 'ms; now dead=' + st.dead + ' rq=' + st.rq);
+    while (Date.now() - t0 < 8000) { if (await T.host.evaluate(() => (G.scene.L !== window.__L0 && !!G.scene.L) || (G.scene.L && !G.scene.L.me.dead))) { restarted = true; break; } await sleep(100); }
+    const st = await T.host.evaluate(() => ({ dead: G.scene.L.me.dead, rq: (G.scene.L.reviveQ || []).length, same: G.scene.L === window.__L0 }));
+    return R(restarted && !st.dead, 'reviveQ before=' + q + ' back in play=' + restarted + ' after ' + (Date.now() - t0) + 'ms (revived in the same level=' + st.same + '); now dead=' + st.dead + ' rq=' + st.rq);
   } finally { await T.close(); }
 };
 S['host-gone'] = async () => {

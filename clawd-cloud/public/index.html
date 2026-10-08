@@ -22,57 +22,44 @@
   body.touch #game { cursor: auto; }
   @media (orientation: portrait) { body.touch #stage { align-items: flex-start; padding-top: 10px; box-sizing: border-box; } }
 
-  #touch {
-    position: fixed; left: 0; right: 0; bottom: 0;
-    padding: 0 16px calc(14px + env(safe-area-inset-bottom, 0px));
-    display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none;
-  }
-  #touch .cluster { display: grid; gap: 8px; pointer-events: auto; }
-  /* round analog stick: drag anywhere inside the ring, the knob follows your thumb */
+  /* ---- touch controls: the whole screen is one input layer. Left half = floating stick (it appears where the thumb lands),
+          right side = round action buttons. Fingers can slide between buttons; every tap counts, however short. ---- */
+  #touch { position: fixed; inset: 0; z-index: 40; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #touch[hidden] { display: none; }
   #stick {
-    position: relative; width: 124px; height: 124px; border-radius: 50%; pointer-events: auto; touch-action: none;
-    background: radial-gradient(circle, color-mix(in srgb, var(--panel) 70%, transparent) 0 58%, color-mix(in srgb, var(--panel) 88%, transparent) 59% 100%);
-    border: 2px solid var(--paper); box-shadow: 0 3px 0 var(--ink); box-sizing: border-box;
+    position: fixed; left: 0; top: 0; width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(244,237,224,0.07) 0 55%, rgba(244,237,224,0.13) 56% 100%);
+    border: 2px solid rgba(244,237,224,0.28); box-sizing: border-box; opacity: 0.45; transition: opacity 0.12s;
   }
-  #stick::before, #stick::after { content: ""; position: absolute; left: 50%; top: 50%; background: color-mix(in srgb, var(--paper) 22%, transparent); transform: translate(-50%, -50%); }
-  #stick::before { width: 70%; height: 1px; } #stick::after { width: 1px; height: 70%; }
+  #stick.on { opacity: 1; transition: none; }
   #knob {
-    position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
-    background: var(--paper); border: 2px solid var(--ink); box-sizing: border-box; box-shadow: 0 3px 0 var(--ink);
-    pointer-events: none; z-index: 1; will-change: transform;
+    position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.55), rgba(244,237,224,0.32) 60%, rgba(244,237,224,0.22));
+    border: 2px solid rgba(244,237,224,0.6); box-sizing: border-box; box-shadow: 0 4px 14px rgba(0,0,0,0.35); will-change: transform;
   }
-  #stick.on #knob { background: var(--clawd); }
-  #touch .acts { grid-template-columns: repeat(2, 58px); grid-template-rows: repeat(2, 46px); }
-  .k {
-    appearance: none; margin: 0; padding: 0; min-width: 0;
-    font: 700 10px/1 var(--label-face); letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--paper); background: color-mix(in srgb, var(--panel) 82%, transparent);
-    border: 2px solid var(--paper); border-radius: 0; box-shadow: 0 3px 0 var(--ink);
-    touch-action: none;
+  #stick.on #knob { background: radial-gradient(circle at 35% 30%, #ffd2bf, var(--clawd) 65%); border-color: #ffe3d6; }
+  .tb {
+    position: fixed; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-sizing: border-box; pointer-events: none;
+    width: 62px; height: 62px; font: 800 11px/1 var(--label-face); letter-spacing: 0.06em; color: rgba(255,247,238,0.92);
+    background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.16), rgba(35,29,46,0.55) 62%);
+    border: 2px solid rgba(244,237,224,0.42); box-shadow: 0 4px 12px rgba(0,0,0,0.35), inset 0 -3px 0 rgba(0,0,0,0.25);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); transition: transform 0.06s, background 0.06s;
   }
-  .k.on { background: var(--clawd); color: var(--ink); transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
-  .k:focus-visible { outline: 2px solid var(--clawd); outline-offset: 2px; }
-  .k.up { grid-column: 2; }
-  .k.left { grid-column: 1; grid-row: 2; } .k.down { grid-column: 2; grid-row: 2; } .k.right { grid-column: 3; grid-row: 2; }
-  #pause {
-    position: fixed; right: 16px; top: calc(8px + env(safe-area-inset-top, 0px)); width: 40px; height: 32px; pointer-events: auto;
-  }
-  /* in portrait the pause button sits just under the screen instead of on top of it */
-  @media (orientation: portrait) { #pause { top: calc(18px + (100vw - 32px) * 0.5625 + env(safe-area-inset-top, 0px)); } }
-  @media (prefers-reduced-motion: reduce) { .k.on { transform: none; } }
+  .tb.on { transform: scale(0.9); background: radial-gradient(circle at 35% 28%, #ffd2bf, var(--clawd) 70%); color: #1b1226; border-color: #ffe3d6; box-shadow: 0 0 18px rgba(215,119,87,0.7); }
+  .tb.big { width: 82px; height: 82px; font-size: 13px; }
+  .tb.sm { width: 46px; height: 38px; border-radius: 12px; font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .tb, .tb.on { transition: none; transform: none; } }
 </style>
 
 <div id="stage"><canvas id="game" width="384" height="216" tabindex="0" aria-label="CLAWD: EXIT CODE 0, a platform game"></canvas></div>
 
 <div id="touch" hidden>
-  <div id="stick" role="application" aria-label="movement stick"><div id="knob"></div></div>
-  <div class="cluster acts">
-    <button class="k" id="t-special" data-a="special">task</button>
-    <button class="k" id="t-dash" data-a="dash">bash</button>
-    <button class="k" id="t-attack" data-a="attack">claw</button>
-    <button class="k" id="t-jump" data-a="jump">jump</button>
-  </div>
-  <button class="k" id="pause" data-a="pause" aria-label="pause">II</button>
+  <div id="stick"><div id="knob"></div></div>
+  <div class="tb big" id="t-jump" data-a="jump">JUMP</div>
+  <div class="tb" id="t-attack" data-a="attack">CLAW</div>
+  <div class="tb" id="t-dash" data-a="dash">BASH</div>
+  <div class="tb" id="t-special" data-a="special">TASK</div>
+  <div class="tb sm" id="pause" data-a="pause">II</div>
 </div>
 
 <script>
@@ -224,7 +211,7 @@
     for (const a of ACTIONS) state[a] = held[a] > 0 || !!queued[a];
     if (padSeen) pollPad(state);
     if (input.script) for (const a of ACTIONS) if (input.script[a]) state[a] = true;   // test harness
-    if (input.touch) for (const a of ACTIONS) if (input.touch[a]) state[a] = true;     // on-screen buttons
+    if (input.touch) for (const a of ACTIONS) if (input.touch[a] || (input.tq && input.tq[a])) state[a] = true;     // on-screen buttons (tq: a press the game has not seen yet)
     input.any = anyQueued;
     for (const a of ACTIONS) {
       const d = state[a] && !input.locked;
@@ -234,6 +221,7 @@
       prev[a] = d;
       if (input.pressed[a]) input.any = true;
       queued[a] = false;
+      if (input.tq) input.tq[a] = false;
     }
     anyQueued = false;
     // menu helpers: confirm/back on any of the usual keys
@@ -3218,6 +3206,7 @@ G.VOICE = {
       for (const e of this.ents) if (!e.dead && !e.front) e.draw(g, cx, cy);
       p.draw(g, cx, cy);
       if (this.partner) G.coop.drawPartner(g, this, cx, cy);
+      if (this.net) G.coop.drawDowned(g, this, cx, cy);
       for (const e of this.ents) if (!e.dead && e.front) e.draw(g, cx, cy);
       // projectiles
       for (const q of this.projs) if (!q.dead && !(q.wait > 0)) this.drawProj(g, q, cx, cy);
@@ -6352,55 +6341,112 @@ G.VOICE = {
 </script>
 
 <script>
-// On-screen buttons for phones and tablets. They feed the same input the keyboard does.
+// On-screen controls for phones and tablets. They feed the same input the keyboard does.
+// One input layer for the whole screen, so several fingers, sliding from one button to another and very short taps all work:
+//  * left half: a floating stick, its centre is wherever the thumb lands (and it follows the thumb if it goes too far)
+//  * right side: round buttons; a finger belongs to the button under it and moves to another one when it slides onto it
+//  * every press is latched until the game has seen it (a tap shorter than a frame is never lost) and lasts at least MIN_HOLD
 (function () {
   'use strict';
   var G = window.G, pad = document.getElementById('touch'), on = false;
+  var stick = document.getElementById('stick'), knob = document.getElementById('knob');
+  var BTN = Array.prototype.map.call(pad.querySelectorAll('.tb'), function (el) { return { el: el, a: el.getAttribute('data-a'), x: 0, y: 0, r: 0 }; });
+  var R = 50, MIN_HOLD = 90;              // stick travel (px), shortest press the game sees (ms) - a quick tap still gives a proper jump
+  var held = {}, downAt = {}, timers = {}, ptr = {}, stickId = null, ox = 0, oy = 0;
   function enable() {
     if (on) return;
-    on = true; G.mobile = true; G.input.touch = {}; pad.hidden = false; document.body.classList.add('touch');
-    window.dispatchEvent(new Event('resize'));
+    on = true; G.mobile = true; G.input.touch = {}; G.input.tq = {}; pad.hidden = false; document.body.classList.add('touch');
+    layout(); window.dispatchEvent(new Event('resize'));
   }
+  // buttons sit in an arc around the right thumb; sizes follow the screen a little
+  function layout() {
+    var w = window.innerWidth, h = window.innerHeight, k = Math.max(0.8, Math.min(1.25, Math.min(w, h) / 380));
+    var sr = 'env(safe-area-inset-right, 0px)', sb = 'env(safe-area-inset-bottom, 0px)';
+    var spots = { jump: [22, 26, 82], attack: [116, 30, 62], dash: [34, 120, 62], special: [118, 112, 54], pause: [16, h - 54 - 16, 0] };
+    BTN.forEach(function (b) {
+      var sp = spots[b.a]; if (!sp) return;
+      if (b.a === 'pause') {     // landscape: top-right corner; portrait: just under the game screen
+        b.el.style.right = 'calc(' + sp[0] + 'px + ' + sr + ')';
+        b.el.style.top = h > w ? 'calc(' + Math.round(18 + (w - 32) * 0.5625) + 'px + env(safe-area-inset-top, 0px))' : 'calc(10px + env(safe-area-inset-top, 0px))';
+      }
+      else {
+        var size = Math.round(sp[2] * k);
+        b.el.style.width = b.el.style.height = size + 'px';
+        b.el.style.right = 'calc(' + Math.round(sp[0] * k) + 'px + ' + sr + ')'; b.el.style.bottom = 'calc(' + Math.round(sp[1] * k) + 'px + ' + sb + ')';
+      }
+    });
+    R = Math.round(50 * k);
+    idleStick();
+    requestAnimationFrame(measure);
+  }
+  function measure() { BTN.forEach(function (b) { var r = b.el.getBoundingClientRect(); b.x = r.left + r.width / 2; b.y = r.top + r.height / 2; b.r = Math.max(r.width, r.height) / 2; }); }
+  function idleStick() { if (stickId !== null) return; var h = window.innerHeight; stick.style.transform = 'translate(' + (90) + 'px,' + (h - 96) + 'px)'; knob.style.transform = ''; }
+  // the button a finger at (x, y) is on: the nearest one whose (generously enlarged) circle contains it
+  function hit(x, y) {
+    var best = null, bd = 1e9;
+    BTN.forEach(function (b) { var d = Math.hypot(x - b.x, y - b.y), lim = b.r * 1.18 + 8; if (d < lim && d < bd) { bd = d; best = b; } });
+    return best;
+  }
+  function press(a) {
+    var T = G.input.touch; if (!T) return;
+    clearTimeout(timers[a]);
+    held[a] = (held[a] || 0) + 1; downAt[a] = performance.now(); T[a] = true; G.input.tq[a] = true;
+    show(a, true);
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* not allowed */ } }
+  }
+  function release(a) {
+    var T = G.input.touch; if (!T || !held[a]) return;
+    if (--held[a] > 0) return;
+    var left = MIN_HOLD - (performance.now() - downAt[a]);
+    var up = function () { if (!held[a]) { T[a] = false; show(a, false); } };
+    if (left > 0) timers[a] = setTimeout(up, left); else up();
+  }
+  function show(a, v) { BTN.forEach(function (b) { if (b.a === a) b.el.classList.toggle('on', v); }); }
+  function dirs(l, r, u, d) { var t = G.input.touch; if (!t) return; t.left = l; t.right = r; t.up = u; t.down = d; }
+  function moveStick(x, y) {
+    var dx = x - ox, dy = y - oy, d = Math.hypot(dx, dy);
+    if (d > R) { ox = x - dx / d * R; oy = y - dy / d * R; dx = x - ox; dy = y - oy; d = R; }     // the base follows a thumb that goes too far
+    stick.style.transform = 'translate(' + ox + 'px,' + oy + 'px)';
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    var nx = dx / R, ny = dy / R;
+    // walking reacts early; up/down need a firmer push so running never ducks or looks up by accident
+    dirs(nx < -0.28, nx > 0.28, ny < -0.6, ny > 0.6);
+  }
+  function endStick() { stickId = null; stick.classList.remove('on'); dirs(false, false, false, false); idleStick(); }
+
+  pad.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    if (!on) enable();
+    try { pad.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
+    var b = hit(e.clientX, e.clientY);
+    if (b) { ptr[e.pointerId] = b.a; press(b.a); return; }
+    if (e.clientX < window.innerWidth * 0.5 && stickId === null) {
+      stickId = e.pointerId; stick.classList.add('on');
+      ox = Math.max(R + 6, Math.min(window.innerWidth * 0.5 - R, e.clientX)); oy = Math.max(R + 6, Math.min(window.innerHeight - R - 6, e.clientY));
+      moveStick(e.clientX, e.clientY);
+    }
+  });
+  pad.addEventListener('pointermove', function (e) {
+    if (e.pointerId === stickId) { e.preventDefault(); moveStick(e.clientX, e.clientY); return; }
+    var cur = ptr[e.pointerId]; if (cur === undefined) return;
+    var b = hit(e.clientX, e.clientY);
+    if (b && b.a !== cur) { ptr[e.pointerId] = b.a; release(cur); press(b.a); }      // slid onto another button
+  });
+  function up(e) {
+    if (e.pointerId === stickId) { endStick(); return; }
+    var cur = ptr[e.pointerId]; if (cur === undefined) return;
+    delete ptr[e.pointerId]; release(cur);
+  }
+  pad.addEventListener('pointerup', up);
+  pad.addEventListener('pointercancel', up);
+  pad.addEventListener('lostpointercapture', up);
+  pad.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  window.addEventListener('blur', function () { endStick(); Object.keys(ptr).forEach(function (id) { up({ pointerId: +id }); }); });
+  window.addEventListener('resize', function () { if (on) layout(); });
+  window.addEventListener('orientationchange', function () { if (on) setTimeout(layout, 300); });
   if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) enable();
   window.addEventListener('pointerdown', function (e) { if (e.pointerType === 'touch') enable(); window.focus(); }, { passive: true });
-  Array.prototype.forEach.call(pad.querySelectorAll('.k'), function (b) {
-    var a = b.getAttribute('data-a');
-    function set(v) { return function (e) { e.preventDefault(); if (!G.input.touch) return; G.input.touch[a] = v; b.classList.toggle('on', v); if (v && b.setPointerCapture) { try { b.setPointerCapture(e.pointerId); } catch (err) { /* fine */ } } }; }
-    b.addEventListener('pointerdown', set(true));
-    b.addEventListener('pointerup', set(false));
-    b.addEventListener('pointercancel', set(false));
-    b.addEventListener('lostpointercapture', set(false));
-    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  });
-
-  // round analog stick -> left/right/up/down, with a dead zone so a resting thumb does nothing
-  var stick = document.getElementById('stick'), knob = document.getElementById('knob'), sid = null;
-  function dirs(l, r, u, d) { var t = G.input.touch; if (!t) return; t.left = l; t.right = r; t.up = u; t.down = d; }
-  function move(e) {
-    var b = stick.getBoundingClientRect(), R = b.width / 2;
-    var dx = e.clientX - (b.left + R), dy = e.clientY - (b.top + R), d = Math.hypot(dx, dy), max = R * 0.62;
-    if (d > max) { dx = dx / d * max; dy = dy / d * max; }
-    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    var nx = dx / max, ny = dy / max;
-    // horizontal triggers early (walking is what matters); up/down need a firmer push so running never ducks or looks up
-    dirs(nx < -0.3, nx > 0.3, ny < -0.55, ny > 0.55);
-  }
-  function release(e) {
-    if (sid === null || (e && e.pointerId !== sid)) return;
-    sid = null; stick.classList.remove('on'); knob.style.transform = ''; dirs(false, false, false, false);
-  }
-  stick.addEventListener('pointerdown', function (e) {
-    e.preventDefault(); if (sid !== null) return;
-    sid = e.pointerId; stick.classList.add('on');
-    try { stick.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
-    move(e);
-  });
-  stick.addEventListener('pointermove', function (e) { if (e.pointerId === sid) { e.preventDefault(); move(e); } });
-  stick.addEventListener('pointerup', release);
-  stick.addEventListener('pointercancel', release);
-  stick.addEventListener('lostpointercapture', release);
-  stick.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  window.addEventListener('blur', function () { release(); });
+  G.touchPad = { layout: layout, measure: measure, hit: hit };     // (for tests)
 })();
 </script>
 
@@ -6660,7 +6706,7 @@ G.VOICE = {
       const hurt0 = me.hurt, haz0 = me.hazard, die0 = me.die;
       me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) { coop.rel('hurt', { x, y, d }); if (laggy()) this.inv += 0.4; } return r; };
       me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
-      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
+      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; this._downAt = performance.now(); die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
       coop.gsPrev = null;
       coop.gTick = 0;
     }
@@ -6698,12 +6744,14 @@ G.VOICE = {
   };
   coop.notice = null;
   coop.say = (text) => { coop.notice = { text, t: 2 }; };
+  // one simple rule: a fallen player comes back after REVIVE_T seconds if the other one is still alive; both down = the level restarts
+  const REVIVE_T = coop.REVIVE_T = 6;
   coop.holdDeath = (p) => {
     const L = p.L;
     if (!L.net || !L.reviveQ) return false;
     const other = p === L.me ? L.partner : L.me;
-    if (!other || other.dead || other.lagging) return false;           // a partner who does not answer cannot pick anyone up
-    L.reviveQ.push({ p, t: 4 });
+    if (!other || other.dead) return false;
+    L.reviveQ.push({ p, t: REVIVE_T });
     return true;
   };
 
@@ -6728,7 +6776,7 @@ G.VOICE = {
   function applyRemote(L) {
     const p2 = L.p2, d = coop.rAll;
     for (const k in d) {
-      if (HOSTOWN.has(k) || k === 'x' || k === 'y') continue;
+      if (HOSTOWN.has(k) || k === 'x' || k === 'y' || k === 'dead') continue;      // death only arrives as the 'die' event (so it always reaches holdDeath / the revive timer) and only the host revives
       const v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
@@ -6800,7 +6848,6 @@ G.VOICE = {
     // revive the fallen partner after a few seconds
     for (let i = L.reviveQ.length - 1; i >= 0; i--) {
       const q = L.reviveQ[i]; q.t -= dt;
-      if (q.p === L.me && p2.lagging) { L.reviveQ.length = 0; L.events.push('death'); break; }      // nobody is there to pick me up
       if (q.t > 0) continue;
       L.reviveQ.splice(i, 1);
       const other = q.p === L.me ? p2 : L.me;
@@ -6881,6 +6928,7 @@ G.VOICE = {
   const CLS = (e) => e.constructor.name;
   function buildState(L, N) {
     const p2 = L.p2, w = {};
+    w.rv = L.reviveQ.map((q) => [q.p === L.me ? 1 : 2, Math.ceil(q.t * 10)]);
     w.ly = L.liquidY; w.rs = L.rising ? 1 : 0; w.tk = L.tokens; w.ht = L.hits; w.ci = L.cpIndex;
     w.cp = L.cps.map((c) => (c.on ? 1 : 0)); w.ex = L.exit && L.exit.done ? 1 : 0; w.sk = L.sparks.slice();
     const T0 = L._tiles0, tl = [];
@@ -7096,6 +7144,7 @@ G.VOICE = {
     const w = S.w;
     if (S.lt !== undefined) { if (L._tm === undefined || Math.abs(S.lt - L.time) > 0.3) L.time = S.lt; else L.time += (S.lt - L.time) * 0.5; L._tm = 1; }
     if (w.ly === null) L.liquidY = null; else if (w.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - w.ly) > 60 ? w.ly : L.liquidY + (w.ly - L.liquidY) * 0.5;
+    L._rv = w.rv || []; L._rvAt = performance.now();
     L.rising = !!w.rs; L.tokens = w.tk; L.hits = w.ht; L.cpIndex = w.ci;
     if (w.cp) w.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
     if (L.exit) L.exit.done = !!w.ex;
@@ -7322,6 +7371,30 @@ G.VOICE = {
     }
   };
 
+  coop.reviveLeft = (L, q) => {
+    if (!q || !q.dead) return null;
+    if (L.net === 'host') { const e = (L.reviveQ || []).find((r) => r.p === q); return e ? Math.max(0, e.t) : null; }
+    const who = q === L.me ? 2 : 1, e = (L._rv || []).find((r) => r[0] === who);
+    if (e) return Math.max(0, e[1] / 10 - (performance.now() - (L._rvAt || 0)) / 1000);
+    return q === L.me && q._downAt ? Math.max(0, REVIVE_T - (performance.now() - q._downAt) / 1000) : null;
+  };
+  // a fallen player stays visible: a faint ghost where it fell, with a ring that empties as the revive comes closer
+  coop.drawDowned = (g, L, cx, cy) => {
+    for (const q of [L.me, L.partner]) {
+      if (!q || !q.dead) continue;
+      const left = coop.reviveLeft(L, q);
+      const x = q.x, y = Math.min(q.y, L.ph - 20);
+      q.dead = false; const gone = q.gone; q.gone = false;
+      g.globalAlpha = 0.35; try { q.draw(g, cx, cy); } finally { g.globalAlpha = 1; q.dead = true; q.gone = gone; }
+      const px = Math.round(x + q.w / 2) - cx, py = Math.round(y) - cy - 14;
+      const col = q === L.me ? '#ffb38a' : '#9cc4ff';
+      g.lineWidth = 2; g.strokeStyle = 'rgba(13,10,18,0.8)'; g.beginPath(); g.arc(px, py, 7, 0, Math.PI * 2); g.stroke();
+      if (left !== null) {
+        g.strokeStyle = col; g.beginPath(); g.arc(px, py, 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - left / REVIVE_T)); g.stroke();
+        G.text(g, String(Math.ceil(left) || 1), px, py - 3, col, { tiny: true, align: 'c' });
+      } else G.text(g, '!', px, py - 3, col, { tiny: true, align: 'c' });
+    }
+  };
   coop.drawPartner = (g, L, cx, cy) => {
     const q = L.partner;
     if (q.dead || q.gone) return;
@@ -7341,7 +7414,14 @@ G.VOICE = {
     const q = L.partner, S = G.SPR, on = L.net === 'host' ? G.tint(S.pip, '#6aa8ff') : S.pip;
     for (let i = 0; i < q.maxHp; i++) ug.drawImage(i < q.hp ? on : S.pipOff, 6 + i * 9, hudY + dy);
     ug.fillStyle = '#0d0a12'; ug.fillRect(6 + q.maxHp * 9, hudY + dy + 1, 6, 6); ug.fillStyle = coop.dotColor(true); ug.fillRect(6 + q.maxHp * 9 + 1, hudY + dy + 2, 4, 4);
-    if (q.dead) G.text(ug, 'down...', 6 + q.maxHp * 9 + 9, hudY + dy, '#8d8798', { tiny: true });
+    if (q.dead) { const l = coop.reviveLeft(L, q); G.text(ug, l !== null && !L.me.dead ? 'back in ' + Math.ceil(l || 0.01) : 'down', 6 + q.maxHp * 9 + 9, hudY + dy, '#8d8798', { tiny: true }); }
+    // my own body is down: say so, and when I come back
+    if (L.me.dead) {
+      const l = coop.reviveLeft(L, L.me), both = q.dead;
+      const t = both ? 'BOTH DOWN' : l !== null ? 'DOWN  -  BACK IN ' + Math.ceil(l || 0.01) : 'DOWN';
+      const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), 40, w, 15, '#17131f', '#ffb38a', '#0d0a12');
+      G.text(ug, t, W / 2, 44, '#ffd9c4', { align: 'c' });
+    }
   };
 
   // ---------- line quality: measured every 2 s, rates follow it ----------
