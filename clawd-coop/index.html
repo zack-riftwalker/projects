@@ -131,17 +131,14 @@
   };
 
   // ---------- input ----------
-  const KEYMAP = {
-    ArrowLeft: 'left', KeyA: 'left',
-    ArrowRight: 'right', KeyD: 'right',
-    ArrowUp: 'up', KeyW: 'up',
-    ArrowDown: 'down', KeyS: 'down',
-    Space: 'jump', KeyZ: 'jump', KeyK: 'jump',
-    KeyX: 'attack', KeyJ: 'attack',
-    KeyC: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyL: 'dash',
-    KeyV: 'special', KeyE: 'special', KeyI: 'special',
-    Enter: 'start', Escape: 'pause', KeyP: 'pause',
+  // code -> action, rebuilt from the save (see input.rebuild). Two slots per action; null = unbound.
+  const KEYMAP = {};
+  const DEFAULT_KEYS = {
+    left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'],
+    jump: ['KeyZ', 'Space'], attack: ['KeyX', 'KeyJ'], dash: ['KeyC', 'ShiftLeft'], special: ['KeyV', 'KeyE'],
+    start: ['Enter', null], pause: ['Escape', 'KeyP'],
   };
+  const RESERVED_KEYS = ['KeyF', 'KeyM', 'Tab'];     // fullscreen, mute, focus: never bindable
   const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'dash', 'special', 'start', 'pause'];
   const held = {}, queued = {}, prev = {};
   const input = (G.input = { down: {}, pressed: {}, released: {}, any: false, padActive: false, locked: false });
@@ -153,6 +150,7 @@
     const a = KEYMAP[e.code];
     if (G.audio) G.audio.unlock();
     if (e.metaKey || e.ctrlKey) return;
+    if (input.capture) { e.preventDefault(); if (!e.repeat) input.capture(e.code); return; }   // the controls screen is listening for a key
     if (a) {
       e.preventDefault();
       if (!e.repeat) { held[a]++; queued[a] = true; anyQueued = true; held['_' + e.code] = a; }
@@ -166,6 +164,34 @@
   });
   window.addEventListener('blur', () => { ACTIONS.forEach((a) => (held[a] = 0)); for (const k in held) if (k[0] === '_') held[k] = null; });
   window.addEventListener('pointerdown', () => { if (G.audio) G.audio.unlock(); anyQueued = true; });
+
+  input.defaultKeys = () => JSON.parse(JSON.stringify(DEFAULT_KEYS));
+  input.reserved = (code) => RESERVED_KEYS.includes(code);
+  input.rebuild = () => {
+    const sv = G.save && G.save.data.keys, b = (input.binds = {});
+    for (const c in KEYMAP) delete KEYMAP[c];
+    for (const a of ACTIONS) {
+      const src = sv && Array.isArray(sv[a]) ? sv[a] : DEFAULT_KEYS[a];
+      b[a] = [0, 1].map((i) => (typeof src[i] === 'string' && !RESERVED_KEYS.includes(src[i]) ? src[i] : null));
+      for (const c of b[a]) if (c) KEYMAP[c] = a;
+    }
+    for (const a of ACTIONS) held[a] = 0;
+    for (const k in held) if (k[0] === '_') held[k] = null;
+  };
+  const KEY_NAMES = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT', ControlLeft: 'CTRL', ControlRight: 'CTRL', AltLeft: 'ALT', AltRight: 'ALT', Escape: 'ESC', Enter: 'ENTER', NumpadEnter: 'ENTER', Backspace: 'BKSP', Delete: 'DEL', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Backquote: '`', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', CapsLock: 'CAPS', Insert: 'INS', Home: 'HOME', End: 'END', PageUp: 'PGUP', PageDown: 'PGDN' };
+  G.keyLabel = (code) => {
+    if (!code) return '';
+    if (KEY_NAMES[code]) return KEY_NAMES[code];
+    let m = /^Key([A-Z])$/.exec(code) || /^Digit(\d)$/.exec(code);
+    if (m) return m[1];
+    if ((m = /^Numpad(.+)$/.exec(code))) return 'N' + (KEY_NAMES[code.slice(6)] || m[1].toUpperCase());
+    return code.toUpperCase();
+  };
+  // label of an action's first bound key ('Z'), or both ('Z/SPACE') with both = true; '?' if unbound
+  G.actionLabel = (action, both) => {
+    const ks = ((input.binds && input.binds[action]) || []).filter(Boolean).map(G.keyLabel);
+    return ks.length ? (both ? ks.filter((k, i) => ks.indexOf(k) === i).join('/') : ks[0]) : '?';
+  };
 
   function pollPad(state) {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -218,6 +244,7 @@
     deaths: 0, tokens: 0, finished: false,
     opt: { music: 0.7, sfx: 0.8, voice: 1, shake: 1, min: 0, diffPreset: 'normal', bossPct: 0, npcExtra: 0, npcMult: 100 },
     coopDiff: { preset: 'coop', bossPct: 50, npcExtra: 0, npcMult: 100 },     // the difficulty profile used while hosting a co-op game
+    keys: null,             // custom key bindings { action: [code, code] }; null = defaults. Survives "erase save", like opt.
   });
   G.save = {
     data: fresh(),
@@ -228,12 +255,14 @@
           const d = JSON.parse(raw), f = fresh();
           this.data = Object.assign(f, d, { tools: Object.assign(f.tools, d.tools), opt: Object.assign(f.opt, d.opt), coopDiff: Object.assign(f.coopDiff, d.coopDiff) });
         }
+        G.input.rebuild();
       } catch (e) { /* private mode etc. - play without saving */ }
     },
     write() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
-    reset() { const opt = this.data.opt, coopDiff = this.data.coopDiff; this.data = fresh(); this.data.opt = opt; this.data.coopDiff = coopDiff; this.write(); },
+    reset() { const opt = this.data.opt, coopDiff = this.data.coopDiff, keys = this.data.keys; this.data = fresh(); this.data.opt = opt; this.data.coopDiff = coopDiff; this.data.keys = keys; this.write(); },
     sparkCount() { let n = 0; for (const k in this.data.sparks) for (const s of this.data.sparks[k]) if (s) n++; return n; },
   };
+  input.rebuild();
 })();
 
 </script>
