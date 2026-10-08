@@ -15,44 +15,32 @@
   section { background: var(--panel); border: 1px solid #2a2338; border-radius: 10px; padding: 12px; margin: 12px 0; }
   button { font: inherit; padding: 9px 14px; border-radius: 8px; border: 1px solid #555; background: #2a2338; color: #fff; margin: 4px 0 4px 6px; cursor: pointer; }
   button.pri { background: var(--acc); border-color: var(--acc); color: #0d0a12; font-weight: bold; }
-  textarea { width: 100%; height: 90px; font: 12px/1.3 monospace; direction: ltr; background: #0d0a12; color: var(--ink); border: 1px solid #333; border-radius: 6px; padding: 6px; }
+  input { font: 22px monospace; width: 140px; text-align: center; direction: ltr; background: #0d0a12; color: var(--ink); border: 1px solid #444; border-radius: 6px; padding: 6px; }
+  #sess { font: bold 34px monospace; color: var(--warn); letter-spacing: 4px; direction: ltr; }
   #status { font-size: 18px; font-weight: bold; }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
-  #log { font: 12px/1.4 monospace; direction: ltr; text-align: left; white-space: pre-wrap; color: var(--dim); max-height: 180px; overflow: auto; }
+  #log { font: 12px/1.4 monospace; direction: ltr; text-align: left; white-space: pre-wrap; color: var(--dim); max-height: 200px; overflow: auto; }
   .hide { display: none; }
 </style>
 </head>
 <body>
 <main>
   <h1>تست اتصال مستقیم (WebRTC)</h1>
-  <p class="dim">بدون سرور: متن اتصال را دستی بین دو دستگاه کپی کن (مثلاً با Saved Messages تلگرام). PC با اینترنت خانه، گوشی با اینترنت موبایل (Wi-Fi خاموش).</p>
+  <p class="dim">PC با اینترنت خانه، گوشی با اینترنت موبایل (Wi-Fi خاموش). دو دستگاه خودشان متن اتصال را از طریق سرور کلودفلرِ خودت رد و بدل می‌کنند؛ بعد از وصل شدن، داده مستقیم بین دو دستگاه می‌رود.</p>
 
   <section id="pick">
-    <p><b>این دستگاه کدام است؟</b></p>
-    <button class="pri" id="bA">دستگاه ۱ (شروع)</button>
-    <button id="bB">دستگاه ۲ (جواب)</button>
+    <button class="pri" id="bA">دستگاه ۱: شروع</button>
+    <p>یا شماره‌ای که دستگاه ۱ نشان می‌دهد را بزن:</p>
+    <input id="sessIn" inputmode="numeric" maxlength="4" placeholder="----"> <button id="bB">دستگاه ۲: وصل شو</button>
   </section>
 
   <section id="sA" class="hide">
-    <p><b>دستگاه ۱</b> — مرحله‌ی ۱: این متن را کپی کن و روی دستگاه ۲ بچسبان.</p>
-    <textarea id="offerOut" readonly placeholder="در حال ساخت..."></textarea>
-    <button id="copyOffer">کپی</button>
-    <p>مرحله‌ی ۳: جوابی که دستگاه ۲ داد را اینجا بچسبان:</p>
-    <textarea id="answerIn" placeholder="جواب دستگاه ۲"></textarea>
-    <button class="pri" id="useAnswer">وصل شو</button>
-  </section>
-
-  <section id="sB" class="hide">
-    <p><b>دستگاه ۲</b> — مرحله‌ی ۲: متن دستگاه ۱ را اینجا بچسبان:</p>
-    <textarea id="offerIn" placeholder="متن دستگاه ۱"></textarea>
-    <button class="pri" id="makeAnswer">ساخت جواب</button>
-    <p>این جواب را کپی کن و روی دستگاه ۱ بچسبان:</p>
-    <textarea id="answerOut" readonly></textarea>
-    <button id="copyAnswer">کپی</button>
+    <p>این شماره را روی دستگاه ۲ بزن:</p>
+    <div id="sess"></div>
   </section>
 
   <section>
-    <div id="status" class="dim">منتظر...</div>
+    <div id="status" class="dim">یکی از دو گزینه‌ی بالا را بزن</div>
     <p id="pingLine"></p>
     <p id="pathLine" class="dim"></p>
     <p id="candLine" class="dim"></p>
@@ -66,58 +54,65 @@
   const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
   const log = (s) => { $('log').textContent += new Date().toISOString().slice(11, 23) + '  ' + s + '\n'; $('log').scrollTop = 1e9; };
   const status = (s, cls) => { $('status').textContent = s; $('status').className = cls || ''; };
-  const show = (id) => $(id).classList.remove('hide');
-  let pc = null, dc = null, pingT = null, failT = null;
-  const seen = { host: 0, srflx: 0, prflx: 0, relay: 0 };
+  let pc = null, dc = null, me = '', other = '', sess = '', pollT = null, pingT = null, failT = null, done = false;
+  const mine = { host: 0, srflx: 0, prflx: 0, relay: 0 }, theirs = { host: 0, srflx: 0, prflx: 0, relay: 0 };
+  const showCands = () => { $('candLine').textContent = 'کاندیداها — این دستگاه: host ' + mine.host + ' · srflx ' + mine.srflx + '   |   دستگاه دیگر: host ' + theirs.host + ' · srflx ' + theirs.srflx; };
+  const typeOf = (c) => c.type || (/ typ (\w+)/.exec(c.candidate || '') || [])[1] || '?';
 
-  // the connection text: JSON -> deflate (when the browser can) -> base64, prefixed so the other side knows how to read it
-  const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
-  const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  const pipe = async (u8, stream) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer());
-  async function pack(desc) {
-    const raw = new TextEncoder().encode(JSON.stringify({ type: desc.type, sdp: desc.sdp }));
-    if (window.CompressionStream) { try { return 'Z' + b64(await pipe(raw, new CompressionStream('deflate-raw'))); } catch (e) { /* plain */ } }
-    return 'P' + b64(raw);
+  // ---------- signaling: a mailbox on this site (/sig). Device 1 reads box 'a', device 2 reads box 'b' ----------
+  let chain = Promise.resolve();          // one at a time, so the other side reads them in the order they were made
+  const post = (o) => { chain = chain.then(() => fetch('/sig?r=' + sess + '&k=' + other, { method: 'POST', body: JSON.stringify(o) })).catch((e) => log('post failed: ' + e.message)); };
+  const early = [];                       // candidates that arrive before the description
+  let next = 0;
+  function poll() {
+    pollT = setTimeout(async () => {
+      try {
+        const r = await (await fetch('/sig?r=' + sess + '&k=' + me + '&n=' + next, { cache: 'no-store' })).json();
+        next = r.next;
+        for (const t of r.msgs) await onSig(JSON.parse(t));
+      } catch (e) { log('poll failed: ' + e.message); }
+      if (!done) poll();
+    }, 400);
   }
-  async function unpack(text) {
-    text = text.replace(/\s+/g, '');
-    const kind = text[0], body = unb64(text.slice(1));
-    const raw = kind === 'Z' ? await pipe(body, new DecompressionStream('deflate-raw')) : body;
-    return JSON.parse(new TextDecoder().decode(raw));
+  async function onSig(m) {
+    if (m.desc) {
+      log('got ' + m.desc.type);
+      await pc.setRemoteDescription(m.desc);
+      for (const c of early.splice(0)) { try { await pc.addIceCandidate(c); } catch (e) { log('remote candidate error: ' + e.message); } }
+      if (m.desc.type === 'offer') { await pc.setLocalDescription(await pc.createAnswer()); post({ desc: pc.localDescription }); log('answer sent'); }
+      armTimeout();
+    } else if (m.cand) {
+      const t = typeOf(m.cand); if (t in theirs) theirs[t]++; showCands();
+      if (!pc.remoteDescription) { early.push(m.cand); return; }
+      try { await pc.addIceCandidate(m.cand); } catch (e) { log('remote candidate error: ' + e.message); }
+    }
   }
 
   function newPc() {
     pc = new RTCPeerConnection({ iceServers: ICE });
     pc.onicecandidate = (e) => {
       if (!e.candidate) { log('candidate gathering finished'); return; }
-      const t = e.candidate.type || (/ typ (\w+)/.exec(e.candidate.candidate) || [])[1];
-      if (t in seen) seen[t]++;
-      $('candLine').textContent = 'کاندیداهای این دستگاه: host ' + seen.host + ' · srflx ' + seen.srflx + ' · relay ' + seen.relay;
+      const t = typeOf(e.candidate); if (t in mine) mine[t]++; showCands();
       log('local candidate: ' + t + ' ' + (e.candidate.protocol || ''));
+      post({ cand: e.candidate.toJSON() });
     };
-    pc.onconnectionstatechange = () => {
-      log('connection: ' + pc.connectionState);
-      if (pc.connectionState === 'failed') fail('اتصال مستقیم برقرار نشد (failed)');
-    };
+    pc.onconnectionstatechange = () => { log('connection: ' + pc.connectionState); if (pc.connectionState === 'failed') fail('اتصال مستقیم برقرار نشد (failed)'); };
     pc.oniceconnectionstatechange = () => log('ice: ' + pc.iceConnectionState);
-    return pc;
   }
-  // wait until all candidates are gathered (no trickle: one text to copy each way), at most 8 s
-  const gathered = () => new Promise((res) => {
-    if (pc.iceGatheringState === 'complete') return res();
-    const t = setTimeout(res, 8000);
-    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
-  });
-  function fail(msg) { clearTimeout(failT); clearInterval(pingT); status('✗ ' + msg, 'bad'); }
-  function armTimeout() { clearTimeout(failT); failT = setTimeout(() => { if (!dc || dc.readyState !== 'open') fail('بعد از ۲۰ ثانیه وصل نشد — اتصال مستقیم در این دو شبکه کار نمی‌کند'); }, 20000); }
+  function fail(msg) {
+    if (dc && dc.readyState === 'open') return;
+    clearTimeout(failT); clearInterval(pingT); done = true; clearTimeout(pollT);
+    status('✗ ' + msg, 'bad');
+    $('pathLine').textContent = !theirs.srflx && !mine.srflx ? 'هیچ‌کدام srflx نداشت: STUN روی هر دو شبکه بسته است.' : !theirs.srflx || !mine.srflx ? 'فقط یک طرف srflx داشت: STUN روی یکی از دو شبکه بسته است.' : 'هر دو srflx داشتند ولی بسته‌ها به هم نرسید: NAT یکی از دو شبکه (احتمالاً اینترنت موبایل) اتصال مستقیم را نمی‌پذیرد، یا UDP بین دو شبکه مسدود است.';
+  }
+  function armTimeout() { clearTimeout(failT); failT = setTimeout(() => fail('بعد از ۳۰ ثانیه وصل نشد — اتصال مستقیم بین این دو شبکه کار نمی‌کند'), 30000); }
 
-  // once open: measure the direct round trip and show which path was chosen
+  // ---------- once open: direct round trip and the chosen path ----------
   function useChannel(ch) {
-    dc = ch;
-    const rtts = [];
-    dc.onopen = async () => {
-      clearTimeout(failT);
-      status('✓ اتصال مستقیم برقرار شد', 'ok');
+    dc = ch; const rtts = [];
+    dc.onopen = () => {
+      clearTimeout(failT); status('✓ اتصال مستقیم برقرار شد', 'ok');
+      setTimeout(() => { done = true; clearTimeout(pollT); }, 3000);
       pingT = setInterval(() => { if (dc.readyState === 'open') dc.send(JSON.stringify({ t: 'ping', ts: performance.now() })); }, 500);
       setTimeout(describePath, 1500);
     };
@@ -126,8 +121,7 @@
       if (m.t === 'ping') dc.send(JSON.stringify({ t: 'pong', ts: m.ts }));
       else if (m.t === 'pong') {
         rtts.push(performance.now() - m.ts); if (rtts.length > 60) rtts.shift();
-        const s = rtts.slice().sort((a, b) => a - b), med = s[s.length >> 1];
-        const cls = med < 100 ? 'ok' : med < 200 ? 'warn' : 'bad';
+        const s = rtts.slice().sort((a, b) => a - b), med = s[s.length >> 1], cls = med < 100 ? 'ok' : med < 200 ? 'warn' : 'bad';
         $('pingLine').innerHTML = 'پینگ مستقیم: <b class="' + cls + '">' + Math.round(med) + ' ms</b> (کمترین ' + Math.round(s[0]) + '، بیشترین ' + Math.round(s[s.length - 1]) + '، ' + rtts.length + ' نمونه) — مقایسه کن با ۲۵۰ ms فعلی';
       }
     };
@@ -136,42 +130,31 @@
   async function describePath() {
     try {
       const st = await pc.getStats(); let pair = null; const c = {};
-      st.forEach((r) => { if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r; if (r.type === 'local-candidate' || r.type === 'remote-candidate') c[r.id] = r; });
-      if (!pair) st.forEach((r) => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = st.get(r.selectedCandidatePairId); });
+      st.forEach((r) => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = st.get(r.selectedCandidatePairId); if (r.type === 'local-candidate' || r.type === 'remote-candidate') c[r.id] = r; });
+      if (!pair) st.forEach((r) => { if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r; });
       if (!pair) return;
-      const L = c[pair.localCandidateId] || {}, R = c[pair.remoteCandidateId] || {};
-      const lan = L.candidateType === 'host' && R.candidateType === 'host';
-      $('pathLine').textContent = 'مسیر: این دستگاه ' + L.candidateType + ' ⇄ دستگاه دیگر ' + R.candidateType + ' (' + (L.protocol || '') + ')' + (lan ? ' — یعنی هر دو در یک شبکه‌اید (LAN)، نه اینترنت' : '');
+      const L = c[pair.localCandidateId] || {}, R = c[pair.remoteCandidateId] || {}, lan = L.candidateType === 'host' && R.candidateType === 'host';
+      $('pathLine').textContent = 'مسیر: این دستگاه ' + L.candidateType + ' ⇄ دستگاه دیگر ' + R.candidateType + ' (' + (L.protocol || '') + ')' + (lan ? ' — هر دو در یک شبکه‌اید (LAN)؛ برای تست واقعی Wi-Fi گوشی را خاموش کن' : '');
       log('selected pair: ' + L.candidateType + ' <-> ' + R.candidateType + ' ' + (L.protocol || ''));
     } catch (e) { log('stats: ' + e.message); }
   }
 
   $('bA').onclick = async () => {
-    $('pick').classList.add('hide'); show('sA'); status('در حال جمع کردن کاندیداها...', 'dim');
+    me = 'a'; other = 'b'; sess = String(1000 + Math.floor(Math.random() * 9000));
+    $('pick').classList.add('hide'); $('sA').classList.remove('hide'); $('sess').textContent = sess;
+    status('منتظر دستگاه ۲...', 'warn');
     newPc(); useChannel(pc.createDataChannel('t', { ordered: false, maxRetransmits: 0 }));
     await pc.setLocalDescription(await pc.createOffer());
-    await gathered();
-    $('offerOut').value = await pack(pc.localDescription);
-    status('متن را به دستگاه ۲ بفرست', 'warn');
+    post({ desc: pc.localDescription }); log('offer sent, session ' + sess);
+    poll();
   };
-  $('bB').onclick = () => { $('pick').classList.add('hide'); show('sB'); status('متن دستگاه ۱ را بچسبان', 'warn'); };
-  $('makeAnswer').onclick = async () => {
-    try {
-      newPc(); pc.ondatachannel = (e) => useChannel(e.channel);
-      await pc.setRemoteDescription(await unpack($('offerIn').value));
-      await pc.setLocalDescription(await pc.createAnswer());
-      status('در حال جمع کردن کاندیداها...', 'dim');
-      await gathered();
-      $('answerOut').value = await pack(pc.localDescription);
-      status('جواب را به دستگاه ۱ بفرست، بعد صبر کن', 'warn'); armTimeout();
-    } catch (e) { status('متن دستگاه ۱ درست نیست: ' + e.message, 'bad'); }
+  $('bB').onclick = () => {
+    const v = $('sessIn').value.trim(); if (!/^\d{4}$/.test(v)) { status('شماره‌ی ۴ رقمی دستگاه ۱ را بزن', 'bad'); return; }
+    me = 'b'; other = 'a'; sess = v;
+    $('pick').classList.add('hide'); status('در حال وصل شدن...', 'warn');
+    newPc(); pc.ondatachannel = (e) => useChannel(e.channel);
+    poll();
   };
-  $('useAnswer').onclick = async () => {
-    try { await pc.setRemoteDescription(await unpack($('answerIn').value)); status('در حال وصل شدن...', 'warn'); armTimeout(); }
-    catch (e) { status('جواب درست نیست: ' + e.message, 'bad'); }
-  };
-  const copy = (id) => async () => { const t = $(id); t.select(); try { await navigator.clipboard.writeText(t.value); status('کپی شد', 'ok'); } catch (e) { document.execCommand('copy'); } };
-  $('copyOffer').onclick = copy('offerOut'); $('copyAnswer').onclick = copy('answerOut');
   window.__p2p = { get pc() { return pc; }, get dc() { return dc; } };
 })();
 </script>

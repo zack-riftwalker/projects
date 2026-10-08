@@ -17,6 +17,8 @@ export default {
       const id = env.ROOM.idFromName(env.ROOM_NAME || 'main');
       return env.ROOM.get(id, env.LOCATION_HINT ? { locationHint: env.LOCATION_HINT } : undefined).fetch(request);
     }
+    // P2P test page (p2p-test.html): a tiny mailbox in its own object instance, never the game room
+    if (url.pathname === '/sig') return env.ROOM.get(env.ROOM.idFromName('p2p-test')).fetch(request);
     if (url.pathname === '/config') return json({ bossPct: pick(env.BOSS_HP), npcExtra: pick(env.NPC_HITS), npcMult: pick(env.NPC_MULT), lock: env.LOCK === '1' });
     return env.ASSETS.fetch(request);       // static files are normally answered before the Worker runs; this is the fallback (404 for everything else)
   },
@@ -92,6 +94,7 @@ export class Room {
   // ---------- connection ----------
   async fetch(request) {
     const url = new URL(request.url), q = url.searchParams, role = q.get('role');
+    if (url.pathname === '/sig') return this.sig(request, q);
     const ip = String(request.headers.get('CF-Connecting-IP') || (request.headers.get('X-Forwarded-For') || '').split(',')[0].trim() || '?');
     const pair = new WebSocketPair(), client = pair[0], server = pair[1];
     server.accept();
@@ -212,6 +215,21 @@ export class Room {
       }
       for (const [k, f] of this.fails) if (f.until < now && now - f.first > 60000) this.fails.delete(k);
     }, 2000);
+  }
+  // ---------- mailbox for the P2P test page: POST appends a message for box k of session r, GET returns the messages from index n ----------
+  async sig(request, q) {
+    const r = String(q.get('r') || ''), k = q.get('k');
+    if (!/^[0-9]{4,8}$/.test(r) || (k !== 'a' && k !== 'b')) return json({ err: 'bad session' }, 400);
+    const now = Date.now(), box = this.box || (this.box = new Map());
+    for (const [id, b] of box) if (now - b.at > 600000) box.delete(id);          // sessions live 10 minutes
+    const b = box.get(r) || { at: now, a: [], b: [] }; box.set(r, b);
+    if (request.method === 'POST') {
+      const text = await request.text();
+      if (text.length > 65536 || b[k].length >= 200) return json({ err: 'too much' }, 413);
+      b[k].push(text); b.at = now; return json({ ok: 1 });
+    }
+    const n = Math.max(0, +q.get('n') || 0);
+    return json({ msgs: b[k].slice(n), next: b[k].length });
   }
   stopBeat() { if (this.beat) { clearInterval(this.beat); this.beat = null; } }
 }
