@@ -187,9 +187,9 @@ module.exports = (S, h) => {
       // 6. layout: buttons do not overlap each other, all on screen, the 2P button stays tappable
       const lay = await pg.evaluate(() => { const r = Array.from(document.querySelectorAll('.tb')).map((e) => e.getBoundingClientRect()); let ov = 0; for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (!(r[i].right <= r[j].left || r[j].right <= r[i].left || r[i].bottom <= r[j].top || r[j].bottom <= r[i].top)) ov++; const off = r.filter((b) => b.left < 0 || b.top < 0 || b.right > innerWidth || b.bottom > innerHeight).length; const top = document.elementFromPoint(innerWidth / 2, 14); return { ov, off, coop: !!(top && top.id === 'coopBtn') }; });
       out.push('layout: overlapping buttons ' + lay.ov + ', off-screen ' + lay.off + ', 2P button reachable ' + lay.coop); if (lay.ov || lay.off || !lay.coop) ok = false;
-      await pg.screenshot({ path: require('path').join(h.ROOT, 'reports', 'touch-landscape.png') });
+      await pg.screenshot({ path: require('path').join(h.ROOT, 'docs', 'reports', 'touch-landscape.png') });
       await pg.setViewportSize({ width: 360, height: 760 }); await pg.waitForTimeout(500);
-      await pg.screenshot({ path: require('path').join(h.ROOT, 'reports', 'touch-portrait.png') });
+      await pg.screenshot({ path: require('path').join(h.ROOT, 'docs', 'reports', 'touch-portrait.png') });
       const lay2 = await pg.evaluate(() => { const r = Array.from(document.querySelectorAll('.tb')).map((e) => e.getBoundingClientRect()); let ov = 0; for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (!(r[i].right <= r[j].left || r[j].right <= r[i].left || r[i].bottom <= r[j].top || r[j].bottom <= r[i].top)) ov++; return { ov, off: r.filter((b) => b.left < 0 || b.top < 0 || b.right > innerWidth || b.bottom > innerHeight).length }; });
       out.push('portrait: overlapping ' + lay2.ov + ', off-screen ' + lay2.off); if (lay2.ov || lay2.off) ok = false;
       if (errs.length) { ok = false; out.push('ERRORS ' + errs.join('; ')); }
