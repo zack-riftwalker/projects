@@ -6408,9 +6408,11 @@ G.VOICE = {
     if (d > R) { ox = x - dx / d * R; oy = y - dy / d * R; dx = x - ox; dy = y - oy; d = R; }     // the base follows a thumb that goes too far
     stick.style.transform = 'translate(' + ox + 'px,' + oy + 'px)';
     knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    var nx = dx / R, ny = dy / R;
-    // walking reacts early; up/down need a firmer push so running never ducks or looks up by accident
-    dirs(nx < -0.28, nx > 0.28, ny < -0.6, ny > 0.6);
+    // walking reacts early; up/down only for a firm, nearly vertical push (within ~35 degrees of straight up/down).
+    // A thumb pushed diagonally towards an enemy must walk, not aim: "up" turns the claw into an upward swipe that misses
+    // everything on the ground (small slimes), "down" in the air turns it into a pogo swipe.
+    var m = d / R, ux = d ? dx / d : 0, uy = d ? dy / d : 0;
+    dirs(m > 0.28 && ux < -0.38, m > 0.28 && ux > 0.38, m > 0.55 && uy < -0.82, m > 0.55 && uy > 0.82);
   }
   function endStick() { stickId = null; stick.classList.remove('on'); dirs(false, false, false, false); idleStick(); }
 
@@ -6559,7 +6561,7 @@ G.VOICE = {
   const NSP = {}; for (const c of NETC) NSP[c] = spec(NETSPEC[c]);
   const ITEMSP = spec('kind:s x:p y:p vx:v vy:v loose:b ghost:b dead:b ph:f idx:n');
   // the body of a player, both directions (each side owns its own, the other side only looks at it)
-  const PLAYERSP = spec('x:p y:p vx:v vy:v face:n onGround:b dashT:t atkT:t atkDir:s atkFace:n hurtT:t inv:u gone:b goneT:u dead:b hp:n maxHp:n wallDir:n');
+  const PLAYERSP = spec('x:p y:p vx:v vy:v face:n onGround:b dashT:t atkT:t atkDir:s atkFace:n hurtT:t inv:u gone:b goneT:u dead:b hp:n maxHp:n wallDir:n dn:n');      // dn: how many times this body died (lets the host catch a death it missed)
   // hazards that only depend on the level clock are not sent at all: every screen runs them itself
   const LOCALRUN = new Set(['Pendulum', 'Gear', 'FireJet']);
   coop.netspec = NETSPEC; coop.localrun = LOCALRUN;                       // (read by the dev test that checks the lists are complete)
@@ -6706,7 +6708,7 @@ G.VOICE = {
       const hurt0 = me.hurt, haz0 = me.hazard, die0 = me.die;
       me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) { coop.rel('hurt', { x, y, d }); if (laggy()) this.inv += 0.4; } return r; };
       me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
-      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; this._downAt = performance.now(); die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
+      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; this._downAt = performance.now(); this._downX = x; this._downY = y; this.dn = (this.dn || 0) + 1; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent, dn: this.dn }); };
       coop.gsPrev = null;
       coop.gTick = 0;
     }
@@ -6743,11 +6745,23 @@ G.VOICE = {
     L.net = null; L.partner = null; L.p2 = null;
   };
   coop.notice = null;
+  (function () {
+    let lastErr = 0;
+    const report = (msg) => {
+      const now = performance.now(); if (now - lastErr < 5000) return; lastErr = now;
+      msg = String(msg || 'error').slice(0, 160);
+      if (coop.role === 'guest' && coop.open) send({ t: 'err', m: msg });
+      else if (coop.role === 'host') coop.say('error: ' + msg.slice(0, 44));
+    };
+    window.addEventListener('error', (e) => report((e.message || e) + (e.lineno ? ' @' + e.lineno : '')));
+    window.addEventListener('unhandledrejection', (e) => report('promise: ' + (e.reason && e.reason.message || e.reason)));
+  })();
   coop.say = (text) => { coop.notice = { text, t: 2 }; };
   // one simple rule: a fallen player comes back after REVIVE_T seconds if the other one is still alive; both down = the level restarts
   const REVIVE_T = coop.REVIVE_T = 6;
   coop.holdDeath = (p) => {
     const L = p.L;
+    if (p._downX === undefined || !p.dead || p._dnT !== p.dn) { p._downX = p.x; p._downY = p.y; p._dnT = p.dn; }
     if (!L.net || !L.reviveQ) return false;
     const other = p === L.me ? L.partner : L.me;
     if (!other || other.dead) return false;
@@ -6776,12 +6790,14 @@ G.VOICE = {
   function applyRemote(L) {
     const p2 = L.p2, d = coop.rAll;
     for (const k in d) {
-      if (HOSTOWN.has(k) || k === 'x' || k === 'y' || k === 'dead') continue;      // death only arrives as the 'die' event (so it always reaches holdDeath / the revive timer) and only the host revives
+      if (HOSTOWN.has(k) || k === 'x' || k === 'y' || k === 'dead' || k === 'dn') continue;      // death goes through p2Down (so it always reaches holdDeath / the revive timer); only the host revives
       const v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
       p2[k] = v;
     }
+    if (typeof d.dn === 'number' && d.dn > (p2._dnSeen || 0)) p2Down(L, d.dn, d.x, d.y, false);      // the 'die' event is late or lost: the body report says it fell
+    if (p2.dead) return;                                                                                 // a fallen body stays where it fell
     if (pb.off === null || !pb.list.length) { if (typeof d.x === 'number') { p2.x = d.x; p2.y = d.y; } return; }
     const rt = performance.now() / 1000 - pb.off - pb.D;
     let A = null, B = null;
@@ -6823,10 +6839,13 @@ G.VOICE = {
       L.hits++;
       asP2(L, () => { const ox = p2.x, oy = p2.y; p2.x = ev.x; p2.y = ev.y; p2.scatter(0, 0); p2.x = ox; p2.y = oy; A.sfx('hurt'); });
       if (L.rise && L.rising) L.liquidY += 72;                      // the tide backs off a little, same as for the host player
-    } else if (ev.t === 'die') {
-      if (p2.dead) return;
-      asP2(L, () => { p2.x = ev.x; p2.y = ev.y; p2.die(!!ev.silent); });
-    }
+    } else if (ev.t === 'die') p2Down(L, ev.dn, ev.x, ev.y, !!ev.silent);
+  }
+  function p2Down(L, dn, x, y, silent) {
+    const p2 = L.p2;
+    if (dn !== undefined) { if (dn <= (p2._dnSeen || 0)) return; p2._dnSeen = dn; }
+    if (p2.dead) return;
+    asP2(L, () => { p2.x = x; p2.y = y; p2.die(silent); });
   }
   coop.hostTick = (L, dt) => {
     const p2 = L.p2; if (!p2 || !coop.peer) return;
@@ -6854,7 +6873,7 @@ G.VOICE = {
       if (!q.p.dead || other.dead) continue;
       q.p.dead = false; q.p.hp = Math.min(3, q.p.maxHp); q.p.x = other.x; q.p.y = other.y - 2; q.p.vx = q.p.vy = 0; q.p.inv = 2; q.p.gone = false; q.p.hurtT = 0;
       L.ring(q.p.x + 5, q.p.y + 5, 2, 26, '#6aa8ff', 0.4); L.pop(q.p.x + 5, q.p.y - 12, 'revived', '#cfe3ff', true);
-      if (q.p === p2) coop.rel('revive', { x: p2.x, y: p2.y, hp: p2.hp });          // its body is its own: tell it
+      if (q.p === p2) { p2._rg = (p2._rg || 0) + 1; p2._rv = { x: p2.x, y: p2.y, hp: p2.hp }; coop.rel('revive', { x: p2.x, y: p2.y, hp: p2.hp, rg: p2._rg }); }          // its body is its own: tell it
     }
     if (++coop.tickN % coop.rate.snap === 0) sendSnap(L);
   };
@@ -6946,6 +6965,7 @@ G.VOICE = {
     for (const q of L.projs) if (!q.dead && q.pid && S.pj.length < 60) S.pj.push(Object.assign({ pid: q.pid }, projData(q)));      // only sent with keyframes
     S.p = encAll(PLAYERSP, L.me);
     S.ph = { frozen: p2.frozen, celebrate: p2.celebrate };        // the rest of the partner's body belongs to the partner
+    if (p2._rg) { S.ph.rg = p2._rg; S.ph.rx = p2._rv.x; S.ph.ry = p2._rv.y; S.ph.rh = p2._rv.hp; }      // the last revive, in case its event was lost
     S.hs = coop.hostState;
     return S;
   }
@@ -7175,7 +7195,7 @@ G.VOICE = {
       merge(it, fOf(u, ITEMSP));
     }
     if (S.p) merge(L.partner, fOf(S, PLAYERSP, 'pf', S.p));
-    if (S.ph) Object.assign(L.me, S.ph);
+    if (S.ph) { L.me.frozen = S.ph.frozen; L.me.celebrate = S.ph.celebrate; if (S.ph.rg) guestRevive(L, { x: S.ph.rx, y: S.ph.ry, hp: S.ph.rh, rg: S.ph.rg }); }
     if (S.hs && !(S.tm < coop.hsTm)) coop.hostState = S.hs;          // a newer 'hs' message beats an older snapshot shown with delay
   }
   const ECHO = new Set(['hit', 'clang', 'squish', 'bossHit']);
@@ -7224,8 +7244,16 @@ G.VOICE = {
     if (ev.k === 'proj') { if (!L.projs.some((q) => q.pid === ev.pid)) L.projs.push(newProj(L, ev, ev.tm)); return; }
     if (ev.k === 'projDead') { for (const q of L.projs) if (q.pid === ev.pid) q.dead = true; return; }
     if (ev.k === 'heal') { p.hp = Math.min(p.maxHp, p.hp + ev.n); if (ev.safe) p.setSafe(ev.safe.x, ev.safe.y); }
-    else if (ev.k === 'revive') { p.dead = false; p.hp = ev.hp; p.x = ev.x; p.y = ev.y; p.vx = p.vy = 0; p.inv = 2; p.gone = false; p.hurtT = 0; }
+    else if (ev.k === 'revive') guestRevive(L, ev);
   };
+  // each revive is numbered: the event and the snapshot copy of it are applied once, whichever comes first
+  function guestRevive(L, ev) {
+    const p = L.me;
+    if (ev.rg !== undefined && ev.rg <= (p._rg || 0)) return;
+    if (ev.rg !== undefined) p._rg = ev.rg;
+    if (!p.dead) return;
+    p.dead = false; p.hp = ev.hp; p.x = ev.x; p.y = ev.y; p.vx = p.vy = 0; p.inv = 2; p.gone = false; p.hurtT = 0;
+  }
   // ---------- the guest runs its own body: fights, hurts and hazards are decided here, at once, against what this screen shows ----------
   // Damage dealt is only *announced* (reliable 'hit' event); the host owns the creatures and applies it after checking it makes sense.
   // remember which hits this screen already showed, so the host's echo of the same hit is not played a second time
@@ -7383,15 +7411,15 @@ G.VOICE = {
     for (const q of [L.me, L.partner]) {
       if (!q || !q.dead) continue;
       const left = coop.reviveLeft(L, q);
-      const x = q.x, y = Math.min(q.y, L.ph - 20);
-      q.dead = false; const gone = q.gone; q.gone = false;
-      g.globalAlpha = 0.35; try { q.draw(g, cx, cy); } finally { g.globalAlpha = 1; q.dead = true; q.gone = gone; }
+      const x = q._downX !== undefined ? q._downX : q.x, y = Math.min(q._downY !== undefined ? q._downY : q.y, L.ph - 20);
+      const ox = q.x, oy = q.y, gone = q.gone; q.x = x; q.y = y; q.dead = false; q.gone = false;
+      g.globalAlpha = 0.35; try { q.draw(g, cx, cy); } finally { g.globalAlpha = 1; q.dead = true; q.gone = gone; q.x = ox; q.y = oy; }
       const px = Math.round(x + q.w / 2) - cx, py = Math.round(y) - cy - 14;
       const col = q === L.me ? '#ffb38a' : '#9cc4ff';
       g.lineWidth = 2; g.strokeStyle = 'rgba(13,10,18,0.8)'; g.beginPath(); g.arc(px, py, 7, 0, Math.PI * 2); g.stroke();
       if (left !== null) {
         g.strokeStyle = col; g.beginPath(); g.arc(px, py, 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - left / REVIVE_T)); g.stroke();
-        G.text(g, String(Math.ceil(left) || 1), px, py - 3, col, { tiny: true, align: 'c' });
+        G.text(g, left > 0 ? String(Math.ceil(left)) : '..', px, py - 3, col, { tiny: true, align: 'c' });
       } else G.text(g, '!', px, py - 3, col, { tiny: true, align: 'c' });
     }
   };
@@ -7418,7 +7446,7 @@ G.VOICE = {
     // my own body is down: say so, and when I come back
     if (L.me.dead) {
       const l = coop.reviveLeft(L, L.me), both = q.dead;
-      const t = both ? 'BOTH DOWN' : l !== null ? 'DOWN  -  BACK IN ' + Math.ceil(l || 0.01) : 'DOWN';
+      const t = both ? 'BOTH DOWN' : l !== null && l > 0 ? 'DOWN  -  BACK IN ' + Math.ceil(l) : l !== null ? 'DOWN  -  REVIVING...' : 'DOWN';
       const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), 40, w, 15, '#17131f', '#ffb38a', '#0d0a12');
       G.text(ug, t, W / 2, 44, '#ffd9c4', { align: 'c' });
     }
@@ -7492,6 +7520,7 @@ G.VOICE = {
         const L = G.scene && G.scene.L; if (L && L._net && m.e === coop.epoch && m.sa > L._net.acked) L._net.acked = m.sa;
       }
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
+      else if (m.t === 'err') { console.error('P2 error: ' + m.m); coop.say('P2 error: ' + String(m.m).slice(0, 40)); }
     } else {
       if (m.t === 'host') {
         coop.hostOn = !!m.on; ui.render();

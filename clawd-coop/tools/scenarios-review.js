@@ -196,4 +196,63 @@ module.exports = (S, h) => {
       return R(ok, out.join(' | '));
     } finally { await browser.close(); await srv.stop(); }
   };
+
+  // a lost "revive" event or a lost "die" event must not leave anyone dead: both are also carried by the regular state messages
+  S['revive-lost'] = async () => {
+    const T = await openPair(); const out = [];
+    try {
+      await startLevel(T, '1-1'); await sleep(1200);
+      // 1. the guest never gets the revive event
+      await T.guest.evaluate(() => { const g = G.coop.guestRel; G.coop.guestRel = function (L, ev) { if (ev.k === 'revive') return; return g.apply(this, arguments); }; const p = G.scene.L.me; p.inv = 0; p.die(); });
+      let t0 = Date.now(), back = false;
+      while (Date.now() - t0 < 10000 * K()) { if (await T.guest.evaluate(() => !G.scene.L.me.dead)) { back = true; break; } await h.sleep(200); }
+      out.push('revive event lost: guest back=' + back + ' after ' + (Date.now() - t0) + ' ms');
+      const ok1 = back;
+      await sleep(2500);
+      // 2. the host never gets the die event (only body reports)
+      await T.host.evaluate(() => { const o = G.coop.onRel; G.coop.onRel = function (ev, m) { if (ev.k === 'die') return; return o.apply(this, arguments); }; });
+      await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.die(); });
+      await sleep(1200);
+      const q = await T.host.evaluate(() => ({ dead: G.scene.L.p2.dead, rq: G.scene.L.reviveQ.length }));
+      t0 = Date.now(); back = false;
+      while (Date.now() - t0 < 10000 * K()) { if (await T.guest.evaluate(() => !G.scene.L.me.dead)) { back = true; break; } await h.sleep(200); }
+      out.push('die event lost: host saw the death=' + q.dead + ' queued=' + q.rq + ', guest back=' + back);
+      return R(ok1 && q.dead && q.rq === 1 && back && !T.errs.length, out.join(' | ') + (T.errs.length ? ' ERRORS ' + T.errs.join('; ') : ''));
+    } finally { await T.close(); }
+  };
+
+  // the phone player pushes the stick diagonally up towards a small slime and taps CLAW: it must be a forward swipe that kills it
+  S['touch-slime'] = async () => {
+    const srv = await h.startServer(); const browser = await h.chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); const errs = [];
+    try {
+      const host = await (await browser.newContext({ viewport: { width: 768, height: 432 } })).newPage();
+      const gctx = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 780, height: 360 } }), guest = await gctx.newPage();
+      for (const [n, pg] of [['host', host], ['guest', guest]]) pg.on('pageerror', (e) => errs.push(n + ': ' + e.message));
+      await host.goto('http://localhost:' + srv.port + '/?mute'); await guest.goto('http://127.0.0.1:' + srv.port + '/?mute');
+      for (const pg of [host, guest]) await pg.waitForFunction(() => window.G && G.scene);
+      await host.evaluate((c) => G.coop.connect('host', c), h.wsTry ? 'test' : h.CODE);      // the cloud relay wants the host key await host.waitForFunction(() => G.coop.open);
+      await guest.evaluate((c) => G.coop.connect('guest', c), h.CODE); await host.waitForFunction(() => G.coop.peer);
+      await host.evaluate(() => { G.go(() => G.Scenes.play('1-1', null)); });
+      await guest.waitForFunction(() => G.scene.L && G.scene.L.net === 'guest' && !G.transitioning(), null, { timeout: 15000 }); await h.sleep(1200);
+      await host.evaluate(() => { const L = G.scene.L; L.ents = L.ents.filter((e) => e.isBoss); });
+      const cdp = await gctx.newCDPSession(guest); const T = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+      const A = await guest.evaluate(() => { const r = document.getElementById('t-attack').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+      let kills = 0; const dirs = [];
+      for (let k = 0; k < 5; k++) {
+        const id = await host.evaluate(() => { const L = G.scene.L, p = L.p2, e = new G.Enemies.Slime(L, 0, 0, true); e.x = p.x + 18; e.y = p.y + p.h - e.h; e.update = function (dt) { this.tick(dt); }; L.ents.push(e); G.coop.hostTick(L, 0); window.__s = e; return e._id; });
+        await guest.waitForFunction((id) => G.scene.L.ents.some((e) => e._id === id), id, { timeout: 5000 });
+        await guest.evaluate(() => { G.scene.L.me.face = 1; });
+        // thumb lands, pushes up-right at 45 degrees (as when chasing something), and the other thumb taps CLAW
+        await T('touchStart', [{ x: 200, y: 250, id: 1 }]); await T('touchMove', [{ x: 200 + 34, y: 250 - 34, id: 1 }]);
+        await h.sleep(40);
+        await T('touchMove', [{ x: 234, y: 216, id: 1 }, { x: A.x, y: A.y, id: 2 }]); await h.sleep(30);
+        await T('touchMove', [{ x: 234, y: 216, id: 1 }]); await h.sleep(250);
+        dirs.push(await guest.evaluate(() => G.scene.L.me.atkDir));
+        await T('touchEnd', []); await h.sleep(500);
+        if (await host.evaluate(() => !!window.__s.dead)) kills++;
+        await host.evaluate(() => { window.__s.dead = true; }); await h.sleep(300);
+      }
+      return R(kills === 5 && dirs.every((d) => d === 'f') && !errs.length, 'stick pushed 45 deg up-right + CLAW tap at a small slime: swipe direction ' + dirs.join(',') + ' (want f), slimes killed ' + kills + '/5' + (errs.length ? ' ERRORS ' + errs.join('; ') : ''));
+    } finally { await browser.close(); await srv.stop(); }
+  };
 };
