@@ -6514,8 +6514,16 @@ G.VOICE = {
   const r2 = (v) => Math.round(v * 100) / 100;
   const BUILD = coop.build = Array.from(document.scripts).reduce((a, sc) => a + sc.text.length, 0);
   // ?debug: a few lines on screen about the partner's hits (host: what happened to each one; guest: what was sent)
-  coop.dbgOn = /[?&]debug\b/.test(location.search); coop.dlog = [];
-  const dlog = (t) => { if (!coop.dbgOn) return; coop.dlog.push(t); if (coop.dlog.length > 7) coop.dlog.shift(); console.log('[coop] ' + t); };
+  // Everything also goes into coop.dfull (the LOG button copies it). The guest's lines are sent to the host too, so the PC's log has both sides.
+  coop.dbgOn = /[?&]debug\b/.test(location.search); coop.dlog = []; coop.dfull = [];
+  const dT0 = performance.now();
+  const stamp = () => { const t = (performance.now() - dT0) / 1000; return Math.floor(t / 60) + ':' + (t % 60).toFixed(1).padStart(4, '0'); };
+  coop.dkeep = (t) => { if (!coop.dbgOn) return; coop.dfull.push(stamp() + ' ' + t); if (coop.dfull.length > 800) coop.dfull.shift(); };
+  const dlog = (t) => {
+    if (!coop.dbgOn) return; coop.dlog.push(t); if (coop.dlog.length > 7) coop.dlog.shift(); console.log('[coop] ' + t);
+    coop.dkeep((coop.role === 'guest' ? 'GUEST ' : 'HOST  ') + t);
+    if (coop.role === 'guest' && coop.open) send({ t: 'dl', v: t });
+  };
   // the level (host) decides these for the partner; everything else about the partner's body is the partner's own
   const HOSTOWN = new Set(['frozen', 'celebrate', 'auto', 'remote', 'blue', 'away']);
 
@@ -6761,7 +6769,7 @@ G.VOICE = {
     window.addEventListener('error', (e) => report((e.message || e) + (e.lineno ? ' @' + e.lineno : '')));
     window.addEventListener('unhandledrejection', (e) => report('promise: ' + (e.reason && e.reason.message || e.reason)));
   })();
-  coop.say = (text) => { coop.notice = { text, t: 2 }; };
+  coop.say = (text) => { coop.notice = { text, t: 2 }; coop.dkeep('say   ' + text); };
   // one simple rule: a fallen player comes back after REVIVE_T seconds if the other one is still alive; both down = the level restarts
   const REVIVE_T = coop.REVIVE_T = 6;
   coop.holdDeath = (p) => {
@@ -7534,7 +7542,8 @@ G.VOICE = {
       }
       else if (m.t === 'full') { const L = G.scene && G.scene.L; if (L && L.net === 'host' && m.e === coop.epoch) coop.kfNext = true; }
       else if (m.t === 'ver') coop.verBad = m.v !== BUILD;
-      else if (m.t === 'err') { console.error('P2 error: ' + m.m); coop.say('P2 error: ' + String(m.m).slice(0, 40)); }
+      else if (m.t === 'err') { console.error('P2 error: ' + m.m); coop.dkeep('GUEST error: ' + m.m); coop.say('P2 error: ' + String(m.m).slice(0, 40)); }
+      else if (m.t === 'dl') coop.dkeep('GUEST ' + String(m.v).slice(0, 200));
     } else {
       if (m.t === 'host' && m.lag) {                                                      // the host's line dropped: it has 15 s to come back
         const L = G.scene && G.scene.L; if (L && L.net === 'guest' && L.partner) L.partner.lagging = true;
@@ -7547,7 +7556,7 @@ G.VOICE = {
         coop.hostOn = !!m.on; ui.render();
         if (!m.on && G.scene && G.scene.L && G.scene.L.net === 'guest') { coop.kick = 'wait'; coop.say('host disconnected'); }
       }
-      else if (m.t === 'start') { coop.verBad = m.v !== BUILD; coop.hsTm = -1; coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
+      else if (m.t === 'start') { coop.verBad = m.v !== BUILD; if (coop.verBad) coop.dkeep('net   HOST RUNS ANOTHER BUILD: ' + m.v + ' (mine ' + BUILD + ')'); coop.hsTm = -1; coop.q = coop.q.filter((x) => x.e >= m.e); coop.startMsg = m; coop.leaveMsg = false; }
       else if (m.t === 'hs') { const L = G.scene && G.scene.L; if (!L || L.net !== 'guest' || m.e >= L._ep) { coop.hostState = m.hs; if (m.tm !== undefined) coop.hsTm = m.tm; } }
       else if (m.t === 'cfg') { coop.diffLine = G.diff.label(m.diff); }
       else if (m.t === 'tok') { if (m.v !== coop.token) { if (coop.token) coop.resetNet(); coop.token = m.v; } }
@@ -7589,6 +7598,7 @@ G.VOICE = {
       if (ui.panel) ui.panel.style.display = 'none';          // get out of the way of the game
       if (role === 'host' && !resume) coop.fetchCfg();
       if (role === 'guest') send({ t: 'ver', v: BUILD });
+      coop.dkeep('net   ' + role + ' connected' + (resume ? ' (resume)' : '') + ', build ' + BUILD);
       if (role === 'guest' && !resume) G.go(() => wait(), { speed: 3 });
       coop.lastMsgAt = performance.now();
       coop.pgT = setInterval(() => {
@@ -7604,6 +7614,7 @@ G.VOICE = {
     ws.onmessage = (ev) => { coop.bytesIn += ev.data.length; coop.lastMsgAt = performance.now(); if (ev.data === '{"t":"hb"}') return; try { onMsg(JSON.parse(ev.data)); } catch (e) { console.error(e); } };
     ws.onclose = (ev) => {
       if (coop.ws !== ws) return;
+      coop.dkeep('net   closed ' + ev.code);
       clearInterval(coop.pgT); clearInterval(coop.kaT); clearInterval(coop.mtT); coop.open = false; coop.peer = false; coop.ping = 0;
       coop.status = ev.code === 4001 ? 'wrong code' : ev.code === 4002 ? 'a host is already running' : ev.code === 4003 ? 'wrong host key' : ev.code === 4004 ? 'Host only works on the PC running the server' : ev.code === 4005 ? 'too many wrong codes, wait a minute' : 'offline';
       const L = G.scene && G.scene.L;
@@ -7705,6 +7716,42 @@ G.VOICE = {
       if (this.diffBox) { this.diffBox.style.display = on && coop.role === 'host' && coop.peer ? '' : 'none'; if (this.renderDiff) this.renderDiff(); }
     },
   };
+  // ?debug: a LOG button (top left) opens the whole log as text, with Copy and Download (both also work on plain http:// pages)
+  function debugWindow() {
+    const b = document.createElement('button'); b.id = 'dbgBtn'; b.textContent = 'LOG';
+    b.style.cssText = 'position:fixed;top:4px;left:4px;z-index:60;font:bold 11px monospace;padding:3px 7px;background:rgba(20,16,30,.75);color:#9cc4ff;border:1px solid #6aa8ff;border-radius:6px';
+    const w = document.createElement('div');
+    w.style.cssText = 'position:fixed;inset:4%;z-index:70;display:none;flex-direction:column;gap:6px;padding:8px;background:#17131f;border:1px solid #6aa8ff;border-radius:8px;font:12px monospace;color:#fff3e4';
+    w.innerHTML = '<div><button data-a="copy">Copy</button> <button data-a="save">Download</button> <button data-a="close">Close</button> <span data-n style="color:#7fe08a"></span></div>' +
+      '<textarea readonly spellcheck="false" style="flex:1;width:100%;box-sizing:border-box;background:#0d0a12;color:#d8e6ff;border:1px solid #444;border-radius:5px;font:11px/1.35 monospace;white-space:pre;resize:none"></textarea>';
+    for (const x of w.querySelectorAll('button')) x.style.cssText = 'font:12px monospace;padding:6px 10px;border-radius:5px;border:1px solid #555;background:#2a2338;color:#fff';
+    const ta = w.querySelector('textarea'), note = (t) => { w.querySelector('[data-n]').textContent = t; };
+    const text = () => {
+      const L = G.scene && G.scene.L;
+      return ['CLAWD debug log', 'build ' + BUILD + (coop.verBad ? '  (OTHER SCREEN RUNS ANOTHER BUILD)' : '') + '  role ' + (coop.role || 'none') + '  open ' + coop.open + '  peer ' + coop.peer + '  ping ' + Math.round(coop.ping || 0) + ' ms',
+        'page ' + location.href + '  scene ' + (L ? (L.net || 'solo') : 'menu'), 'browser ' + navigator.userAgent, ''].concat(coop.dfull).join('\n');
+    };
+    const show = (on) => { w.style.display = on ? 'flex' : 'none'; if (on) { ta.value = text(); ta.scrollTop = ta.scrollHeight; note(coop.dfull.length + ' lines'); } };
+    b.addEventListener('click', () => show(w.style.display === 'none'));
+    w.addEventListener('click', (e) => {
+      const a = e.target.dataset && e.target.dataset.a; if (!a) return;
+      if (a === 'close') return show(false);
+      ta.value = text();
+      if (a === 'copy') {
+        ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+        let ok = false; try { ok = document.execCommand('copy'); } catch (x) { /* old API missing */ }
+        if (ok) note('copied - paste it in the chat');
+        else if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(ta.value).then(() => note('copied - paste it in the chat'), () => note('copy blocked: the text is selected, copy it by hand'));
+        else note('copy blocked: the text is selected, copy it by hand');
+      } else if (a === 'save') {
+        const u = URL.createObjectURL(new Blob([ta.value], { type: 'text/plain' })), l = document.createElement('a');
+        l.href = u; l.download = 'clawd-log-' + (coop.role || 'solo') + '.txt'; document.body.appendChild(l); l.click(); l.remove();
+        setTimeout(() => URL.revokeObjectURL(u), 5000); note('saved as ' + l.download);
+      }
+    });
+    for (const el of [b, w]) for (const ev of ['keydown', 'keyup', 'pointerdown', 'touchstart']) el.addEventListener(ev, (e) => e.stopPropagation());
+    document.body.appendChild(b); document.body.appendChild(w);
+  }
   if (/^https?:$/.test(location.protocol)) {
     const css = document.createElement('style');
     css.textContent = '#coopBtn{position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:60;font:bold 12px monospace;padding:4px 8px;background:rgba(20,16,30,.75);border:1px solid #555;border-radius:6px;opacity:.75}#coopBtn:hover{opacity:1}body.touch #coopBtn{font-size:10px;padding:2px 6px;opacity:.55}#coopP{position:fixed;top:30px;left:50%;transform:translateX(-50%);z-index:60;max-width:92vw;width:230px;padding:10px;background:#17131f;color:#fff3e4;border:1px solid #6aa8ff;border-radius:8px;font:12px monospace;display:none}#coopP button,#coopP input{font:12px monospace;margin:3px 2px;padding:5px 8px;border-radius:5px;border:1px solid #555;background:#2a2338;color:#fff}#coopP input{width:70px}';
@@ -7757,6 +7804,7 @@ G.VOICE = {
     panel.querySelector('#cJoin').addEventListener('click', () => coop.connect('guest', panel.querySelector('#cCode').value.trim()));
     ui.off.addEventListener('click', () => coop.disconnect());
     if (!canHost) { panel.style.display = 'block'; }
+    if (coop.dbgOn) debugWindow();
     ui.render();
   }
 })();

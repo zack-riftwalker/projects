@@ -222,6 +222,24 @@ module.exports = (S, h) => {
   };
 
   // the phone player pushes the stick diagonally up towards a small slime and taps CLAW: it must be a forward swipe that kills it
+  // ?debug on both pages: the guest's lines reach the host's log; the LOG window shows both sides and Copy works on a plain http:// page
+  S['debug-log'] = async () => {
+    const T = await h.openPair({ query: '?mute&debug' });
+    try {
+      await h.startLevel(T, '1-1'); await h.sleep(1500);
+      await T.guest.evaluate(() => { const L = G.scene.L, e = L.ents.find((x) => !x.dead && x._id); G.coop.rel('hit', { eid: e ? e._id : 999, how: 'swipe', dmg: 1, dx: 1, dy: 0, atk: 77, bi: 0 }); });
+      await h.sleep(1500);
+      const r = await T.host.evaluate(() => {
+        document.querySelector('#dbgBtn').click();
+        const w = document.querySelector('#dbgBtn').nextSibling, ta = w.querySelector('textarea');
+        w.querySelector('[data-a="copy"]').click();
+        return { shown: getComputedStyle(w).display, text: ta.value, note: w.querySelector('[data-n]').textContent };
+      });
+      const guestLine = /GUEST sent swipe #\d+/.test(r.text), hostLine = /HOST  P2 swipe/.test(r.text);
+      return R(r.shown === 'flex' && guestLine && hostLine && /^copied/.test(r.note) && /build \d+/.test(r.text), 'window ' + r.shown + '; guest line on the PC=' + guestLine + ', host verdict=' + hostLine + '; copy -> "' + r.note + '"\n' + r.text.split('\n').filter((l) => /GUEST|HOST/.test(l)).slice(-4).join('\n'));
+    } finally { await T.close(); }
+  };
+
   S['touch-slime'] = async () => {
     const srv = await h.startServer(); const browser = await h.chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); const errs = [];
     try {
