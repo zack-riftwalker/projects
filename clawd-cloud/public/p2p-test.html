@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLAWD P2P test</title>
+<style>
+  :root { --bg: #0d0a12; --panel: #17131f; --ink: #fff3e4; --dim: #8d8798; --ok: #7fe08a; --warn: #ffd27a; --bad: #ff6b6b; --acc: #6aa8ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 system-ui, Tahoma, sans-serif; padding: 16px; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: var(--acc); }
+  p { margin: 6px 0; }
+  .dim { color: var(--dim); font-size: 13px; }
+  section { background: var(--panel); border: 1px solid #2a2338; border-radius: 10px; padding: 12px; margin: 12px 0; }
+  button { font: inherit; padding: 9px 14px; border-radius: 8px; border: 1px solid #555; background: #2a2338; color: #fff; margin: 4px 0 4px 6px; cursor: pointer; }
+  button.pri { background: var(--acc); border-color: var(--acc); color: #0d0a12; font-weight: bold; }
+  textarea { width: 100%; height: 90px; font: 12px/1.3 monospace; direction: ltr; background: #0d0a12; color: var(--ink); border: 1px solid #333; border-radius: 6px; padding: 6px; }
+  #status { font-size: 18px; font-weight: bold; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  #log { font: 12px/1.4 monospace; direction: ltr; text-align: left; white-space: pre-wrap; color: var(--dim); max-height: 180px; overflow: auto; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>تست اتصال مستقیم (WebRTC)</h1>
+  <p class="dim">بدون سرور: متن اتصال را دستی بین دو دستگاه کپی کن (مثلاً با Saved Messages تلگرام). PC با اینترنت خانه، گوشی با اینترنت موبایل (Wi-Fi خاموش).</p>
+
+  <section id="pick">
+    <p><b>این دستگاه کدام است؟</b></p>
+    <button class="pri" id="bA">دستگاه ۱ (شروع)</button>
+    <button id="bB">دستگاه ۲ (جواب)</button>
+  </section>
+
+  <section id="sA" class="hide">
+    <p><b>دستگاه ۱</b> — مرحله‌ی ۱: این متن را کپی کن و روی دستگاه ۲ بچسبان.</p>
+    <textarea id="offerOut" readonly placeholder="در حال ساخت..."></textarea>
+    <button id="copyOffer">کپی</button>
+    <p>مرحله‌ی ۳: جوابی که دستگاه ۲ داد را اینجا بچسبان:</p>
+    <textarea id="answerIn" placeholder="جواب دستگاه ۲"></textarea>
+    <button class="pri" id="useAnswer">وصل شو</button>
+  </section>
+
+  <section id="sB" class="hide">
+    <p><b>دستگاه ۲</b> — مرحله‌ی ۲: متن دستگاه ۱ را اینجا بچسبان:</p>
+    <textarea id="offerIn" placeholder="متن دستگاه ۱"></textarea>
+    <button class="pri" id="makeAnswer">ساخت جواب</button>
+    <p>این جواب را کپی کن و روی دستگاه ۱ بچسبان:</p>
+    <textarea id="answerOut" readonly></textarea>
+    <button id="copyAnswer">کپی</button>
+  </section>
+
+  <section>
+    <div id="status" class="dim">منتظر...</div>
+    <p id="pingLine"></p>
+    <p id="pathLine" class="dim"></p>
+    <p id="candLine" class="dim"></p>
+    <div id="log"></div>
+  </section>
+</main>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
+  const log = (s) => { $('log').textContent += new Date().toISOString().slice(11, 23) + '  ' + s + '\n'; $('log').scrollTop = 1e9; };
+  const status = (s, cls) => { $('status').textContent = s; $('status').className = cls || ''; };
+  const show = (id) => $(id).classList.remove('hide');
+  let pc = null, dc = null, pingT = null, failT = null;
+  const seen = { host: 0, srflx: 0, prflx: 0, relay: 0 };
+
+  // the connection text: JSON -> deflate (when the browser can) -> base64, prefixed so the other side knows how to read it
+  const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const pipe = async (u8, stream) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer());
+  async function pack(desc) {
+    const raw = new TextEncoder().encode(JSON.stringify({ type: desc.type, sdp: desc.sdp }));
+    if (window.CompressionStream) { try { return 'Z' + b64(await pipe(raw, new CompressionStream('deflate-raw'))); } catch (e) { /* plain */ } }
+    return 'P' + b64(raw);
+  }
+  async function unpack(text) {
+    text = text.replace(/\s+/g, '');
+    const kind = text[0], body = unb64(text.slice(1));
+    const raw = kind === 'Z' ? await pipe(body, new DecompressionStream('deflate-raw')) : body;
+    return JSON.parse(new TextDecoder().decode(raw));
+  }
+
+  function newPc() {
+    pc = new RTCPeerConnection({ iceServers: ICE });
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) { log('candidate gathering finished'); return; }
+      const t = e.candidate.type || (/ typ (\w+)/.exec(e.candidate.candidate) || [])[1];
+      if (t in seen) seen[t]++;
+      $('candLine').textContent = 'کاندیداهای این دستگاه: host ' + seen.host + ' · srflx ' + seen.srflx + ' · relay ' + seen.relay;
+      log('local candidate: ' + t + ' ' + (e.candidate.protocol || ''));
+    };
+    pc.onconnectionstatechange = () => {
+      log('connection: ' + pc.connectionState);
+      if (pc.connectionState === 'failed') fail('اتصال مستقیم برقرار نشد (failed)');
+    };
+    pc.oniceconnectionstatechange = () => log('ice: ' + pc.iceConnectionState);
+    return pc;
+  }
+  // wait until all candidates are gathered (no trickle: one text to copy each way), at most 8 s
+  const gathered = () => new Promise((res) => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const t = setTimeout(res, 8000);
+    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+  });
+  function fail(msg) { clearTimeout(failT); clearInterval(pingT); status('✗ ' + msg, 'bad'); }
+  function armTimeout() { clearTimeout(failT); failT = setTimeout(() => { if (!dc || dc.readyState !== 'open') fail('بعد از ۲۰ ثانیه وصل نشد — اتصال مستقیم در این دو شبکه کار نمی‌کند'); }, 20000); }
+
+  // once open: measure the direct round trip and show which path was chosen
+  function useChannel(ch) {
+    dc = ch;
+    const rtts = [];
+    dc.onopen = async () => {
+      clearTimeout(failT);
+      status('✓ اتصال مستقیم برقرار شد', 'ok');
+      pingT = setInterval(() => { if (dc.readyState === 'open') dc.send(JSON.stringify({ t: 'ping', ts: performance.now() })); }, 500);
+      setTimeout(describePath, 1500);
+    };
+    dc.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.t === 'ping') dc.send(JSON.stringify({ t: 'pong', ts: m.ts }));
+      else if (m.t === 'pong') {
+        rtts.push(performance.now() - m.ts); if (rtts.length > 60) rtts.shift();
+        const s = rtts.slice().sort((a, b) => a - b), med = s[s.length >> 1];
+        const cls = med < 100 ? 'ok' : med < 200 ? 'warn' : 'bad';
+        $('pingLine').innerHTML = 'پینگ مستقیم: <b class="' + cls + '">' + Math.round(med) + ' ms</b> (کمترین ' + Math.round(s[0]) + '، بیشترین ' + Math.round(s[s.length - 1]) + '، ' + rtts.length + ' نمونه) — مقایسه کن با ۲۵۰ ms فعلی';
+      }
+    };
+    dc.onclose = () => { clearInterval(pingT); log('channel closed'); };
+  }
+  async function describePath() {
+    try {
+      const st = await pc.getStats(); let pair = null; const c = {};
+      st.forEach((r) => { if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r; if (r.type === 'local-candidate' || r.type === 'remote-candidate') c[r.id] = r; });
+      if (!pair) st.forEach((r) => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = st.get(r.selectedCandidatePairId); });
+      if (!pair) return;
+      const L = c[pair.localCandidateId] || {}, R = c[pair.remoteCandidateId] || {};
+      const lan = L.candidateType === 'host' && R.candidateType === 'host';
+      $('pathLine').textContent = 'مسیر: این دستگاه ' + L.candidateType + ' ⇄ دستگاه دیگر ' + R.candidateType + ' (' + (L.protocol || '') + ')' + (lan ? ' — یعنی هر دو در یک شبکه‌اید (LAN)، نه اینترنت' : '');
+      log('selected pair: ' + L.candidateType + ' <-> ' + R.candidateType + ' ' + (L.protocol || ''));
+    } catch (e) { log('stats: ' + e.message); }
+  }
+
+  $('bA').onclick = async () => {
+    $('pick').classList.add('hide'); show('sA'); status('در حال جمع کردن کاندیداها...', 'dim');
+    newPc(); useChannel(pc.createDataChannel('t', { ordered: false, maxRetransmits: 0 }));
+    await pc.setLocalDescription(await pc.createOffer());
+    await gathered();
+    $('offerOut').value = await pack(pc.localDescription);
+    status('متن را به دستگاه ۲ بفرست', 'warn');
+  };
+  $('bB').onclick = () => { $('pick').classList.add('hide'); show('sB'); status('متن دستگاه ۱ را بچسبان', 'warn'); };
+  $('makeAnswer').onclick = async () => {
+    try {
+      newPc(); pc.ondatachannel = (e) => useChannel(e.channel);
+      await pc.setRemoteDescription(await unpack($('offerIn').value));
+      await pc.setLocalDescription(await pc.createAnswer());
+      status('در حال جمع کردن کاندیداها...', 'dim');
+      await gathered();
+      $('answerOut').value = await pack(pc.localDescription);
+      status('جواب را به دستگاه ۱ بفرست، بعد صبر کن', 'warn'); armTimeout();
+    } catch (e) { status('متن دستگاه ۱ درست نیست: ' + e.message, 'bad'); }
+  };
+  $('useAnswer').onclick = async () => {
+    try { await pc.setRemoteDescription(await unpack($('answerIn').value)); status('در حال وصل شدن...', 'warn'); armTimeout(); }
+    catch (e) { status('جواب درست نیست: ' + e.message, 'bad'); }
+  };
+  const copy = (id) => async () => { const t = $(id); t.select(); try { await navigator.clipboard.writeText(t.value); status('کپی شد', 'ok'); } catch (e) { document.execCommand('copy'); } };
+  $('copyOffer').onclick = copy('offerOut'); $('copyAnswer').onclick = copy('answerOut');
+  window.__p2p = { get pc() { return pc; }, get dc() { return dc; } };
+})();
+</script>
+</body>
+</html>
