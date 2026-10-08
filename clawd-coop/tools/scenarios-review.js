@@ -91,4 +91,38 @@ module.exports = (S, h) => {
       return R(kills === 6 && hurts === 0, 'six swipes at a bug walking in: ' + log.join(', ') + ' (want killed every time, never hurt)');
     } finally { await T.close(); }
   };
+
+  // revive: a fallen player comes back after 6 s if the other one is alive; both screens show a countdown; both down = restart
+  S['revive'] = async () => {
+    const T = await openPair(); const out = [];
+    try {
+      await startLevel(T, '1-1'); await sleep(1200);
+      // the guest falls
+      await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.hp = 1; p.hurt(1, p.x + 30); });
+      await sleep(1500);
+      const a = await T.host.evaluate(() => { const L = G.scene.L; return { dead: L.p2.dead, left: G.coop.reviveLeft(L, L.p2) }; });
+      const b = await T.guest.evaluate(() => { const L = G.scene.L; return { dead: L.me.dead, left: G.coop.reviveLeft(L, L.me) }; });
+      await h.sleep(3500);
+      const mid = await T.guest.evaluate(() => G.scene.L.me.dead);
+      await h.sleep(2200 + 600 * K());
+      const c = await T.guest.evaluate(() => ({ dead: G.scene.L.me.dead, hp: G.scene.L.me.hp }));
+      out.push('guest down: host countdown ' + (a.left && a.left.toFixed(1)) + ' s, guest countdown ' + (b.left && b.left.toFixed(1)) + ' s; still down at ~5 s=' + mid + '; back after ~7 s=' + !c.dead + ' hp ' + c.hp);
+      const ok1 = a.dead && b.dead && a.left > 3.5 && a.left <= 6 && b.left > 3 && b.left <= 6 && mid === true && !c.dead;
+      // the host falls: the guest sees the countdown of its partner
+      await T.host.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.die(); });
+      await sleep(1500);
+      const d = await T.guest.evaluate(() => { const L = G.scene.L; return { dead: L.partner.dead, left: G.coop.reviveLeft(L, L.partner) }; });
+      await h.sleep(5500);
+      const e = await T.host.evaluate(() => !G.scene.L.me.dead);
+      out.push('host down: guest sees countdown ' + (d.left && d.left.toFixed(1)) + ' s; host back=' + e);
+      const ok2 = d.dead && d.left > 3 && d.left <= 6 && e;
+      // both fall: the level restarts
+      await T.host.evaluate(() => { window.__L0 = G.scene.L; const p = G.scene.L.me; p.inv = 0; p.die(); });
+      await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.die(); });
+      let restarted = false; const t0 = Date.now();
+      while (Date.now() - t0 < 6000 * K()) { if (await T.host.evaluate(() => G.scene.L !== window.__L0 && !!G.scene.L)) { restarted = true; break; } await h.sleep(100); }
+      out.push('both down: level restarted=' + restarted);
+      return R(ok1 && ok2 && restarted && T.errs.length === 0, out.join(' | ') + (T.errs.length ? ' ERRORS ' + T.errs.join('; ') : ''));
+    } finally { await T.close(); }
+  };
 };

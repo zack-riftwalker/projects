@@ -110,10 +110,10 @@ module.exports = (S, h) => {
       await T.guest.evaluate(() => { const p = G.scene.L.me; p.inv = 0; p.hp = 1; p.hurt(1, p.x + 30); });
       await sleep(600);
       const down = await T.host.evaluate(() => ({ dead: G.scene.L.p2.dead, q: G.scene.L.reviveQ.length }));
-      await sleep(4600);
+      await sleep(6600);
       const up = await T.guest.evaluate(() => ({ dead: G.scene.L.me.dead, hp: G.scene.L.me.hp }));
       const hostSees = await T.host.evaluate(() => ({ dead: G.scene.L.p2.dead, hp: G.scene.L.p2.hp }));
-      return R(b1 < b0 && down.dead && down.q === 1 && !up.dead && up.hp > 0 && !hostSees.dead, 'boss hp ' + b0 + ' -> ' + b1 + ' (guest swings); guest down on host=' + down.dead + ' queued=' + down.q + '; after 5 s guest dead=' + up.dead + ' hp=' + up.hp + ', host sees dead=' + hostSees.dead);
+      return R(b1 < b0 && down.dead && down.q === 1 && !up.dead && up.hp > 0 && !hostSees.dead, 'boss hp ' + b0 + ' -> ' + b1 + ' (guest swings); guest down on host=' + down.dead + ' queued=' + down.q + '; after 7 s guest dead=' + up.dead + ' hp=' + up.hp + ', host sees dead=' + hostSees.dead);
     } finally { await T.close(); }
   };
 
@@ -307,10 +307,13 @@ module.exports = (S, h) => {
       await T.guest.evaluate(() => { window.__upd = G.scene.update; G.scene.update = () => {}; });
       await sleep(1800);
       const lag = await T.host.evaluate(() => { const L = G.scene.L; return { lagging: L.p2.lagging, aim: G.coop.aimAt(L, { x: L.p2.x, y: L.p2.y, w: 1, h: 1 }) === L.me }; });
-      await T.host.evaluate(() => { window.__L0 = G.scene.L; G.scene.L.me.die(); });          // nobody can pick me up: the level restarts
-      let restarted = false; const t0 = Date.now();
-      while (Date.now() - t0 < 6000) { if (await T.host.evaluate(() => G.scene.L !== window.__L0 && !!G.scene.L)) { restarted = true; break; } await sleep(100); }
-      return R(inv > 1.6 && ok0 && lag.lagging && lag.aim && restarted, 'guest inv after a hit ' + inv.toFixed(2) + ' (1.3 normal, want > 1.6 on a slow line); partner lagging after 1.8 s silence=' + lag.lagging + ', enemies ignore it=' + lag.aim + '; host down + lagging partner -> restart ' + restarted + ' after ' + (Date.now() - t0) + ' ms');
+      await T.host.evaluate(() => { window.__L0 = G.scene.L; G.scene.L.me.die(); });          // the partner is silent but alive: the simple 6 s rule still applies
+      await h.sleep(3000);
+      const early = await T.host.evaluate(() => ({ same: G.scene.L === window.__L0, dead: G.scene.L.me.dead }));
+      let back = false; const t0 = Date.now();
+      while (Date.now() - t0 < 6000) { if (await T.host.evaluate(() => G.scene.L === window.__L0 && !G.scene.L.me.dead)) { back = true; break; } await h.sleep(100); }
+      await T.guest.evaluate(() => { G.scene.update = window.__upd; });
+      return R(inv > 1.6 && ok0 && lag.lagging && lag.aim && early.same && early.dead && back, 'guest inv after a hit ' + inv.toFixed(2) + ' (1.3 normal, want > 1.6 on a slow line); partner lagging after 1.8 s silence=' + lag.lagging + ', enemies ignore it=' + lag.aim + '; host down + lagging partner: still down after 3 s=' + early.dead + ' (no instant fail, same level=' + early.same + '), revived after 6 s=' + back);
     } finally { await T.close(); }
   };
 

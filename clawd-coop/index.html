@@ -3218,6 +3218,7 @@ G.VOICE = {
       for (const e of this.ents) if (!e.dead && !e.front) e.draw(g, cx, cy);
       p.draw(g, cx, cy);
       if (this.partner) G.coop.drawPartner(g, this, cx, cy);
+      if (this.net) G.coop.drawDowned(g, this, cx, cy);
       for (const e of this.ents) if (!e.dead && e.front) e.draw(g, cx, cy);
       // projectiles
       for (const q of this.projs) if (!q.dead && !(q.wait > 0)) this.drawProj(g, q, cx, cy);
@@ -6660,7 +6661,7 @@ G.VOICE = {
       const hurt0 = me.hurt, haz0 = me.hazard, die0 = me.die;
       me.hurt = function (d, srcX) { const x = this.x, y = this.y, r = hurt0.call(this, d, srcX); if (r) { coop.rel('hurt', { x, y, d }); if (laggy()) this.inv += 0.4; } return r; };
       me.hazard = function () { if (this.dead || this.gone || this.celebrate) return; const x = this.x, y = this.y; haz0.call(this); coop.rel('hazard', { x, y }); };
-      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
+      me.die = function (silent) { if (this.dead) return; const x = this.x, y = this.y; this._downAt = performance.now(); die0.call(this, silent); coop.rel('die', { x, y, silent: !!silent }); };
       coop.gsPrev = null;
       coop.gTick = 0;
     }
@@ -6698,12 +6699,14 @@ G.VOICE = {
   };
   coop.notice = null;
   coop.say = (text) => { coop.notice = { text, t: 2 }; };
+  // one simple rule: a fallen player comes back after REVIVE_T seconds if the other one is still alive; both down = the level restarts
+  const REVIVE_T = coop.REVIVE_T = 6;
   coop.holdDeath = (p) => {
     const L = p.L;
     if (!L.net || !L.reviveQ) return false;
     const other = p === L.me ? L.partner : L.me;
-    if (!other || other.dead || other.lagging) return false;           // a partner who does not answer cannot pick anyone up
-    L.reviveQ.push({ p, t: 4 });
+    if (!other || other.dead) return false;
+    L.reviveQ.push({ p, t: REVIVE_T });
     return true;
   };
 
@@ -6728,7 +6731,7 @@ G.VOICE = {
   function applyRemote(L) {
     const p2 = L.p2, d = coop.rAll;
     for (const k in d) {
-      if (HOSTOWN.has(k) || k === 'x' || k === 'y') continue;
+      if (HOSTOWN.has(k) || k === 'x' || k === 'y' || k === 'dead') continue;      // death only arrives as the 'die' event (so it always reaches holdDeath / the revive timer) and only the host revives
       const v = d[k];
       if (k === 'safe') { p2.safe.x = v.x; p2.safe.y = v.y; continue; }
       if (v !== null && typeof v === 'object') continue;
@@ -6800,7 +6803,6 @@ G.VOICE = {
     // revive the fallen partner after a few seconds
     for (let i = L.reviveQ.length - 1; i >= 0; i--) {
       const q = L.reviveQ[i]; q.t -= dt;
-      if (q.p === L.me && p2.lagging) { L.reviveQ.length = 0; L.events.push('death'); break; }      // nobody is there to pick me up
       if (q.t > 0) continue;
       L.reviveQ.splice(i, 1);
       const other = q.p === L.me ? p2 : L.me;
@@ -6881,6 +6883,7 @@ G.VOICE = {
   const CLS = (e) => e.constructor.name;
   function buildState(L, N) {
     const p2 = L.p2, w = {};
+    w.rv = L.reviveQ.map((q) => [q.p === L.me ? 1 : 2, Math.ceil(q.t * 10)]);
     w.ly = L.liquidY; w.rs = L.rising ? 1 : 0; w.tk = L.tokens; w.ht = L.hits; w.ci = L.cpIndex;
     w.cp = L.cps.map((c) => (c.on ? 1 : 0)); w.ex = L.exit && L.exit.done ? 1 : 0; w.sk = L.sparks.slice();
     const T0 = L._tiles0, tl = [];
@@ -7096,6 +7099,7 @@ G.VOICE = {
     const w = S.w;
     if (S.lt !== undefined) { if (L._tm === undefined || Math.abs(S.lt - L.time) > 0.3) L.time = S.lt; else L.time += (S.lt - L.time) * 0.5; L._tm = 1; }
     if (w.ly === null) L.liquidY = null; else if (w.ly !== undefined) L.liquidY = L.liquidY === null || Math.abs(L.liquidY - w.ly) > 60 ? w.ly : L.liquidY + (w.ly - L.liquidY) * 0.5;
+    L._rv = w.rv || []; L._rvAt = performance.now();
     L.rising = !!w.rs; L.tokens = w.tk; L.hits = w.ht; L.cpIndex = w.ci;
     if (w.cp) w.cp.forEach((v, i) => { if (L.cps[i]) L.cps[i].on = !!v; });
     if (L.exit) L.exit.done = !!w.ex;
@@ -7322,6 +7326,30 @@ G.VOICE = {
     }
   };
 
+  coop.reviveLeft = (L, q) => {
+    if (!q || !q.dead) return null;
+    if (L.net === 'host') { const e = (L.reviveQ || []).find((r) => r.p === q); return e ? Math.max(0, e.t) : null; }
+    const who = q === L.me ? 2 : 1, e = (L._rv || []).find((r) => r[0] === who);
+    if (e) return Math.max(0, e[1] / 10 - (performance.now() - (L._rvAt || 0)) / 1000);
+    return q === L.me && q._downAt ? Math.max(0, REVIVE_T - (performance.now() - q._downAt) / 1000) : null;
+  };
+  // a fallen player stays visible: a faint ghost where it fell, with a ring that empties as the revive comes closer
+  coop.drawDowned = (g, L, cx, cy) => {
+    for (const q of [L.me, L.partner]) {
+      if (!q || !q.dead) continue;
+      const left = coop.reviveLeft(L, q);
+      const x = q.x, y = Math.min(q.y, L.ph - 20);
+      q.dead = false; const gone = q.gone; q.gone = false;
+      g.globalAlpha = 0.35; try { q.draw(g, cx, cy); } finally { g.globalAlpha = 1; q.dead = true; q.gone = gone; }
+      const px = Math.round(x + q.w / 2) - cx, py = Math.round(y) - cy - 14;
+      const col = q === L.me ? '#ffb38a' : '#9cc4ff';
+      g.lineWidth = 2; g.strokeStyle = 'rgba(13,10,18,0.8)'; g.beginPath(); g.arc(px, py, 7, 0, Math.PI * 2); g.stroke();
+      if (left !== null) {
+        g.strokeStyle = col; g.beginPath(); g.arc(px, py, 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - left / REVIVE_T)); g.stroke();
+        G.text(g, String(Math.ceil(left) || 1), px, py - 3, col, { tiny: true, align: 'c' });
+      } else G.text(g, '!', px, py - 3, col, { tiny: true, align: 'c' });
+    }
+  };
   coop.drawPartner = (g, L, cx, cy) => {
     const q = L.partner;
     if (q.dead || q.gone) return;
@@ -7341,7 +7369,14 @@ G.VOICE = {
     const q = L.partner, S = G.SPR, on = L.net === 'host' ? G.tint(S.pip, '#6aa8ff') : S.pip;
     for (let i = 0; i < q.maxHp; i++) ug.drawImage(i < q.hp ? on : S.pipOff, 6 + i * 9, hudY + dy);
     ug.fillStyle = '#0d0a12'; ug.fillRect(6 + q.maxHp * 9, hudY + dy + 1, 6, 6); ug.fillStyle = coop.dotColor(true); ug.fillRect(6 + q.maxHp * 9 + 1, hudY + dy + 2, 4, 4);
-    if (q.dead) G.text(ug, 'down...', 6 + q.maxHp * 9 + 9, hudY + dy, '#8d8798', { tiny: true });
+    if (q.dead) { const l = coop.reviveLeft(L, q); G.text(ug, l !== null && !L.me.dead ? 'back in ' + Math.ceil(l || 0.01) : 'down', 6 + q.maxHp * 9 + 9, hudY + dy, '#8d8798', { tiny: true }); }
+    // my own body is down: say so, and when I come back
+    if (L.me.dead) {
+      const l = coop.reviveLeft(L, L.me), both = q.dead;
+      const t = both ? 'BOTH DOWN' : l !== null ? 'DOWN  -  BACK IN ' + Math.ceil(l || 0.01) : 'DOWN';
+      const w = G.textW(t) + 16; G.panel(ug, Math.round((W - w) / 2), 40, w, 15, '#17131f', '#ffb38a', '#0d0a12');
+      G.text(ug, t, W / 2, 44, '#ffd9c4', { align: 'c' });
+    }
   };
 
   // ---------- line quality: measured every 2 s, rates follow it ----------
