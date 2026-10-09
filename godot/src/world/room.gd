@@ -47,6 +47,16 @@ var blink_period := 1.5
 var entity_root: Node2D
 var fight_active := false
 var crossing := false
+var boss_spawn = null
+var boss = null                            # the boss of this room (R05: NULL) while it is not beaten
+var fight := {"state": "none", "t": 0.0}   # none | intro | active | reward | done
+var stats := {}                            # the running fight statistics
+var attacker = null                        # who is swinging right now (for the boss damage log)
+var dmg_log: Array = []                    # {t, who, d}
+var remote_players: Array = []
+var banner := {"text": "", "sub": "", "t": 0.0}
+var stats_line := ""
+var stats_t := 0.0
 var end_door = null
 signal door_crossed(door: Dictionary)
 signal bench_requested(index: int)
@@ -137,11 +147,17 @@ func load_room(room_id: String, snap = null) -> void:
 				"E", "B", "D":
 					if ch == "D":
 						end_door = {"x": x + 8, "y": y + T}
+					elif ch == "B":
+						boss_spawn = {"x": x + 8, "y": y + T}
 				_:
 					var e = spawn_enemy(ch, x, y)
 					if e != null:
 						Game.scale_enemy(e)
 						ents.append(e)
+	if def.has("boss") and not Game.flag("boss:" + def.boss.id):
+		var bs: Dictionary = boss_spawn if boss_spawn != null else {"x": pw - 80.0, "y": ph - 48.0}
+		boss = NullBoss.new(self, bs.x, bs.y, roundi(60.0 * float(Game.dv("boss_hp_mult"))))
+		ents.append(boss)
 	spark_spots.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for i in range(mini(3, spark_spots.size())):
 		var fid := "item:%s:f%d" % [id, i]
@@ -276,6 +292,31 @@ func break_tile(tx: int, ty: int) -> bool:
 
 func snapshot() -> Dictionary:
 	return {"cp": cp_index, "tokens": tokens, "got": got.duplicate(), "sparks": sparks.duplicate(), "clock": clock, "kills": kills, "hits": hits}
+
+# everyone who counts for the room's mechanics: the living players
+func players() -> Array:
+	var out: Array = []
+	if player != null and not player.dead:
+		out.append(player)
+	for r in remote_players:
+		if not r.dead:
+			out.append(r)
+	return out
+
+func recent_damage(q, secs: float) -> float:
+	var sum := 0.0
+	for e in dmg_log:
+		if e.who == q and time - e.t <= secs:
+			sum += e.d
+	return sum
+
+func boss_damage(_boss, d: float) -> void:
+	if attacker == null:
+		return
+	dmg_log.append({"t": time, "who": attacker, "d": d})
+	if fight.state == "active":
+		var i: int = 1 if (attacker in remote_players) else 0
+		stats.hits[i] += 1
 
 func heal(q, n: int) -> void:
 	q.hp = mini(q.max_hp, q.hp + n)
@@ -456,16 +497,123 @@ func step(dt: float) -> void:
 			else:
 				keep.append(e)
 		ents = keep
-	update_cam(dt)
+	_step_fight(dt)
+	if cam.lock == null:
+		update_cam(dt)
+	else:
+		cam.x = Game.damp(cam.x, cam.lock.x, 8.0, dt)
+		cam.y = Game.damp(cam.y, cam.lock.y, 8.0, dt)
 	for ev in events:
 		if ev == "death" and death_t < 0.0:
 			death_t = 1.2
+		elif ev == "bossDying":
+			for q in players():
+				q.inv = 99.0
+		elif ev == "bossDead":
+			_start_reward()
 	events.clear()
+	if stats_t > 0.0:
+		stats_t -= dt
 	if death_t >= 0.0:
 		death_t -= dt
 		if death_t < 0.0:
 			death_t = -1.0
 			restart_requested.emit(snapshot())
+
+# ---------------------------------------------------------------- boss fight flow (MV2-06)
+func _step_fight(dt: float) -> void:
+	if boss == null:
+		return
+	var trigger: float = float(def.boss.trigger_x)
+	match String(fight.state):
+		"none":
+			for q in players():
+				if q.x + q.w / 2.0 > trigger:
+					_start_intro()
+					break
+		"intro":
+			fight.t -= dt
+			if fight.t <= 0.0 and summon_ready():
+				_begin_fight()
+		"active":
+			stats.secs += dt
+		"reward":
+			fight.t -= dt
+			banner.t = fight.t
+			if fight.t <= 0.0:
+				_finish_reward()
+
+# co-op overrides this: the partner has to be in the arena (or 5 s have passed)
+func summon_ready() -> bool:
+	return true
+
+func _start_intro() -> void:
+	fight.state = "intro"
+	fight.t = 1.5
+	fight_active = true
+	cam.lock = {"x": (pw - W) / 2.0, "y": float(ph - H)}
+	for q in players():
+		q.frozen = true
+	Audio.music("boss")
+	Audio.sfx("roar")
+	events.append("bossIntro")
+
+func _begin_fight() -> void:
+	fight.state = "active"
+	var ps := players()
+	for q in ps:
+		q.frozen = false
+	if ps.size() >= 2:                                   # both are in the arena: the co-op factor applies
+		var k := 1.0 + float(Game.coop_hp_pct) / 100.0
+		boss.max_hp = roundi(boss.max_hp * k)
+		boss.hpf = float(boss.max_hp)
+		boss.hp = boss.max_hp
+	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "coop": ps.size() >= 2}
+	boss.start()
+	events.append("bossStart")
+
+func on_player_hurt(q, d: int) -> void:
+	if fight.state == "active":
+		var i: int = 1 if (q in remote_players) else 0
+		stats.dmg[i] += d
+
+func _start_reward() -> void:
+	fight.state = "reward"
+	fight.t = 3.0
+	for q in players():
+		q.frozen = true
+	banner = {"text": "bash", "sub": "dash in any direction · breaks cracked % walls", "t": 3.0}
+	Audio.music("toolget")
+	# the fight statistics (to tune boss HP with real numbers)
+	var np: int = 2 if stats.coop else 1
+	var secs: float = maxf(stats.secs, 0.001)
+	var r: float = float(stats.hits[0] + stats.hits[1]) / np / secs
+	stats_line = "NULL %ds · P1 %d hits" % [roundi(secs), stats.hits[0]]
+	if stats.coop:
+		stats_line += " · P2 %d hits" % stats.hits[1]
+	stats_line += " · r %.2f/s · won" % r
+	stats_t = 5.0
+	Game.fights.append({"boss": "NULL", "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop})
+
+func record_loss() -> void:
+	if fight.state == "active":
+		Game.fights.append({"boss": "NULL", "secs": snappedf(stats.secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": false, "diff": Game.diff, "coop": stats.coop})
+		Game.write_save()
+
+func _finish_reward() -> void:
+	Game.tools.bash = true
+	Game.flags["ability:bash"] = true
+	Game.flags["boss:NULL"] = true
+	fight.state = "done"
+	fight_active = false
+	cam.lock = null
+	for q in players():
+		q.frozen = false
+	boss = null
+	banner.text = ""
+	Audio.music("w1")
+	Game.write_save()
+	update_doors()
 
 func interact() -> void:
 	var p = player
@@ -510,10 +658,21 @@ func interact_combat(p) -> void:
 				if not Game.overlap(box, b):
 					continue
 				e.marks[p.hit_key] = p.atk_id
+				attacker = p
 				var res: String = e.hit(p.atk_dmg, p.atk_face if p.atk_dir == "f" else 0.0, -1.0 if p.atk_dir == "u" else (1.0 if p.atk_dir == "d" else 0.0), "swipe", b)
 				if res != "":
 					p.on_hit(e, res, b)
 				break
+		for q in projs:
+			if q.dead or not q.cut or q.get("friendly", false):
+				continue
+			if q.x + q.r > box.x and q.x - q.r < box.x + box.w and q.y + q.r > box.y and q.y - q.r < box.y + box.h:
+				q.dead = true
+				spark(q.x, q.y, q.col, 6)
+				Audio.sfx("clang")
+				stop(0.03)
+				if p.atk_dir == "d":
+					p.bounce(0.85)
 		for s in springs:
 			if p.atk_dir == "d" and Game.overlap(box, s):
 				p.spring(s)
@@ -537,6 +696,7 @@ func interact_combat(p) -> void:
 			if p.dash_t > 0.0 and e.dashable:
 				if e.marks.get(p.dash_key, 0) != p.dash_id:
 					e.marks[p.dash_key] = p.dash_id
+					attacker = p
 					var res2: String = e.hit(1, p.dash_dx if p.dash_dx != 0.0 else p.face, 0.0, "dash", b)
 					if res2 != "":
 						stop(0.05)
@@ -645,8 +805,62 @@ func collect(it: Dictionary) -> void:
 			burst(it.x, it.y, 8, [Game.COL.paper, Game.COL.clawd], 70.0, 100.0)
 			Audio.sfx("heal")
 
-func update_projs(_dt: float) -> void:
-	pass          # no hostile projectiles in phase 1 (Bug and Typo do not shoot)
+# hostile projectile. kinds: orb, shard
+func shoot(px: float, py: float, pvx: float, pvy: float, o = null) -> Dictionary:
+	var q := {"x": px, "y": py, "vx": pvx, "vy": pvy, "r": 3.0, "kind": "orb", "col": Game.COL.hazard, "life": 4.0, "g": 0.0, "dmg": 1, "tile": true, "cut": true, "t": 0.0, "dead": false}
+	if o != null:
+		for k in o:
+			q[k] = o[k]
+	projs.append(q)
+	return q
+
+func update_projs(dt: float) -> void:
+	var p = player
+	for q in projs:
+		if q.dead:
+			continue
+		q.t += dt
+		q.life -= dt
+		q.vy += q.g * dt
+		q.x += q.vx * dt
+		q.y += q.vy * dt
+		if q.life <= 0.0 or q.y > ph + 60 or q.x < -60 or q.x > pw + 60:
+			q.dead = true
+			continue
+		if q.tile and grid.solid_at(q.x, q.y):
+			q.dead = true
+			spark(q.x, q.y, q.col, 4)
+			continue
+		for pl in players():
+			var hb: Dictionary = pl.hurtbox()
+			if not q.get("friendly", false) and not pl.gone and q.x + q.r > hb.x and q.x - q.r < hb.x + hb.w and q.y + q.r > hb.y and q.y - q.r < hb.y + hb.h:
+				if pl.dash_t > 0.0 and Game.dv("dash_iframes"):
+					continue
+				if pl.hurt(q.dmg, q.x) and not q.get("pierce", false):
+					q.dead = true
+					spark(q.x, q.y, q.col, 5)
+					break
+	if projs.size() > 30:
+		projs = projs.filter(func(q): return not q.dead)
+
+func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
+	var px := floori(q.x + 0.5)
+	var py := floori(q.y + 0.5)
+	var ink := Color(Game.COL.ink)
+	var col := Color(q.col)
+	match q.kind:
+		"shard", "plus", "minus":
+			var minus: bool = q.kind == "minus"
+			ci.draw_rect(Rect2(px - 3, py - 1 - (0 if minus else 2), 7, 3 if minus else 7), ink)
+			if not minus:
+				ci.draw_rect(Rect2(px - 3, py - 1, 7, 3), ink)
+			ci.draw_rect(Rect2(px - 2, py, 5, 1), col)
+			if not minus:
+				ci.draw_rect(Rect2(px, py - 2, 1, 5), col)
+		_:
+			Fx._disc(ci, px, py, q.r + 1, ink)
+			Fx._disc(ci, px, py, q.r, col)
+			Fx._disc(ci, px - 1, py - 1, maxf(0.5, q.r - 2), Color.WHITE)
 
 # ---------------------------------------------------------------- drawing of what is not an entity
 func draw_layer(kind: String, ci: CanvasItem) -> void:
@@ -682,6 +896,9 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 				"coffee":
 					ci.draw_texture(Gfx.tex("coffee"), Vector2(ix - 6, iy - 7))
 	elif kind == "top":
+		for q in projs:
+			if not q.dead:
+				_draw_proj(ci, q)
 		fx.draw(ci)
 		if fx.flash > 0.0:
 			var c := fx.flash_col

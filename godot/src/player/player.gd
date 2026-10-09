@@ -485,6 +485,7 @@ func hurt(d: int, src_x: float) -> bool:
 		return false
 	hp -= d
 	room.hits += 1
+	room.on_player_hurt(self, d)
 	inv = float(Game.dv("inv_after_hit"))
 	hurt_t = 0.22
 	jumping = false

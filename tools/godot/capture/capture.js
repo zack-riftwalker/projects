@@ -1,6 +1,6 @@
 // Captures art, tiles, font, background, sound effects, music and level maps from the current game (public/index.html)
 // into godot/assets/ (and everything, including music, into tools/godot/capture/out/). Usage: node capture.js <what...>
-// what: sprites tiles font bg sfx music levels all
+// what: sprites tiles font bg sfx music levels boss all
 'use strict';
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
@@ -134,6 +134,32 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
     // only w1 is copied this phase, so the index in godot/assets lists only w1
     const sub = { w1: index.w1 }; fs.writeFileSync(path.join(ASSETS, 'music/index.json'), JSON.stringify(sub, null, 1));
     console.log('music', Object.keys(index).length);
+  }
+
+  if (want('boss')) {
+    // the NULL sprites: the builder code of `nullSpr` / `cursorSpr` in js/bosses.js (they only use G.pix, G.rng, G.ring, G.text)
+    const d = await png(() => {
+      const out = {};
+      [0, 1].forEach((f) => {
+        const p = G.pix(44, 54);
+        p.ell(22, 17, 15, 15, '#0b0914');
+        p.rect(7, 17, 30, 26, '#0b0914');
+        for (let i = 0; i < 6; i++) { const x = 7 + i * 5, d = (i + f) % 2 ? 6 : 2; p.rect(x, 43, 5, d, '#0b0914'); }
+        const r = G.rng(3 + f);
+        for (let i = 0; i < 50; i++) p.px(9 + Math.floor(r() * 26), 8 + Math.floor(r() * 36), r() < 0.5 ? '#1a1f3a' : '#15122a');
+        p.outline('#bfe9ff');
+        G.ring(p.g, 15, 17, 4, '#ffffff'); G.ring(p.g, 28, 17, 4, '#ffffff');
+        G.text(p.g, 'NULL', 22, 31, '#3d5a80', { tiny: true, align: 'c' });
+        out['null_' + f] = p.c.toDataURL('image/png').split(',')[1];
+      });
+      const rows = ['#', '##', '#.#', '#..#', '#...#', '#....#', '#.....#', '#......#', '#.......#', '#........#', '#.....#####', '#..#..#', '#.#.#..#', '##  #..#', '#    #..#', '     #..#', '      ##'];
+      const p = G.pix(13, 19);
+      p.rows(1, 1, rows, { '#': '#0b0914', '.': '#ffffff' });
+      out.cursor = p.c.toDataURL('image/png').split(',')[1];
+      return out;
+    });
+    for (const [k, v] of Object.entries(d)) put('sprites/' + k + '.png', save('sprites/' + k + '.png', v));
+    console.log('boss sprites', Object.keys(d).length);
   }
 
   if (want('levels')) {

@@ -48,6 +48,29 @@ func _draw() -> void:
 	var filled := Game.fragments % 4
 	for q in range(4):
 		draw_rect(Rect2(fx_ + 1 + (q % 2) * 3, hud_y + 1 + (q / 2) * 3, 2, 2), Color(Game.COL.clawdHi) if q < filled else Color("#3a3346"))
+	# boss: the name and the health bar at the bottom, the name card during the intro
+	var b = room.boss
+	if b != null and not b.dead and (room.fight.state == "active" or room.fight.state == "reward"):
+		var bw := 190
+		var bx := (W - bw) / 2
+		var byy := H - 12
+		PixelText.draw_text(self, b.boss_name, bx, byy - 9, Game.COL.paper, {"tiny": true, "outline": Game.COL.ink})
+		Gfx.panel(self, bx - 2, byy - 2, bw + 4, 7, "#231d2e", Game.COL.ink)
+		draw_rect(Rect2(bx, byy, bw, 3), Color("#5a1630"))
+		var fw := roundi(bw * maxf(0.0, b.hpf) / maxf(1.0, float(b.max_hp)))
+		draw_rect(Rect2(bx, byy, fw, 3), Color.WHITE if b.flash > 0.0 else Color(Game.COL.hazard))
+		draw_rect(Rect2(bx, byy, fw, 1), Color("#ff9aab"))
+	if b != null and room.fight.state == "intro":
+		var k := _ease_out(clampf((1.5 - room.fight.t - 0.3) / 0.5, 0.0, 1.0))
+		if k > 0.0:
+			PixelText.draw_text(self, b.boss_name, W / 2.0, 40 - (1.0 - k) * 12.0, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
+			draw_rect(Rect2(floori(W / 2.0 - 70.0 * k + 0.5), 60, floori(140.0 * k + 0.5), 1), Color(Game.COL.hazard))
+			PixelText.draw_text(self, b.sub, W / 2.0, 65, Game.COL.hazardHi, {"align": "c", "outline": Game.COL.ink})
+	if room.banner.text != "":
+		PixelText.draw_text(self, room.banner.text, W / 2.0, 70, Game.COL.paper, {"align": "c", "scale": 3, "outline": Game.COL.ink, "shadow": Game.COL.ink})
+		PixelText.draw_text(self, room.banner.sub, W / 2.0, 100, Game.COL.hazardHi, {"align": "c", "outline": Game.COL.ink})
+	if room.stats_t > 0.0 and room.stats_line != "":
+		PixelText.draw_text(self, room.stats_line, W / 2.0, H - 34, Game.COL.paper, {"align": "c", "outline": Game.COL.ink})
 	# room title tab
 	if age < 3.2:
 		var k := _ease_out(clampf(age / 0.4, 0.0, 1.0)) * (1.0 - _ease_in(clampf((age - 2.7) / 0.5, 0.0, 1.0)))

@@ -135,6 +135,37 @@ func _ready() -> void:
 				room.entity_root.add_child(e)
 			z2.hit(1, 1.0, 0.0, "swipe")
 			z2.hit(1, 1.0, 0.0, "swipe")
+		elif Game.scene.begins_with("null:"):           # screenshot helper: NULL in the middle of an attack (null:<attack>)
+			manager.swap_to("R05")
+			var p = manager.player
+			p.x = 150.0
+			p.y = 166.0
+			p.inv = 999.0
+			var r: Room = manager.room
+			r._start_intro()
+			r.fight.t = 0.0
+			r._begin_fight()
+			var b = r.boss
+			b.phase = 2
+			b.tx = 250.0
+			b.ty = 96.0
+			var kind := Game.scene.substr(5)
+			if kind == "dangling":
+				b.start_dangling(p)
+			elif kind == "deref":
+				b.start_deref(p)
+			elif kind == "rain":
+				b.set_state("rain", 0.1)
+				b.n = 4
+			elif kind == "sweep":
+				b.set_state("sweepPrep", 5.0)
+				b.dir = 1
+			elif kind == "poke":
+				b.set_state("poke")
+				b.n = 5
+				b.cur.mode = "aim"
+				b.cur.t = 5.0
+				b.pick_aim()
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
 		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited

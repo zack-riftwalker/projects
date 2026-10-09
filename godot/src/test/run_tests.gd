@@ -31,6 +31,7 @@ func run(name: String) -> bool:
 		"doors": return t_doors()
 		"save": return t_save()
 		"crack": return t_crack()
+		"null": return t_null()
 		"focus": return t_focus()
 		"guard": return t_guard()
 		"zombie": return t_zombie()
@@ -584,3 +585,75 @@ func t_zombie() -> bool:
 	Controls.script_input = null
 	var ok: bool = corpse and back and corpse2 and z.dead and room.kills == 1 and tokens == 2
 	return report("zombie", ok, "corpse=%s back after 3.5 s=%s corpse again=%s dead=%s kills=%d tokens=%d" % [corpse, back, corpse2, z.dead, room.kills, tokens])
+
+func null_setup() -> RoomManager:
+	Game.flags = {}
+	Game.tools.bash = false
+	Game.fights = []
+	Game.diff = "normal"
+	var m := new_manager()
+	m.swap_to("R05")
+	var p = m.player
+	p.x = 100.0
+	p.y = floor_y(m.room, 105.0, 7)
+	return m
+
+func t_null() -> bool:
+	var m := null_setup()
+	var room := m.room
+	var p = m.player
+	var boss = room.boss
+	var seen := {}
+	var longest := 0.0
+	var cur_state := ""
+	var since := 0.0
+	var feints := 0
+	Controls.script_input = {}
+	# A: the boss alone against a bot that stands still and cannot be hurt: phase 1 for 50 s, then phase 2 for 70 s
+	var phase2_at := 3000
+	for f in range(7200):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		if f == phase2_at:
+			boss.hit(1, 0.0, 0.0, "swipe", boss)
+			boss.hpf = boss.max_hp / 2.0 - 0.5
+			boss.hit(1, 0.0, 0.0, "swipe", boss)
+		m.tick(Game.STEP)
+		if boss.active:
+			var key: String = "%d:%s%s" % [boss.phase, boss.st, (":" + boss.cur.mode) if boss.st == "poke" else ""]
+			seen[key] = true
+			if boss.feint_done:
+				feints += 1
+			if key != cur_state:
+				cur_state = key
+				since = 0.0
+			since += Game.STEP
+			longest = maxf(longest, since)
+	var need := ["1:poke:aim", "1:poke:fly", "1:poke:stuck", "1:rain", "1:sweepPrep", "1:sweep", "1:tired", "2:poke:aim", "2:dangling", "2:sweep", "2:rain", "2:deref", "2:derefStuck"]
+	var missing: Array = []
+	for k in need:
+		if not seen.has(k):
+			missing.append(k)
+	var a_ok: bool = missing.is_empty() and longest <= 6.0 and feints > 0 and boss.phase == 2
+	# B: hit the boss once per 0.5 s until it dies
+	var m2 := null_setup()
+	room = m2.room
+	p = m2.player
+	boss = room.boss
+	var dead_at := -1
+	for f in range(9000):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		if boss.active and f % 30 == 0:
+			room.attacker = p
+			boss.hit(1, 0.0, 0.0, "swipe", boss)
+		m2.tick(Game.STEP)
+		if not Game.tools.bash == false:
+			dead_at = f
+			break
+	var door_open: bool = room.grid.tile(room.w, 8) == TileGrid.E
+	var b_ok: bool = dead_at > 0 and Game.tools.bash and Game.flag("boss:NULL") and Game.flag("ability:bash") and door_open and Game.fights.size() == 1 and Game.fights[0].won
+	Controls.script_input = null
+	Game.tools.bash = false
+	Game.flags = {}
+	return report("null", a_ok and b_ok, "seen %d states, missing %s, longest state %.1f s, feints=%s, phase %d | kill: reward at frame %d, bash=%s door open=%s fights=%s" % [seen.size(), missing, longest, feints > 0, boss.phase, dead_at, Game.tools.bash, door_open, str(Game.fights)])

@@ -36,7 +36,7 @@
 | MV2-03 | cracked walls and bash, moving platforms, springs, memory fragments | Sonnet | done |
 | MV2-04 | combat model: context meter healing, dash without i-frames, big hits, difficulty presets | Sonnet | done |
 | MV2-05 | FIREWALL GUARD and ZOMBIE PROCESS | Sonnet | done |
-| MV2-06 | NULL v2, arena, reward (bash), fight statistics | Sonnet | todo |
+| MV2-06 | NULL v2, arena, reward (bash), fight statistics | Sonnet | done |
 | MV2-07 | co-op: protocol, host with two rooms, guest, summon, revive, reconnect | Sonnet | todo |
 | MV2-08 | title screen, menus, sound and music for the slice | Sonnet | todo |
 | MV2-09 | tests, delivery build, playtest instructions, phase report | Sonnet | todo |

@@ -60,6 +60,8 @@ func respawn(count_death := true) -> void:
 	if count_death:
 		Game.deaths += 1
 	Game.load_meta()
+	if room != null:
+		room.record_loss()
 	if player != null:
 		player.queue_free()
 	player = null
