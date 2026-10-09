@@ -361,7 +361,7 @@ S['smoke'] = async () => {   // solo, no co-op: every level for 3 s with scripte
 };
 
 // scenarios for later phases are appended by tools/scenarios-*.js
-for (const f of ['scenarios-p1.js', 'scenarios-p2.js', 'scenarios-p3.js', 'scenarios-review.js', 'scenarios-cloud.js', 'scenarios-controls.js']) { try { require('./' + f)(S, { startServer, wsTry, get, CLOUD, HOSTKEY: 'test', rawReq, openPair, startLevel, counters, diffNet, key, holdKey, godmode, noGod, sleep, R, openPage, chromium, ROOT, CODE, createRequire }); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; } }
+for (const f of ['scenarios-p1.js', 'scenarios-p2.js', 'scenarios-p3.js', 'scenarios-review.js', 'scenarios-cloud.js', 'scenarios-controls.js', 'scenarios-mv.js']) { try { require('./' + f)(S, { startServer, wsTry, get, CLOUD, HOSTKEY: 'test', rawReq, openPair, startLevel, counters, diffNet, key, holdKey, godmode, noGod, sleep, R, openPage, chromium, ROOT, CODE, createRequire }); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; } }
 
 module.exports = { S, openPair, startLevel, sleep, counters, key, holdKey, godmode, startServer };
 if (require.main === module) (async () => {

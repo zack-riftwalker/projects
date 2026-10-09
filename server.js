@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3000;
 const ROOT = __dirname, WEB = path.join(ROOT, 'public');
 const newCode = () => String(100000 + require('crypto').randomInt(900000));   // 6 digits
 let CODE = process.env.CODE || newCode();
-const MIME = { '.html': 'text/html; charset=utf-8', '.mp3': 'audio/mpeg', '.js': 'text/javascript', '.png': 'image/png', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.mp3': 'audio/mpeg', '.js': 'text/javascript', '.png': 'image/png', '.json': 'application/json', '.wasm': 'application/wasm', '.pck': 'application/octet-stream' };
 
 // co-op difficulty defaults: env vars BOSS_HP, NPC_HITS, NPC_MULT (+ LOCK=1 to forbid changes) or an optional coop-config.json
 let file = {}; try { file = JSON.parse(fs.readFileSync(path.join(ROOT, 'coop-config.json'), 'utf8')); } catch (e) { /* none */ }
@@ -34,12 +34,17 @@ function load(rel) {
   return ent;
 }
 function serveFile(req, res, rel) {
-  const ent = load(rel);
+  let ent = load(rel), pre = false;
+  if (!ent && rel.startsWith('mv/')) { ent = load(rel + '.gz'); pre = !!ent; }     // stored gzipped by tools/godot/export-web.sh
   if (!ent) { res.writeHead(404); return res.end('not found'); }
   const isMp3 = rel.endsWith('.mp3');
   const h = { 'Content-Type': MIME[path.extname(rel)] || 'application/octet-stream', ETag: ent.etag, 'Cache-Control': isMp3 ? 'public, max-age=31536000, immutable' : 'no-cache' };
   if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, h); return res.end(); }
   let body = ent.raw;
+  if (pre) {               // already gzip: send as is when the browser takes gzip (all do), unpack once otherwise
+    h.Vary = 'Accept-Encoding';
+    if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) h['Content-Encoding'] = 'gzip'; else body = ent.plain || (ent.plain = zlib.gunzipSync(ent.raw));
+  } else
   if (ent.gz) {            // brotli (every current browser asks for it) is ~20 % smaller than gzip
     const ae = req.headers['accept-encoding'] || '';
     h.Vary = 'Accept-Encoding';
@@ -52,6 +57,7 @@ function serveFile(req, res, rel) {
 
 // only these paths are ever served: no directory traversal is possible
 const VOICE = /^\/assets\/voice\/[a-z0-9_]+\.mp3$/;
+const MV = /^\/mv\/[a-z0-9_-]+(\.[a-z0-9]+)+$/;     // the Godot build (Metroidvania test): one flat folder, no sub-paths, no dot-files
 const server = http.createServer((req, res) => {
   let u;
   try { u = decodeURIComponent(req.url.split('?')[0]); } catch (e) { res.writeHead(400); return res.end('bad request'); }
@@ -60,7 +66,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COOP));
   }
   if (u === '/') u = '/index.html';
-  if (u !== '/index.html' && !VOICE.test(u)) { res.writeHead(404); return res.end('not found'); }
+  if (u === '/mv' || u === '/mv/') u = '/mv/index.html';
+  if (u !== '/index.html' && !VOICE.test(u) && !MV.test(u)) { res.writeHead(404); return res.end('not found'); }
   serveFile(req, res, u.slice(1));
 });
 server.on('clientError', (e, sock) => { try { sock.destroy(); } catch (x) { /* gone */ } });
