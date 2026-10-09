@@ -1,0 +1,6 @@
+{ "R01": { "file": "R01.txt", "title": "hello_world.py", "world": 1, "music": "w1", "origin": [0, 0],
+           "signs": ["MOVE with the [move] and JUMP with [jump] - hold it to go higher.",
+                     "Bugs. Swipe them with [attack] - or simply land on them.",
+                     "Between two walls? Jump at one, then jump again. Clawd has grippy legs.",
+                     "Land on an enemy, or hold [down] and swipe in mid-air, to bounce off it."],
+           "doors": [] } }

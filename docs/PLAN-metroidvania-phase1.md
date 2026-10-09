@@ -35,7 +35,7 @@
 | MV1-01 | export templates, Godot project skeleton, web export pipeline | Sonnet | done |
 | MV1-02 | the PC relay serves the Godot build at `/mv/` | Sonnet | done |
 | MV1-03 | capture art, font, sound effects and music from the current game | Sonnet | done |
-| MV1-04 | input, tile collision, room loading, tile rendering | Sonnet | todo |
+| MV1-04 | input, tile collision, room loading, tile rendering | Sonnet | done |
 | MV1-05 | the player (exact port), Clawd drawing, camera, hitstop, particles | Sonnet | todo |
 | MV1-06 | Bug, Typo, combat, items, checkpoint, signs, HUD, sound | Sonnet | todo |
 | MV1-07 | touch controls, pause, debug overlay for the phone test | Sonnet | todo |
