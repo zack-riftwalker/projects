@@ -28,7 +28,9 @@ var start := {"x": 32.0, "y": 32.0}
 var time := 0.0
 var clock := 0.0
 var hitstop := 0.0
-var tokens := 0
+var tokens: int:
+	get: return Game.tokens
+	set(v): Game.tokens = v
 var kills := 0
 var hits := 0
 var cp_index := -1
@@ -47,6 +49,7 @@ var fight_active := false
 var crossing := false
 var end_door = null
 signal door_crossed(door: Dictionary)
+signal bench_requested(index: int)
 var got := {}                  # item ids already collected (kept across a death)
 var sparks := [false, false, false]
 var death_t := -1.0
@@ -68,14 +71,6 @@ func _physics_process(_delta: float) -> void:
 func load_room(room_id: String, snap = null) -> void:
 	Game.load_meta()
 	id = room_id
-	if snap != null:
-		got = snap.got.duplicate()
-		sparks = snap.sparks.duplicate()
-		tokens = snap.tokens
-		clock = snap.clock
-		kills = snap.kills
-		hits = snap.hits
-		cp_index = snap.cp
 	def = Game.rooms_meta.rooms[room_id]
 	var raw: PackedStringArray = FileAccess.get_file_as_string("res://src/world/rooms/" + def.file).split("\n")
 	w = int(def.size[0])
@@ -266,6 +261,7 @@ func break_tile(tx: int, ty: int) -> bool:
 	if not grid.break_tile(tx, ty):
 		return false
 	view.erase_tile(tx, ty)
+	Game.flags["crack:%s:%d:%d" % [id, tx, ty]] = true
 	burst(tx * T + 8, ty * T + 8, 12, ["#8d8798", "#c3bccd", "#4c4658"], 90.0, 300.0)
 	shake(0.3)
 	Audio.sfx("brk")
@@ -552,21 +548,12 @@ func interact_combat(p) -> void:
 			p.spring(s)
 
 func interact_goals(p) -> void:
-	for i in range(cps.size()):
-		var c: Dictionary = cps[i]
-		var in_r: bool = absf(p.x + p.w / 2.0 - c.x) < 12 and p.y + p.h > c.y - 34 and p.y < c.y
-		if not c.on and in_r:
-			for o in cps:
-				o.on = false
-			c.on = true
-			cp_index = i
-			heal(p, 99)
-			p.set_safe(c.x - 5, c.y - p.h)
-			ring(c.x, c.y - 22, 3, 26, Game.COL.ok, 0.4)
-			burst(c.x, c.y - 22, 14, [Game.COL.ok, Game.COL.okHi, "#ffffff"], 100.0, 100.0, {"glow": 1})
-			pop(c.x, c.y - 36, "committed ✓", Game.COL.okHi, true)
-			Audio.sfx("checkpoint")
-			events.append("checkpoint")
+	if Controls.pressed.get("up", false) and p.on_ground and not crossing:
+		for i in range(cps.size()):
+			var c: Dictionary = cps[i]
+			if absf(p.x + p.w / 2.0 - c.x) < 12 and p.y + p.h > c.y - 34 and p.y < c.y:
+				bench_requested.emit(i)
+				break
 	sign_now = null
 	for s in signs:
 		if absf(p.x + p.w / 2.0 - s.x) < 26 and absf(p.y + p.h - s.y) < 30:
@@ -616,6 +603,7 @@ func collect(it: Dictionary) -> void:
 	it.dead = true
 	if it.has("id"):
 		got[it.id] = true
+		Game.flags[it.id] = true
 	match it.kind:
 		"token":
 			tokens += 1

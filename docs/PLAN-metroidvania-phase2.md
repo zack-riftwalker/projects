@@ -32,7 +32,7 @@
 | task | what | owner | status |
 |---|---|---|---|
 | MV2-01 | 8 rooms, doors, transitions, pause map | Sonnet | done |
-| MV2-02 | benches, save file, death and respawn, persistence | Sonnet | todo |
+| MV2-02 | benches, save file, death and respawn, persistence | Sonnet | done |
 | MV2-03 | cracked walls and bash, moving platforms, springs, memory fragments | Sonnet | todo |
 | MV2-04 | combat model: context meter healing, dash without i-frames, big hits, difficulty presets | Sonnet | todo |
 | MV2-05 | FIREWALL GUARD and ZOMBIE PROCESS | Sonnet | todo |

@@ -90,6 +90,8 @@ func _init(r: Room, px: float, py: float) -> void:
 	x = px
 	y = py
 	tools = Game.tools
+	max_hp = Game.max_hp
+	hp = max_hp
 	safe = {"x": px, "y": py}
 	prev_bottom = py + h
 	z_index = 3

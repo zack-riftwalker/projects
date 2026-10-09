@@ -29,6 +29,7 @@ func run(name: String) -> bool:
 		"soak": return t_soak()
 		"rooms": return t_rooms()
 		"doors": return t_doors()
+		"save": return t_save()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -329,3 +330,51 @@ func t_doors() -> bool:
 	var w_closed: bool = room.grid.tile(-1, 8) == TileGrid.SOLID
 	Game.flags.erase("boss:NULL")
 	return report("doors", closed and opened and w_open and above and w_closed, "E closed=%s opened=%s W open=%s W closed in fight=%s wall above=%s" % [closed, opened, w_open, w_closed, above])
+
+func t_save() -> bool:
+	Game.persist = true
+	Game.save_path = "user://test_save.json"
+	Game.new_game()
+	var m := new_manager()
+	var room := m.room
+	var p = m.player
+	var c: Dictionary = room.cps[0]
+	p.x = c.x - 5.0
+	p.y = c.y - 10.0
+	var tok := {}
+	for it in room.items:
+		if it.kind == "token":
+			tok = it
+			break
+	var tok_id: String = tok.id
+	room.collect(tok)
+	p.hp = 2
+	m.rest(room, 0)
+	var rested_hp: int = p.hp
+	# reload the game from the file
+	var tokens_before := Game.tokens
+	Game.fresh()
+	var loaded := Game.load_save()
+	m.queue_free()
+	var m2 := new_manager()
+	var token_gone := true
+	for it in m2.room.items:
+		if it.get("id", "") == tok_id:
+			token_gone = false
+	var at_bench: bool = m2.room.id == "R01" and Game.bench == "R01" and absf(m2.player.x - (c.x - 5.0)) < 1.0
+	# die: back on the bench with full hp
+	var died := [false]
+	m2.restart_requested.connect(func(): died[0] = true)
+	m2.player.die()
+	Controls.script_input = {}
+	for f in range(200):
+		m2.tick(Game.STEP)
+		if died[0]:
+			break
+	m2.respawn(true)
+	var back: bool = m2.player.hp == m2.player.max_hp and absf(m2.player.x - (c.x - 5.0)) < 1.0 and absf(m2.player.y - (c.y - 10.0)) < 1.0
+	var ok: bool = loaded and rested_hp == 5 and token_gone and tokens_before == 1 and Game.tokens == 1 and at_bench and died[0] and back and Game.deaths == 1
+	Controls.script_input = null
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_save.json"))
+	Game.persist = false
+	return report("save", ok, "loaded=%s rested hp=%d token gone=%s tokens=%d at bench=%s died event=%s back on bench full hp=%s deaths=%d" % [loaded, rested_hp, token_gone, Game.tokens, at_bench, died[0], back, Game.deaths])

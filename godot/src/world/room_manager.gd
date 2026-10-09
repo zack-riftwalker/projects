@@ -7,6 +7,7 @@ const FADE := 0.12
 
 signal room_changed(room: Room)
 signal restart_requested
+signal bench_requested(room: Room, index: int)
 
 var host: Node2D                 # where rooms are added (Main.world)
 var hud                          # Hud (fade overlay), may be null in tests
@@ -30,6 +31,7 @@ func make_room(room_id: String, snap = null, spawn = null) -> Room:
 		player = r.player
 	r.door_crossed.connect(_on_door_crossed.bind(r))
 	r.restart_requested.connect(func(_s): restart_requested.emit())
+	r.bench_requested.connect(func(i): bench_requested.emit(r, i))
 	Game.flags["room:%s:visited" % room_id] = true
 	return r
 
@@ -51,8 +53,63 @@ func swap_to(room_id: String, spawn = null, snap = null) -> void:
 
 func start_game() -> void:
 	Game.load_meta()
-	var st: Dictionary = Game.rooms_meta.start
-	swap_to(st.room)
+	respawn(false)
+
+# a fresh Clawd (full hp) on the respawn bench, or at the start of R01. The room is rebuilt: enemies are back, a fight resets.
+func respawn(count_death := true) -> void:
+	if count_death:
+		Game.deaths += 1
+	Game.load_meta()
+	if player != null:
+		player.queue_free()
+	player = null
+	var rid := String(Game.rooms_meta.start.room)
+	var spawn = null
+	if Game.bench != "" and Game.rooms_meta.rooms.has(Game.bench):
+		rid = Game.bench
+		spawn = Game.bench_spawn(rid)
+	swap_to(rid, spawn)
+	Controls.locked = false
+	trans.on = false
+	fade = 0.0
+	if hud != null:
+		hud.fade = 0.0
+
+# Rest at a bench: heal, make it the respawn point, save
+func rest(r: Room, index: int) -> void:
+	var c: Dictionary = r.cps[index]
+	var first: bool = not Game.flag("bench:" + r.id)
+	Game.flags["bench:" + r.id] = true
+	c.on = true
+	Game.bench = r.id
+	player.hp = player.max_hp
+	player.meter = player.meter
+	if first:
+		r.pop(c.x, c.y - 36, "committed ✓", Game.COL.okHi, true)
+		r.ring(c.x, c.y - 22, 3, 26, Game.COL.ok, 0.4)
+		r.burst(c.x, c.y - 22, 14, [Game.COL.ok, Game.COL.okHi, "#ffffff"], 100.0, 100.0, {"glow": 1})
+	Audio.sfx("checkpoint")
+	Game.write_save()
+
+func rested_benches() -> Array:
+	var out: Array = []
+	for id in Game.rooms_meta.rooms:
+		if Game.flag("bench:" + id):
+			out.append(id)
+	out.sort()
+	return out
+
+# fade to another room's bench
+func travel(room_id: String) -> void:
+	if trans.on:
+		return
+	trans.on = true
+	trans.t = 0.0
+	trans.door = null
+	trans.swapped = false
+	trans.travel = room_id
+	Controls.locked = true
+
 
 # ---------------------------------------------------------------- transitions
 func _on_door_crossed(d: Dictionary, from_room: Room) -> void:
@@ -74,6 +131,7 @@ func tick(dt: float) -> void:
 		_tick_transition(dt)
 		return
 	Controls.poll()
+	Game.play_time += dt
 	room.step(dt)
 
 func _tick_transition(dt: float) -> void:
@@ -94,6 +152,12 @@ func _tick_transition(dt: float) -> void:
 		hud.fade = fade
 
 func _place_in_target() -> void:
+	if trans.door == null:
+		var rid: String = trans.travel
+		player.vx = 0.0
+		player.vy = 0.0
+		swap_to(rid, Game.bench_spawn(rid))
+		return
 	var d: Dictionary = trans.door
 	var to_id := String(d.to)                       # "R02:W" = the target room and its door
 	var target_room := to_id.get_slice(":", 0)

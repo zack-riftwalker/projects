@@ -14,6 +14,7 @@ var room: Room:
 var hud: Hud
 var hud_layer: CanvasLayer
 var pause_menu: PauseMenu
+var bench_menu: BenchMenu
 var touch: TouchControls
 var debug_overlay: DebugOverlay
 var game_rect := Rect2()                # window pixels of the displayed 384x216 picture (after aspect fitting)
@@ -65,8 +66,10 @@ func _ready() -> void:
 	pause_menu.resume_requested.connect(set_paused.bind(false))
 	pause_menu.restart_requested.connect(func():
 		set_paused(false)
-		restart_from_death())
+		manager.respawn(false))
 	hud_layer.add_child(pause_menu)
+	bench_menu = BenchMenu.new()
+	hud_layer.add_child(bench_menu)
 	touch = TouchControls.new()
 	touch.name = "Touch"
 	touch.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -77,9 +80,18 @@ func _ready() -> void:
 	add_child(debug_overlay)
 	manager = RoomManager.new(world, hud)
 	add_child(manager)
-	manager.restart_requested.connect(func(): restart_from_death())
+	manager.restart_requested.connect(func(): manager.respawn(true))
+	manager.bench_requested.connect(func(r, i): open_bench(r, i))
+	bench_menu.manager = manager
+	bench_menu.rest_chosen.connect(func():
+		manager.rest(bench_room, bench_idx))
+	bench_menu.travel_chosen.connect(func(id): manager.travel(id))
 	manager.room_changed.connect(func(r): hud.set_room(r))
 	pause_menu.manager = manager
+	if Game.persist:
+		Game.load_save()
+	if Game.demo:
+		Game.tools.bash = true
 	manager.start_game()
 	if Game.demo:
 		demo_frame = 0
@@ -105,11 +117,13 @@ func _ready() -> void:
 			pause_menu.page = "map"
 		_shot_after(Game.shot_wait)
 
-# phase 2 interim (MV2-02 puts the bench here): the same room again, fresh Clawd, tokens and collected things kept
-func restart_from_death() -> void:
-	var snap := room.snapshot()
-	manager.player = null
-	manager.swap_to(room.id, null, snap)
+var bench_room: Room
+var bench_idx := 0
+
+func open_bench(r: Room, i: int) -> void:
+	bench_room = r
+	bench_idx = i
+	bench_menu.open()
 
 func set_paused(v: bool) -> void:
 	paused = v
@@ -120,7 +134,7 @@ func set_paused(v: bool) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# a tap on a pause option
-	if paused:
+	if paused or bench_menu.active:
 		var pos := Vector2.ZERO
 		var hit := false
 		if event is InputEventScreenTouch and event.pressed:
@@ -130,7 +144,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			pos = event.position
 			hit = true
 		if hit:
-			pause_menu.tap((pos - screen.position) * Vector2(W, H) / screen.size)
+			var gp := (pos - screen.position) * Vector2(W, H) / screen.size
+			if paused:
+				pause_menu.tap(gp)
+			else:
+				bench_menu.tap(gp)
 	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and Game.touch_seen:
 		pass
 
@@ -148,6 +166,10 @@ func _physics_process(_d: float) -> void:
 	if paused:
 		Controls.poll()
 		pause_menu.update()
+		return
+	if bench_menu.active:
+		Controls.poll()
+		bench_menu.update()
 		return
 	manager.tick(Game.STEP)
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):

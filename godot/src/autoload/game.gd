@@ -35,8 +35,78 @@ func load_meta() -> void:
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
+# ---- the save (user://save.json; on the web this is IndexedDB, it survives reloads) ----
+var persist := true                 # false in tests, selftest and screenshot runs
+var save_path := "user://save.json"
+var bench := ""                     # the room whose bench is the respawn point ("" = the start)
+var tokens := 0
+var max_hp := 5
+var fragments := 0
+var diff := "normal"
+var coop_hp_pct := 50
+var play_time := 0.0
+var deaths := 0
+var fights: Array = []
+
+func fresh() -> void:
+	flags = {}
+	tools = {"bash": false, "sudo": false, "agents": false, "opus": false}
+	bench = ""
+	tokens = 0
+	max_hp = 5
+	fragments = 0
+	play_time = 0.0
+	deaths = 0
+	fights = []
+
+func save_exists() -> bool:
+	return FileAccess.file_exists(save_path)
+
+func new_game() -> void:
+	fresh()
+	if FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+
+func write_save() -> void:
+	if not persist:
+		return
+	var d := {"version": 1, "flags": flags, "tools": tools, "bench": bench, "tokens": tokens, "max_hp": max_hp, "fragments": fragments,
+		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights}
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(d))
+
+func load_save() -> bool:
+	if not FileAccess.file_exists(save_path):
+		return false
+	var d = JSON.parse_string(FileAccess.get_file_as_string(save_path))
+	if typeof(d) != TYPE_DICTIONARY:
+		return false
+	fresh()
+	flags = d.get("flags", {})
+	for k in d.get("tools", {}):
+		tools[k] = d.tools[k]
+	bench = String(d.get("bench", ""))
+	tokens = int(d.get("tokens", 0))
+	max_hp = int(d.get("max_hp", 5))
+	fragments = int(d.get("fragments", 0))
+	diff = String(d.get("diff", "normal"))
+	coop_hp_pct = int(d.get("coop_hp_pct", 50))
+	play_time = float(d.get("time", 0.0))
+	deaths = int(d.get("deaths", 0))
+	fights = d.get("fights", [])
+	return true
+
+# the player's top-left when standing on the bench of a room
+func bench_spawn(room_id: String):
+	load_meta()
+	var b: Array = rooms_meta.rooms[room_id].benches
+	if b.is_empty():
+		return null
+	return Vector2(b[0][0] * 16 + 3, b[0][1] * 16 + 6)
+
 # the tools Clawd owns (phase 1 test build: bash only)
-var tools := {"bash": true, "sudo": false, "agents": false, "opus": false}
+var tools := {"bash": false, "sudo": false, "agents": false, "opus": false}
 var shake_opt := 1.0
 var low_fx := false          # G.save.data.opt.min
 
@@ -77,6 +147,8 @@ func _ready() -> void:
 			"full": full_shot = true
 	if fps30:
 		Engine.max_fps = 30
+	if test_name != "" or selftest or shot_path != "" or demo:
+		persist = false
 	if FileAccess.file_exists("res://build.txt"):
 		build_text = FileAccess.get_file_as_string("res://build.txt").strip_edges()
 
