@@ -33,7 +33,7 @@ var kills := 0
 var hits := 0
 var cp_index := -1
 var sign_now = null
-var auto_step := true
+var auto_step := false
 var rng := RandomNumberGenerator.new()
 var cam := {"x": 0.0, "y": 0.0, "ty": 0.0, "look": 0.0, "lock": null}
 var fx: Fx
@@ -43,6 +43,10 @@ var layers := {}
 var liquid_y = null
 var blink_period := 1.5
 var entity_root: Node2D
+var fight_active := false
+var crossing := false
+var end_door = null
+signal door_crossed(door: Dictionary)
 var got := {}                  # item ids already collected (kept across a death)
 var sparks := [false, false, false]
 var death_t := -1.0
@@ -60,7 +64,9 @@ func _physics_process(_delta: float) -> void:
 	step(Game.STEP)
 
 # ---------------------------------------------------------------- loading
+# spawn: "" (the room's P letter, or the start bench), or a Vector2 top-left position for the player
 func load_room(room_id: String, snap = null) -> void:
+	Game.load_meta()
 	id = room_id
 	if snap != null:
 		got = snap.got.duplicate()
@@ -70,19 +76,27 @@ func load_room(room_id: String, snap = null) -> void:
 		kills = snap.kills
 		hits = snap.hits
 		cp_index = snap.cp
-	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://src/world/rooms.json"))
-	def = meta[room_id]
-	rows = FileAccess.get_file_as_string("res://src/world/rooms/" + def.file).split("\n")
-	h = rows.size()
-	w = 0
-	for r in rows:
-		w = maxi(w, r.length())
+	def = Game.rooms_meta.rooms[room_id]
+	var raw: PackedStringArray = FileAccess.get_file_as_string("res://src/world/rooms/" + def.file).split("\n")
+	w = int(def.size[0])
+	h = int(def.size[1])
+	if raw.size() != h:
+		push_error("room %s: %d rows, rooms.json says %d" % [id, raw.size(), h])
+	rows = PackedStringArray()
+	for r in raw:
+		if r.length() > w:
+			push_error("room %s: a row is longer (%d) than the room width %d" % [id, r.length(), w])
+		rows.append(r.rpad(w, " "))
 	pw = w * T
 	ph = h * T
 	grid.w = w
 	grid.h = h
 	grid.tiles = PackedByteArray()
 	grid.tiles.resize(w * h)
+	grid.doors = []
+	for d in def.get("doors", []):
+		grid.doors.append({"id": d.id, "side": d.side, "a": int(d.a), "b": int(d.b), "to": d.to, "lock": d.get("lock", ""), "open": true})
+	update_doors()
 	var sign_n := 0
 	var item_id := 0
 	var spark_spots: Array = []
@@ -93,7 +107,10 @@ func load_room(room_id: String, snap = null) -> void:
 			var x := tx * T
 			var y := ty * T
 			if TileGrid.CHARS.has(ch):
-				grid.tiles[ty * w + tx] = TileGrid.CHARS[ch]
+				var t: int = TileGrid.CHARS[ch]
+				if t == TileGrid.CRACK and Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
+					t = TileGrid.E
+				grid.tiles[ty * w + tx] = t
 				continue
 			match ch:
 				" ", ".", "|":
@@ -101,18 +118,20 @@ func load_room(room_id: String, snap = null) -> void:
 				"P":
 					start = {"x": float(x + 3), "y": float(y + 6)}
 				"C":
-					cps.append({"x": x + 8, "y": y + T, "on": false})
+					cps.append({"x": x + 8, "y": y + T, "on": Game.flag("bench:" + id), "tx": tx})
 				"S":
 					springs.append({"x": x + 2, "y": y + 9, "w": 12, "h": 7, "t": 0.0})
 				"o":
-					if not got.has(item_id):
-						items.append({"kind": "token", "x": float(x + 8), "y": float(y + 8), "id": item_id, "ph": tx * 0.7})
+					var tid := "item:%s:%d" % [id, item_id]
+					if not Game.flag(tid):
+						items.append({"kind": "token", "x": float(x + 8), "y": float(y + 8), "id": tid, "ph": tx * 0.7})
 					item_id += 1
 				"*":
 					spark_spots.append({"x": x + 8, "y": y + 8})
 				"H":
-					if not got.has(item_id):
-						items.append({"kind": "coffee", "x": float(x + 8), "y": float(y + 9), "id": item_id, "ph": 0.0})
+					var cid := "item:%s:%d" % [id, item_id]
+					if not Game.flag(cid):
+						items.append({"kind": "coffee", "x": float(x + 8), "y": float(y + 9), "id": cid, "ph": 0.0})
 					item_id += 1
 				"T":
 					var texts: Array = def.get("signs", [])
@@ -120,19 +139,30 @@ func load_room(room_id: String, snap = null) -> void:
 					sign_n += 1
 				"M", "V":
 					_add_platform(ch, tx, ty, rows)
-				"E", "B", "E ":
-					pass
+				"E", "B", "D":
+					if ch == "D":
+						end_door = {"x": x + 8, "y": y + T}
 				_:
 					var e = spawn_enemy(ch, x, y)
 					if e != null:
 						ents.append(e)
 	spark_spots.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for i in range(mini(3, spark_spots.size())):
-		items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "ph": i, "ghost": sparks[i]})
+		var fid := "item:%s:f%d" % [id, i]
+		if not Game.flag(fid):
+			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
 	rng.seed = 1
-	if cp_index >= 0 and cp_index < cps.size():
-		cps[cp_index].on = true
-		start = {"x": cps[cp_index].x - 5.0, "y": cps[cp_index].y - 10.0}
+
+# closed doors are solid; recomputed every step (a fight, a boss flag)
+func update_doors() -> void:
+	for d in grid.doors:
+		var lock: String = d.lock
+		var open := true
+		if lock == "fight":
+			open = not fight_active
+		elif lock.begins_with("until:"):
+			open = Game.flag(lock.substr(6))
+		d.open = open
 
 func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> void:
 	var x := tx * T
@@ -171,7 +201,7 @@ func spawn_enemy(ch: String, x: int, y: int):
 	return null
 
 # the nodes that draw the room; called once after load_room
-func build_nodes() -> void:
+func build_nodes(p = null, spawn = null) -> void:
 	view = RoomView.new()
 	view.name = "View"
 	add_child(view)
@@ -196,9 +226,18 @@ func build_nodes() -> void:
 	camera.make_current()
 	for e in ents:
 		entity_root.add_child(e)
-	player = Player.new(self, start.x, start.y)
-	player.name = "Player"
-	add_child(player)
+	if p == null:
+		p = Player.new(self, start.x, start.y)
+		p.name = "Player"
+	else:
+		if p.get_parent() != null:
+			p.get_parent().remove_child(p)
+		p.room = self
+	if spawn != null:
+		p.x = spawn.x
+		p.y = spawn.y
+	add_child(p)
+	player = p
 	snap_cam()
 
 func reserved(tx: int, ty: int) -> bool:
@@ -303,6 +342,7 @@ func _process(_dt: float) -> void:
 
 # ---------------------------------------------------------------- simulation (js: Level.update, same order)
 func step(dt: float) -> void:
+	update_doors()
 	fx.decay(dt)
 	if hitstop > 0.0:
 		hitstop -= dt
@@ -373,6 +413,20 @@ func step(dt: float) -> void:
 			m.y = v + 2.0
 
 	p.update(dt)
+	# through a door (the manager changes the room)
+	if not p.dead and not crossing:
+		var mid_x: float = p.x + p.w / 2.0
+		var row := floori((p.y + p.h / 2.0) / T)
+		var side := ""
+		if mid_x < 0.0:
+			side = "W"
+		elif mid_x > pw:
+			side = "E"
+		if side != "":
+			var d = grid.door_at(side, row)
+			if d != null and d.open:
+				crossing = true
+				door_crossed.emit(d)
 
 	# creatures (only the ones near the camera think)
 	var cx: float = cam.x
@@ -595,6 +649,14 @@ func update_projs(_dt: float) -> void:
 # ---------------------------------------------------------------- drawing of what is not an entity
 func draw_layer(kind: String, ci: CanvasItem) -> void:
 	if kind == "furniture":
+		# closed doors: a gate column just inside the edge so the player sees why it is closed
+		var gate := Gfx.tex("gate")
+		for d in grid.doors:
+			if d.open:
+				continue
+			var gx := 0 if d.side == "W" else pw - T
+			for ty in range(d.a, d.b + 1):
+				ci.draw_texture_rect_region(gate, Rect2(gx, ty * T, T, T), Rect2(7, 12, 16, 16))
 		for c in cps:
 			ci.draw_texture(Gfx.tex("checkpoint_%d" % (1 if c.on else 0)), Vector2(c.x - 8, c.y - 28))
 		for s in signs:

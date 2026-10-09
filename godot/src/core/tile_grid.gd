@@ -23,13 +23,27 @@ var tiles := PackedByteArray()
 var crumble := {}          # index -> {s, t}
 var blink_hold := {}       # index -> true
 var blink_phase := 0
+var doors: Array = []      # {side: "W"|"E", a, b, open}: rows a..b of the left/right edge are walkable while open
 
 func tile(tx: int, ty: int) -> int:
-	if tx < 0 or tx >= w or ty < 0:
+	if ty < 0:
+		return SOLID
+	if tx < 0 or tx >= w:
+		if ty < h:
+			for d in doors:
+				if d.open and (d.side == "W") == (tx < 0) and ty >= d.a and ty <= d.b:
+					return E
 		return SOLID
 	if ty >= h:
 		return E
 	return tiles[ty * w + tx]
+
+# the open door whose rows cover ty on the given side ("" = none)
+func door_at(side: String, ty: int):
+	for d in doors:
+		if d.side == side and ty >= d.a and ty <= d.b:
+			return d
+	return null
 
 func solid(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)

@@ -15,6 +15,26 @@ const COL := {
 	"ok": "#7fd08a", "okHi": "#d6ffd0", "bad": "#ff5d5d", "mint": "#58f0c8", "sky": "#7cc4ff",
 }
 
+# persistent world flags: room:<id>:visited, bench:<id>, item:<room>:<n>, crack:<room>:<tx>:<ty>, boss:NULL, ability:bash
+var flags := {}
+var rooms_meta := {}
+
+func load_meta() -> void:
+	if rooms_meta.is_empty():
+		rooms_meta = JSON.parse_string(FileAccess.get_file_as_string("res://src/world/rooms.json"))
+		# bench positions (letter C) for the map and the travel list
+		for id in rooms_meta.rooms:
+			var m: Dictionary = rooms_meta.rooms[id]
+			m["benches"] = []
+			var rows := FileAccess.get_file_as_string("res://src/world/rooms/" + m.file).split("\n")
+			for ty in range(rows.size()):
+				var tx := rows[ty].find("C")
+				if tx >= 0:
+					m.benches.append([tx, ty])
+
+func flag(key: String) -> bool:
+	return bool(flags.get(key, false))
+
 # the tools Clawd owns (phase 1 test build: bash only)
 var tools := {"bash": true, "sudo": false, "agents": false, "opus": false}
 var shake_opt := 1.0

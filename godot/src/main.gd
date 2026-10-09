@@ -8,7 +8,9 @@ const H := 216
 var game_vp: SubViewport
 var world: Node2D
 var screen: TextureRect
-var room: Room
+var manager: RoomManager
+var room: Room:
+	get: return manager.room if manager != null else null
 var hud: Hud
 var hud_layer: CanvasLayer
 var pause_menu: PauseMenu
@@ -63,7 +65,7 @@ func _ready() -> void:
 	pause_menu.resume_requested.connect(set_paused.bind(false))
 	pause_menu.restart_requested.connect(func():
 		set_paused(false)
-		start_room(null))
+		restart_from_death())
 	hud_layer.add_child(pause_menu)
 	touch = TouchControls.new()
 	touch.name = "Touch"
@@ -73,7 +75,12 @@ func _ready() -> void:
 	debug_overlay.name = "Debug"
 	debug_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(debug_overlay)
-	start_room(null)
+	manager = RoomManager.new(world, hud)
+	add_child(manager)
+	manager.restart_requested.connect(func(): restart_from_death())
+	manager.room_changed.connect(func(r): hud.set_room(r))
+	pause_menu.manager = manager
+	manager.start_game()
 	if Game.demo:
 		demo_frame = 0
 	elif Game.selftest:
@@ -82,27 +89,30 @@ func _ready() -> void:
 	elif Game.shot_path != "":
 		if Game.scene == "hud":          # screenshot helper: Clawd next to the first sign, a Bug close by
 			room.player.x = 104.0
+			manager.set_process(false)
 			var b := Bug.new(room, 140, 192, false)
 			room.ents.append(b)
 			room.entity_root.add_child(b)
 			room.tokens = 7
+		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
+			manager.swap_to(Game.scene.substr(5))
+		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited
+			for id in Game.rooms_meta.rooms:
+				Game.flags["room:%s:visited" % id] = true
+			manager.swap_to("R03")
+			manager.player.x = 1200.0
+			set_paused(true)
+			pause_menu.page = "map"
 		_shot_after(Game.shot_wait)
 
-func start_room(snap) -> void:
-	if room != null:
-		room.queue_free()
-	room = Room.new()
-	world.add_child(room)
-	room.load_room("R01", snap)
-	room.build_nodes()
-	room.restart_requested.connect(func(sn): start_room(sn))
-	room.auto_step = not paused
-	hud.set_room(room)
-	Audio.music(String(room.def.get("music", "")))
+# phase 2 interim (MV2-02 puts the bench here): the same room again, fresh Clawd, tokens and collected things kept
+func restart_from_death() -> void:
+	var snap := room.snapshot()
+	manager.player = null
+	manager.swap_to(room.id, null, snap)
 
 func set_paused(v: bool) -> void:
 	paused = v
-	room.auto_step = not v
 	if v:
 		pause_menu.open()
 	else:
@@ -138,7 +148,9 @@ func _physics_process(_d: float) -> void:
 	if paused:
 		Controls.poll()
 		pause_menu.update()
-	elif Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
+		return
+	manager.tick(Game.STEP)
+	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
 		set_paused(true)
 
 # the fixed 180-frame script of ?selftest: run right, jump, dash, swipe

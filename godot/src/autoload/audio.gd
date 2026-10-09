@@ -70,10 +70,20 @@ func music(music_key: String) -> void:
 		tw.tween_property(music_b, "volume_db", -60.0, 0.5)
 		tw.chain().tween_callback(music_b.stop)
 
-func stop_music() -> void:
+func stop_music(fade := 0.0) -> void:
 	music_name = ""
-	music_a.stop()
-	music_b.stop()
+	if fade <= 0.0:
+		music_a.stop()
+		music_b.stop()
+		return
+	var tw := create_tween().set_parallel(true)
+	for pl in [music_a, music_b]:
+		if pl.playing:
+			tw.tween_property(pl, "volume_db", -60.0, fade)
+	tw.chain().tween_callback(func():
+		if music_name == "":
+			music_a.stop()
+			music_b.stop())
 
 # pause menu: music a bit quieter
 func duck(db: float) -> void:

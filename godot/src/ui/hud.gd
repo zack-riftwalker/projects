@@ -6,6 +6,7 @@ const W := 384
 const H := 216
 var room: Room
 var age := 0.0
+var fade := 0.0
 
 func set_room(r: Room) -> void:
 	room = r
@@ -16,6 +17,8 @@ func _process(dt: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	if fade > 0.0:
+		draw_rect(Rect2(0, 0, W, H), Color(0.051, 0.039, 0.071, fade))
 	if room == null or room.player == null:
 		return
 	var p = room.player

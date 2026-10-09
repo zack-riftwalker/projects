@@ -13,7 +13,6 @@ func report(name: String, ok: bool, info: String) -> bool:
 
 func new_room(room_id := "R01") -> Room:
 	var room := Room.new()
-	room.auto_step = false
 	main.world.add_child(room)
 	room.load_room(room_id)
 	room.build_nodes()
@@ -28,6 +27,8 @@ func run(name: String) -> bool:
 		"combat": return t_combat()
 		"hurt": return t_hurt()
 		"soak": return t_soak()
+		"rooms": return t_rooms()
+		"doors": return t_doors()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -252,3 +253,79 @@ func t_soak() -> bool:
 			break
 	Controls.script_input = null
 	return report("soak", ok, "3600 frames, x %.0f..%.0f, kills=%d hits=%d tokens=%d%s" % [min_x, max_x, room.kills, room.hits, room.tokens, why])
+
+func new_manager() -> RoomManager:
+	var m := RoomManager.new(main.world, null)
+	main.add_child(m)
+	m.start_game()
+	return m
+
+# first solid row below the door in the column of x (so a test can stand Clawd on the floor in front of a door)
+func floor_y(room: Room, x: float, from_row: int) -> float:
+	var tx := floori(x / 16.0)
+	for ty in range(from_row, room.h):
+		if room.grid.solid(tx, ty):
+			return ty * 16.0 - 10.0
+	return room.ph - 26.0
+
+# walk R01 -> R02 -> R03 -> R04 through the east doors
+func t_rooms() -> bool:
+	var m := new_manager()
+	var ok := true
+	var info := ""
+	var path := ["R01", "R02", "R03", "R04"]
+	for i in range(path.size() - 1):
+		var r := m.room
+		if r.id != path[i]:
+			ok = false
+			info += " BAD: expected %s but in %s" % [path[i], r.id]
+			break
+		var d = null
+		for dd in r.grid.doors:
+			if dd.side == "E":
+				d = dd
+		var p = m.player
+		p.x = r.pw - p.w - 4.0
+		p.y = floor_y(r, p.x + 5, d.a)
+		p.vx = 0.0
+		p.vy = 0.0
+		Controls.script_input = {"right": true}
+		var n := 0
+		while m.room.id == path[i] and n < 300:
+			m.tick(Game.STEP)
+			n += 1
+		var grounded := -1
+		for f in range(40):
+			m.tick(Game.STEP)
+			if p.on_ground and not m.trans.on:
+				grounded = f
+				break
+		var nr := m.room
+		var good: bool = nr.id == path[i + 1] and grounded >= 0 and grounded <= 20 and p.y > (nr.grid.doors[0].a - 2) * 16.0
+		info += " %s->%s (%d ticks, grounded after %d)" % [path[i], nr.id, n, grounded]
+		if not good:
+			ok = false
+			info += " BAD"
+			break
+		Controls.script_input = {}
+		for f in range(10):
+			m.tick(Game.STEP)
+	Controls.script_input = null
+	Controls.locked = false
+	return report("rooms", ok, info)
+
+func t_doors() -> bool:
+	Game.flags.erase("boss:NULL")
+	var room := new_room("R05")
+	room.update_doors()
+	var closed: bool = room.grid.tile(room.w, 8) == TileGrid.SOLID
+	var w_open: bool = room.grid.tile(-1, 8) == TileGrid.E
+	Game.flags["boss:NULL"] = true
+	room.update_doors()
+	var opened: bool = room.grid.tile(room.w, 8) == TileGrid.E
+	var above: bool = room.grid.tile(room.w, 5) == TileGrid.SOLID
+	room.fight_active = true
+	room.update_doors()
+	var w_closed: bool = room.grid.tile(-1, 8) == TileGrid.SOLID
+	Game.flags.erase("boss:NULL")
+	return report("doors", closed and opened and w_open and above and w_closed, "E closed=%s opened=%s W open=%s W closed in fight=%s wall above=%s" % [closed, opened, w_open, w_closed, above])
