@@ -6,7 +6,7 @@
 |---|---|---|---|
 | [`00-decisions.md`](00-decisions.md) | خلاصه‌ی همه‌ی تصمیم‌ها (به انگلیسی، برای Sonnet) | Claude | انجام شد |
 | [`01-current-game.md`](01-current-game.md) | MV0-02: فهرست بازی فعلی | Claude | انجام شد |
-| [`../../tools/godot/README.md`](../../tools/godot/README.md) | MV0-03: ابزار Godot | Sonnet | در صف |
+| [`../../tools/godot/README.md`](../../tools/godot/README.md) | MV0-03: ابزار Godot | Sonnet | انجام شد |
 | [`02-oss-bosses.md`](02-oss-bosses.md) | MV0-04: باس‌ها و دشمن‌های بازی‌های اوپن سورس | Sonnet | در صف |
 | [`03-abilities-and-gates.md`](03-abilities-and-gates.md) | MV0-05: توانایی‌ها و درها | Sonnet | در صف |
 | [`04-coop-design.md`](04-coop-design.md) | MV0-06: Co-op با دوربین جدا | Sonnet | در صف |
