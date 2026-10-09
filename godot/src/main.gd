@@ -14,6 +14,7 @@ var hud_layer: CanvasLayer
 var pause_menu: PauseMenu
 var touch: TouchControls
 var debug_overlay: DebugOverlay
+var game_rect := Rect2()                # window pixels of the displayed 384x216 picture (after aspect fitting)
 var paused := false
 var demo_frame := -1
 var selftest_frame := -1
@@ -207,3 +208,11 @@ func _fit() -> void:
 		var hh := sz.x * float(H) / float(W)
 		screen.position = Vector2(0, 10.0 * k)
 		screen.size = Vector2(sz.x, hh)
+	# the picture itself (KEEP_ASPECT_CENTERED inside the TextureRect): the overlay and the pause button are placed from it
+	var sc := minf(screen.size.x / W, screen.size.y / H)
+	var gs := Vector2(W, H) * sc
+	game_rect = Rect2(screen.position + (screen.size - gs) * 0.5, gs)
+	if touch != null:
+		touch.layout()
+	if debug_overlay != null:
+		debug_overlay.queue_redraw()

@@ -41,6 +41,7 @@
 | MV1-07 | touch controls, pause, debug overlay for the phone test | Sonnet | done |
 | MV1-08 | automated tests: parity with the JS game, headless run, web check | Sonnet | done |
 | MV1-09 | delivery build, phone test instructions, phase report | Sonnet | done |
+| MV1-10 | debug overlay measures without disturbing the game; pause button in portrait | Sonnet | done |
 
 Order: strictly MV1-01 → MV1-09. Update this table and `docs/metroidvania/README.md` in the same commit as each task.
 

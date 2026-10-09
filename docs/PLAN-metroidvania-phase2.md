@@ -50,9 +50,9 @@ Order: MV2-01 → MV2-09. MV2-07 needs MV2-01…06 finished; do not start it ear
 **Goal:** the eight rooms of THE SOURCE TREE are connected and walkable.
 
 ### Room files
-Create `godot/world/rooms/<id>.txt` for each room. Pad every row with spaces to the room width given in `rooms.json` (the loader must pad rows to `size[0]` and fail loudly if a row is longer or the row count differs from `size[1]`).
+Create `godot/src/world/rooms/<id>.txt` for each room. Pad every row with spaces to the room width given in `rooms.json` (the loader must pad rows to `size[0]` and fail loudly if a row is longer or the row count differs from `size[1]`).
 
-**From the current levels** (`tools/godot/capture/out/levels/<id>.txt`, made by the phase 1 capture tool) with these edits. Save the edits verbatim as `godot/world/room_edits.json` and write `tools/godot/make-rooms.py` (Python 3, run with `python3 -I`) that applies them and writes the `.txt` files. Each edit is `[x, y, expected_old_char, new_char]`; the script must stop with an error if the old char does not match.
+**From the current levels** (`tools/godot/capture/out/levels/<id>.txt`, made by the phase 1 capture tool) with these edits. Save the edits verbatim as `godot/src/world/room_edits.json` and write `tools/godot/make-rooms.py` (Python 3, run with `python3 -I`) that applies them and writes the `.txt` files. Each edit is `[x, y, expected_old_char, new_char]`; the script must stop with an error if the old char does not match.
 
 ```json
 {
@@ -160,7 +160,7 @@ What the edits do: no level exits (`E`) and only one start (`P`, in R01); Flaky 
 ```
 Why the R07 gap is 8 tiles: a running jump covers about 98 px (reference trace in phase 1 §2); the gap is 128 px, so only jump + dash crosses it.
 
-### `godot/world/rooms.json` (replace the phase 1 file with exactly this)
+### `godot/src/world/rooms.json` (replace the phase 1 file with exactly this)
 ```json
 {
   "start": { "room": "R01", "spawn": "P" },

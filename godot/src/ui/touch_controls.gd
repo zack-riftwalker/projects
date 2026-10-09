@@ -55,7 +55,7 @@ func layout() -> void:
 	var ph := 38.0 * kc
 	var top := 10.0 * kc
 	if h > w:
-		top = (18.0 + (w / kc - 32.0) * 0.5625) * kc
+		top = get_parent().game_rect.end.y + 8.0 * kc    # just below the picture
 	pause_rect = Rect2(w - 16.0 * kc - pw, top, pw, ph)
 	stick_r = 50.0 * k * kc
 	queue_redraw()
