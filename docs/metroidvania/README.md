@@ -11,5 +11,5 @@
 | [`03-abilities-and-gates.md`](03-abilities-and-gates.md) | MV0-05: توانایی‌ها و درها | Sonnet | انجام شد |
 | [`04-coop-design.md`](04-coop-design.md) | MV0-06: Co-op با دوربین جدا | Sonnet | انجام شد |
 | [`05-difficulty-model.md`](05-difficulty-model.md) | MV0-07: مدل سختی | Sonnet | انجام شد |
-| [`06-phase1-test.md`](06-phase1-test.md) | MV0-08: پروتکل تست گوشی | Sonnet | در صف |
-| [`../reports/metroidvania-phase0.md`](../reports/metroidvania-phase0.md) | MV0-08: گزارش فاز ۰ | Sonnet | در صف |
+| [`06-phase1-test.md`](06-phase1-test.md) | MV0-08: پروتکل تست گوشی | Sonnet | انجام شد |
+| [`../reports/metroidvania-phase0.md`](../reports/metroidvania-phase0.md) | MV0-08: گزارش فاز ۰ | Sonnet | انجام شد |
