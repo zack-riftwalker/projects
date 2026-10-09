@@ -54,6 +54,8 @@ func harmboxes() -> Array:
 
 # returns "block", "kill", "hit" or ""
 func hit(d: int, dx: float, _dy: float, how: String, _b = null) -> String:
+	if has_method("blocks") and call("blocks", dx, _dy, how):
+		return "block"
 	hp -= d
 	flash = 0.13
 	stun = 0.22

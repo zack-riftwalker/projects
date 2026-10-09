@@ -32,6 +32,8 @@ func run(name: String) -> bool:
 		"save": return t_save()
 		"crack": return t_crack()
 		"focus": return t_focus()
+		"guard": return t_guard()
+		"zombie": return t_zombie()
 		"dashhurt": return t_dashhurt()
 		"platform": return t_platform()
 	return report(name, false, "unknown test")
@@ -503,3 +505,82 @@ func t_dashhurt() -> bool:
 	Game.diff = "normal"
 	var ok: bool = n[0] == 2 and n[2] == n[1] - 1 and e[0] == 2 and e[2] == e[1]
 	return report("dashhurt", ok, "normal: bug hp %d, player %d -> %d | easy: bug hp %d, player %d -> %d" % [n[0], n[1], n[2], e[0], e[1], e[2]])
+
+func add_ent(room: Room, e) -> void:
+	room.ents.append(e)
+	room.entity_root.add_child(e)
+
+func t_guard() -> bool:
+	Game.diff = "normal"
+	var room := new_room()
+	clear_ents(room)
+	room.cam.x = 60.0
+	var p = room.player
+	for i in range(30):
+		step_with(room, {})
+	# 1. from the front: the guard faces left, Clawd swings right from its left
+	p.x = 150.0
+	p.face = 1.0
+	var g := Guard.new(room, 0, 0)
+	g.x = 174.0
+	g.y = 192.0
+	g.face = -1.0
+	g.stun = 999.0
+	add_ent(room, g)
+	var hp0: int = g.hp
+	for f in range(8):
+		step_with(room, {"attack": f == 1, "right": false})
+	var front_ok: bool = g.hp == hp0
+	# 2. from behind: it faces right, Clawd swings right from its left
+	g.face = 1.0
+	p.x = 150.0
+	p.vx = 0.0
+	p.atk_cd = 0.0
+	p.atk_t = 0.0
+	for f in range(20):
+		step_with(room, {"attack": f == 1})
+	var back_ok: bool = g.hp == hp0 - 1
+	# 3. pogo: a down-swipe from above lands whatever it faces
+	g.face = -1.0
+	p.x = g.x + 2.0
+	p.y = g.y - 28.0
+	p.vy = 0.0
+	p.on_ground = false
+	p.atk_cd = 0.0
+	p.atk_t = 0.0
+	var hp1: int = g.hp
+	var bounced := false
+	for f in range(60):
+		step_with(room, {"down": true, "attack": f == 1})
+		if g.hp < hp1:
+			bounced = p.vy < 0.0
+			break
+	var pogo_ok: bool = g.hp == hp1 - 1 and bounced
+	Controls.script_input = null
+	return report("guard", front_ok and back_ok and pogo_ok, "front blocked=%s | behind hit=%s | pogo hit=%s bounce=%s (hp %d of %d)" % [front_ok, back_ok, pogo_ok, bounced, g.hp, hp0])
+
+func t_zombie() -> bool:
+	Game.diff = "normal"
+	var room := new_room()
+	clear_ents(room)
+	room.cam.x = 60.0
+	for i in range(10):
+		step_with(room, {})
+	var z := Zombie.new(room, 0, 0)
+	z.x = 260.0
+	z.y = 196.0
+	add_ent(room, z)
+	z.hit(1, 1.0, 0.0, "swipe")
+	z.hit(1, 1.0, 0.0, "swipe")
+	var corpse: bool = z.state == "down" and z.passive and not z.dead and room.kills == 0
+	for f in range(216):              # 3.6 s: 3 s down + 0.5 s rising
+		step_with(room, {})
+	var back: bool = z.state == "idle" and z.hp == 2 and not z.passive
+	z.hit(1, 1.0, 0.0, "swipe")
+	z.hit(1, 1.0, 0.0, "swipe")
+	var corpse2: bool = z.state == "down"
+	z.hit(1, 0.0, 1.0, "swipe")       # the down-swipe: kill -9
+	var tokens := loose_tokens(room)
+	Controls.script_input = null
+	var ok: bool = corpse and back and corpse2 and z.dead and room.kills == 1 and tokens == 2
+	return report("zombie", ok, "corpse=%s back after 3.5 s=%s corpse again=%s dead=%s kills=%d tokens=%d" % [corpse, back, corpse2, z.dead, room.kills, tokens])

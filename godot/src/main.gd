@@ -107,6 +107,34 @@ func _ready() -> void:
 			room.entity_root.add_child(b)
 			room.tokens = 7
 			Game.fragments = 2
+		elif Game.scene == "enemies":                   # screenshot helper: a Guard, a Zombie, a corpse
+			manager.set_process(false)
+			room.player.x = 100.0
+			for e in room.ents:
+				e.queue_free()
+			room.ents.clear()
+			var g := Guard.new(room, 0, 0)
+			g.x = 140.0
+			g.y = 192.0
+			g.face = -1.0
+			g.stun = 999.0
+			var z := Zombie.new(room, 0, 0)
+			z.x = 190.0
+			z.y = 196.0
+			z.stun = 999.0
+			var z2 := Zombie.new(room, 0, 0)
+			z2.x = 230.0
+			z2.y = 196.0
+			var g2 := Guard.new(room, 0, 0)
+			g2.x = 270.0
+			g2.y = 192.0
+			g2.face = 1.0
+			g2.stun = 999.0
+			for e in [g, z, z2, g2]:
+				room.ents.append(e)
+				room.entity_root.add_child(e)
+			z2.hit(1, 1.0, 0.0, "swipe")
+			z2.hit(1, 1.0, 0.0, "swipe")
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
 		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited

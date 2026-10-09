@@ -193,6 +193,8 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"b": return Bug.new(self, x, y, false)
 		"a": return Bug.new(self, x, y, true)
 		"t": return Typo.new(self, x, y)
+		"G": return Guard.new(self, x, y)
+		"Z": return Zombie.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 
@@ -518,11 +520,20 @@ func interact_combat(p) -> void:
 	# touching
 	var hb: Dictionary = p.hurtbox()
 	for e in ents:
-		if e.dead or e.passive:
+		if e.dead:
 			continue
 		for b in e.harmboxes():
 			if not Game.overlap(hb, b):
 				continue
+			if e.passive:                       # a corpse hurts nobody, but a stomp still finishes it
+				if e.stompable and p.vy > 30.0 and p.prev_bottom <= b.y + minf(8.0, b.h * 0.6):
+					var res4: String = e.hit(maxi(1, e.hp), 0.0, 1.0, "stomp", b)
+					p.y = b.y - p.h
+					p.bounce(1.0)
+					p.gain_meter()
+					if res4 != "":
+						stop(0.05)
+				break
 			if p.dash_t > 0.0 and e.dashable:
 				if e.marks.get(p.dash_key, 0) != p.dash_id:
 					e.marks[p.dash_key] = p.dash_id
