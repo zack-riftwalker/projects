@@ -41,12 +41,12 @@
 | MV0-01 | this plan + docs index | Claude | done |
 | MV0-02 | inventory of the current game → `docs/metroidvania/01-current-game.md` | Claude | done |
 | MV0-02b | decisions summary → `docs/metroidvania/00-decisions.md` | Claude | done |
-| MV0-03 | Godot tooling → `tools/godot/` | Sonnet | todo |
-| MV0-04 | open-source bosses and enemies → `02-oss-bosses.md` | Sonnet | todo |
-| MV0-05 | abilities and gates → `03-abilities-and-gates.md` | Sonnet | todo |
-| MV0-06 | co-op with separate cameras → `04-coop-design.md` | Sonnet | todo |
-| MV0-07 | difficulty model → `05-difficulty-model.md` | Sonnet | todo |
-| MV0-08 | phone test protocol + phase report → `06-phase1-test.md`, `docs/reports/metroidvania-phase0.md` | Sonnet | todo |
+| MV0-03 | Godot tooling → `tools/godot/` | Sonnet | done |
+| MV0-04 | open-source bosses and enemies → `02-oss-bosses.md` | Sonnet | done |
+| MV0-05 | abilities and gates → `03-abilities-and-gates.md` | Sonnet | done |
+| MV0-06 | co-op with separate cameras → `04-coop-design.md` | Sonnet | done |
+| MV0-07 | difficulty model → `05-difficulty-model.md` | Sonnet | done |
+| MV0-08 | phone test protocol + phase report → `06-phase1-test.md`, `docs/reports/metroidvania-phase0.md` | Sonnet | done |
 
 **Order:** MV0-03 and MV0-04 are independent. MV0-05 after MV0-04 (its ideas may change abilities). MV0-06 and MV0-07 after MV0-05. MV0-08 last. Update the status column of `docs/metroidvania/README.md` in the same commit as each task.
 

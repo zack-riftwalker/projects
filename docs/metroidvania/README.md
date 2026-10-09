@@ -1,6 +1,16 @@
 # سندهای متروید وینیای CLAWD
 
-این پوشه سندهای طراحی نسخه‌ی متروید وینیا رو نگه می‌داره. پلن فاز ۰ (برای Sonnet): [`../PLAN-metroidvania-phase0.md`](../PLAN-metroidvania-phase0.md).
+این پوشه سندهای طراحی نسخه‌ی متروید وینیا رو نگه می‌داره. تصمیم‌های نهایی بعد از بررسی فاز ۰ تو بخش ۱۱ِ [`00-decisions.md`](00-decisions.md) هستن.
+
+## پلن‌ها (برای Sonnet)
+
+| پلن | چی | وضعیت |
+|---|---|---|
+| [`../PLAN-metroidvania-phase0.md`](../PLAN-metroidvania-phase0.md) | فاز ۰: طراحی و ابزار Godot | انجام شد |
+| [`../PLAN-metroidvania-phase1.md`](../PLAN-metroidvania-phase1.md) | فاز ۱: پایه‌ی Godot، یه اتاق قابل بازی، تست گوشی | در صف |
+| [`../PLAN-metroidvania-phase2.md`](../PLAN-metroidvania-phase2.md) | فاز ۲: ۸ اتاق SOURCE TREE، NULL v2، دو دشمن جدید، co-op | بعد از فاز ۱ |
+
+## سندها
 
 | سند | کار | کی | وضعیت |
 |---|---|---|---|

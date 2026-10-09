@@ -2,7 +2,7 @@
 
 This file is the self-contained summary of the research report Zakaria approved. The full Persian report (with sources) is a Claude Docs document: https://claude.ai/artifact/8MqVrs6Exvx7d2sAqYMdo2 (tabs: report, evaluation, roadmap). You may not be able to open it; everything you need is here.
 
-All decisions below were approved by Zakaria on 2026-10-09 unless marked **open**.
+All decisions below were approved by Zakaria on 2026-10-09 unless marked **open**. **§11 (the review of phase 0) is the latest word: where it differs from an earlier section, §11 wins.**
 
 ## 1. Direction
 
@@ -17,11 +17,11 @@ All decisions below were approved by Zakaria on 2026-10-09 unless marked **open*
 |---|---|---|
 | Engine | **Godot 4.7.2** (MIT), full rewrite | Conditional: must pass the phone test at the end of phase 1. The current game in `public/` is not touched and stays playable. |
 | Verified in a cloud container | Godot 4.7.2 Linux binary runs `--headless`; with `xvfb-run` + `--rendering-driver opengl3` it renders and `get_viewport().get_texture().get_image().save_png()` works | Download: `https://downloads.godotengine.org/?version=4.7.2&flavor=stable&slug=linux.x86_64.zip` (78 MB zip, 146 MB binary). Export templates: `slug=export_templates.tpz&platform=templates` (1.28 GB). ALSA errors under xvfb are harmless (audio falls back to dummy). |
-| Map tool | **MetSys** (KoBeWi/Metroidvania-System, MIT, needs Godot ≥ 4.6) | grid map editor, room transitions, minimap, collectibles, save data |
+| Map tool | ~~MetSys~~ → **ASCII room files + `rooms.json`** (§11 D12) | MetSys needs its editor GUI, which an agent cannot drive; revisit MetSys/LDtk when Zakaria wants to draw rooms with a mouse |
 | Level editor (optional) | LDtk (MIT) + heygleeson/godot-ldtk-importer (MIT, Godot 4.1+) | for when Zakaria wants to draw rooms with a mouse |
 | godot-mcp | not needed | the agent runs the Godot CLI directly |
 | Platforms | **Web first** (same as now: friend joins by link), Windows and Android later from the same project | Godot web = Compatibility renderer / WebGL 2 only; single-threaded export is the default |
-| Co-op transport (recommendation) | WebRTC between the two browsers (`WebRTCMultiplayerPeer`), with the existing `server.js` / Cloudflare Worker used only for signaling | WebRTC is built into Godot's web export; native builds need the webrtc-native GDExtension |
+| Co-op transport | ~~WebRTC~~ → **WebSocket through the existing relay** (§11 D5) | WebRTC only if a phase 2 measurement shows TCP is not good enough |
 | Art | Phase 1 captures the current code-drawn sprites to PNG with a headless browser | better art is phase 6 |
 | Licensing | Take code only if MIT / Apache-2.0 / CC0, with credits. GPL and non-commercial: **ideas only, never copy code.** Commercial games' art/audio: never. | Names like "Claude"/"Opus" need a trademark check before any commercial release (risk noted, no action now) |
 
@@ -147,3 +147,31 @@ Deferred on purpose: research on Metroid (incl. Dread's E.M.M.I.), Castlevania S
 | scope (10 bosses, 12 enemies, 8 zones) | high | medium | phase by phase; optional bosses last; every phase is playable |
 | the rewrite takes long | medium | medium | the current game stays playable; the vertical slice comes early |
 | trademarked names if sold | low | high | check with a professional before a commercial release |
+
+## 11. Decisions after the phase 0 review (2026-10-09)
+
+Phase 0 was executed by Sonnet (`docs/reports/metroidvania-phase0.md`). Claude reviewed it, Zakaria approved the review ("اوکی"). These are final.
+
+| # | decision | from |
+|---|---|---|
+| D1 | Back door DEPENDENCY DEPTHS → THE NETWORK, opened with `agents` (key in a slot), so the order is not fixed. | 03 |
+| D2 | PRODUCTION opens with **either** door (revert from GIT HISTORY or breakpoint from THREAD TOWER). | 03 |
+| D3 | `opus` and `agents` are upgrades, not required keys (except the optional back door). | 03 |
+| D4 | THE REVIEWER #2 is fought in THE NETWORK's central room, **without** an extra lock on the exits: `curl` and `ssh` already gate THREAD TOWER and GIT HISTORY, so a player can go to THREAD TOWER right after WEB CRAWLER. (Changed from Sonnet's proposal.) | 03 |
+| D5 | Co-op transport: WebSocket through the existing relay (`server.js`, later the Worker); the current protocol's envelope and reliable channel are kept. WebRTC only if a phase 2 measurement says TCP is not good enough. | 04 |
+| D6 | Abilities, the explored map, doors and keys are shared; tokens and the plugin loadout are per player. | 04 |
+| D7 | A player who goes down far from the partner gets up at the last safe ground of that room, not next to the partner; both down → each at their own bench. | 04 |
+| D8 | Healing uses the context meter (33 per hp, +11 per hit); tokens become money for a later shop. | 05 |
+| D9 | Boss HP comes from `HP = T × r × u`. The phase 0 numbers (NULL 60, …) are **provisional**: phase 2 measures `r` in real fights (the game records fight statistics) and the numbers are fixed after that. | 05 |
+| D10 | Phone gate: pass at ≥ 55 fps average (low 1 % ≥ 40), **or** at a steady 30 fps with the 30-fps cap (avg ≥ 29.5, low 1 % ≥ 27), because the current game also draws at 30 fps on phones (`G.mobile` in `// js/main.js`). | 06 + review |
+| D11 | Dash has **no** invulnerability in normal/hard/nightmare (the current game makes Clawd fully invulnerable while dashing: `hurt()` returns early when `dashT > 0`). Easy keeps it. A late upgrade will give dash invulnerability back (like Hollow Knight's Shade Cloak). | review |
+| D12 | Rooms are ASCII text files in the current game's level format plus `rooms.json` (doors, origins, signs); the minimap is our own. No MetSys in phases 1–2. | review |
+| D13 | Collision is the current game's tile AABB code ported to GDScript (no Godot physics): the feel stays identical (checked frame by frame against the JS game), the simulation is deterministic, and the host can run two rooms without separate physics worlds. | review |
+| D14 | The Godot web build is served by `server.js` at `/mv/` over plain http. Godot normally refuses non-secure pages and its audio needs AudioWorklet (secure pages only); a small shell patch (ScriptProcessor audio driver + stub `addModule`) fixes both. Verified in Chromium on 2026-10-09; Firefox on the phone is checked in the phase 1 test. | review |
+| D15 | Test builds reach Zakaria through the `ph1` branch with `update-branch.txt` (an existing updater feature), never through `main`, until the Godot version replaces the current game. | review |
+| D16 | Co-op snapshots in phase 2 are full room snapshots (no deltas); deltas come later only if the measured bandwidth needs them. | review |
+| D17 | Phase 2's SOURCE TREE = the three world 1 levels (edited) + five new rooms: bench before the boss, NULL arena, bash corridor, end door, secret room (`docs/PLAN-metroidvania-phase2.md` MV2-01). | review |
+| D18 | New enemy SCRAPER (teaches `curl`) joins the enemy list. | 03 |
+
+Plans: `docs/PLAN-metroidvania-phase1.md`, `docs/PLAN-metroidvania-phase2.md`.
+
