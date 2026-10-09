@@ -28,3 +28,9 @@ func update(dt: float) -> void:
 
 func draw_body() -> void:
 	spr("%s_%d" % ["spiky" if spiky else "bug", int(t * 6.0) % 2], face < 0.0)
+
+func net_fields() -> Array:
+	return []
+
+func net_apply(_f: Array) -> void:
+	pass

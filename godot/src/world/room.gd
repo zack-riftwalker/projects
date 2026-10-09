@@ -47,6 +47,27 @@ var blink_period := 1.5
 var entity_root: Node2D
 var fight_active := false
 var crossing := false
+var mode := "solo"                         # solo | host | guest (co-op: the guest's room only shows what the host sends)
+var is_local := true                       # false: a room only the partner is in (no local Clawd, no camera, hidden)
+var next_nid := 1                          # network ids of creatures (host)
+var hist := {}                             # entity nid -> [[time, [hurtboxes]]]: one second, for the guest's hit check
+var zones: Array = []                      # short-lived damage areas the guest checks itself {id,kind,x,y,a,b,dmg,until}
+var next_zone := 1
+var next_pid := 1
+var next_lid := 1
+var summon_ok := true
+var pending_cracks := {}                   # guest: tiles hidden before the host confirmed them
+var zones_hit := {}
+var summon_t := 0.0
+signal net_hit(nid: int, how: String, dmg: int, dx: float, dy: float, atk: int)
+signal net_hurt(d: int)
+signal net_projhit(pid: int)
+signal net_pickup(item_id: String)
+signal local_died
+signal fight_intro
+signal item_collected(item_id: String, kind: String)
+signal tile_broken(tx: int, ty: int)
+signal net_crack(tx: int, ty: int)
 var boss_spawn = null
 var boss = null                            # the boss of this room (R05: NULL) while it is not beaten
 var fight := {"state": "none", "t": 0.0}   # none | intro | active | reward | done
@@ -128,14 +149,14 @@ func load_room(room_id: String, snap = null) -> void:
 					springs.append({"x": x + 2, "y": y + 9, "w": 12, "h": 7, "t": 0.0})
 				"o":
 					var tid := "item:%s:%d" % [id, item_id]
-					if not Game.flag(tid):
+					if not Game.flag(tid) and mode != "guest":
 						items.append({"kind": "token", "x": float(x + 8), "y": float(y + 8), "id": tid, "ph": tx * 0.7})
 					item_id += 1
 				"*":
 					spark_spots.append({"x": x + 8, "y": y + 8})
 				"H":
 					var cid := "item:%s:%d" % [id, item_id]
-					if not Game.flag(cid):
+					if not Game.flag(cid) and mode != "guest":
 						items.append({"kind": "coffee", "x": float(x + 8), "y": float(y + 9), "id": cid, "ph": 0.0})
 					item_id += 1
 				"T":
@@ -153,15 +174,19 @@ func load_room(room_id: String, snap = null) -> void:
 					var e = spawn_enemy(ch, x, y)
 					if e != null:
 						Game.scale_enemy(e)
+						e.nid = next_nid
+						next_nid += 1
 						ents.append(e)
-	if def.has("boss") and not Game.flag("boss:" + def.boss.id):
+	if def.has("boss") and not Game.flag("boss:" + def.boss.id) and mode != "guest":
 		var bs: Dictionary = boss_spawn if boss_spawn != null else {"x": pw - 80.0, "y": ph - 48.0}
 		boss = NullBoss.new(self, bs.x, bs.y, roundi(60.0 * float(Game.dv("boss_hp_mult"))))
+		boss.nid = next_nid
+		next_nid += 1
 		ents.append(boss)
 	spark_spots.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for i in range(mini(3, spark_spots.size())):
 		var fid := "item:%s:f%d" % [id, i]
-		if not Game.flag(fid):
+		if not Game.flag(fid) and mode != "guest":
 			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
 	rng.seed = 1
 
@@ -205,6 +230,8 @@ func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> voi
 	plats.append({"x": float(x), "y": float(y + 2), "w": 48.0, "h": 6.0, "ax": ch == "M", "a": a, "b": b, "ph": fposmod(tx * 0.37 + ty * 0.61, 1.0), "dx": 0.0, "dy": 0.0, "speed": def.get("platSpeed", 44.0)})
 
 func spawn_enemy(ch: String, x: int, y: int):
+	if mode == "guest":
+		return null
 	match ch:
 		"b": return Bug.new(self, x, y, false)
 		"a": return Bug.new(self, x, y, true)
@@ -214,8 +241,8 @@ func spawn_enemy(ch: String, x: int, y: int):
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 
-# the nodes that draw the room; called once after load_room
-func build_nodes(p = null, spawn = null) -> void:
+# the nodes that draw the room; called once after load_room. local = false: a room only the partner is in
+func build_nodes(p = null, spawn = null, local := true) -> void:
 	view = RoomView.new()
 	view.name = "View"
 	add_child(view)
@@ -233,13 +260,25 @@ func build_nodes(p = null, spawn = null) -> void:
 	ent_root.z_index = 2
 	add_child(ent_root)
 	entity_root = ent_root
-	camera = Camera2D.new()
-	camera.anchor_mode = Camera2D.ANCHOR_MODE_FIXED_TOP_LEFT
-	camera.position_smoothing_enabled = false
-	add_child(camera)
-	camera.make_current()
 	for e in ents:
 		entity_root.add_child(e)
+	if local:
+		attach_local(p, spawn)
+	else:
+		is_local = false
+		visible = false
+		snap_cam()
+
+# Clawd (the local player) enters this room: camera, placement
+func attach_local(p = null, spawn = null) -> void:
+	is_local = true
+	visible = true
+	if camera == null:
+		camera = Camera2D.new()
+		camera.anchor_mode = Camera2D.ANCHOR_MODE_FIXED_TOP_LEFT
+		camera.position_smoothing_enabled = false
+		add_child(camera)
+	camera.make_current()
 	if p == null:
 		p = Player.new(self, start.x, start.y)
 		p.name = "Player"
@@ -252,7 +291,29 @@ func build_nodes(p = null, spawn = null) -> void:
 		p.y = spawn.y
 	add_child(p)
 	player = p
+	crossing = false
 	snap_cam()
+
+# Clawd leaves (the partner stays): the room goes on running, hidden
+func detach_local():
+	var p = player
+	if p != null and p.get_parent() == self:
+		remove_child(p)
+	player = null
+	is_local = false
+	visible = false
+	if camera != null:
+		camera.queue_free()
+		camera = null
+	return p
+
+# whose position the camera / the "near the camera" rule follows
+func cam_player():
+	if player != null and not (player.dead and not players().is_empty()):
+		return player
+	if not remote_players.is_empty():
+		return remote_players[0]
+	return null
 
 func reserved(tx: int, ty: int) -> bool:
 	if ty < 0 or ty >= rows.size() or tx >= rows[ty].length():
@@ -274,11 +335,25 @@ func explode(px: float, py: float, size: float, cols = null) -> void: fx.explode
 
 func drop(px: float, py: float, n: int, kind := "token") -> void:
 	for i in range(n):
-		items.append({"kind": kind, "x": px, "y": py, "vx": rng.randf_range(-70, 70), "vy": rng.randf_range(-190, -90), "loose": true, "t": 0.0, "ph": i})
+		items.append({"kind": kind, "id": "L%d" % next_lid, "x": px, "y": py, "vx": rng.randf_range(-70, 70), "vy": rng.randf_range(-190, -90), "loose": true, "t": 0.0, "ph": i})
+		next_lid += 1
 
 func break_tile(tx: int, ty: int) -> bool:
+	if mode == "guest":
+		# hidden at once, the host decides (no chain here: its `tile` events break the neighbours)
+		if grid.tile(tx, ty) != TileGrid.CRACK:
+			return false
+		grid.tiles[ty * w + tx] = TileGrid.E
+		view.erase_tile(tx, ty)
+		pending_cracks["%d:%d" % [tx, ty]] = time + 1.0
+		burst(tx * T + 8, ty * T + 8, 12, ["#8d8798", "#c3bccd", "#4c4658"], 90.0, 300.0)
+		shake(0.3)
+		Audio.sfx("brk")
+		net_crack.emit(tx, ty)
+		return true
 	if not grid.break_tile(tx, ty):
 		return false
+	tile_broken.emit(tx, ty)
 	view.erase_tile(tx, ty)
 	Game.flags["crack:%s:%d:%d" % [id, tx, ty]] = true
 	burst(tx * T + 8, ty * T + 8, 12, ["#8d8798", "#c3bccd", "#4c4658"], 90.0, 300.0)
@@ -299,7 +374,7 @@ func players() -> Array:
 	if player != null and not player.dead:
 		out.append(player)
 	for r in remote_players:
-		if not r.dead:
+		if not r.dead and not r.lagging:
 			out.append(r)
 	return out
 
@@ -327,10 +402,11 @@ func snap_cam() -> void:
 	var t := cam_target()
 	cam.x = t[0]
 	cam.y = t[1]
-	camera.position = Vector2(floori(cam.x + 0.5), floori(cam.y + 0.5))
+	if camera != null:
+		camera.position = Vector2(floori(cam.x + 0.5), floori(cam.y + 0.5))
 
 func player_cam_snap() -> void:
-	var p = player
+	var p = cam_player()
 	if p == null:
 		cam.ty = start.y + 10 - H * 0.64
 	else:
@@ -339,8 +415,9 @@ func player_cam_snap() -> void:
 func cam_target() -> Array:
 	var tx: float
 	var ty: float = cam.ty
-	if player != null:
-		tx = player.x + player.w / 2.0 - W / 2.0 + cam.look
+	var cp = cam_player()
+	if cp != null:
+		tx = cp.x + cp.w / 2.0 - W / 2.0 + cam.look
 	else:
 		tx = start.x + 5 - W / 2.0
 	if cam.lock != null:
@@ -357,7 +434,9 @@ func cam_target() -> Array:
 	return [tx, ty]
 
 func update_cam(dt: float) -> void:
-	var p = player
+	var p = cam_player()
+	if p == null:
+		return
 	cam.look = Game.damp(cam.look, p.face * 22.0 + clampf(p.vx * 0.12, -16.0, 16.0), 2.2, dt)
 	var feet: float = p.y + p.h
 	if p.on_ground or p.wall_dir != 0:
@@ -380,60 +459,87 @@ func _process(_dt: float) -> void:
 	for k in layers:
 		layers[k].queue_redraw()
 
-# ---------------------------------------------------------------- simulation (js: Level.update, same order)
-func step(dt: float) -> void:
+# ---------------------------------------------------------------- the guest's room: only its own body is simulated
+func step_guest(dt: float) -> void:
 	update_doors()
 	fx.decay(dt)
 	if hitstop > 0.0:
 		hitstop -= dt
 		return
 	time += dt
+	_move_platforms()
 	var p = player
-	if not p.dead:
-		clock += dt
+	if p != null:
+		p.update(dt)
+		_check_door()
+		if not p.dead and not p.gone:
+			interact_combat(p)
+			interact_goals(p)
+			# damage areas the host announced (blasts, the slam): checked on this body, once each
+			var hb: Dictionary = p.hurtbox()
+			for z in zones:
+				if zones_hit.has(z.id):
+					continue
+				var hit_z := false
+				if z.kind == "c":
+					var cxp: float = clampf(z.x, hb.x, hb.x + hb.w)
+					var cyp: float = clampf(z.y, hb.y, hb.y + hb.h)
+					hit_z = Vector2(cxp - z.x, cyp - z.y).length() < z.a
+				else:
+					hit_z = Game.overlap(hb, {"x": z.x, "y": z.y, "w": z.a, "h": z.b})
+				if hit_z:
+					zones_hit[z.id] = true
+					p.hurt(z.dmg, z.x)
+			# pick things up: ask the host once per item
+			var pcx: float = p.x + p.w / 2.0
+			var pcy: float = p.y + p.h / 2.0
+			for it in items:
+				if it.get("asked", false) or it.get("dead", false):
+					continue
+				var rr := 11.0 if it.kind == "spark" else 9.0
+				if absf(pcx - it.x) < rr + 3 and absf(pcy - it.y) < rr and (not it.get("loose", false) or it.get("t", 1.0) > 0.2):
+					it.asked = true
+					net_pickup.emit(it.id)
+	update_projs(dt)
+	for s2 in springs:
+		if s2.t > 0.0:
+			s2.t -= dt
+	fx.step(dt)
+	# a crack the host never confirmed comes back
+	for k in pending_cracks.keys():
+		if time > pending_cracks[k]:
+			var parts: PackedStringArray = String(k).split(":")
+			var tx := int(parts[0])
+			var ty := int(parts[1])
+			pending_cracks.erase(k)
+			if not Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
+				grid.tiles[ty * w + tx] = TileGrid.CRACK
+				view.dynamic.set_cell(Vector2i(tx, ty), 0, Vector2i(2, 5))
+	if cam.lock == null:
+		update_cam(dt)
+	else:
+		cam.x = Game.damp(cam.x, cam.lock.x, 8.0, dt)
+		cam.y = Game.damp(cam.y, cam.lock.y, 8.0, dt)
+	for ev in events:
+		if ev == "death":
+			local_died.emit()
+	events.clear()
 
-	# blinking blocks
-	var ph_ := floori(time / blink_period) % 2
-	if ph_ != grid.blink_phase:
-		grid.blink_phase = ph_
-		var want := TileGrid.BLINK_A if ph_ == 0 else TileGrid.BLINK_B
-		var q = p
-		if not q.dead:
-			for ty in range(floori(q.y / T), floori((q.y + q.h) / T) + 1):
-				for tx in range(floori(q.x / T), floori((q.x + q.w) / T) + 1):
-					if grid.tile(tx, ty) == want:
-						grid.blink_hold[ty * w + tx] = true
-	if not grid.blink_hold.is_empty():
-		for i in grid.blink_hold.keys():
-			if not grid.any_on([p] if not p.dead else [], i % w, i / w):
-				grid.blink_hold.erase(i)
-	# crumbling blocks
-	for i in grid.crumble.keys():
-		var c: Dictionary = grid.crumble[i]
-		c.t -= dt
-		if c.t > 0.0:
-			continue
-		var tx2: int = i % w
-		var ty2: int = i / w
-		if c.s == 1:
-			c.s = 2
-			c.t = 2.6
-			burst(tx2 * T + 8, ty2 * T + 4, 7, ["#cbb894", "#8a7a5c"], 50.0, 260.0)
-			Audio.sfx("crumble")
-		elif c.s == 2:
-			if grid.any_on([p] if not p.dead else [], tx2, ty2):
-				c.t = 0.2
-			else:
-				grid.crumble.erase(i)
-				dust(tx2 * T + 8, ty2 * T + 8, 4)
-	if not break_q.is_empty():
-		for q in break_q:
-			q.t -= dt
-			if q.t <= 0.0:
-				q.done = true
-				break_tile(q.tx, q.ty)
-		break_q = break_q.filter(func(q): return not q.get("done", false))
-	# moving platforms
+# the host confirmed a broken tile (or the guest's own request came through)
+func apply_tile(tx: int, ty: int) -> void:
+	pending_cracks.erase("%d:%d" % [tx, ty])
+	Game.flags["crack:%s:%d:%d" % [id, tx, ty]] = true
+	if grid.tile(tx, ty) == TileGrid.CRACK:
+		grid.tiles[ty * w + tx] = TileGrid.E
+		view.erase_tile(tx, ty)
+		burst(tx * T + 8, ty * T + 8, 12, ["#8d8798", "#c3bccd", "#4c4658"], 90.0, 300.0)
+		shake(0.3)
+		Audio.sfx("brk")
+	elif grid.tile(tx, ty) == TileGrid.E:
+		view.erase_tile(tx, ty)
+
+# ---------------------------------------------------------------- simulation (js: Level.update, same order)
+func _move_platforms() -> void:
 	for m in plats:
 		var span := absf(m.b - m.a)
 		if span < 1.0:
@@ -452,30 +558,94 @@ func step(dt: float) -> void:
 			m.dx = 0.0
 			m.y = v + 2.0
 
-	p.update(dt)
-	# through a door (the manager changes the room)
-	if not p.dead and not crossing:
-		var mid_x: float = p.x + p.w / 2.0
-		var row := floori((p.y + p.h / 2.0) / T)
-		var side := ""
-		if mid_x < 0.0:
-			side = "W"
-		elif mid_x > pw:
-			side = "E"
-		if side != "":
-			var d = grid.door_at(side, row)
-			if d != null and d.open:
-				crossing = true
-				door_crossed.emit(d)
+func _check_door() -> void:
+	var p = player
+	if p == null or p.dead or crossing:
+		return
+	var mid_x: float = p.x + p.w / 2.0
+	var row := floori((p.y + p.h / 2.0) / T)
+	var side := ""
+	if mid_x < 0.0:
+		side = "W"
+	elif mid_x > pw:
+		side = "E"
+	if side != "":
+		var d = grid.door_at(side, row)
+		if d != null and d.open:
+			crossing = true
+			door_crossed.emit(d)
 
-	# creatures (only the ones near the camera think)
+func step(dt: float) -> void:
+	if mode == "guest":
+		step_guest(dt)
+		return
+	update_doors()
+	fx.decay(dt)
+	if hitstop > 0.0:
+		hitstop -= dt
+		return
+	time += dt
+	var p = player                       # null in a room only the partner is in
+	var live := players()
+	if p != null and not p.dead:
+		clock += dt
+
+	# blinking blocks
+	var ph_ := floori(time / blink_period) % 2
+	if ph_ != grid.blink_phase:
+		grid.blink_phase = ph_
+		var want := TileGrid.BLINK_A if ph_ == 0 else TileGrid.BLINK_B
+		for q in live:
+			for ty in range(floori(q.y / T), floori((q.y + q.h) / T) + 1):
+				for tx in range(floori(q.x / T), floori((q.x + q.w) / T) + 1):
+					if grid.tile(tx, ty) == want:
+						grid.blink_hold[ty * w + tx] = true
+	if not grid.blink_hold.is_empty():
+		for i in grid.blink_hold.keys():
+			if not grid.any_on(live, i % w, i / w):
+				grid.blink_hold.erase(i)
+	# crumbling blocks
+	for i in grid.crumble.keys():
+		var c: Dictionary = grid.crumble[i]
+		c.t -= dt
+		if c.t > 0.0:
+			continue
+		var tx2: int = i % w
+		var ty2: int = i / w
+		if c.s == 1:
+			c.s = 2
+			c.t = 2.6
+			burst(tx2 * T + 8, ty2 * T + 4, 7, ["#cbb894", "#8a7a5c"], 50.0, 260.0)
+			Audio.sfx("crumble")
+		elif c.s == 2:
+			if grid.any_on(live, tx2, ty2):
+				c.t = 0.2
+			else:
+				grid.crumble.erase(i)
+				dust(tx2 * T + 8, ty2 * T + 8, 4)
+	if not break_q.is_empty():
+		for q in break_q:
+			q.t -= dt
+			if q.t <= 0.0:
+				q.done = true
+				break_tile(q.tx, q.ty)
+		break_q = break_q.filter(func(q): return not q.get("done", false))
+	_move_platforms()
+
+	if p != null:
+		p.update(dt)
+	_check_door()
+
+	# creatures (only the ones near a player think)
 	var cx: float = cam.x
 	var cy: float = cam.y
 	for e in ents:
 		if e.dead:
 			continue
-		if e.always or (e.x + e.w > cx - 90 and e.x < cx + W + 90 and e.y + e.h > cy - 110 and e.y < cy + H + 110):
+		if e.always or _near_a_player(e, cx, cy):
 			e.update(dt)
+	if remote_players.size() > 0:
+		record_hist()
 	interact()
 	update_items(dt)
 	update_projs(dt)
@@ -503,9 +673,14 @@ func step(dt: float) -> void:
 	else:
 		cam.x = Game.damp(cam.x, cam.lock.x, 8.0, dt)
 		cam.y = Game.damp(cam.y, cam.lock.y, 8.0, dt)
+	for z in zones:
+		z.until -= dt
+	zones = zones.filter(func(z): return z.until > 0.0)
 	for ev in events:
-		if ev == "death" and death_t < 0.0:
+		if ev == "death" and mode == "solo" and death_t < 0.0:
 			death_t = 1.2
+		elif ev == "death":
+			local_died.emit()
 		elif ev == "bossDying":
 			for q in players():
 				q.inv = 99.0
@@ -533,10 +708,12 @@ func _step_fight(dt: float) -> void:
 					break
 		"intro":
 			fight.t -= dt
+			summon_t += dt
 			if fight.t <= 0.0 and summon_ready():
 				_begin_fight()
 		"active":
-			stats.secs += dt
+			if stats.has("secs"):
+				stats.secs += dt
 		"reward":
 			fight.t -= dt
 			banner.t = fight.t
@@ -545,11 +722,13 @@ func _step_fight(dt: float) -> void:
 
 # co-op overrides this: the partner has to be in the arena (or 5 s have passed)
 func summon_ready() -> bool:
-	return true
+	return summon_ok or summon_t >= 5.0
 
 func _start_intro() -> void:
 	fight.state = "intro"
 	fight.t = 1.5
+	summon_t = 0.0
+	summon_ok = true
 	fight_active = true
 	cam.lock = {"x": (pw - W) / 2.0, "y": float(ph - H)}
 	for q in players():
@@ -557,6 +736,7 @@ func _start_intro() -> void:
 	Audio.music("boss")
 	Audio.sfx("roar")
 	events.append("bossIntro")
+	fight_intro.emit()
 
 func _begin_fight() -> void:
 	fight.state = "active"
@@ -573,6 +753,9 @@ func _begin_fight() -> void:
 	events.append("bossStart")
 
 func on_player_hurt(q, d: int) -> void:
+	if mode == "guest":
+		net_hurt.emit(d)
+		return
 	if fight.state == "active":
 		var i: int = 1 if (q in remote_players) else 0
 		stats.dmg[i] += d
@@ -615,9 +798,36 @@ func _finish_reward() -> void:
 	Game.write_save()
 	update_doors()
 
+func _near_a_player(e, cx: float, cy: float) -> bool:
+	if player != null and e.x + e.w > cx - 90 and e.x < cx + W + 90 and e.y + e.h > cy - 110 and e.y < cy + H + 110:
+		return true
+	for r in remote_players:
+		if e.x + e.w > r.x - W / 2.0 - 90 and e.x < r.x + W / 2.0 + 90 and e.y + e.h > r.y - H / 2.0 - 110 and e.y < r.y + H / 2.0 + 110:
+			return true
+	return false
+
+# one second of every creature's hurtboxes (the guest's hit check looks back in time)
+func record_hist() -> void:
+	for e in ents:
+		if e.dead or e.nid == 0:
+			continue
+		var h_: Array = hist.get(e.nid, [])
+		var boxes: Array = []
+		for b in e.hurtboxes():
+			boxes.append({"x": b.x, "y": b.y, "w": b.w, "h": b.h})
+		h_.append([time, boxes])
+		while h_.size() > 0 and time - h_[0][0] > 1.0:
+			h_.pop_front()
+		hist[e.nid] = h_
+
+# a short-lived damage area the guest checks against its own body: kind "c" circle (x, y, r), "r" rectangle (x, y, w, h)
+func harm_zone(kind: String, zx: float, zy: float, za: float, zb: float, dmg: int) -> void:
+	zones.append({"id": next_zone, "kind": kind, "x": zx, "y": zy, "a": za, "b": zb, "dmg": dmg, "until": 0.25})
+	next_zone += 1
+
 func interact() -> void:
 	var p = player
-	if p.dead or p.gone:
+	if p == null or p.dead or p.gone:
 		return
 	interact_combat(p)
 	interact_goals(p)
@@ -647,6 +857,20 @@ func hazard_at(p) -> String:
 		hz = "pit"
 	return hz
 
+# solo / host: the creature takes the hit. Guest: only sparks and sound here, the host decides (announced with net_hit)
+func _hit_entity(e, d: int, dx: float, dy: float, how: String, b) -> String:
+	if mode != "guest":
+		return e.hit(d, dx, dy, how, b)
+	var res := "hit"
+	if e.has_method("blocks") and e.blocks(dx, dy, how):
+		res = "block"
+	var p = player
+	var atk_val: int = p.dash_id if how == "dash" else p.atk_id
+	net_hit.emit(e.nid, how, d, dx, dy, atk_val)
+	if res == "hit":
+		Audio.sfx("hit")
+	return res
+
 func interact_combat(p) -> void:
 	# claw
 	if p.atk_t > 0.0 and p.atk_live:
@@ -659,7 +883,7 @@ func interact_combat(p) -> void:
 					continue
 				e.marks[p.hit_key] = p.atk_id
 				attacker = p
-				var res: String = e.hit(p.atk_dmg, p.atk_face if p.atk_dir == "f" else 0.0, -1.0 if p.atk_dir == "u" else (1.0 if p.atk_dir == "d" else 0.0), "swipe", b)
+				var res: String = _hit_entity(e, p.atk_dmg, p.atk_face if p.atk_dir == "f" else 0.0, -1.0 if p.atk_dir == "u" else (1.0 if p.atk_dir == "d" else 0.0), "swipe", b)
 				if res != "":
 					p.on_hit(e, res, b)
 				break
@@ -668,6 +892,8 @@ func interact_combat(p) -> void:
 				continue
 			if q.x + q.r > box.x and q.x - q.r < box.x + box.w and q.y + q.r > box.y and q.y - q.r < box.y + box.h:
 				q.dead = true
+				if mode == "guest":
+					net_projhit.emit(q.id)
 				spark(q.x, q.y, q.col, 6)
 				Audio.sfx("clang")
 				stop(0.03)
@@ -686,7 +912,7 @@ func interact_combat(p) -> void:
 				continue
 			if e.passive:                       # a corpse hurts nobody, but a stomp still finishes it
 				if e.stompable and p.vy > 30.0 and p.prev_bottom <= b.y + minf(8.0, b.h * 0.6):
-					var res4: String = e.hit(maxi(1, e.hp), 0.0, 1.0, "stomp", b)
+					var res4: String = _hit_entity(e, maxi(1, e.hp), 0.0, 1.0, "stomp", b)
 					p.y = b.y - p.h
 					p.bounce(1.0)
 					p.gain_meter()
@@ -697,7 +923,7 @@ func interact_combat(p) -> void:
 				if e.marks.get(p.dash_key, 0) != p.dash_id:
 					e.marks[p.dash_key] = p.dash_id
 					attacker = p
-					var res2: String = e.hit(1, p.dash_dx if p.dash_dx != 0.0 else p.face, 0.0, "dash", b)
+					var res2: String = _hit_entity(e, 1, p.dash_dx if p.dash_dx != 0.0 else p.face, 0.0, "dash", b)
 					if res2 != "":
 						stop(0.05)
 						shake(0.2)
@@ -705,7 +931,7 @@ func interact_combat(p) -> void:
 						p.hurt(e.dmg, b.x + b.w / 2.0)
 
 			elif e.stompable and p.vy > 30.0 and p.prev_bottom <= b.y + minf(8.0, b.h * 0.6):
-				var res3: String = e.hit(maxi(1, e.hp), 0.0, 1.0, "stomp", b)       # a stomp always kills in one hit
+				var res3: String = _hit_entity(e, maxi(1, e.hp), 0.0, 1.0, "stomp", b)       # a stomp always kills in one hit
 				p.y = b.y - p.h
 				p.bounce(1.0)
 				p.gain_meter()
@@ -736,20 +962,22 @@ func interact_goals(p) -> void:
 			sign_now = s
 
 func update_items(dt: float) -> void:
-	var p = player
-	var pcx: float = p.x + p.w / 2.0
-	var pcy: float = p.y + p.h / 2.0
+	var p = player                      # may be null: then the partner picks things up (through the network)
+	var live := players()
 	for it in items:
 		if it.get("dead", false):
 			continue
 		if it.get("loose", false):
 			it.t += dt
-			if it.t > 0.35 and not p.dead:       # drawn to the nearest living Clawd
-				var dx: float = pcx - it.x
-				var dy: float = pcy - it.y
-				var d := maxf(sqrt(dx * dx + dy * dy), 1e-9)
-				if sqrt(dx * dx + dy * dy) == 0.0:
-					d = 1.0
+			if it.t > 0.35 and not live.is_empty():       # drawn to the nearest living Clawd
+				var tg = live[0]
+				for q in live:
+					if Vector2(q.x - it.x, q.y - it.y).length() < Vector2(tg.x - it.x, tg.y - it.y).length():
+						tg = q
+				var dx: float = tg.x + tg.w / 2.0 - it.x
+				var dy: float = tg.y + tg.h / 2.0 - it.y
+				var dd := sqrt(dx * dx + dy * dy)
+				var d := dd if dd != 0.0 else 1.0
 				var pull := minf(700.0, 160.0 + it.t * 500.0)
 				it.vx = Game.damp(it.vx, (dx / d) * pull, 8.0, dt)
 				it.vy = Game.damp(it.vy, (dy / d) * pull, 8.0, dt)
@@ -763,8 +991,11 @@ func update_items(dt: float) -> void:
 			if it.t > 8.0:
 				it.dead = true
 		var r := 11.0 if it.kind == "spark" else 9.0
-		if not p.dead and not p.gone and absf(pcx - it.x) < r + 3 and absf(pcy - it.y) < r and (not it.get("loose", false) or it.t > 0.2):
-			collect(it)
+		if p != null and not p.dead and not p.gone:
+			var pcx: float = p.x + p.w / 2.0
+			var pcy: float = p.y + p.h / 2.0
+			if absf(pcx - it.x) < r + 3 and absf(pcy - it.y) < r and (not it.get("loose", false) or it.t > 0.2):
+				collect(it)
 	if items.size() > 40:
 		var any := false
 		for it in items:
@@ -777,7 +1008,8 @@ func update_items(dt: float) -> void:
 func collect(it: Dictionary) -> void:
 	var p = player
 	it.dead = true
-	if it.has("id"):
+	item_collected.emit(String(it.get("id", "")), String(it.kind))
+	if it.has("id") and not String(it.id).begins_with("L"):
 		got[it.id] = true
 		Game.flags[it.id] = true
 	match it.kind:
@@ -807,10 +1039,11 @@ func collect(it: Dictionary) -> void:
 
 # hostile projectile. kinds: orb, shard
 func shoot(px: float, py: float, pvx: float, pvy: float, o = null) -> Dictionary:
-	var q := {"x": px, "y": py, "vx": pvx, "vy": pvy, "r": 3.0, "kind": "orb", "col": Game.COL.hazard, "life": 4.0, "g": 0.0, "dmg": 1, "tile": true, "cut": true, "t": 0.0, "dead": false}
+	var q := {"id": next_pid, "x": px, "y": py, "vx": pvx, "vy": pvy, "r": 3.0, "kind": "orb", "col": Game.COL.hazard, "life": 4.0, "g": 0.0, "dmg": 1, "tile": true, "cut": true, "t": 0.0, "dead": false}
 	if o != null:
 		for k in o:
 			q[k] = o[k]
+	next_pid += 1
 	projs.append(q)
 	return q
 
@@ -827,17 +1060,21 @@ func update_projs(dt: float) -> void:
 		if q.life <= 0.0 or q.y > ph + 60 or q.x < -60 or q.x > pw + 60:
 			q.dead = true
 			continue
-		if q.tile and grid.solid_at(q.x, q.y):
+		if q.tile and mode != "guest" and grid.solid_at(q.x, q.y):
 			q.dead = true
 			spark(q.x, q.y, q.col, 4)
 			continue
 		for pl in players():
+			if pl.get("is_remote"):
+				continue                         # the partner checks its own body
 			var hb: Dictionary = pl.hurtbox()
 			if not q.get("friendly", false) and not pl.gone and q.x + q.r > hb.x and q.x - q.r < hb.x + hb.w and q.y + q.r > hb.y and q.y - q.r < hb.y + hb.h:
 				if pl.dash_t > 0.0 and Game.dv("dash_iframes"):
 					continue
 				if pl.hurt(q.dmg, q.x) and not q.get("pierce", false):
 					q.dead = true
+					if mode == "guest":
+						net_projhit.emit(q.id)
 					spark(q.x, q.y, q.col, 5)
 					break
 	if projs.size() > 30:

@@ -408,12 +408,37 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 		var col2 := Color(Game.COL.hazard) if int(t * 14.0) % 2 == 1 else Color(Game.COL.hazardHi)
 		ci.draw_rect(Rect2(land.x - 20, FLOOR - 1, 40, 1), col2)
 
+const STATES := ["wait", "idle", "poke", "rain", "sweepPrep", "sweep", "tired", "dangling", "deref", "derefStuck"]
+const MODES := ["orbit", "aim", "fly", "stuck"]
+
 func net_fields() -> Array:
-	return [roundi(hpf * 10.0), phase, ["wait", "idle", "poke", "rain", "sweepPrep", "sweep", "tired", "dangling", "deref", "derefStuck"].find(st), roundi(fade * 100.0)]
+	var rm: Array = []
+	for m in rain_marks:
+		rm.append([roundi(m.x), roundi(m.t * 100.0)])
+	var dm: Array = []
+	for m in dmarks:
+		dm.append([roundi(m.x * 4.0), roundi(m.y * 4.0)])
+	return [roundi(hpf * 10.0), max_hp, phase, STATES.find(st), roundi(fade * 100.0), roundi(cur.x * 4.0), roundi(cur.y * 4.0), roundi(cur.a * 100.0), MODES.find(cur.mode), 1 if jerk_t > 0.0 else 0, dir, 1 if active else 0, rm, dm, roundi(land.x * 4.0), roundi(land.y * 4.0), 1 if dying else 0]
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
 	hp = ceili(hpf)
-	phase = int(f[1])
-	st = ["wait", "idle", "poke", "rain", "sweepPrep", "sweep", "tired", "dangling", "deref", "derefStuck"][clampi(int(f[2]), 0, 9)]
-	fade = f[3] / 100.0
+	max_hp = int(f[1])
+	phase = int(f[2])
+	st = STATES[clampi(int(f[3]), 0, STATES.size() - 1)]
+	fade = f[4] / 100.0
+	cur.x = f[5] / 4.0
+	cur.y = f[6] / 4.0
+	cur.a = f[7] / 100.0
+	cur.mode = MODES[clampi(int(f[8]), 0, MODES.size() - 1)]
+	jerk_t = 0.1 if int(f[9]) == 1 else 0.0
+	dir = int(f[10])
+	active = int(f[11]) == 1
+	rain_marks.clear()
+	for m in f[12]:
+		rain_marks.append({"x": float(m[0]), "t": m[1] / 100.0, "done": false})
+	dmarks.clear()
+	for m in f[13]:
+		dmarks.append(Vector2(m[0] / 4.0, m[1] / 4.0))
+	land = Vector2(f[14] / 4.0, f[15] / 4.0)
+	dying = int(f[16]) == 1

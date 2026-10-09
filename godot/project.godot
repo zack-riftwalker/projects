@@ -10,6 +10,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 Game="*res://src/autoload/game.gd"
 Controls="*res://src/autoload/controls.gd"
 Audio="*res://src/autoload/audio.gd"
+Net="*res://src/autoload/net.gd"
 
 [audio]
 general/default_playback_type.web=0

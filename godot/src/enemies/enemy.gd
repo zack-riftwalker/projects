@@ -31,6 +31,8 @@ var no_hit := false
 var passive := false
 var dashable := true
 var always := false
+var nid := 0                  # network id (co-op)
+var puppet := false           # a guest's copy: it only shows what the host sends
 
 func _init(r: Room, px: float, py: float, ew: float, eh: float) -> void:
 	room = r
@@ -105,11 +107,20 @@ func tick(dt: float) -> void:
 	if stun > 0.0:
 		stun -= dt
 
+# the nearest living player (co-op: the partner counts too)
 func to_player() -> Dictionary:
 	var p = room.player
+	var best := 1e18
+	for q in room.players():
+		var qd: float = Vector2(q.x + 5 - cx, q.y + 5 - cy).length_squared()
+		if qd < best:
+			best = qd
+			p = q
+	if p == null:
+		return {"dx": 0.0, "dy": 0.0, "d": 1e9, "p": null}
 	var dx: float = p.x + 5 - cx
 	var dy: float = p.y + 5 - cy
-	return {"dx": dx, "dy": dy, "d": sqrt(dx * dx + dy * dy)}
+	return {"dx": dx, "dy": dy, "d": sqrt(dx * dx + dy * dy), "p": p}
 
 func update(_dt: float) -> void:
 	pass

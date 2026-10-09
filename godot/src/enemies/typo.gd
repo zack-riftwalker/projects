@@ -32,3 +32,10 @@ func draw_body() -> void:
 	var air := not on_ground
 	var squat := on_ground and wait < 0.18
 	spr("typo_%d" % (1 if air else 0), face < 0.0, 1.15 if squat else 1.0, 0.8 if squat else 1.0)
+
+func net_fields() -> Array:
+	return [roundi(wait * 100.0), 1 if on_ground else 0]
+
+func net_apply(f: Array) -> void:
+	wait = f[0] / 100.0
+	on_ground = int(f[1]) == 1

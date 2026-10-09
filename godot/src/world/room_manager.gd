@@ -22,26 +22,68 @@ func _init(h: Node2D, hd = null) -> void:
 	hud = hd
 
 # ---------------------------------------------------------------- rooms
-func make_room(room_id: String, snap = null, spawn = null) -> Room:
+signal room_built(room: Room)
+signal local_died(room: Room)
+
+var mode := "solo"               # solo | host | guest (co-op)
+
+# builds a room (fresh from its file and the flags). local = false: a room only the partner is in (hidden, no camera)
+func make_room(room_id: String, spawn = null, local := true) -> Room:
 	var r := Room.new()
+	r.mode = mode
 	host.add_child(r)
-	r.load_room(room_id, snap)
-	r.build_nodes(player, spawn)
-	if player == null:
+	r.load_room(room_id)
+	r.build_nodes(player if local else null, spawn, local)
+	if local and player == null:
 		player = r.player
 	r.door_crossed.connect(_on_door_crossed.bind(r))
 	r.restart_requested.connect(func(_s): restart_requested.emit())
 	r.bench_requested.connect(func(i): bench_requested.emit(r, i))
-	Game.flags["room:%s:visited" % room_id] = true
+	r.local_died.connect(func(): local_died.emit(r))
+	rooms[room_id] = r
+	if local:
+		Game.flags["room:%s:visited" % room_id] = true
+	room_built.emit(r)
 	return r
 
-func swap_to(room_id: String, spawn = null, snap = null) -> void:
+# a room for the partner (built if nobody is in it yet)
+func ensure_room(room_id: String) -> Room:
+	if rooms.has(room_id):
+		return rooms[room_id]
+	return make_room(room_id, null, false)
+
+# a room nobody is in any more is dropped (it is rebuilt fresh on the next visit)
+func release_if_empty(r: Room) -> void:
+	if r == null or r == room:
+		return
+	if r.player == null and r.remote_players.is_empty():
+		rooms.erase(r.id)
+		r.queue_free()
+
+# the local player goes to another room (the partner may already be there). rebuild: throw the old copy of the target away first
+func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> void:
 	var old := room
-	room = make_room(room_id, snap, spawn)
-	rooms.clear()
-	rooms[room_id] = room
-	if old != null:
-		old.queue_free()
+	if rebuild and rooms.has(room_id):
+		var dead_room: Room = rooms[room_id]
+		for rp in dead_room.remote_players.duplicate():
+			rp.reparent(host, false)
+		rooms.erase(room_id)
+		if dead_room == old:
+			old = null
+			room = null
+		dead_room.queue_free()
+	var target: Room = rooms.get(room_id)
+	if target == null:
+		target = make_room(room_id, spawn, true)
+	else:
+		target.attach_local(player, spawn)
+		Game.flags["room:%s:visited" % room_id] = true
+	if old != null and old != target:
+		old.detach_local()
+		if old.remote_players.is_empty():
+			rooms.erase(old.id)
+			old.queue_free()
+	room = target
 	room_changed.emit(room)
 	if hud != null:
 		hud.set_room(room)
@@ -63,14 +105,20 @@ func respawn(count_death := true) -> void:
 	if room != null:
 		room.record_loss()
 	if player != null:
+		if player.get_parent() != null:
+			player.get_parent().remove_child(player)
 		player.queue_free()
 	player = null
+	if room != null:
+		room.player = null
 	var rid := String(Game.rooms_meta.start.room)
 	var spawn = null
 	if Game.bench != "" and Game.rooms_meta.rooms.has(Game.bench):
 		rid = Game.bench
 		spawn = Game.bench_spawn(rid)
-	swap_to(rid, spawn)
+	if room != null:
+		room.player = null
+	swap_to(rid, spawn, null, true)
 	Controls.locked = false
 	trans.on = false
 	fade = 0.0
@@ -132,9 +180,12 @@ func tick(dt: float) -> void:
 	if trans.on:
 		_tick_transition(dt)
 		return
+	if room == null:
+		return
 	Controls.poll()
 	Game.play_time += dt
-	room.step(dt)
+	for r in rooms.values():
+		r.step(dt)
 
 func _tick_transition(dt: float) -> void:
 	trans.t += dt

@@ -7,6 +7,8 @@ const H := 216
 var room: Room
 var age := 0.0
 var fade := 0.0
+var notice := ""
+var partner_hp := -1
 
 func set_room(r: Room) -> void:
 	room = r
@@ -71,6 +73,11 @@ func _draw() -> void:
 		PixelText.draw_text(self, room.banner.sub, W / 2.0, 100, Game.COL.hazardHi, {"align": "c", "outline": Game.COL.ink})
 	if room.stats_t > 0.0 and room.stats_line != "":
 		PixelText.draw_text(self, room.stats_line, W / 2.0, H - 34, Game.COL.paper, {"align": "c", "outline": Game.COL.ink})
+	if notice != "":
+		PixelText.draw_text(self, notice, W / 2.0, 22, Game.COL.paper, {"align": "c", "outline": Game.COL.ink})
+	if partner_hp >= 0:
+		for i in range(partner_hp):
+			draw_rect(Rect2(6 + i * 5, 22, 4, 4), Color("#6aa8ff"))
 	# room title tab
 	if age < 3.2:
 		var k := _ease_out(clampf(age / 0.4, 0.0, 1.0)) * (1.0 - _ease_in(clampf((age - 2.7) / 0.5, 0.0, 1.0)))

@@ -27,7 +27,7 @@ func _sees_player() -> bool:
 	var tp := to_player()
 	if absf(tp.dx) > 112.0 or absf(tp.dy) > 48.0:
 		return false
-	var p = room.player
+	var p = tp.p
 	var x0 := cx
 	var y0 := cy
 	var x1: float = p.x + 5

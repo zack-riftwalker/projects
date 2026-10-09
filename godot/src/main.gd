@@ -17,6 +17,7 @@ var pause_menu: PauseMenu
 var bench_menu: BenchMenu
 var touch: TouchControls
 var debug_overlay: DebugOverlay
+var coop: Coop
 var game_rect := Rect2()                # window pixels of the displayed 384x216 picture (after aspect fitting)
 var paused := false
 var demo_frame := -1
@@ -92,12 +93,24 @@ func _ready() -> void:
 		Game.load_save()
 	if Game.demo:
 		Game.tools.bash = true
-	manager.start_game()
+	if Game.net_role != "":
+		coop = Coop.new()
+		coop.name = "Coop"
+		add_child(coop)
+		coop.setup(self)
+	if Game.net_role != "guest":
+		manager.start_game()
+	if Game.scenario != "":
+		var sc = load("res://src/test/coop_scenarios.gd")
+		if sc != null:
+			add_child(sc.new(self))
 	if Game.demo:
 		demo_frame = 0
 	elif Game.selftest:
 		selftest_frame = 0
 		selftest_x0 = room.player.x
+	elif Game.net_role != "":
+		pass
 	elif Game.shot_path != "":
 		if Game.scene == "hud":          # screenshot helper: Clawd next to the first sign, a Bug close by
 			room.player.x = 104.0
@@ -185,8 +198,10 @@ func open_bench(r: Room, i: int) -> void:
 	bench_idx = i
 	bench_menu.open()
 
-func set_paused(v: bool) -> void:
+func set_paused(v: bool, remote := false) -> void:
 	paused = v
+	if not remote and Net.is_active() and Net.is_open:
+		Net.rel("pause", {"on": v})
 	if v:
 		pause_menu.open()
 	else:
@@ -212,8 +227,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and Game.touch_seen:
 		pass
 
+# the guest was told the host is gone
+func on_host_left() -> void:
+	set_paused(false, true)
+	Controls.locked = true
+	print("CLAWD: host left")
+
 func _physics_process(_d: float) -> void:
 	if Game.test_name != "":
+		return
+	if manager.room == null:
 		return
 	if demo_frame >= 0:
 		_demo_step()

@@ -87,6 +87,8 @@ var look_t := 0.0
 var focus_hold := 0.0
 var focus_t := -1.0              # < 0: not focusing
 var focus_ring := 0.0
+var downed := false              # co-op: lying there, the partner can bring Clawd back
+var down_t := -1.0
 
 func _init(r: Room, px: float, py: float) -> void:
 	room = r
@@ -552,6 +554,10 @@ func draw_body() -> void:
 	var px := floori(x + w / 2.0 + 0.5)
 	var py := floori(y + h + 0.5)
 	if dead:
+		if downed:                        # the downed body: flat, with the revive countdown
+			ClawdDraw.draw_clawd(self, px, py, {"alpha": 0.75, "sy": 0.45, "legs": [0, 0, 0, 0], "eyes": "shut", "face": face})
+			if down_t >= 0.0:
+				PixelText.draw_text(self, str(ceili(down_t)), px, py - 16, "#ffffff", {"align": "c", "outline": Game.COL.ink})
 		return
 	if gone:
 		if gone_t < 0.34:                  # pixels knit themselves back together

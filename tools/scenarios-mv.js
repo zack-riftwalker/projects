@@ -1,7 +1,7 @@
 // Godot (Metroidvania test build) scenarios, loaded by coop-harness.js. Nothing here touches the co-op network.
 'use strict';
 module.exports = (S, h) => {
-  const { startServer, get, chromium, R, ROOT } = h;
+  const { startServer, get, chromium, R, ROOT, CODE, sleep } = h;
   const fs = require('fs'), path = require('path'), zlib = require('zlib');
 
   S['mv-serve'] = async () => {
@@ -36,5 +36,31 @@ module.exports = (S, h) => {
       if (errs.length) info.push(errs[0]);
     } finally { await browser.close(); await srv.stop(); }
     return R(!fails.length, info.join(' '));
+  };
+
+  // two browser tabs: the host on 127.0.0.1, the guest on the container's LAN address (an insecure origin, like the friend's phone)
+  S['mv-coop'] = async () => {
+    if (!fs.existsSync(path.join(ROOT, 'public/mv/index.html'))) return R(true, 'skipped: no Godot build in public/mv');
+    const os = require('os');
+    let lan = '127.0.0.1';
+    for (const l of Object.values(os.networkInterfaces())) for (const a of l || []) if (a.family === 'IPv4' && !a.internal) lan = a.address;
+    const srv = await startServer();
+    const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-proxy-server', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+    const res = { host: null, guest: null }, errs = [];
+    try {
+      const open = async (role, url) => {
+        const ctx = await browser.newContext({ viewport: { width: 768, height: 432 } });
+        const page = await ctx.newPage();
+        page.on('pageerror', (e) => errs.push(role + ': ' + e.message));
+        page.on('console', (m) => { const t = m.text(); if (process.env.MV_LOG) console.log(role, t); if (/CLAWD: coop (PASS|FAIL)/.test(t)) res[role] = t; });
+        await page.goto(url);
+      };
+      await open('host', 'http://127.0.0.1:' + srv.port + '/mv/?host&autotest&mute');
+      await sleep(3000);
+      await open('guest', 'http://' + lan + ':' + srv.port + '/mv/?join=' + CODE + '&autotest&mute');
+      for (let i = 0; i < 600 && !(res.host && res.guest); i++) await sleep(100);
+    } finally { await browser.close(); await srv.stop(); }
+    const ok = /PASS/.test(res.host || '') && /PASS/.test(res.guest || '') && !errs.length;
+    return R(ok, 'host=' + res.host + ' guest=' + res.guest + (errs.length ? ' ' + errs[0] : '') + ' lan=' + lan);
   };
 };

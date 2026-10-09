@@ -31,6 +31,9 @@ func load_meta() -> void:
 				var tx := rows[ty].find("C")
 				if tx >= 0:
 					m.benches.append([tx, ty])
+				var px := rows[ty].find("P")
+				if px >= 0:
+					m["start_pos"] = [px * 16 + 3, ty * 16 + 6]
 
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
@@ -146,6 +149,12 @@ var shot_wait := 30
 var full_shot := false
 var build_text := "dev"
 var touch_seen := false
+# co-op (MV2-07): ?host / ?join=<code> on the web, --net=host|guest --port=<p> --code=<c> --scenario=<s> natively
+var net_role := ""
+var net_port := 3000
+var net_code := ""
+var scenario := ""
+var autotest := false
 
 func _ready() -> void:
 	var q := ""
@@ -165,12 +174,20 @@ func _ready() -> void:
 			"test": test_name = v
 			"shot": shot_path = v
 			"demo": demo = true
+			"host": net_role = "host"
+			"join": net_role = "guest"; net_code = v
+			"net": net_role = v
+			"port": net_port = int(v)
+			"code": net_code = v
+			"scenario": scenario = v
+			"autotest": autotest = true
+			"diff": diff = v
 			"scene": scene = v
 			"wait": shot_wait = int(v)
 			"full": full_shot = true
 	if fps30:
 		Engine.max_fps = 30
-	if test_name != "" or selftest or shot_path != "" or demo:
+	if test_name != "" or selftest or shot_path != "" or demo or net_role == "guest" or scenario != "":
 		persist = false
 	if FileAccess.file_exists("res://build.txt"):
 		build_text = FileAccess.get_file_as_string("res://build.txt").strip_edges()

@@ -120,14 +120,7 @@ func net_fields() -> Array:
 
 func net_apply(f: Array) -> void:
 	var s: String = ["idle", "down", "rise"][clampi(int(f[0]), 0, 2)]
-	if s != state:
-		if s == "down" and state == "idle":
-			y += 7.0
-			h = 5.0
-			passive = true
-		elif s == "idle" and state != "idle":
-			y -= 7.0 if h < 12.0 else 0.0
-			h = 12.0
-			passive = false
 	state = s
 	state_t = f[1] / 100.0
+	h = 12.0 if s == "idle" else 5.0
+	passive = s != "idle"
