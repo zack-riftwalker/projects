@@ -101,22 +101,21 @@ func _text() -> String:
 func _draw() -> void:
 	if not Game.debug or last_text == "":
 		return
-	# 2 x the device scale, but never wider than the picture; below the HUD's hp pips and fragment row, on a dark backdrop.
-	# On the title and end screens it sits at the bottom of the picture instead (the menus use the middle)
+	# not on the title / end screens (the numbers keep being measured in the background, so they are complete once the game starts)
 	var main = get_parent()
+	if (main.title != null and main.title.active) or (main.end_screen != null and main.end_screen.active):
+		return
+	# 2 x the device scale, but never wider than the picture; below the HUD's hp pips and fragment row, on a dark backdrop
 	var gr: Rect2 = main.game_rect
-	var on_menu: bool = (main.title != null and main.title.active) or (main.end_screen != null and main.end_screen.active)
 	var lines := last_text.to_upper().split("\n")
 	var wmax := 1
 	for line in lines:
 		wmax = maxi(wmax, PixelText.text_width(line))
 	var sc := clampi(floori((gr.size.x - 12.0) / wmax), 1, maxi(1, roundi(2.0 * DisplayServer.screen_get_scale())))
 	var x0 := gr.position.x + 6.0
+	var y0 := gr.position.y + 26.0 * gr.size.y / 216.0
 	var text_w := wmax * sc
 	var text_h := (10 * lines.size() - 1) * sc
-	var y0 := gr.position.y + 26.0 * gr.size.y / 216.0
-	if on_menu:
-		y0 = gr.end.y - 6.0 * sc - 3.0 - text_h          # the backdrop's bottom edge is 6 x scale above the picture's bottom edge
 	draw_rect(Rect2(x0 - 4.0, y0 - 3.0, text_w + 8.0, text_h + 6.0), Color(0, 0, 0, 0.6))
 	var y := y0
 	for line in lines:
