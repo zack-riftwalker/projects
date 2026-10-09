@@ -1,5 +1,6 @@
 extends Control
-# Main: builds the viewport, fits it to the window, and (for tests) hands control to src/test/run_tests.gd.
+# Main: builds the viewport, fits it to the window, runs the pause menu, the touch layer and the debug overlay,
+# and (for tests) hands control to src/test/run_tests.gd.
 
 const W := 384
 const H := 216
@@ -10,6 +11,13 @@ var screen: TextureRect
 var room: Room
 var hud: Hud
 var hud_layer: CanvasLayer
+var pause_menu: PauseMenu
+var touch: TouchControls
+var debug_overlay: DebugOverlay
+var paused := false
+var demo_frame := -1
+var selftest_frame := -1
+var selftest_x0 := 0.0
 
 func _ready() -> void:
 	game_vp = SubViewport.new()
@@ -30,6 +38,7 @@ func _ready() -> void:
 	screen.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	screen.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	screen.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(screen)
 	resized.connect(_fit)
 	_fit()
@@ -48,17 +57,34 @@ func _ready() -> void:
 	game_vp.add_child(hud_layer)
 	hud = Hud.new()
 	hud_layer.add_child(hud)
+	pause_menu = PauseMenu.new()
+	pause_menu.resume_requested.connect(set_paused.bind(false))
+	pause_menu.restart_requested.connect(func():
+		set_paused(false)
+		start_room(null))
+	hud_layer.add_child(pause_menu)
+	touch = TouchControls.new()
+	touch.name = "Touch"
+	touch.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(touch)
+	debug_overlay = DebugOverlay.new()
+	debug_overlay.name = "Debug"
+	debug_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(debug_overlay)
 	start_room(null)
 	if Game.demo:
 		demo_frame = 0
+	elif Game.selftest:
+		selftest_frame = 0
+		selftest_x0 = room.player.x
 	elif Game.shot_path != "":
-		if Game.scene == "hud":          # screenshot helper: Clawd next to the first sign, a Bug and a Typo close by
+		if Game.scene == "hud":          # screenshot helper: Clawd next to the first sign, a Bug close by
 			room.player.x = 104.0
 			var b := Bug.new(room, 140, 192, false)
 			room.ents.append(b)
 			room.entity_root.add_child(b)
 			room.tokens = 7
-		_shot_after(30)
+		_shot_after(Game.shot_wait)
 
 func start_room(snap) -> void:
 	if room != null:
@@ -68,15 +94,74 @@ func start_room(snap) -> void:
 	room.load_room("R01", snap)
 	room.build_nodes()
 	room.restart_requested.connect(func(sn): start_room(sn))
+	room.auto_step = not paused
 	hud.set_room(room)
 	Audio.music(String(room.def.get("music", "")))
 
-# scripted demo for screenshots: run, jump, dash, swipe (--demo --shot=<prefix>)
-var demo_frame := -1
+func set_paused(v: bool) -> void:
+	paused = v
+	room.auto_step = not v
+	if v:
+		pause_menu.open()
+	else:
+		pause_menu.close()
+
+func _unhandled_input(event: InputEvent) -> void:
+	# a tap on a pause option
+	if paused:
+		var pos := Vector2.ZERO
+		var hit := false
+		if event is InputEventScreenTouch and event.pressed:
+			pos = event.position
+			hit = true
+		elif event is InputEventMouseButton and event.pressed:
+			pos = event.position
+			hit = true
+		if hit:
+			pause_menu.tap((pos - screen.position) * Vector2(W, H) / screen.size)
+	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and Game.touch_seen:
+		pass
 
 func _physics_process(_d: float) -> void:
-	if demo_frame < 0:
+	if Game.test_name != "":
 		return
+	if demo_frame >= 0:
+		_demo_step()
+		return
+	if selftest_frame >= 0:
+		_selftest_step()
+	if paused:
+		Controls.poll()
+		pause_menu.update()
+	elif Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
+		set_paused(true)
+
+# the fixed 180-frame script of ?selftest: run right, jump, dash, swipe
+func _selftest_step() -> void:
+	var f := selftest_frame
+	if f >= 180:
+		return
+	var keys := {"right": true}
+	if f >= 20 and f < 40:
+		keys["jump"] = true
+	if f == 60:
+		keys["dash"] = true
+	if f == 100 or f == 106:
+		keys["attack"] = true
+	Controls.script_input = keys
+	selftest_frame += 1
+	if selftest_frame == 180:
+		Controls.script_input = null
+		Audio.sfx("jump")
+		var moved: float = room.player.x - selftest_x0
+		if moved > 100.0:
+			print("CLAWD: selftest PASS")
+		else:
+			print("CLAWD: selftest FAIL moved only %.1f px" % moved)
+		selftest_frame = -1
+
+# scripted demo for screenshots: run, jump, dash, swipe (--demo --shot=<prefix>)
+func _demo_step() -> void:
 	var f := demo_frame
 	var keys := {}
 	if f < 120:
@@ -102,7 +187,7 @@ func _shot_after(n: int) -> void:
 	for i in range(n):
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
-	var img := game_vp.get_texture().get_image()
+	var img := get_viewport().get_texture().get_image() if Game.full_shot else game_vp.get_texture().get_image()
 	img.save_png(Game.shot_path)
 	print("CLAWD: shot ", Game.shot_path)
 	get_tree().quit()

@@ -283,6 +283,8 @@ func update(dt: float) -> void:
 			sy = 1.32
 			room.dust(x + 5, y + h, 4)
 			Audio.sfx("jump")
+			if Game.debug or Game.selftest:
+				print("CLAWD: jump")
 			if ride != null:
 				vx += ride.dx * 60.0 * 0.6
 		elif wall_coy > 0.0 and dash_t <= 0.0:
