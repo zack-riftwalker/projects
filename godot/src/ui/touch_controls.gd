@@ -60,7 +60,16 @@ func layout() -> void:
 	stick_r = 50.0 * k * kc
 	queue_redraw()
 
+var suspended := false
+
+# the title screen has its own taps: no stick and no buttons there
+func suspend(v: bool) -> void:
+	suspended = v
+	visible = enabled and not v
+
 func _input(event: InputEvent) -> void:
+	if suspended:
+		return
 	if event is InputEventScreenTouch:
 		enable()
 		if event.pressed:

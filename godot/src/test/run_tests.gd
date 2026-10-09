@@ -31,6 +31,7 @@ func run(name: String) -> bool:
 		"doors": return t_doors()
 		"save": return t_save()
 		"crack": return t_crack()
+		"end": return t_end()
 		"null": return t_null()
 		"focus": return t_focus()
 		"guard": return t_guard()
@@ -385,6 +386,30 @@ func t_save() -> bool:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_save.json"))
 	Game.persist = false
 	return report("save", ok, "loaded=%s rested hp=%d token gone=%s tokens=%d at bench=%s died event=%s back on bench full hp=%s deaths=%d" % [loaded, rested_hp, token_gone, Game.tokens, at_bench, died[0], back, Game.deaths])
+
+func t_end() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var m := new_manager()
+	m.swap_to("R08")
+	var room := m.room
+	var p = m.player
+	var ev := [0]
+	m.end_requested.connect(func(): ev[0] += 1)
+	var ok_far := true
+	for f in range(10):
+		Controls.script_input = {"up": f == 4}
+		m.tick(Game.STEP)
+	ok_far = ev[0] == 0                          # not at the door: nothing
+	p.x = room.end_door.x - 5.0
+	p.y = floor_y(room, room.end_door.x, int(room.end_door.y / 16.0) - 1)
+	p.vx = 0.0
+	p.vy = 0.0
+	for f in range(12):
+		Controls.script_input = {"up": f == 6}
+		m.tick(Game.STEP)
+	Controls.script_input = null
+	return report("end", ok_far and ev[0] == 1, "far press ignored=%s, at the door end_requested=%d" % [ok_far, ev[0]])
 
 func t_crack() -> bool:
 	Game.persist = false

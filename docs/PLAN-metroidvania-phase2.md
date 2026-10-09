@@ -38,7 +38,7 @@
 | MV2-05 | FIREWALL GUARD and ZOMBIE PROCESS | Sonnet | done |
 | MV2-06 | NULL v2, arena, reward (bash), fight statistics | Sonnet | done |
 | MV2-07 | co-op: protocol, host with two rooms, guest, summon, revive, reconnect | Sonnet | done |
-| MV2-08 | title screen, menus, sound and music for the slice | Sonnet | todo |
+| MV2-08 | title screen, menus, sound and music for the slice | Sonnet | done |
 | MV2-09 | tests, delivery build, playtest instructions, phase report | Sonnet | todo |
 
 Order: MV2-01 → MV2-09. MV2-07 needs MV2-01…06 finished; do not start it earlier.

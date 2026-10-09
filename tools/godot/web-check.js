@@ -57,7 +57,7 @@ const until = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 
     await a.ctx.close();
     // 3. touch emulation: tap on the jump button, drag the stick right
     for (const [name, vp] of [['landscape', { width: 800, height: 360 }], ['portrait', { width: 360, height: 800 }]]) {
-      a = await boot(browser, `http://127.0.0.1:${PORT}/mv/?debug`, { viewport: vp, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+      a = await boot(browser, `http://127.0.0.1:${PORT}/mv/?debug&play`, { viewport: vp, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
       await until(() => a.logs.some((l) => /CLAWD: ready/.test(l)), 40000);
       await wait(3000);
       const k = Math.max(0.8, Math.min(1.25, Math.min(vp.width, vp.height) / 380));

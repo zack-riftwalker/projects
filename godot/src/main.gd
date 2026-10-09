@@ -18,6 +18,8 @@ var bench_menu: BenchMenu
 var touch: TouchControls
 var debug_overlay: DebugOverlay
 var coop: Coop
+var title: TitleScreen
+var end_screen: EndScreen
 var game_rect := Rect2()                # window pixels of the displayed 384x216 picture (after aspect fitting)
 var paused := false
 var demo_frame := -1
@@ -89,21 +91,16 @@ func _ready() -> void:
 	bench_menu.travel_chosen.connect(func(id): manager.travel(id))
 	manager.room_changed.connect(func(r): hud.set_room(r))
 	pause_menu.manager = manager
-	if Game.persist:
-		Game.load_save()
-	if Game.demo:
-		Game.tools.bash = true
-	if Game.net_role != "":
-		coop = Coop.new()
-		coop.name = "Coop"
-		add_child(coop)
-		coop.setup(self)
-	if Game.net_role != "guest":
-		manager.start_game()
-	if Game.scenario != "":
-		var sc = load("res://src/test/coop_scenarios.gd")
-		if sc != null:
-			add_child(sc.new(self))
+	end_screen = EndScreen.new()
+	end_screen.done.connect(_back_to_title)
+	hud_layer.add_child(end_screen)
+	manager.end_requested.connect(func():
+		if not end_screen.active:
+			end_screen.open())
+	if _wants_title():
+		_open_title()
+		return
+	_begin_game("continue")
 	if Game.demo:
 		demo_frame = 0
 	elif Game.selftest:
@@ -181,6 +178,22 @@ func _ready() -> void:
 				b.pick_aim()
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
+		elif Game.scene in ["title", "settings", "join", "end"]:       # screenshot helpers: the menus
+			_open_title()
+			if Game.scene == "settings":
+				title.page = "settings"
+			elif Game.scene == "join":
+				title.page = "join"
+				title.code = "246"
+				title.sel = 4
+			elif Game.scene == "end":
+				title.close()
+				Game.play_time = 1234.0
+				Game.deaths = 7
+				Game.fragments = 3
+				Game.tokens = 41
+				Game.fights = [{"boss": "NULL", "secs": 72.4, "hits": [41, 22], "dmg_taken": [3, 2], "won": true, "diff": "normal", "coop": true}]
+				end_screen.open()
 		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited
 			for id in Game.rooms_meta.rooms:
 				Game.flags["room:%s:visited" % id] = true
@@ -189,6 +202,84 @@ func _ready() -> void:
 			set_paused(true)
 			pause_menu.page = "map"
 		_shot_after(Game.shot_wait)
+
+
+# the title screen shows up for a plain page load; every URL / test option that names what to do skips it
+func _wants_title() -> bool:
+	return not (Game.play_now or Game.test_name != "" or Game.selftest or Game.shot_path != "" or Game.demo or Game.net_role != "" or Game.scenario != "" or Game.autotest or Game.scene != "")
+
+func _open_title() -> void:
+	title = TitleScreen.new()
+	hud_layer.add_child(title)
+	title.coop = null
+	title.continue_game.connect(func(): _start_from_title("continue"))
+	title.new_game.connect(func(): _start_from_title("new"))
+	title.host_game.connect(func(): _start_from_title("host"))
+	title.join_game.connect(_join_from_title)
+	title.leave_wait.connect(_cancel_join)
+	touch.suspend(true)
+	title.open()
+
+func _start_from_title(kind: String) -> void:
+	title.close()
+	touch.suspend(false)
+	Audio.stop_music()
+	if kind == "host":
+		Game.net_role = "host"
+	_begin_game(kind)
+
+func _join_from_title(code: String) -> void:
+	Game.net_role = "guest"
+	Game.net_code = code
+	Game.persist = false
+	if coop == null:
+		coop = Coop.new()
+		coop.name = "Coop"
+		add_child(coop)
+		Net.fatal.connect(_join_failed)
+		coop.setup(self)
+	else:
+		coop.started = false
+		Net.connect_as("guest", code)
+	title.coop = coop
+
+func _join_failed(why: String) -> void:
+	if title == null or not title.active:
+		return
+	Net.leave()
+	title.fail("cannot join: " + why)
+
+func _cancel_join() -> void:
+	Net.leave()
+
+# the world: a save (or a new game), the co-op link, the first room
+func _begin_game(kind: String) -> void:
+	if kind == "new":
+		Game.new_game()
+		Game.fresh()
+	elif Game.persist and Game.net_role != "guest":
+		Game.load_save()
+		Game.load_settings()          # the settings file wins over the save's copy (and ?diff= over both)
+	if Game.demo:
+		Game.tools.bash = true
+	if Game.net_role != "" and coop == null:
+		coop = Coop.new()
+		coop.name = "Coop"
+		add_child(coop)
+		coop.setup(self)
+	if Game.net_role != "guest":
+		manager.start_game()
+	if Game.scenario != "":
+		var sc = load("res://src/test/coop_scenarios.gd")
+		if sc != null:
+			add_child(sc.new(self))
+
+# end screen -> the title again (a fresh page: simplest way to reset every object)
+func _back_to_title() -> void:
+	Net.leave()
+	Game.net_role = ""
+	Game.play_now = false
+	get_tree().reload_current_scene()
 
 var bench_room: Room
 var bench_idx := 0
@@ -208,6 +299,24 @@ func set_paused(v: bool, remote := false) -> void:
 		pause_menu.close()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if title != null and title.active:
+		title.key_event(event)
+	if title != null and title.active or end_screen != null and end_screen.active:
+		var tp := Vector2.ZERO
+		var th := false
+		if event is InputEventScreenTouch and event.pressed:
+			tp = event.position
+			th = true
+		elif event is InputEventMouseButton and event.pressed:
+			tp = event.position
+			th = true
+		if th:
+			var tg := (tp - screen.position) * Vector2(W, H) / screen.size
+			if end_screen.active:
+				end_screen.tap(tg)
+			else:
+				title.tap(tg)
+		return
 	# a tap on a pause option
 	if paused or bench_menu.active:
 		var pos := Vector2.ZERO
@@ -235,6 +344,18 @@ func on_host_left() -> void:
 
 func _physics_process(_d: float) -> void:
 	if Game.test_name != "":
+		return
+	if title != null and title.active:
+		Controls.poll()
+		title.update()
+		if title.page == "wait" and coop != null and coop.started and manager.room != null:
+			title.close()
+			touch.suspend(false)
+			Audio.stop_music()
+		return
+	if end_screen != null and end_screen.active:
+		Controls.poll()
+		end_screen.update()
 		return
 	if manager.room == null:
 		return

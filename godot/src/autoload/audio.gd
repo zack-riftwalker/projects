@@ -30,7 +30,7 @@ func _ready() -> void:
 	add_child(music_b)
 
 func sfx(sfx_name: String, opts := {}) -> void:
-	if Game.mute or not streams.has(sfx_name):
+	if Game.mute or Game.vol_sfx <= 0 or not streams.has(sfx_name):
 		return
 	var now := Time.get_ticks_msec()
 	if now - int(last_play.get(sfx_name, -1000)) < MIN_GAP_MS:
@@ -39,7 +39,7 @@ func sfx(sfx_name: String, opts := {}) -> void:
 	for p in pool:
 		if not p.playing:
 			p.stream = streams[sfx_name]
-			p.volume_db = linear_to_db(maxf(0.001, float(opts.get("vol", 1.0)))) + duck_db
+			p.volume_db = linear_to_db(maxf(0.001, float(opts.get("vol", 1.0)) * Game.vol_sfx / 10.0)) + duck_db
 			p.play()
 			if first_sfx_msec < 0:
 				first_sfx_msec = now
@@ -65,7 +65,7 @@ func music(music_key: String) -> void:
 	music_a.volume_db = -60.0
 	music_a.play()
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(music_a, "volume_db", linear_to_db(MUSIC_LINEAR) + duck_db, 0.5)
+	tw.tween_property(music_a, "volume_db", _music_db(), 0.5)
 	if music_b.playing:
 		tw.tween_property(music_b, "volume_db", -60.0, 0.5)
 		tw.chain().tween_callback(music_b.stop)
@@ -89,4 +89,12 @@ func stop_music(fade := 0.0) -> void:
 func duck(db: float) -> void:
 	duck_db = db
 	if music_a.playing:
-		music_a.volume_db = linear_to_db(MUSIC_LINEAR) + db
+		music_a.volume_db = _music_db()
+
+func _music_db() -> float:
+	return linear_to_db(maxf(0.0005, MUSIC_LINEAR * Game.vol_music / 10.0)) + duck_db
+
+# settings: the volume slider changed
+func refresh_music_volume() -> void:
+	if music_a.playing:
+		music_a.volume_db = _music_db()

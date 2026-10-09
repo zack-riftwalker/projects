@@ -81,6 +81,7 @@ var stats_t := 0.0
 var end_door = null
 signal door_crossed(door: Dictionary)
 signal bench_requested(index: int)
+signal end_requested
 var got := {}                  # item ids already collected (kept across a death)
 var sparks := [false, false, false]
 var death_t := -1.0
@@ -199,6 +200,9 @@ func update_doors() -> void:
 			open = not fight_active
 		elif lock.begins_with("until:"):
 			open = Game.flag(lock.substr(6))
+		if d.has("was") and d.was != open and time > 0.5:
+			Audio.sfx("gate" if open else "thud")
+		d.was = open
 		d.open = open
 
 func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> void:
@@ -763,18 +767,19 @@ func on_player_hurt(q, d: int) -> void:
 func _start_reward() -> void:
 	fight.state = "reward"
 	fight.t = 3.0
+	Audio.sfx("kill")
 	for q in players():
 		q.frozen = true
-	banner = {"text": "bash", "sub": "dash in any direction · breaks cracked % walls", "t": 3.0}
+	banner = {"text": "bash", "sub": "dash in any direction - breaks cracked % walls", "t": 3.0}
 	Audio.music("toolget")
 	# the fight statistics (to tune boss HP with real numbers)
 	var np: int = 2 if stats.coop else 1
 	var secs: float = maxf(stats.secs, 0.001)
 	var r: float = float(stats.hits[0] + stats.hits[1]) / np / secs
-	stats_line = "NULL %ds · P1 %d hits" % [roundi(secs), stats.hits[0]]
+	stats_line = "NULL %ds - P1 %d hits" % [roundi(secs), stats.hits[0]]
 	if stats.coop:
-		stats_line += " · P2 %d hits" % stats.hits[1]
-	stats_line += " · r %.2f/s · won" % r
+		stats_line += " - P2 %d hits" % stats.hits[1]
+	stats_line += " - r %.2f/s - won" % r
 	stats_t = 5.0
 	Game.fights.append({"boss": "NULL", "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop})
 
@@ -956,6 +961,9 @@ func interact_goals(p) -> void:
 			if absf(p.x + p.w / 2.0 - c.x) < 12 and p.y + p.h > c.y - 34 and p.y < c.y:
 				bench_requested.emit(i)
 				break
+	if end_door != null and Controls.pressed.get("up", false) and p.on_ground:
+		if absf(p.x + p.w / 2.0 - end_door.x) < 14 and absf(p.y + p.h - end_door.y) < 20:
+			end_requested.emit()
 	sign_now = null
 	for s in signs:
 		if absf(p.x + p.w / 2.0 - s.x) < 26 and absf(p.y + p.h - s.y) < 30:

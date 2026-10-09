@@ -8,6 +8,7 @@ const FADE := 0.12
 signal room_changed(room: Room)
 signal restart_requested
 signal bench_requested(room: Room, index: int)
+signal end_requested
 
 var host: Node2D                 # where rooms are added (Main.world)
 var hud                          # Hud (fade overlay), may be null in tests
@@ -39,6 +40,7 @@ func make_room(room_id: String, spawn = null, local := true) -> Room:
 	r.door_crossed.connect(_on_door_crossed.bind(r))
 	r.restart_requested.connect(func(_s): restart_requested.emit())
 	r.bench_requested.connect(func(i): bench_requested.emit(r, i))
+	r.end_requested.connect(func(): end_requested.emit())
 	r.local_died.connect(func(): local_died.emit(r))
 	rooms[room_id] = r
 	if local:

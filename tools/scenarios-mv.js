@@ -63,4 +63,48 @@ module.exports = (S, h) => {
     const ok = /PASS/.test(res.host || '') && /PASS/.test(res.guest || '') && !errs.length;
     return R(ok, 'host=' + res.host + ' guest=' + res.guest + (errs.length ? ' ' + errs[0] : '') + ' lan=' + lan);
   };
+
+  // the title screen with the keyboard: New game starts the world; Join co-op takes the 6 digits and reaches the host
+  S['mv-title'] = async () => {
+    if (!fs.existsSync(path.join(ROOT, 'public/mv/index.html'))) return R(true, 'skipped: no Godot build in public/mv');
+    const os = require('os');
+    let lan = '127.0.0.1';
+    for (const l of Object.values(os.networkInterfaces())) for (const a of l || []) if (a.family === 'IPv4' && !a.internal) lan = a.address;
+    const srv = await startServer();
+    const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-proxy-server', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+    const info = [], fails = [];
+    const chk = (n, ok) => { info.push(n + '=' + (ok ? 'ok' : 'BAD')); if (!ok) fails.push(n); };
+    try {
+      const open = async (url) => {
+        const ctx = await browser.newContext({ viewport: { width: 768, height: 432 } });
+        const page = await ctx.newPage();
+        const lines = [];
+        page.on('console', (m) => lines.push(m.text()));
+        await page.goto(url);
+        for (let i = 0; i < 300 && !lines.some((l) => /CLAWD: ready/.test(l)); i++) await sleep(100);
+        await sleep(1500);
+        return { page, lines };
+      };
+      const solo = await open('http://127.0.0.1:' + srv.port + '/mv/?debug');
+      await solo.page.keyboard.press('Enter');                // the first entry (New game on a fresh profile)
+      await sleep(500);
+      await solo.page.keyboard.down('ArrowRight');
+      for (let i = 0; i < 40 && !solo.lines.some((l) => /CLAWD: x=/.test(l)); i++) await sleep(100);
+      await solo.page.keyboard.up('ArrowRight');
+      chk('new game moves', solo.lines.some((l) => /CLAWD: x=/.test(l)));
+      const host = await open('http://127.0.0.1:' + srv.port + '/mv/?host&debug');
+      await sleep(2000);
+      const guest = await open('http://' + lan + ':' + srv.port + '/mv/?debug');
+      await guest.page.keyboard.press('ArrowDown');           // Join co-op
+      await guest.page.keyboard.press('Enter');
+      await sleep(300);
+      await guest.page.keyboard.type(CODE, { delay: 250 });
+      await guest.page.keyboard.press('Enter');
+      for (let i = 0; i < 200 && !guest.lines.some((l) => /COOP guest: start received/.test(l)); i++) await sleep(100);
+      if (process.env.MV_LOG) { console.log(guest.lines.slice(-15).join('\n')); console.log('--host'); await guest.page.screenshot({ path: process.env.MV_LOG + '.png' }); console.log(host.lines.slice(-10).join('\n')); }
+      chk('join by code', guest.lines.some((l) => /COOP guest: start received/.test(l)));
+      chk('host saw guest', host.lines.some((l) => /COOP host: guest joined/.test(l)));
+    } finally { await browser.close(); await srv.stop(); }
+    return R(!fails.length, info.join(' '));
+  };
 };

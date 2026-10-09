@@ -88,6 +88,8 @@ func _physics_process(dt: float) -> void:
 		notice_t -= dt
 		if notice_t <= 0.0:
 			notice = ""
+	if role == "host" and not guest_here and Net.code != "" and notice_t <= 0.0:
+		notice_set("code %s - waiting for P2" % Net.code, 0.5)
 	if main.hud != null:
 		main.hud.notice = notice
 	if role == "host":
@@ -558,6 +560,7 @@ func _check_summon(r: Room, announce := false) -> void:
 			log_("host: summon sent for %s" % r.id)
 		if not host_in:
 			host_summon = {"room": r.id, "t": 3.0}
+			Audio.sfx("warn")
 			mgr.player.frozen = true
 			mgr.player.inv = maxf(mgr.player.inv, 5.0)
 
@@ -571,7 +574,7 @@ func _host_summon_logic(dt: float) -> void:
 	if host_summon.is_empty():
 		return
 	host_summon.t -= dt
-	notice_set("Partner fights NULL — joining in %d…" % maxi(1, ceili(host_summon.t)), 1.0)
+	notice_set("Partner fights NULL — joining in %d..." % maxi(1, ceili(host_summon.t)), 1.0)
 	if host_summon.t <= -1.0 or (host_summon.t <= 0.0 and mgr.player.on_ground):
 		var rid: String = host_summon.room
 		host_summon = {}
@@ -651,7 +654,7 @@ func _on_host(on: bool, lag: bool, _resume: bool) -> void:
 func _on_line_lost() -> void:
 	line_down = true
 	if role == "guest":
-		notice_set("reconnecting…", 15.0)
+		notice_set("reconnecting...", 15.0)
 	log_("%s: line lost" % role)
 
 func _guest_msg(t: String, m: Dictionary) -> void:
@@ -901,6 +904,7 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				log_("guest: respawned in %s" % rid)
 		"summon":
 			guest_summon = {"room": String(d.room), "t": float(d.warn)}
+			Audio.sfx("warn")
 			if p != null:
 				p.frozen = true
 				p.inv = maxf(p.inv, 5.0)
@@ -964,7 +968,7 @@ func _guest_summon_logic(dt: float) -> void:
 		return
 	var p = mgr.player
 	guest_summon.t -= dt
-	notice_set("Partner fights NULL — joining in %d…" % maxi(1, ceili(guest_summon.t)), 1.0)
+	notice_set("Partner fights NULL — joining in %d..." % maxi(1, ceili(guest_summon.t)), 1.0)
 	if guest_summon.t <= -1.0 or (guest_summon.t <= 0.0 and p.on_ground):
 		var rid: String = guest_summon.room
 		guest_summon = {}

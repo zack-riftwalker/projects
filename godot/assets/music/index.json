@@ -3,5 +3,30 @@
   "len": 47.273,
   "loop_start": 3.636,
   "once": false
+ },
+ "boss": {
+  "len": 36,
+  "loop_start": 0,
+  "once": false
+ },
+ "boss_hi": {
+  "len": 36,
+  "loop_start": 0,
+  "once": false
+ },
+ "toolget": {
+  "len": 5.455,
+  "loop_start": 0,
+  "once": true
+ },
+ "title": {
+  "len": 86.4,
+  "loop_start": 9.6,
+  "once": false
+ },
+ "clear": {
+  "len": 4.8,
+  "loop_start": 0,
+  "once": true
  }
 }

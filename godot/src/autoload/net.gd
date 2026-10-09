@@ -58,6 +58,8 @@ func connect_as(r: String, c := "") -> void:
 	token = ""
 	gave_up = false
 	closing = false
+	retry_at = -1.0
+	retry_n = 0
 	base_url = _base()
 	rel_next = 1
 	rel_out.clear()

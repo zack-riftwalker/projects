@@ -67,6 +67,10 @@ func scale_enemy(e) -> void:
 # ---- the save (user://save.json; on the web this is IndexedDB, it survives reloads) ----
 var persist := true                 # false in tests, selftest and screenshot runs
 var save_path := "user://save.json"
+var settings_path := "user://settings.json"
+var vol_music := 10                 # 0..10 (settings)
+var vol_sfx := 10
+var diff_from_url := false
 var bench := ""                     # the room whose bench is the respawn point ("" = the start)
 var tokens := 0
 var fragments := 0
@@ -85,6 +89,36 @@ func fresh() -> void:
 	play_time = 0.0
 	deaths = 0
 	fights = []
+
+# settings live in their own file so the guest (who has no save) keeps them too
+func load_settings() -> void:
+	if not FileAccess.file_exists(settings_path):
+		return
+	var d = JSON.parse_string(FileAccess.get_file_as_string(settings_path))
+	if typeof(d) != TYPE_DICTIONARY:
+		return
+	if not diff_from_url and DIFF.has(String(d.get("diff", ""))):
+		diff = String(d.diff)
+	coop_hp_pct = clampi(int(d.get("coop_hp_pct", coop_hp_pct)), 25, 100)
+	vol_music = clampi(int(d.get("vol_music", vol_music)), 0, 10)
+	vol_sfx = clampi(int(d.get("vol_sfx", vol_sfx)), 0, 10)
+	if d.get("fps30", false):
+		fps30 = true
+		Engine.max_fps = 30
+
+func save_settings() -> void:
+	if not persist:
+		return
+	var f := FileAccess.open(settings_path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"diff": diff, "coop_hp_pct": coop_hp_pct, "vol_music": vol_music, "vol_sfx": vol_sfx, "fps30": fps30}))
+
+# Host co-op needs the PC server: only on localhost (the relay refuses other hosts), or natively with --net=host
+func host_allowed() -> bool:
+	if OS.has_feature("web"):
+		var h := str(JavaScriptBridge.eval("location.hostname"))
+		return h == "localhost" or h == "127.0.0.1"
+	return net_role == "host"
 
 func save_exists() -> bool:
 	return FileAccess.file_exists(save_path)
@@ -155,6 +189,7 @@ var net_port := 3000
 var net_code := ""
 var scenario := ""
 var autotest := false
+var play_now := false               # ?play: no title screen
 
 func _ready() -> void:
 	var q := ""
@@ -181,7 +216,8 @@ func _ready() -> void:
 			"code": net_code = v
 			"scenario": scenario = v
 			"autotest": autotest = true
-			"diff": diff = v
+			"play": play_now = true
+			"diff": diff = v; diff_from_url = true
 			"scene": scene = v
 			"wait": shot_wait = int(v)
 			"full": full_shot = true
@@ -189,6 +225,8 @@ func _ready() -> void:
 		Engine.max_fps = 30
 	if test_name != "" or selftest or shot_path != "" or demo or net_role == "guest" or scenario != "":
 		persist = false
+	if persist:
+		load_settings()
 	if FileAccess.file_exists("res://build.txt"):
 		build_text = FileAccess.get_file_as_string("res://build.txt").strip_edges()
 
