@@ -254,13 +254,14 @@ func sc_co_crack() -> Array:
 	return [ok2 and left2.call() == 0 and flags2 == 33, "guest: cracked tiles left %d, confirmed flags %d (x %.0f y %.0f bash %s dash_id %d)" % [left2.call(), flags2, p.x, p.y, str(p.tools.get("bash")), p.dash_id]]
 
 func sc_co_resume() -> Array:
+	var seen: Array = []
+	if role == "host":
+		Net.reliable.connect(func(k, d): if k == "testseq": seen.append(int(d.n)))      # before anyone joins: event 0 must not be missed
 	if not await wait_joined():
 		return [false, "nobody joined"]
-	var seen: Array = []
 	if role == "host":
 		var rp = coop().remote
 		var id0 := rp.get_instance_id()
-		Net.reliable.connect(func(k, d): if k == "testseq": seen.append(int(d.n)))
 		await wait_until(func(): return seen.size() >= 20, 25.0)
 		var same: bool = coop().remote != null and coop().remote.get_instance_id() == id0 and coop().guest_here
 		var in_order := true
@@ -278,6 +279,8 @@ func sc_co_resume() -> Array:
 			Net.ws.close(4000, "test")             # the line dies without a clean leave
 		await wait_secs(0.25)
 	var back := await wait_until(func(): return Net.is_open and not coop().line_down, 15.0)
+	await wait_until(func(): return Net.rel_out.is_empty(), 8.0)       # the host must have every event before this process leaves
+	await wait_secs(0.5)
 	var same: bool = mgr().player != null and mgr().player.get_instance_id() == pid and mgr().room.id == room_id
 	return [back and same, "back on the line %s, same body and room %s" % [back, same]]
 

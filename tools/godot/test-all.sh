@@ -11,7 +11,7 @@ run() { local name=$1; shift; if "$@" > "$TMP/$name.log" 2>&1; then rec "$name" 
 
 run smoke bash tools/godot/smoke.sh
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
-for t in tiles jump combat hurt soak; do
+for t in tiles jump combat hurt soak rooms doors save crack platform focus dashhurt guard zombie null end; do
   timeout 180 "$GODOT" --headless --path godot -- --test=$t > "$TMP/$t.log" 2>&1
   if grep -q "^TEST $t PASS" "$TMP/$t.log" && ! grep -q "SCRIPT ERROR" "$TMP/$t.log"; then rec "test-$t" PASS; else rec "test-$t" FAIL; echo "---- $t ----"; tail -20 "$TMP/$t.log"; fi
 done
@@ -24,7 +24,8 @@ done
 run export bash tools/godot/export-web.sh
 run web-check node tools/godot/web-check.js
 cat "$TMP/web-check.log" 2>/dev/null | grep -E "^(PASS|FAIL)" | sed 's/^/    /'
-run relay node tools/coop-harness.js mv-serve cache
+run relay node tools/coop-harness.js mv-serve mv-coop mv-title cache
+run coop bash tools/godot/coop-test.sh all
 
 echo
 echo "================ summary ================"
