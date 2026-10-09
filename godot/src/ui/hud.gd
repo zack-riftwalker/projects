@@ -36,8 +36,12 @@ func _draw() -> void:
 	var tw := PixelText.text_width(tk)
 	Gfx.spr_at(self, "token_0", W - 20 - tw, hud_y - 1)
 	PixelText.draw_text(self, tk, W - 8, hud_y, Game.COL.paper, {"align": "r", "outline": Game.COL.ink})
-	for i in range(3):
-		Gfx.spr_at(self, "sparkSm_%d" % (0 if room.sparks[i] else 2), W - 37 + i * 10, hud_y + 10)
+	# memory fragments: a small square of 4 segments next to the pips
+	var fx_: int = 6 + p.max_hp * 9 + 2
+	draw_rect(Rect2(fx_, hud_y, 8, 8), Color(Game.COL.ink))
+	var filled := Game.fragments % 4
+	for q in range(4):
+		draw_rect(Rect2(fx_ + 1 + (q % 2) * 3, hud_y + 1 + (q / 2) * 3, 2, 2), Color(Game.COL.clawdHi) if q < filled else Color("#3a3346"))
 	# room title tab
 	if age < 3.2:
 		var k := _ease_out(clampf(age / 0.4, 0.0, 1.0)) * (1.0 - _ease_in(clampf((age - 2.7) / 0.5, 0.0, 1.0)))

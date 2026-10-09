@@ -615,14 +615,19 @@ func collect(it: Dictionary) -> void:
 				heal(p, 1)
 				pop(p.x + 5, p.y - 12, "25 tokens: +1", Game.COL.goldHi, true)
 				Audio.sfx("heal")
-		"spark":
-			sparks[it.idx] = true
+		"spark":                            # a memory fragment: 4 of them give +1 max hp
+			Game.fragments += 1
 			ring(it.x, it.y, 2, 30, Game.COL.clawdHi, 0.5)
 			burst(it.x, it.y, 18, [Game.COL.clawd, Game.COL.clawdHi, "#fff3e4"], 130.0, 60.0, {"glow": 1})
-			pop(it.x, it.y - 12, "spark" if it.ghost else "✳ spark found!", "#fff3e4", true)
+			pop(it.x, it.y - 12, "memory chip ✳ %d/4" % ((Game.fragments - 1) % 4 + 1), "#fff3e4", true)
 			stop(0.07)
 			Audio.sfx("spark")
-			p.add_meter(25)
+			if Game.fragments % 4 == 0:
+				Game.max_hp += 1
+				p.max_hp = Game.max_hp
+				p.hp = p.max_hp
+				pop(it.x, it.y - 26, "+1 max hp", Game.COL.okHi, true)
+			Game.write_save()
 			events.append("spark")
 		"coffee":
 			if p.hp < p.max_hp:
@@ -645,6 +650,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 			var gx := 0 if d.side == "W" else pw - T
 			for ty in range(d.a, d.b + 1):
 				ci.draw_texture_rect_region(gate, Rect2(gx, ty * T, T, T), Rect2(7, 12, 16, 16))
+		for m in plats:
+			ci.draw_texture(Gfx.tex("platform_48"), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
 		for c in cps:
 			ci.draw_texture(Gfx.tex("checkpoint_%d" % (1 if c.on else 0)), Vector2(c.x - 8, c.y - 28))
 		for s in signs:

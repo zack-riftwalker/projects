@@ -50,6 +50,8 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
       const out = {};
       const walk = (o, p) => { for (const k of Object.keys(o)) { const v = o[k], pp = p ? p + '_' + k : k; if (v instanceof HTMLCanvasElement) out[pp] = { w: v.width, h: v.height, d: v.toDataURL('image/png').split(',')[1] }; else if (v && typeof v === 'object') walk(v, pp); } };
       walk(G.SPR, '');
+      const ps = G.platformSprite(1);        // the moving platform of world 1 is built on demand
+      out.platform_48 = { w: ps.width, h: ps.height, d: ps.toDataURL('image/png').split(',')[1] };
       return out;
     });
     const idx = {};

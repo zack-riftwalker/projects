@@ -30,6 +30,8 @@ func run(name: String) -> bool:
 		"rooms": return t_rooms()
 		"doors": return t_doors()
 		"save": return t_save()
+		"crack": return t_crack()
+		"platform": return t_platform()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -378,3 +380,71 @@ func t_save() -> bool:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_save.json"))
 	Game.persist = false
 	return report("save", ok, "loaded=%s rested hp=%d token gone=%s tokens=%d at bench=%s died event=%s back on bench full hp=%s deaths=%d" % [loaded, rested_hp, token_gone, Game.tokens, at_bench, died[0], back, Game.deaths])
+
+func t_crack() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	Game.tools.bash = true
+	var m := new_manager()
+	m.swap_to("R07")
+	var room := m.room
+	var p = m.player
+	var before := 0
+	for ty in range(2, 13):
+		for tx in range(37, 40):
+			if room.grid.tile(tx, ty) == TileGrid.CRACK:
+				before += 1
+	p.x = 33.0 * 16.0
+	p.y = floor_y(room, p.x + 5, 9)
+	p.vx = 0.0
+	p.vy = 0.0
+	p.on_ground = true
+	var n := 0
+	for f in range(90):
+		var keys := {"right": true}
+		if f == 2:
+			keys["dash"] = true
+		Controls.script_input = keys
+		m.tick(Game.STEP)
+		n += 1
+	var left := 0
+	var flagged := 0
+	for ty in range(2, 13):
+		for tx in range(37, 40):
+			if room.grid.tile(tx, ty) == TileGrid.CRACK:
+				left += 1
+			if Game.flag("crack:R07:%d:%d" % [tx, ty]):
+				flagged += 1
+	Controls.script_input = null
+	Game.tools.bash = false
+	return report("crack", before == 33 and left == 0 and flagged == 33, "cracked tiles before=%d left after 1.5 s=%d flags=%d" % [before, left, flagged])
+
+func t_platform() -> bool:
+	var room := new_room("R02")
+	var plat = null
+	for pl in room.plats:
+		if pl.ax:
+			plat = pl
+			break
+	if plat == null:
+		return report("platform", false, "R02 has no horizontal platform")
+	var p = room.player
+	step_with(room, {})                 # the platforms jump to their phase on the first step
+	p.x = plat.x + 20.0
+	p.y = plat.y - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	p.on_ground = true
+	var start_x: float = p.x
+	var worst := 0.0
+	var fell := false
+	for f in range(240):
+		step_with(room, {})
+		var gap := absf((p.y + p.h) - plat.y)
+		worst = maxf(worst, gap)
+		if gap > 3.0 or not p.on_ground:
+			fell = true
+			break
+	var moved := absf(p.x - start_x)
+	Controls.script_input = null
+	return report("platform", not fell and moved > 8.0, "4 s on the platform: max gap %.2f px, moved %.1f px with it, fell=%s" % [worst, moved, fell])

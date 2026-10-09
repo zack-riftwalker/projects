@@ -106,6 +106,7 @@ func _ready() -> void:
 			room.ents.append(b)
 			room.entity_root.add_child(b)
 			room.tokens = 7
+			Game.fragments = 2
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
 		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited
