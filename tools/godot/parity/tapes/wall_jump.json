@@ -1,0 +1,2 @@
+{ "room": "1-1", "start": [2355, 198], "tools": { "bash": true }, "frames": 120,
+  "input": [[0, 10, ["jump"]], [0, 40, ["right"]], [20, 24, ["jump"]], [30, 60, ["left"]], [34, 38, ["jump"]]] }

@@ -18,6 +18,7 @@ var paused := false
 var demo_frame := -1
 var selftest_frame := -1
 var selftest_x0 := 0.0
+var last_logged_x := 0.0
 
 func _ready() -> void:
 	game_vp = SubViewport.new()
@@ -130,6 +131,9 @@ func _physics_process(_d: float) -> void:
 		return
 	if selftest_frame >= 0:
 		_selftest_step()
+	if Game.debug and room != null and room.player != null and absf(room.player.x - last_logged_x) > 8.0:
+		last_logged_x = room.player.x
+		print("CLAWD: x=%d" % int(last_logged_x))          # lets the touch test see that the stick moved Clawd
 	if paused:
 		Controls.poll()
 		pause_menu.update()

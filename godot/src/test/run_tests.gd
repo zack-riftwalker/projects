@@ -20,11 +20,14 @@ func new_room(room_id := "R01") -> Room:
 	return room
 
 func run(name: String) -> bool:
+	if name.begins_with("tape:"):
+		return t_tape(name.substr(5))
 	match name:
 		"tiles": return t_tiles()
 		"jump": return t_jump()
 		"combat": return t_combat()
 		"hurt": return t_hurt()
+		"soak": return t_soak()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -187,3 +190,65 @@ func t_hurt() -> bool:
 	var ok: bool = hp1 == 4 and absf(inv1 - 1.3) < 0.05 and p.hp == 4
 	Controls.script_input = null
 	return report("hurt", ok, "hp after first touch=%d inv=%.3f hp after 1 s of touching=%d" % [hp1, inv1, p.hp])
+
+# plays a tape (same format as tools/godot/parity/tapes/*.json) and prints frame,x,y,vx,vy,onGround like js-trace.js
+func t_tape(path: String) -> bool:
+	var tape: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var room_ids := {"1-1": "R01"}
+	var room := new_room(room_ids[tape.room])
+	clear_ents(room)
+	for k in tape.tools:
+		Game.tools[k] = tape.tools[k]
+	var p = room.player
+	# the JS game has already run its first frames when the tape starts: Clawd stands on the ground. Same here.
+	for i in range(60):
+		step_with(room, {})
+	if tape.start != null:
+		p.x = float(tape.start[0])
+		p.y = float(tape.start[1])
+		p.vx = 0.0
+		p.vy = 0.0
+	for f in range(int(tape.frames)):
+		var keys := {}
+		for seg in tape.input:
+			if f >= int(seg[0]) and f <= int(seg[1]):
+				for a in seg[2]:
+					keys[a] = true
+		step_with(room, keys)
+		print("%d,%.6f,%.6f,%.6f,%.6f,%d" % [f, p.x, p.y, p.vx, p.vy, 1 if p.on_ground else 0])
+	Controls.script_input = null
+	return true
+
+# 3600 frames of seeded random input in R01 with its enemies: no script errors, the player stays inside the room
+func t_soak() -> bool:
+	var room := new_room()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var keys := {}
+	var p = room.player
+	var min_x := 1e9
+	var max_x := -1e9
+	var ok := true
+	var why := ""
+	for f in range(3600):
+		if f % 15 == 0:
+			keys = {}
+			for a in ["left", "right", "up", "down", "jump", "attack", "dash"]:
+				if rng.randf() < (0.45 if a == "right" else 0.25):
+					keys[a] = true
+		step_with(room, keys)
+		if p.dead:
+			room.events.clear()
+			room.death_t = -1.0
+			p.dead = false
+			p.hp = p.max_hp
+			p.x = room.start.x
+			p.y = room.start.y
+		min_x = minf(min_x, p.x)
+		max_x = maxf(max_x, p.x)
+		if p.x < -1.0 or p.x > room.pw + 1.0 or p.y > room.ph + 40.0 or is_nan(p.x) or is_nan(p.y):
+			ok = false
+			why = " out of bounds at frame %d x=%.1f y=%.1f" % [f, p.x, p.y]
+			break
+	Controls.script_input = null
+	return report("soak", ok, "3600 frames, x %.0f..%.0f, kills=%d hits=%d tokens=%d%s" % [min_x, max_x, room.kills, room.hits, room.tokens, why])
