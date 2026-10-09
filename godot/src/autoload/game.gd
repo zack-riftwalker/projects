@@ -35,14 +35,39 @@ func load_meta() -> void:
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
+# ---- difficulty (docs/metroidvania/05-difficulty-model.md, changes from 00-decisions.md §11) ----
+const DIFF := {
+	"easy":      {"start_hp": 7, "big_hit": 1, "boss_hp_mult": 0.7, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 16, "telegraph_mult": 1.3, "punish_mult": 1.3, "inv_after_hit": 1.6, "dash_iframes": true},
+	"normal":    {"start_hp": 5, "big_hit": 2, "boss_hp_mult": 1.0, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 11, "telegraph_mult": 1.0, "punish_mult": 1.0, "inv_after_hit": 1.3, "dash_iframes": false},
+	"hard":      {"start_hp": 5, "big_hit": 2, "boss_hp_mult": 1.3, "enemy_hp_mult": 1.0, "enemy_hp_extra": 1, "meter_per_hit": 11, "telegraph_mult": 1.0, "punish_mult": 1.0, "inv_after_hit": 1.3, "dash_iframes": false},
+	"nightmare": {"start_hp": 3, "big_hit": 2, "boss_hp_mult": 1.6, "enemy_hp_mult": 1.5, "enemy_hp_extra": 2, "meter_per_hit": 8, "telegraph_mult": 1.0, "punish_mult": 0.9, "inv_after_hit": 1.0, "dash_iframes": false},
+}
+const FOCUS_COST := 33
+const FOCUS_HOLD := 0.25       # hold [special] this long before focus starts
+const FOCUS_TIME := 0.9
+const METER_MAX := 99
+
+func dv(key: String):
+	return DIFF[diff][key]
+
+# max hp = the start value of the difficulty + one per 4 memory fragments
+var max_hp: int:
+	get: return int(DIFF[diff].start_hp) + fragments / 4
+
+# js/diff.js scale() with the numbers of the table above: every creature once
+func scale_enemy(e) -> void:
+	var base: int = e.hp
+	e.hp = ceili(base * float(dv("enemy_hp_mult")) - 1e-9) + int(dv("enemy_hp_extra"))
+	if e.loot > 0 and base > 0:
+		e.loot = roundi(e.loot * float(e.hp) / base)         # tougher creatures drop more tokens
+
 # ---- the save (user://save.json; on the web this is IndexedDB, it survives reloads) ----
 var persist := true                 # false in tests, selftest and screenshot runs
 var save_path := "user://save.json"
 var bench := ""                     # the room whose bench is the respawn point ("" = the start)
 var tokens := 0
-var max_hp := 5
 var fragments := 0
-var diff := "normal"
+var diff := "normal"               # easy | normal | hard | nightmare
 var coop_hp_pct := 50
 var play_time := 0.0
 var deaths := 0
@@ -53,7 +78,6 @@ func fresh() -> void:
 	tools = {"bash": false, "sudo": false, "agents": false, "opus": false}
 	bench = ""
 	tokens = 0
-	max_hp = 5
 	fragments = 0
 	play_time = 0.0
 	deaths = 0
@@ -88,7 +112,6 @@ func load_save() -> bool:
 		tools[k] = d.tools[k]
 	bench = String(d.get("bench", ""))
 	tokens = int(d.get("tokens", 0))
-	max_hp = int(d.get("max_hp", 5))
 	fragments = int(d.get("fragments", 0))
 	diff = String(d.get("diff", "normal"))
 	coop_hp_pct = int(d.get("coop_hp_pct", 50))

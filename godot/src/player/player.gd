@@ -84,6 +84,9 @@ var agents: Array = []
 var grace := 0.0
 var frozen := false
 var look_t := 0.0
+var focus_hold := 0.0
+var focus_t := -1.0              # < 0: not focusing
+var focus_ring := 0.0
 
 func _init(r: Room, px: float, py: float) -> void:
 	room = r
@@ -111,10 +114,9 @@ func set_safe(sx_: float, sy_: float) -> void:
 	safe.x = sx_
 	safe.y = sy_
 
-func add_meter(n: float) -> void:
-	if not tools.agents or agents.size() > 0:
-		return
-	meter = minf(100.0, meter + n)
+# the context meter (0-99): every landed claw hit and stomp fills it, focus spends it
+func gain_meter() -> void:
+	meter = minf(float(Game.METER_MAX), meter + float(Game.dv("meter_per_hit")))
 
 func update(dt: float) -> void:
 	var grid := room.grid
@@ -153,6 +155,36 @@ func update(dt: float) -> void:
 	if ride != null:
 		grid.move_x(self, ride.dx)
 		y = ride.y - h
+
+	# --- focus: hold [special] on the ground to turn context into hit points (rooted while it runs) ---
+	var can_focus: bool = down.get("special", false) and on_ground and atk_t <= 0.0 and dash_t <= 0.0 and hurt_t <= 0.0 and hp < max_hp and meter >= Game.FOCUS_COST and not frozen
+	if can_focus:
+		focus_hold += dt
+		if focus_hold >= Game.FOCUS_HOLD:
+			if focus_t < 0.0:
+				focus_t = 0.0
+				focus_ring = 0.0
+				Audio.sfx("charge")
+			focus_t += dt
+			focus_ring += dt
+			if focus_ring >= 0.3:
+				focus_ring = 0.0
+				room.ring(x + 5, y + 5, 14, 3, Game.COL.okHi, 0.3)
+			if focus_t >= Game.FOCUS_TIME:
+				hp = mini(max_hp, hp + 1)
+				meter -= Game.FOCUS_COST
+				Audio.sfx("heal")
+				room.burst(x + 5, y + 5, 8, [Game.COL.ok, Game.COL.okHi, "#ffffff"], 70.0, 100.0)
+				room.pop(x + 5, y - 12, "+1", Game.COL.okHi)
+				focus_t = -1.0
+				focus_hold = Game.FOCUS_HOLD          # the next focus starts at once if it is still possible
+	else:
+		focus_hold = 0.0
+		focus_t = -1.0
+	if focus_t >= 0.0:
+		down = {}
+		pressed = {}
+		vx = 0.0
 
 	var mx := (1.0 if down.get("right", false) else 0.0) - (1.0 if down.get("left", false) else 0.0)
 	var my := (1.0 if down.get("down", false) else 0.0) - (1.0 if down.get("up", false) else 0.0)
@@ -411,7 +443,7 @@ func on_hit(e, res: String, b) -> void:
 		room.spark(hx, hy, "#fff3e4", 6)
 		if atk_dir == "f" and not on_ground:
 			vx -= atk_face * 50.0
-		add_meter(4)
+		gain_meter()
 	if atk_dir == "d":
 		bounce(1.0)
 
@@ -449,11 +481,11 @@ func scatter(vx0: float, vy0: float) -> void:
 		room.part(bx + q.x, by + q.y, q.x * room.rng.randf_range(8, 22) + vx0, q.y * room.rng.randf_range(6, 16) - 60 + vy0, room.rng.randf_range(0.6, 1.1), 1, Game.COL.clawdHi if room.rng.randf() < 0.15 else Game.COL.clawd, 520.0, {"bounce": true, "keep": true})
 
 func hurt(d: int, src_x: float) -> bool:
-	if inv > 0.0 or dash_t > 0.0 or dead or gone:
+	if inv > 0.0 or (dash_t > 0.0 and Game.dv("dash_iframes")) or dead or gone:
 		return false
 	hp -= d
 	room.hits += 1
-	inv = 1.3
+	inv = float(Game.dv("inv_after_hit"))
 	hurt_t = 0.22
 	jumping = false
 	vx = (-1.0 if x + 5 < src_x else 1.0) * 150.0

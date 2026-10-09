@@ -31,6 +31,8 @@ func run(name: String) -> bool:
 		"doors": return t_doors()
 		"save": return t_save()
 		"crack": return t_crack()
+		"focus": return t_focus()
+		"dashhurt": return t_dashhurt()
 		"platform": return t_platform()
 	return report(name, false, "unknown test")
 
@@ -448,3 +450,56 @@ func t_platform() -> bool:
 	var moved := absf(p.x - start_x)
 	Controls.script_input = null
 	return report("platform", not fell and moved > 8.0, "4 s on the platform: max gap %.2f px, moved %.1f px with it, fell=%s" % [worst, moved, fell])
+
+func t_focus() -> bool:
+	Game.diff = "normal"
+	var room := new_room()
+	clear_ents(room)
+	var p = room.player
+	for i in range(30):
+		step_with(room, {})
+	p.hp = 3
+	p.meter = 40.0
+	for f in range(72):                       # hold [special] for 1.2 s
+		step_with(room, {"special": true})
+	var hp1: int = p.hp
+	var meter1: float = p.meter
+	# a short press does nothing
+	p.hp = 3
+	p.meter = 40.0
+	p.focus_hold = 0.0
+	for f in range(12):                       # 0.2 s
+		step_with(room, {"special": true})
+	for f in range(10):
+		step_with(room, {})
+	var short_ok: bool = p.hp == 3 and absf(p.meter - 40.0) < 0.01
+	Controls.script_input = null
+	return report("focus", hp1 == 4 and absf(meter1 - 7.0) < 0.01 and short_ok, "hold 1.2 s: hp %d meter %.1f | hold 0.2 s: hp %d meter %.1f" % [hp1, meter1, p.hp, p.meter])
+
+func dash_into_bug(diff_name: String) -> Array:
+	Game.diff = diff_name
+	Game.tools.bash = true
+	var room := new_room()
+	clear_ents(room)
+	room.cam.x = 0.0
+	var p = room.player
+	for i in range(30):
+		step_with(room, {})
+	var b := add_bug(room, p.x + p.w + 20.0, 199, -1)
+	b.hp = 3
+	b.speed = 0.0
+	b.kb = 0.0                      # it stays put, so the dash carries Clawd clean through it
+	var hp0: int = p.hp
+	for f in range(20):
+		step_with(room, {"right": true, "dash": f == 1})
+	var out := [b.hp, hp0, p.hp]
+	Controls.script_input = null
+	Game.tools.bash = false
+	return out
+
+func t_dashhurt() -> bool:
+	var n := dash_into_bug("normal")
+	var e := dash_into_bug("easy")
+	Game.diff = "normal"
+	var ok: bool = n[0] == 2 and n[2] == n[1] - 1 and e[0] == 2 and e[2] == e[1]
+	return report("dashhurt", ok, "normal: bug hp %d, player %d -> %d | easy: bug hp %d, player %d -> %d" % [n[0], n[1], n[2], e[0], e[1], e[2]])

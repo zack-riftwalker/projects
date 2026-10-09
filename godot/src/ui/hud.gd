@@ -32,6 +32,12 @@ func _draw() -> void:
 			Gfx.spr_at(self, "pipOff", 6 + i * 9, hud_y)
 		if low:
 			draw_rect(Rect2(6 + i * 9, hud_y, 8, 8), Color(1, 1, 1, 0.55))
+	# the context meter under the pips: 99 wide, marks at 33 and 66
+	var meter_y := hud_y + 11
+	draw_rect(Rect2(6, meter_y, Game.METER_MAX, 3), Color("#3a3346"))
+	draw_rect(Rect2(6, meter_y, int(p.meter), 3), Color("#ffe2c4"))
+	draw_rect(Rect2(6 + 33, meter_y, 1, 3), Color(Game.COL.ink))
+	draw_rect(Rect2(6 + 66, meter_y, 1, 3), Color(Game.COL.ink))
 	var tk := str(room.tokens)
 	var tw := PixelText.text_width(tk)
 	Gfx.spr_at(self, "token_0", W - 20 - tw, hud_y - 1)

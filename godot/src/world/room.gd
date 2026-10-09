@@ -140,6 +140,7 @@ func load_room(room_id: String, snap = null) -> void:
 				_:
 					var e = spawn_enemy(ch, x, y)
 					if e != null:
+						Game.scale_enemy(e)
 						ents.append(e)
 	spark_spots.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for i in range(mini(3, spark_spots.size())):
@@ -529,10 +530,14 @@ func interact_combat(p) -> void:
 					if res2 != "":
 						stop(0.05)
 						shake(0.2)
+					if res2 != "kill":                 # a dash is no shield: unless it has i-frames (easy), the contact hurts
+						p.hurt(e.dmg, b.x + b.w / 2.0)
+
 			elif e.stompable and p.vy > 30.0 and p.prev_bottom <= b.y + minf(8.0, b.h * 0.6):
 				var res3: String = e.hit(maxi(1, e.hp), 0.0, 1.0, "stomp", b)       # a stomp always kills in one hit
 				p.y = b.y - p.h
 				p.bounce(1.0)
+				p.gain_meter()
 				if res3 != "":
 					stop(0.05)
 			elif p.grace <= 0.0:
@@ -607,14 +612,8 @@ func collect(it: Dictionary) -> void:
 	match it.kind:
 		"token":
 			tokens += 1
-			p.add_meter(2 if it.get("loose", false) else 3)
 			spark(it.x, it.y, Game.COL.goldHi, 4)
 			Audio.sfx("token")
-			# every 25 tokens buys back a pip
-			if tokens % 25 == 0 and p.hp < p.max_hp:
-				heal(p, 1)
-				pop(p.x + 5, p.y - 12, "25 tokens: +1", Game.COL.goldHi, true)
-				Audio.sfx("heal")
 		"spark":                            # a memory fragment: 4 of them give +1 max hp
 			Game.fragments += 1
 			ring(it.x, it.y, 2, 30, Game.COL.clawdHi, 0.5)
@@ -623,14 +622,13 @@ func collect(it: Dictionary) -> void:
 			stop(0.07)
 			Audio.sfx("spark")
 			if Game.fragments % 4 == 0:
-				Game.max_hp += 1
 				p.max_hp = Game.max_hp
 				p.hp = p.max_hp
 				pop(it.x, it.y - 26, "+1 max hp", Game.COL.okHi, true)
 			Game.write_save()
 			events.append("spark")
 		"coffee":
-			if p.hp < p.max_hp:
+			if Game.diff == "easy" and p.hp < p.max_hp:
 				heal(p, 1)
 			pop(it.x, it.y - 10, "+1 coffee", Game.COL.paper)
 			burst(it.x, it.y, 8, [Game.COL.paper, Game.COL.clawd], 70.0, 100.0)

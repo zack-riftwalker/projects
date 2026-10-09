@@ -76,7 +76,6 @@ func die(how: String) -> void:
 		for i in range(6):
 			room.part(cx + room.rng.randf_range(-6, 6), y + h, room.rng.randf_range(-70, 70), room.rng.randf_range(-30, -5), 0.35, 2, col, 200.0)
 	room.drop(cx, cy, loot)
-	room.player.add_meter(8)
 	Audio.sfx("squish" if how == "stomp" else "kill")
 
 func physics(dt: float, grav := 900.0) -> bool:
