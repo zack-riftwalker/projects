@@ -43,6 +43,11 @@ var layers := {}
 var liquid_y = null
 var blink_period := 1.5
 var entity_root: Node2D
+var got := {}                  # item ids already collected (kept across a death)
+var sparks := [false, false, false]
+var death_t := -1.0
+var snapshot_in = null
+signal restart_requested(snap: Dictionary)
 var rows: PackedStringArray = PackedStringArray()
 
 func _ready() -> void:
@@ -55,8 +60,16 @@ func _physics_process(_delta: float) -> void:
 	step(Game.STEP)
 
 # ---------------------------------------------------------------- loading
-func load_room(room_id: String) -> void:
+func load_room(room_id: String, snap = null) -> void:
 	id = room_id
+	if snap != null:
+		got = snap.got.duplicate()
+		sparks = snap.sparks.duplicate()
+		tokens = snap.tokens
+		clock = snap.clock
+		kills = snap.kills
+		hits = snap.hits
+		cp_index = snap.cp
 	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://src/world/rooms.json"))
 	def = meta[room_id]
 	rows = FileAccess.get_file_as_string("res://src/world/rooms/" + def.file).split("\n")
@@ -92,12 +105,14 @@ func load_room(room_id: String) -> void:
 				"S":
 					springs.append({"x": x + 2, "y": y + 9, "w": 12, "h": 7, "t": 0.0})
 				"o":
-					items.append({"kind": "token", "x": float(x + 8), "y": float(y + 8), "id": item_id, "ph": tx * 0.7})
+					if not got.has(item_id):
+						items.append({"kind": "token", "x": float(x + 8), "y": float(y + 8), "id": item_id, "ph": tx * 0.7})
 					item_id += 1
 				"*":
 					spark_spots.append({"x": x + 8, "y": y + 8})
 				"H":
-					items.append({"kind": "coffee", "x": float(x + 8), "y": float(y + 9), "id": item_id, "ph": 0.0})
+					if not got.has(item_id):
+						items.append({"kind": "coffee", "x": float(x + 8), "y": float(y + 9), "id": item_id, "ph": 0.0})
 					item_id += 1
 				"T":
 					var texts: Array = def.get("signs", [])
@@ -113,7 +128,7 @@ func load_room(room_id: String) -> void:
 						ents.append(e)
 	spark_spots.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for i in range(mini(3, spark_spots.size())):
-		items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "ph": i, "ghost": false})
+		items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "ph": i, "ghost": sparks[i]})
 	rng.seed = 1
 	if cp_index >= 0 and cp_index < cps.size():
 		cps[cp_index].on = true
@@ -148,7 +163,12 @@ func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> voi
 	plats.append({"x": float(x), "y": float(y + 2), "w": 48.0, "h": 6.0, "ax": ch == "M", "a": a, "b": b, "ph": fposmod(tx * 0.37 + ty * 0.61, 1.0), "dx": 0.0, "dy": 0.0, "speed": def.get("platSpeed", 44.0)})
 
 func spawn_enemy(ch: String, x: int, y: int):
-	return null          # MV1-06
+	match ch:
+		"b": return Bug.new(self, x, y, false)
+		"a": return Bug.new(self, x, y, true)
+		"t": return Typo.new(self, x, y)
+	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
+	return null
 
 # the nodes that draw the room; called once after load_room
 func build_nodes() -> void:
@@ -174,6 +194,8 @@ func build_nodes() -> void:
 	camera.position_smoothing_enabled = false
 	add_child(camera)
 	camera.make_current()
+	for e in ents:
+		entity_root.add_child(e)
 	player = Player.new(self, start.x, start.y)
 	player.name = "Player"
 	add_child(player)
@@ -213,6 +235,9 @@ func break_tile(tx: int, ty: int) -> bool:
 		if grid.tile(tx + o[0], ty + o[1]) == TileGrid.CRACK:
 			break_q.append({"tx": tx + o[0], "ty": ty + o[1], "t": 0.06})
 	return true
+
+func snapshot() -> Dictionary:
+	return {"cp": cp_index, "tokens": tokens, "got": got.duplicate(), "sparks": sparks.duplicate(), "clock": clock, "kills": kills, "hits": hits}
 
 func heal(q, n: int) -> void:
 	q.hp = mini(q.max_hp, q.hp + n)
@@ -379,6 +404,15 @@ func step(dt: float) -> void:
 				keep.append(e)
 		ents = keep
 	update_cam(dt)
+	for ev in events:
+		if ev == "death" and death_t < 0.0:
+			death_t = 1.2
+	events.clear()
+	if death_t >= 0.0:
+		death_t -= dt
+		if death_t < 0.0:
+			death_t = -1.0
+			restart_requested.emit(snapshot())
 
 func interact() -> void:
 	var p = player
@@ -526,6 +560,8 @@ func update_items(dt: float) -> void:
 func collect(it: Dictionary) -> void:
 	var p = player
 	it.dead = true
+	if it.has("id"):
+		got[it.id] = true
 	match it.kind:
 		"token":
 			tokens += 1
@@ -538,6 +574,7 @@ func collect(it: Dictionary) -> void:
 				pop(p.x + 5, p.y - 12, "25 tokens: +1", Game.COL.goldHi, true)
 				Audio.sfx("heal")
 		"spark":
+			sparks[it.idx] = true
 			ring(it.x, it.y, 2, 30, Game.COL.clawdHi, 0.5)
 			burst(it.x, it.y, 18, [Game.COL.clawd, Game.COL.clawdHi, "#fff3e4"], 130.0, 60.0, {"glow": 1})
 			pop(it.x, it.y - 12, "spark" if it.ghost else "✳ spark found!", "#fff3e4", true)

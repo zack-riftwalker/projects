@@ -8,6 +8,8 @@ var game_vp: SubViewport
 var world: Node2D
 var screen: TextureRect
 var room: Room
+var hud: Hud
+var hud_layer: CanvasLayer
 
 func _ready() -> void:
 	game_vp = SubViewport.new()
@@ -33,18 +35,41 @@ func _ready() -> void:
 	_fit()
 	print("CLAWD: ready")
 	if Game.test_name != "":
-		var t = load("res://src/test/run_tests.gd").new(self)
-		var ok: bool = t.run(Game.test_name)
+		var script = load("res://src/test/run_tests.gd")
+		if script == null:
+			print("TEST ", Game.test_name, " FAIL could not load run_tests.gd")
+			get_tree().quit(1)
+			return
+		var ok: bool = script.new(self).run(Game.test_name)
 		get_tree().quit(0 if ok else 1)
 		return
-	room = Room.new()
-	world.add_child(room)
-	room.load_room("R01")
-	room.build_nodes()
+	hud_layer = CanvasLayer.new()
+	hud_layer.name = "HudLayer"
+	game_vp.add_child(hud_layer)
+	hud = Hud.new()
+	hud_layer.add_child(hud)
+	start_room(null)
 	if Game.demo:
 		demo_frame = 0
 	elif Game.shot_path != "":
+		if Game.scene == "hud":          # screenshot helper: Clawd next to the first sign, a Bug and a Typo close by
+			room.player.x = 104.0
+			var b := Bug.new(room, 140, 192, false)
+			room.ents.append(b)
+			room.entity_root.add_child(b)
+			room.tokens = 7
 		_shot_after(30)
+
+func start_room(snap) -> void:
+	if room != null:
+		room.queue_free()
+	room = Room.new()
+	world.add_child(room)
+	room.load_room("R01", snap)
+	room.build_nodes()
+	room.restart_requested.connect(func(sn): start_room(sn))
+	hud.set_room(room)
+	Audio.music(String(room.def.get("music", "")))
 
 # scripted demo for screenshots: run, jump, dash, swipe (--demo --shot=<prefix>)
 var demo_frame := -1

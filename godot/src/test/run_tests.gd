@@ -23,6 +23,8 @@ func run(name: String) -> bool:
 	match name:
 		"tiles": return t_tiles()
 		"jump": return t_jump()
+		"combat": return t_combat()
+		"hurt": return t_hurt()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -103,3 +105,85 @@ func t_jump() -> bool:
 	var ok := absf(p.x - 151.608) <= 0.001 and absf(min_y - 140.596) <= 0.001
 	Controls.script_input = null
 	return report("jump", ok, "%s final x=%.3f min y=%.3f" % [settle, p.x, min_y])
+
+func clear_ents(room: Room) -> void:
+	for e in room.ents:
+		e.queue_free()
+	room.ents.clear()
+
+func add_bug(room: Room, bx: float, by: float, fc: float) -> Bug:
+	var b := Bug.new(room, 0, 0, false)
+	b.x = bx
+	b.y = by
+	b.face = fc
+	room.ents.append(b)
+	room.entity_root.add_child(b)
+	return b
+
+func loose_tokens(room: Room) -> int:
+	var n := 0
+	for it in room.items:
+		if it.get("loose", false) and not it.get("dead", false):
+			n += 1
+	return n
+
+func t_combat() -> bool:
+	var room := new_room()
+	clear_ents(room)
+	room.cam.x = 60.0
+	var p = room.player
+	p.x = 170.0
+	p.y = 198.0
+	var b := add_bug(room, 200, 199, -1)
+	for f in range(25):
+		step_with(room, {"attack": f == 5})
+	var kills1: int = room.kills
+	var tokens1 := loose_tokens(room)
+	var slash_ok := kills1 == 1 and tokens1 == 1
+	# stomp: drop onto a second bug from 40 px above
+	for e in room.ents:
+		e.queue_free()
+	room.ents.clear()
+	var p2 = room.player
+	p2.x = 250.0
+	p2.y = 158.0
+	p2.vy = 0.0
+	p2.on_ground = false
+	p2.inv = 0.0
+	var b2 := add_bug(room, 250, 199, -1)
+	b2.speed = 0.0
+	var bounced := false
+	var killed_by_stomp := false
+	for f in range(60):
+		step_with(room, {})
+		if room.kills == 2:
+			killed_by_stomp = true
+			bounced = p2.vy < 0.0
+			break
+	Controls.script_input = null
+	var ok := slash_ok and killed_by_stomp and bounced
+	return report("combat", ok, "swipe kills=%d tokens=%d | stomp kill=%s bounce vy=%.1f hp=%d" % [kills1, tokens1, killed_by_stomp, p2.vy, p2.hp])
+
+func t_hurt() -> bool:
+	var room := new_room()
+	clear_ents(room)
+	room.cam.x = 0.0
+	var p = room.player
+	for i in range(30):
+		step_with(room, {})
+	var ty := Typo.new(room, 0, 0)
+	ty.stun = 999.0
+	room.ents.append(ty)
+	room.entity_root.add_child(ty)
+	ty.x = p.x
+	ty.y = p.y
+	step_with(room, {})
+	var hp1: int = p.hp
+	var inv1: float = p.inv
+	for i in range(60):
+		ty.x = p.x
+		ty.y = p.y
+		step_with(room, {})
+	var ok: bool = hp1 == 4 and absf(inv1 - 1.3) < 0.05 and p.hp == 4
+	Controls.script_input = null
+	return report("hurt", ok, "hp after first touch=%d inv=%.3f hp after 1 s of touching=%d" % [hp1, inv1, p.hp])

@@ -37,7 +37,7 @@
 | MV1-03 | capture art, font, sound effects and music from the current game | Sonnet | done |
 | MV1-04 | input, tile collision, room loading, tile rendering | Sonnet | done |
 | MV1-05 | the player (exact port), Clawd drawing, camera, hitstop, particles | Sonnet | done |
-| MV1-06 | Bug, Typo, combat, items, checkpoint, signs, HUD, sound | Sonnet | todo |
+| MV1-06 | Bug, Typo, combat, items, checkpoint, signs, HUD, sound | Sonnet | done |
 | MV1-07 | touch controls, pause, debug overlay for the phone test | Sonnet | todo |
 | MV1-08 | automated tests: parity with the JS game, headless run, web check | Sonnet | todo |
 | MV1-09 | delivery build, phone test instructions, phase report | Sonnet | todo |

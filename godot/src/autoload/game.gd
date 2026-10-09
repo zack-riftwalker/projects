@@ -28,6 +28,7 @@ var selftest := false
 var test_name := ""
 var shot_path := ""
 var demo := false
+var scene := ""
 var build_text := "dev"
 var touch_seen := false
 
@@ -49,6 +50,7 @@ func _ready() -> void:
 			"test": test_name = v
 			"shot": shot_path = v
 			"demo": demo = true
+			"scene": scene = v
 	if fps30:
 		Engine.max_fps = 30
 	if FileAccess.file_exists("res://build.txt"):
