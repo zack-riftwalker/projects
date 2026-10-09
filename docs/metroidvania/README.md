@@ -23,3 +23,11 @@
 | [`05-difficulty-model.md`](05-difficulty-model.md) | MV0-07: مدل سختی | Sonnet | انجام شد |
 | [`06-phase1-test.md`](06-phase1-test.md) | MV0-08: پروتکل تست گوشی | Sonnet | انجام شد |
 | [`../reports/metroidvania-phase0.md`](../reports/metroidvania-phase0.md) | MV0-08: گزارش فاز ۰ | Sonnet | انجام شد |
+
+## فاز ۱
+
+| سند | کار | کی | وضعیت |
+|---|---|---|---|
+| [`../PLAN-metroidvania-phase1.md`](../PLAN-metroidvania-phase1.md) | پلن فاز ۱ (پایه‌ی Godot) | Claude | انجام شد |
+| [`../../godot/`](../../godot) | MV1-01 تا MV1-08: پروژه‌ی Godot | Sonnet | انجام شد |
+| [`../reports/metroidvania-phase1.md`](../reports/metroidvania-phase1.md) | MV1-09: گزارش فاز ۱ و قدم‌های تست گوشی | Sonnet | انجام شد |

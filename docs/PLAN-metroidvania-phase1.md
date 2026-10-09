@@ -40,7 +40,7 @@
 | MV1-06 | Bug, Typo, combat, items, checkpoint, signs, HUD, sound | Sonnet | done |
 | MV1-07 | touch controls, pause, debug overlay for the phone test | Sonnet | done |
 | MV1-08 | automated tests: parity with the JS game, headless run, web check | Sonnet | done |
-| MV1-09 | delivery build, phone test instructions, phase report | Sonnet | todo |
+| MV1-09 | delivery build, phone test instructions, phase report | Sonnet | done |
 
 Order: strictly MV1-01 → MV1-09. Update this table and `docs/metroidvania/README.md` in the same commit as each task.
 
