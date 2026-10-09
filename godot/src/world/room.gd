@@ -82,6 +82,7 @@ var end_door = null
 signal door_crossed(door: Dictionary)
 signal bench_requested(index: int)
 signal end_requested
+signal bench_touched(index: int)
 var got := {}                  # item ids already collected (kept across a death)
 var sparks := [false, false, false]
 var death_t := -1.0
@@ -955,6 +956,12 @@ func interact_combat(p) -> void:
 			p.spring(s)
 
 func interact_goals(p) -> void:
+	if mode != "guest" and p.on_ground and not crossing and Game.bench != id and p.hp > 0:
+		for i in range(cps.size()):         # walking up to a bench is enough to make it the respawn point
+			var c0: Dictionary = cps[i]
+			if absf(p.x + p.w / 2.0 - c0.x) < 12 and p.y + p.h > c0.y - 34 and p.y < c0.y:
+				bench_touched.emit(i)
+				break
 	if Controls.pressed.get("up", false) and p.on_ground and not crossing:
 		for i in range(cps.size()):
 			var c: Dictionary = cps[i]

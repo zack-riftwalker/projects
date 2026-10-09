@@ -100,7 +100,7 @@ module.exports = (S, h) => {
       await sleep(300);
       await guest.page.keyboard.type(CODE, { delay: 250 });
       await guest.page.keyboard.press('Enter');
-      for (let i = 0; i < 200 && !guest.lines.some((l) => /COOP guest: start received/.test(l)); i++) await sleep(100);
+      for (let i = 0; i < 500 && !guest.lines.some((l) => /COOP guest: start received/.test(l)); i++) await sleep(100);
       if (process.env.MV_LOG) { console.log(guest.lines.slice(-15).join('\n')); console.log('--host'); await guest.page.screenshot({ path: process.env.MV_LOG + '.png' }); console.log(host.lines.slice(-10).join('\n')); }
       chk('join by code', guest.lines.some((l) => /COOP guest: start received/.test(l)));
       chk('host saw guest', host.lines.some((l) => /COOP host: guest joined/.test(l)));

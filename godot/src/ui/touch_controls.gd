@@ -38,7 +38,7 @@ func enable() -> void:
 		return
 	enabled = true
 	Game.touch_seen = true
-	visible = true
+	visible = not suspended
 	layout()
 
 func layout() -> void:

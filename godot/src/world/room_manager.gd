@@ -41,6 +41,7 @@ func make_room(room_id: String, spawn = null, local := true) -> Room:
 	r.restart_requested.connect(func(_s): restart_requested.emit())
 	r.bench_requested.connect(func(i): bench_requested.emit(r, i))
 	r.end_requested.connect(func(): end_requested.emit())
+	r.bench_touched.connect(func(i): rest(r, i))
 	r.local_died.connect(func(): local_died.emit(r))
 	rooms[room_id] = r
 	if local:

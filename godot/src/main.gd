@@ -1,4 +1,5 @@
 extends Control
+
 # Main: builds the viewport, fits it to the window, runs the pause menu, the touch layer and the debug overlay,
 # and (for tests) hands control to src/test/run_tests.gd.
 
@@ -298,7 +299,7 @@ func set_paused(v: bool, remote := false) -> void:
 	else:
 		pause_menu.close()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if title != null and title.active:
 		title.key_event(event)
 	if title != null and title.active or end_screen != null and end_screen.active:
@@ -307,11 +308,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventScreenTouch and event.pressed:
 			tp = event.position
 			th = true
-		elif event is InputEventMouseButton and event.pressed:
+		elif event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:      # (a touch also arrives as an emulated mouse click: once is enough)
 			tp = event.position
 			th = true
 		if th:
+			if event is InputEventScreenTouch:
+				touch.enable()            # a phone: the stick and buttons show up as soon as the title is gone
 			var tg := (tp - screen.position) * Vector2(W, H) / screen.size
+			if Game.debug:
+				print("CLAWD: tap ", event.get_class(), " ", tp, " -> ", tg)
 			if end_screen.active:
 				end_screen.tap(tg)
 			else:
@@ -324,7 +329,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventScreenTouch and event.pressed:
 			pos = event.position
 			hit = true
-		elif event is InputEventMouseButton and event.pressed:
+		elif event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:      # (a touch also arrives as an emulated mouse click: once is enough)
 			pos = event.position
 			hit = true
 		if hit:

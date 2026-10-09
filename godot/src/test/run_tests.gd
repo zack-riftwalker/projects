@@ -32,6 +32,7 @@ func run(name: String) -> bool:
 		"save": return t_save()
 		"crack": return t_crack()
 		"end": return t_end()
+		"bench": return t_bench()
 		"null": return t_null()
 		"focus": return t_focus()
 		"guard": return t_guard()
@@ -386,6 +387,25 @@ func t_save() -> bool:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_save.json"))
 	Game.persist = false
 	return report("save", ok, "loaded=%s rested hp=%d token gone=%s tokens=%d at bench=%s died event=%s back on bench full hp=%s deaths=%d" % [loaded, rested_hp, token_gone, Game.tokens, at_bench, died[0], back, Game.deaths])
+
+func t_bench() -> bool:
+	Game.persist = false
+	Game.fresh()
+	Game.bench = ""
+	var m := new_manager()
+	m.swap_to("R03")
+	var room := m.room
+	var c: Dictionary = room.cps[0]
+	var p = m.player
+	p.x = c.x - 5.0
+	p.y = floor_y(room, c.x, int(c.y / 16.0) - 2)
+	p.vx = 0.0
+	p.vy = 0.0
+	for f in range(12):
+		Controls.script_input = {}
+		m.tick(Game.STEP)
+	Controls.script_input = null
+	return report("bench", Game.bench == "R03", "bench after walking up to it without pressing anything: '%s'" % Game.bench)
 
 func t_end() -> bool:
 	Game.persist = false
