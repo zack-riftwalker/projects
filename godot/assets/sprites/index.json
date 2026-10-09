@@ -1,0 +1,374 @@
+{
+ "agent_0.png": [
+  10,
+  7
+ ],
+ "agent_1.png": [
+  10,
+  7
+ ],
+ "slash_f_0.png": [
+  42,
+  42
+ ],
+ "slash_f_1.png": [
+  42,
+  42
+ ],
+ "slash_f_2.png": [
+  42,
+  42
+ ],
+ "slash_u_0.png": [
+  42,
+  42
+ ],
+ "slash_u_1.png": [
+  42,
+  42
+ ],
+ "slash_u_2.png": [
+  42,
+  42
+ ],
+ "slash_d_0.png": [
+  42,
+  42
+ ],
+ "slash_d_1.png": [
+  42,
+  42
+ ],
+ "slash_d_2.png": [
+  42,
+  42
+ ],
+ "slash_b_0.png": [
+  42,
+  42
+ ],
+ "slash_b_1.png": [
+  42,
+  42
+ ],
+ "slash_b_2.png": [
+  42,
+  42
+ ],
+ "slashBig_f_0.png": [
+  52,
+  52
+ ],
+ "slashBig_f_1.png": [
+  52,
+  52
+ ],
+ "slashBig_f_2.png": [
+  52,
+  52
+ ],
+ "slashBig_u_0.png": [
+  52,
+  52
+ ],
+ "slashBig_u_1.png": [
+  52,
+  52
+ ],
+ "slashBig_u_2.png": [
+  52,
+  52
+ ],
+ "slashBig_d_0.png": [
+  52,
+  52
+ ],
+ "slashBig_d_1.png": [
+  52,
+  52
+ ],
+ "slashBig_d_2.png": [
+  52,
+  52
+ ],
+ "slashBig_b_0.png": [
+  52,
+  52
+ ],
+ "slashBig_b_1.png": [
+  52,
+  52
+ ],
+ "slashBig_b_2.png": [
+  52,
+  52
+ ],
+ "bug_0.png": [
+  18,
+  15
+ ],
+ "bug_1.png": [
+  18,
+  15
+ ],
+ "spiky_0.png": [
+  18,
+  15
+ ],
+ "spiky_1.png": [
+  18,
+  15
+ ],
+ "typo_0.png": [
+  14,
+  15
+ ],
+ "typo_1.png": [
+  14,
+  15
+ ],
+ "flaky_0.png": [
+  18,
+  14
+ ],
+ "flaky_1.png": [
+  18,
+  14
+ ],
+ "flakyMad_0.png": [
+  18,
+  14
+ ],
+ "flakyMad_1.png": [
+  18,
+  14
+ ],
+ "lint_0.png": [
+  17,
+  17
+ ],
+ "lint_1.png": [
+  17,
+  17
+ ],
+ "logger_0.png": [
+  18,
+  18
+ ],
+ "logger_1.png": [
+  18,
+  18
+ ],
+ "mimic_0.png": [
+  20,
+  20
+ ],
+ "mimic_1.png": [
+  20,
+  20
+ ],
+ "mimic_2.png": [
+  20,
+  20
+ ],
+ "noodle_0.png": [
+  20,
+  14
+ ],
+ "noodle_1.png": [
+  20,
+  14
+ ],
+ "noodle_2.png": [
+  20,
+  14
+ ],
+ "noodle_3.png": [
+  20,
+  14
+ ],
+ "slime_0.png": [
+  18,
+  14
+ ],
+ "slime_1.png": [
+  18,
+  14
+ ],
+ "slimeS_0.png": [
+  12,
+  10
+ ],
+ "slimeS_1.png": [
+  12,
+  10
+ ],
+ "ghost_0.png": [
+  18,
+  18
+ ],
+ "ghost_1.png": [
+  18,
+  18
+ ],
+ "ghost_2.png": [
+  18,
+  18
+ ],
+ "racer_0.png": [
+  20,
+  12
+ ],
+ "racer_1.png": [
+  20,
+  12
+ ],
+ "drone_0.png": [
+  20,
+  16
+ ],
+ "drone_1.png": [
+  20,
+  16
+ ],
+ "drone_2.png": [
+  20,
+  16
+ ],
+ "drone_3.png": [
+  20,
+  16
+ ],
+ "pendulum.png": [
+  19,
+  19
+ ],
+ "gear_0.png": [
+  27,
+  27
+ ],
+ "gear_1.png": [
+  27,
+  27
+ ],
+ "gear_2.png": [
+  27,
+  27
+ ],
+ "gear_3.png": [
+  27,
+  27
+ ],
+ "gear_4.png": [
+  27,
+  27
+ ],
+ "gear_5.png": [
+  27,
+  27
+ ],
+ "token_0.png": [
+  9,
+  9
+ ],
+ "token_1.png": [
+  9,
+  9
+ ],
+ "token_2.png": [
+  9,
+  9
+ ],
+ "token_3.png": [
+  9,
+  9
+ ],
+ "spark_0.png": [
+  15,
+  15
+ ],
+ "spark_1.png": [
+  15,
+  15
+ ],
+ "sparkGhost_0.png": [
+  15,
+  15
+ ],
+ "sparkGhost_1.png": [
+  15,
+  15
+ ],
+ "sparkSm_0.png": [
+  9,
+  9
+ ],
+ "sparkSm_1.png": [
+  9,
+  9
+ ],
+ "sparkSm_2.png": [
+  9,
+  9
+ ],
+ "coffee.png": [
+  12,
+  12
+ ],
+ "pip.png": [
+  8,
+  8
+ ],
+ "pipOff.png": [
+  8,
+  8
+ ],
+ "checkpoint_0.png": [
+  16,
+  28
+ ],
+ "checkpoint_1.png": [
+  16,
+  28
+ ],
+ "sign.png": [
+  16,
+  18
+ ],
+ "spring_0.png": [
+  16,
+  14
+ ],
+ "spring_1.png": [
+  16,
+  14
+ ],
+ "gate.png": [
+  30,
+  40
+ ],
+ "cracked.png": [
+  16,
+  16
+ ],
+ "crumble.png": [
+  16,
+  16
+ ],
+ "blink_0_on.png": [
+  16,
+  16
+ ],
+ "blink_0_off.png": [
+  16,
+  16
+ ],
+ "blink_1_on.png": [
+  16,
+  16
+ ],
+ "blink_1_off.png": [
+  16,
+  16
+ ]
+}
