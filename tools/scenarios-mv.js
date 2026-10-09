@@ -13,6 +13,8 @@ module.exports = (S, h) => {
     try {
       const idx = await get(srv.port, '/mv/');
       chk('mv/', idx && idx.status === 200 && /^text\/html/.test(idx.headers['content-type'] || ''));
+      const rd = await get(srv.port, '/mv?debug');
+      chk('/mv redirects', rd && rd.status === 301 && rd.headers.location === '/mv/?debug');
       const wz = await get(srv.port, '/mv/index.wasm', { 'accept-encoding': 'gzip' });
       chk('wasm-gzip', wz && wz.status === 200 && wz.headers['content-encoding'] === 'gzip' && wz.headers['content-type'] === 'application/wasm');
       const wp = await get(srv.port, '/mv/index.wasm', {});

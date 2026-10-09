@@ -66,7 +66,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(COOP));
   }
   if (u === '/') u = '/index.html';
-  if (u === '/mv' || u === '/mv/') u = '/mv/index.html';
+  if (u === '/mv') { res.writeHead(301, { Location: '/mv/' + (req.url.includes('?') ? '?' + req.url.split('?')[1] : '') }); return res.end(); }     // the build's files are relative to /mv/
+  if (u === '/mv/') u = '/mv/index.html';
   if (u !== '/index.html' && !VOICE.test(u) && !MV.test(u)) { res.writeHead(404); return res.end('not found'); }
   serveFile(req, res, u.slice(1));
 });
