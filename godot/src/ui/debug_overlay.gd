@@ -2,10 +2,9 @@ class_name DebugOverlay
 extends Control
 # DebugOverlay: the numbers of the phone test (?debug). Frame rate (average, slow 1 %, minute 1 vs now), input delay, audio delay, memory.
 
-const RING := 36000
-var frames := PackedFloat32Array()      # frame times (s), ring buffer
-var head := 0
-var count := 0
+# frame times go into a histogram of 1 ms buckets (0..250 ms): O(1) per frame and a 251-step walk per second,
+# so measuring for 10 minutes costs the same as for 10 seconds (a sorted copy of every frame time did not)
+var hist := PackedInt32Array()
 var total_t := 0.0
 var total_frames := 0
 var minute := {}                         # minute index -> [frames, seconds]
@@ -17,10 +16,12 @@ var low_timer := 0.0
 var mem2 := -1.0
 var mem10 := -1.0
 var last_text := ""
+var text_timer := 0.25                   # text + redraw 4 times a second (JavaScriptBridge.eval and ~700 glyph draws are not free on a phone)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	frames.resize(RING)
+	hist.resize(251)
+	hist.fill(0)
 	visible = Game.debug
 
 func _input(event: InputEvent) -> void:
@@ -35,9 +36,7 @@ func _input(event: InputEvent) -> void:
 func _process(dt: float) -> void:
 	if not Game.debug:
 		return
-	frames[head] = dt
-	head = (head + 1) % RING
-	count = mini(count + 1, RING)
+	hist[clampi(int(dt * 1000.0), 0, 250)] += 1
 	total_t += dt
 	total_frames += 1
 	var m := int(total_t / 60.0)
@@ -56,14 +55,19 @@ func _process(dt: float) -> void:
 	low_timer += dt
 	if low_timer >= 1.0:
 		low_timer = 0.0
-		var fps := PackedFloat32Array()
-		fps.resize(count)
-		for i in range(count):
-			fps[i] = 1.0 / maxf(frames[i], 0.0001)
-		fps.sort()
-		low1 = fps[int(count * 0.01)] if count > 0 else 0.0
-	last_text = _text()
-	queue_redraw()
+		# slowest 1 % of all frames: walk the buckets from the slowest down until 1 % of the frames are counted
+		var need := maxi(1, ceili(total_frames * 0.01))
+		var acc := 0
+		for i in range(250, -1, -1):
+			acc += hist[i]
+			if acc >= need:
+				low1 = 1000.0 / (i + 0.5)
+				break
+	text_timer += dt
+	if text_timer >= 0.25:
+		text_timer = 0.0
+		last_text = _text()
+		queue_redraw()
 
 # memory in MB: Godot's own counter (debug builds / native), else the size of the wasm heap (web release builds report 0)
 func _mem_mb() -> float:
@@ -95,15 +99,21 @@ func _text() -> String:
 	return l1 + "\n" + l2 + "\n" + l3
 
 func _draw() -> void:
-	if not Game.debug:
+	if not Game.debug or last_text == "":
 		return
-	# 2 x the device scale, but never wider than the window
+	# 2 x the device scale, but never wider than the picture; below the HUD's hp pips and fragment row, on a dark backdrop
+	var gr: Rect2 = get_parent().game_rect
 	var lines := last_text.to_upper().split("\n")
 	var wmax := 1
 	for line in lines:
 		wmax = maxi(wmax, PixelText.text_width(line))
-	var sc := clampi(floori((size.x - 12.0) / wmax), 1, maxi(1, roundi(2.0 * DisplayServer.screen_get_scale())))
-	var y := 6
+	var sc := clampi(floori((gr.size.x - 12.0) / wmax), 1, maxi(1, roundi(2.0 * DisplayServer.screen_get_scale())))
+	var x0 := gr.position.x + 6.0
+	var y0 := gr.position.y + 26.0 * gr.size.y / 216.0
+	var text_w := wmax * sc
+	var text_h := (10 * lines.size() - 1) * sc
+	draw_rect(Rect2(x0 - 4.0, y0 - 3.0, text_w + 8.0, text_h + 6.0), Color(0, 0, 0, 0.6))
+	var y := y0
 	for line in lines:
-		PixelText.draw_text(self, line, 6, y, "#ffffff", {"scale": sc, "outline": "#000000"})
+		PixelText.draw_text(self, line, x0, y, "#ffffff", {"scale": sc})
 		y += 10 * sc
