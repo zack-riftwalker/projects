@@ -6,6 +6,7 @@ const W := 384
 const H := 216
 signal resume_requested
 signal restart_requested
+signal fullscreen_requested
 
 var active := false
 var sel := 0
@@ -14,7 +15,7 @@ var manager: RoomManager
 var blink_t := 0.0
 
 func options() -> Array:
-	return ["Resume", "Map", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off")]
+	return ["Resume", "Map", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
 
 func open() -> void:
 	active = true
@@ -68,6 +69,7 @@ func choose(i: int) -> void:
 		3:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
+		4: fullscreen_requested.emit()
 	queue_redraw()
 
 # a tap in game coordinates (0..384, 0..216)

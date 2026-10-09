@@ -113,6 +113,10 @@ func save_settings() -> void:
 	if f != null:
 		f.store_string(JSON.stringify({"diff": diff, "coop_hp_pct": coop_hp_pct, "vol_music": vol_music, "vol_sfx": vol_sfx, "fps30": fps30}))
 
+func is_fullscreen() -> bool:
+	var m := DisplayServer.window_get_mode()
+	return m == DisplayServer.WINDOW_MODE_FULLSCREEN or m == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
 # Host co-op needs the PC server: only on localhost (the relay refuses other hosts), or natively with --net=host
 func host_allowed() -> bool:
 	if OS.has_feature("web"):

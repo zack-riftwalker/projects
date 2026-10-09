@@ -68,6 +68,7 @@ func _ready() -> void:
 	hud_layer.add_child(hud)
 	pause_menu = PauseMenu.new()
 	pause_menu.resume_requested.connect(set_paused.bind(false))
+	pause_menu.fullscreen_requested.connect(request_fullscreen)
 	pause_menu.restart_requested.connect(func():
 		set_paused(false)
 		manager.respawn(false))
@@ -218,8 +219,8 @@ func _open_title() -> void:
 	title.host_game.connect(func(): _start_from_title("host"))
 	title.join_game.connect(_join_from_title)
 	title.leave_wait.connect(_cancel_join)
-	touch.suspend(true)
-	title.open()
+	title.fullscreen_requested.connect(request_fullscreen)
+	title.open()                  # the touch pad stays on the menus: stick moves, JUMP chooses, DASH goes back
 
 func _start_from_title(kind: String) -> void:
 	title.close()
@@ -300,6 +301,11 @@ func set_paused(v: bool, remote := false) -> void:
 		pause_menu.close()
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_F or event.physical_keycode == KEY_F):
+		gesture_msec = Time.get_ticks_msec()
+		toggle_fullscreen()            # F, as in the JS game (it is not a game action: Controls does not bind it)
+		return
+	_fullscreen_input(event)
 	if title != null and title.active:
 		title.key_event(event)
 	if title != null and title.active or end_screen != null and end_screen.active:
@@ -314,9 +320,11 @@ func _input(event: InputEvent) -> void:
 		if th:
 			if event is InputEventScreenTouch:
 				touch.enable()            # a phone: the stick and buttons show up as soon as the title is gone
-			var tg := (tp - screen.position) * Vector2(W, H) / screen.size
+			var tg := to_game(tp)
 			if Game.debug:
 				print("CLAWD: tap ", event.get_class(), " ", tp, " -> ", tg)
+			if touch.visible and touch.claims(tp):
+				return                # the finger is on a pad button: it presses that button, not the menu item behind it
 			if end_screen.active:
 				end_screen.tap(tg)
 			else:
@@ -333,13 +341,72 @@ func _input(event: InputEvent) -> void:
 			pos = event.position
 			hit = true
 		if hit:
-			var gp := (pos - screen.position) * Vector2(W, H) / screen.size
+			var gp := to_game(pos)
 			if paused:
 				pause_menu.tap(gp)
 			else:
 				bench_menu.tap(gp)
 	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and Game.touch_seen:
 		pass
+
+# Fullscreen (F, and the menu entries). Browsers only allow it inside a user gesture, and a gesture keeps the permission for a few
+# seconds: F runs straight from its key event; a menu entry (chosen on a press or in the next physics step) goes at once when a
+# gesture just happened, else it waits for the next key press / lifted finger / click (and gives up after 2 s)
+var gesture_msec := -100000
+var fs_deadline := 0
+
+func _fullscreen_input(event: InputEvent) -> void:
+	var g: bool = event is InputEventKey and event.pressed and not event.echo
+	if event is InputEventScreenTouch and not event.pressed:
+		g = true
+	if event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:
+		g = true
+	if not g:
+		return
+	gesture_msec = Time.get_ticks_msec()
+	if fs_deadline > gesture_msec:
+		toggle_fullscreen()
+
+func request_fullscreen() -> void:
+	var now := Time.get_ticks_msec()
+	if not OS.has_feature("web") or now - gesture_msec < 3000:
+		toggle_fullscreen()
+	else:
+		fs_deadline = now + 2000
+
+func toggle_fullscreen() -> void:
+	fs_deadline = 0
+	var on := Game.is_fullscreen()
+	if Game.debug:
+		print("CLAWD: fullscreen ", "off" if on else "on")
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if on else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+# ?debug: the menu state as CLAWD: lines (the phone tests read them)
+var _dbg_page := ""
+var _dbg_touch := -1
+var _dbg_code := ""
+
+func _dbg_menu_state() -> void:
+	var pg := "game"
+	if title != null and title.active:
+		pg = title.page
+	elif end_screen != null and end_screen.active:
+		pg = "end"
+	if pg != _dbg_page:
+		_dbg_page = pg
+		print("CLAWD: page ", pg)
+	var tv := 1 if touch.visible else 0
+	if tv != _dbg_touch:
+		_dbg_touch = tv
+		print("CLAWD: touch visible ", touch.visible)
+	var cd: String = title.code if title != null else ""
+	if cd != _dbg_code:
+		_dbg_code = cd
+		print("CLAWD: code ", cd)
+
+# a window position -> game pixels of the displayed 384x216 picture (not of the whole TextureRect: a wide phone has bars)
+func to_game(p: Vector2) -> Vector2:
+	return (p - game_rect.position) * Vector2(W, H) / game_rect.size
 
 # the guest was told the host is gone
 func on_host_left() -> void:
@@ -350,6 +417,8 @@ func on_host_left() -> void:
 func _physics_process(_d: float) -> void:
 	if Game.test_name != "":
 		return
+	if Game.debug:
+		_dbg_menu_state()
 	if title != null and title.active:
 		Controls.poll()
 		title.update()

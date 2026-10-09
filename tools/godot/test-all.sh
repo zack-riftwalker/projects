@@ -24,7 +24,7 @@ done
 run export bash tools/godot/export-web.sh
 run web-check node tools/godot/web-check.js
 cat "$TMP/web-check.log" 2>/dev/null | grep -E "^(PASS|FAIL)" | sed 's/^/    /'
-run relay node tools/coop-harness.js mv-serve mv-coop mv-title cache
+run relay node tools/coop-harness.js mv-serve mv-coop mv-title mv-phone cache
 run coop bash tools/godot/coop-test.sh all
 
 echo

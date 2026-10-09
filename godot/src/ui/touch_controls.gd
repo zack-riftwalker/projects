@@ -58,11 +58,16 @@ func layout() -> void:
 		top = get_parent().game_rect.end.y + 8.0 * kc    # just below the picture
 	pause_rect = Rect2(w - 16.0 * kc - pw, top, pw, ph)
 	stick_r = 50.0 * k * kc
+	if Game.debug and enabled:                # (window px: the phone tests tap the buttons where they are drawn)
+		for a in btn:
+			print("CLAWD: pad ", a, " ", int(btn[a].x), " ", int(btn[a].y), " ", int(btn[a].r))
+		print("CLAWD: pad pause ", int(pause_rect.get_center().x), " ", int(pause_rect.get_center().y), " 0")
 	queue_redraw()
 
 var suspended := false
 
-# the title screen has its own taps: no stick and no buttons there
+# hides the pad. The menus no longer use it (the pad stays on the title, settings, join, wait and end screens);
+# main still calls suspend(false) when the game starts, which is then a no-op
 func suspend(v: bool) -> void:
 	suspended = v
 	visible = enabled and not v
@@ -92,6 +97,10 @@ func _hit(p: Vector2) -> String:
 	if best == "" and pause_rect.grow(8.0 * kc).has_point(p):
 		best = "pause"
 	return best
+
+# true when p is on a button or the pause rect: a tap there belongs to the pad, not to a menu item behind it
+func claims(p: Vector2) -> bool:
+	return _hit(p) != ""
 
 func _press(a: String) -> void:
 	pending.erase(a)

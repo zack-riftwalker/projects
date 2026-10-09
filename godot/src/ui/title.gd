@@ -10,8 +10,10 @@ signal new_game
 signal host_game
 signal join_game(code: String)
 signal leave_wait
+signal fullscreen_requested
 
 const DIFFS := ["easy", "normal", "hard", "nightmare"]
+const FS_ROW := 5                 # the Fullscreen row of the settings page (Back is the one after it)
 const PAD := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "DEL", "0", "OK"]
 
 var active := false
@@ -50,7 +52,11 @@ func items() -> Array:
 	return o
 
 func settings_rows() -> Array:
-	return ["Difficulty: " + Game.diff, "Co-op boss HP: %d%%" % Game.coop_hp_pct, "Music: %d" % Game.vol_music, "Sound: %d" % Game.vol_sfx, "30 fps: " + ("on" if Game.fps30 else "off"), "Back"]
+	return ["Difficulty: " + Game.diff, "Co-op boss HP: %d%%" % Game.coop_hp_pct, "Music: %d" % Game.vol_music, "Sound: %d" % Game.vol_sfx, "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off"), "Back"]
+
+# the settings rows are 20 px apart (seven of them plus the hint line fit the 216 px picture)
+func settings_y(i: int) -> int:
+	return 52 + i * 20
 
 # a failed connection (wrong code, no host ...): back to the code pad with the reason
 func fail(why: String) -> void:
@@ -84,9 +90,9 @@ func update() -> void:
 			if pr.get("down", false):
 				sel = (sel + 1) % n2
 				Audio.sfx("uiMove")
-			if pr.get("left", false):
+			if pr.get("left", false) and sel != FS_ROW:          # (Fullscreen is chosen, not stepped)
 				change(sel, -1)
-			if pr.get("right", false):
+			if pr.get("right", false) and sel != FS_ROW:
 				change(sel, 1)
 			if pr.get("start", false) or pr.get("jump", false) or pr.get("attack", false):
 				change(sel, 1)
@@ -166,7 +172,8 @@ func change(i: int, d: int) -> void:
 		4:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
-		5: back()
+		FS_ROW: fullscreen_requested.emit()
+		6: back()
 	Game.save_settings()
 	queue_redraw()
 
@@ -221,7 +228,7 @@ func tap(p: Vector2) -> void:
 					choose_main(i)
 		"settings":
 			for i in range(settings_rows().size()):
-				var r := Rect2(W / 2.0 - 90, 62 + i * 22, 180, 18)
+				var r := Rect2(W / 2.0 - 90, settings_y(i), 180, 18)
 				if r.has_point(p):
 					sel = i
 					change(i, -1 if p.x < W / 2.0 - 20 and i < 4 else 1)
@@ -262,7 +269,7 @@ func _draw() -> void:
 			PixelText.draw_text(self, "SETTINGS", W / 2.0, 22, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})
 			var rows := settings_rows()
 			for i in range(rows.size()):
-				var y := 62 + i * 22
+				var y := settings_y(i)
 				Gfx.panel(self, W / 2.0 - 90, y, 180, 18, "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
 				PixelText.draw_text(self, rows[i], W / 2.0, y + 5, Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
 			PixelText.draw_text(self, "left / right to change - applies from the next room", W / 2.0, 198, Game.COL.dim, {"align": "c", "tiny": true})
