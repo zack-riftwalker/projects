@@ -22,6 +22,7 @@ func new_room(room_id := "R01") -> Room:
 func run(name: String) -> bool:
 	match name:
 		"tiles": return t_tiles()
+		"jump": return t_jump()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -74,3 +75,31 @@ func t_tiles() -> bool:
 	chk.call("no_oneway", b.y == 170.0 and r == 0)
 	room.queue_free()
 	return report("tiles", ok, info)
+
+# one fixed step with scripted input (js: G.input.script + G.step(1, true))
+func step_with(room: Room, keys: Dictionary) -> void:
+	Controls.script_input = keys
+	Controls.poll()
+	room.step(Game.STEP)
+
+func t_jump() -> bool:
+	var room := new_room()
+	for e in room.ents:
+		e.queue_free()
+	room.ents.clear()
+	for i in range(60):
+		step_with(room, {})
+	var p = room.player
+	var settle := "settled x=%s y=%s" % [p.x, p.y]
+	var min_y: float = p.y
+	for f in range(90):
+		var keys := {}
+		if f <= 59:
+			keys["right"] = true
+		if f >= 10 and f <= 39:
+			keys["jump"] = true
+		step_with(room, keys)
+		min_y = minf(min_y, p.y)
+	var ok := absf(p.x - 151.608) <= 0.001 and absf(min_y - 140.596) <= 0.001
+	Controls.script_input = null
+	return report("jump", ok, "%s final x=%.3f min y=%.3f" % [settle, p.x, min_y])

@@ -67,10 +67,12 @@ func explode(x: float, y: float, size: float, cols = null) -> void:
 	list.append({"k": 3, "x": x, "y": y, "r": size * 0.6, "life": 0.14, "max": 0.14, "col": Color("#ffffff"), "vx": 0.0, "vy": 0.0, "g": 0.0})
 
 # js: the particle loop at the end of Level.update (swap-remove, same order)
-func step(dt: float) -> void:
+func decay(dt: float) -> void:
 	trauma = maxf(0.0, trauma - dt * 2.2)
 	if flash > 0.0:
 		flash = maxf(0.0, flash - dt * 3.0)
+
+func step(dt: float) -> void:
 	var i := list.size() - 1
 	while i >= 0:
 		var q: Dictionary = list[i]

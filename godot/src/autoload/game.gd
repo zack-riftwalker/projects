@@ -27,6 +27,7 @@ var mute := false
 var selftest := false
 var test_name := ""
 var shot_path := ""
+var demo := false
 var build_text := "dev"
 var touch_seen := false
 
@@ -47,6 +48,7 @@ func _ready() -> void:
 			"selftest": selftest = true
 			"test": test_name = v
 			"shot": shot_path = v
+			"demo": demo = true
 	if fps30:
 		Engine.max_fps = 30
 	if FileAccess.file_exists("res://build.txt"):
@@ -62,7 +64,7 @@ static func damp(a: float, b: float, rate: float, dt: float) -> float:
 static func sign_of(v: float) -> float:
 	return -1.0 if v < 0.0 else (1.0 if v > 0.0 else 0.0)
 
-static func overlap(a: Dictionary, b: Dictionary) -> bool:
+static func overlap(a, b) -> bool:
 	return a.x < b.x + b.w and a.x + a.w > b.x and a.y < b.y + b.h and a.y + a.h > b.y
 
 # JS ToInt32 of a double

@@ -41,8 +41,37 @@ func _ready() -> void:
 	world.add_child(room)
 	room.load_room("R01")
 	room.build_nodes()
-	if Game.shot_path != "":
+	if Game.demo:
+		demo_frame = 0
+	elif Game.shot_path != "":
 		_shot_after(30)
+
+# scripted demo for screenshots: run, jump, dash, swipe (--demo --shot=<prefix>)
+var demo_frame := -1
+
+func _physics_process(_d: float) -> void:
+	if demo_frame < 0:
+		return
+	var f := demo_frame
+	var keys := {}
+	if f < 120:
+		keys["right"] = true
+	if f >= 40 and f < 62:
+		keys["jump"] = true
+	if f == 72:
+		keys["dash"] = true
+	if f == 96 or f == 102:
+		keys["attack"] = true
+	Controls.script_input = keys
+	demo_frame += 1
+	if f in [30, 66, 78, 98, 116]:
+		_snap.call_deferred("%s_%d.png" % [Game.shot_path, f])
+	if f == 120:
+		get_tree().quit()
+
+func _snap(path: String) -> void:
+	await RenderingServer.frame_post_draw
+	game_vp.get_texture().get_image().save_png(path)
 
 func _shot_after(n: int) -> void:
 	for i in range(n):
