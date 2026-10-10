@@ -14,6 +14,7 @@ var music_name := ""
 var first_sfx_msec := -1       # when the first sound actually started (debug overlay)
 var first_touch_msec := -1
 var duck_db := 0.0
+var music_index := {}                # assets/music/index.json, read on the first song
 var music_tw: Tween = null          # the running crossfade: a new music change ends it (its stop callback must not hit the new song)
 
 func _ready() -> void:
@@ -54,8 +55,9 @@ func music(music_key: String) -> void:
 	if not ResourceLoader.exists(path):
 		return
 	var st: AudioStreamOggVorbis = load(path)
-	var idx: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/music/index.json"))
-	var info: Dictionary = idx.get(music_key, {})
+	if music_index.is_empty():
+		music_index = JSON.parse_string(FileAccess.get_file_as_string("res://assets/music/index.json"))
+	var info: Dictionary = music_index.get(music_key, {})
 	st.loop = not info.get("once", false)
 	st.loop_offset = float(info.get("loop_start", 0.0))
 	# crossfade 0.5 s: a fades out, b fades in
