@@ -393,3 +393,38 @@ func sc_co_wipe() -> Array:
 	var flow := await wait_until(func(): return coop().snaps_applied > snaps0 + 5, 5.0)
 	var bodies: int = mgr().room.find_children("*", "RemotePlayer", true, false).size()
 	return [flow and bodies <= 1, "snapshots flow after the wipe: %s (+%d), host bodies %d" % [flow, coop().snaps_applied - snaps0, bodies]]
+
+# the host is seen as gone (before the game starts, or it reloads) and comes back: the guest must not stay locked (G3)
+func sc_co_hostgone() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(6.0)
+		return [true, "host waited"]
+	coop()._on_host(false, false, false)          # what the relay says to a guest whose host is not there
+	await wait_secs(0.3)
+	var locked: bool = Controls.locked
+	coop()._on_host(true, false, false)
+	Net.message.emit("start", {"e": Net.epoch, "save": {"tools": Game.tools, "flags": Game.flags, "diff": Game.diff, "coop_hp_pct": Game.coop_hp_pct, "fragments": Game.fragments}, "you": {"room": "R01", "x4": 400, "y4": 400, "hp": 5, "max_hp": 5}, "tm": 0.0})
+	await wait_secs(0.5)
+	return [not Controls.locked, "locked after host left %s, still locked after host back + start: %s" % [locked, Controls.locked]]
+
+# the guest leaves a room the host is in and comes back: no stale room, no doubled creatures or host bodies (G6)
+func sc_co_return() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(14.0)
+		return [true, "host stayed in %s" % mgr().room.id]
+	await wait_until(func(): return coop().snaps_applied > 5 and coop().host_body != null, 8.0)
+	mgr().swap_to("R02", Vector2(60.0, 100.0))
+	await wait_secs(2.0)
+	var rooms_away: Array = mgr().rooms.keys()
+	mgr().swap_to("R01", Vector2(60.0, 100.0))
+	await wait_secs(3.0)
+	var r: Room = mgr().room
+	var bodies := 0
+	for c in r.get_children():
+		if c is RemotePlayer:
+			bodies += 1
+	return [bodies == 1 and r.ents.size() == coop().puppets.size() and rooms_away == ["R02"], "ents %d, puppets %d, host bodies %d (want 1), rooms while away %s" % [r.ents.size(), coop().puppets.size(), bodies, str(rooms_away)]]

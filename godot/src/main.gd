@@ -411,7 +411,8 @@ func to_game(p: Vector2) -> Vector2:
 # the guest was told the host is gone
 func on_host_left() -> void:
 	set_paused(false, true)
-	Controls.locked = true
+	if coop != null and coop.started:     # (on the wait page nothing is running yet: nothing to lock)
+		Controls.locked = true
 	print("CLAWD: host left")
 
 func _physics_process(_d: float) -> void:

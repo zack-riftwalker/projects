@@ -647,6 +647,7 @@ func _on_host(on: bool, lag: bool, _resume: bool) -> void:
 		notice_set("host lagging", 3.0)
 	elif on:
 		host_lagging = false
+		Controls.locked = false         # a host that comes back (or a new one) releases the "host left" lock
 	else:
 		notice_set("Host left", 9999.0)
 		log_("guest: host left")
@@ -667,6 +668,7 @@ func _guest_msg(t: String, m: Dictionary) -> void:
 func _guest_start(m: Dictionary) -> void:
 	log_("guest: start received")
 	Net.reset_reliable()
+	Controls.locked = false
 	Net.epoch = int(m.e)
 	var sv: Dictionary = m.save
 	Game.flags = sv.flags
