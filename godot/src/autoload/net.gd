@@ -230,7 +230,7 @@ func send_msg(msg_type: String, fields := {}, droppable := false) -> void:
 	ack_due = -1.0
 
 func rel(kind: String, data := {}) -> void:
-	rel_out.append({"i": rel_next, "k": kind, "d": data, "sent": -1.0})
+	rel_out.append({"i": rel_next, "k": kind, "d": data, "sent": -1.0, "t0": now()})
 	rel_next += 1
 
 func _flush(t: float) -> void:

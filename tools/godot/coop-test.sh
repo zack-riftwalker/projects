@@ -26,6 +26,9 @@ one() { # scenario [env...]
   local g=$!
   wait $h; wait $g
   stop_srv
+  # the watchdog's broken rules and script errors fail any scenario (co-log makes an error on purpose)
+  if grep -h "INVARIANT" "$TMP/$s.host.log" "$TMP/$s.guest.log"; then return 1; fi
+  if [ "$s" != co-log ] && grep -h -A2 "SCRIPT ERROR" "$TMP/$s.host.log" "$TMP/$s.guest.log"; then return 1; fi
   grep -q "COOP $s host PASS" "$TMP/$s.host.log" && grep -q "COOP $s guest PASS" "$TMP/$s.guest.log"
 }
 

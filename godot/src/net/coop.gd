@@ -29,6 +29,9 @@ var snap_n := 0
 var snap_sent := {}
 var force_full := false
 var both_t := -1.0
+var last_snap_tx := 0.0          # host: when the last snapshot went out (the watchdog checks they flow)
+var host_present := true         # guest: false between "host left" and the host's return
+var watchdog: Watchdog
 var dl_acc := 0.0
 var host_home_t := -1.0          # host: dead outside a boss fight, back to its bench when this runs out
 var guest_home_t := -1.0         # host: the same for the guest
@@ -58,6 +61,7 @@ var zones_seen := {}
 func setup(m) -> void:
 	main = m
 	mgr = m.manager
+	watchdog = Watchdog.new(self)
 	role = Game.net_role
 	mgr.mode = role
 	Net.message.connect(_on_msg)
@@ -107,6 +111,8 @@ func _physics_process(dt: float) -> void:
 		_host_tick(dt)
 	elif role == "guest":
 		_guest_tick(dt)
+	if watchdog != null:
+		watchdog.tick(dt)
 	if Game.autotest:
 		_autotest(dt)
 
@@ -713,6 +719,7 @@ func _send_snapshot() -> void:
 	if r == null:
 		return
 	snap_n += 1
+	last_snap_tx = hms()
 	var en: Array = []
 	for e in r.ents:
 		if e.dead and not (e.get("is_boss") and e.dying):
@@ -752,8 +759,10 @@ func _on_host(on: bool, lag: bool, _resume: bool) -> void:
 		notice_set("host lagging", 3.0)
 	elif on:
 		host_lagging = false
+		host_present = true
 		Controls.locked = false         # a host that comes back (or a new one) releases the "host left" lock
 	else:
+		host_present = false
 		notice_set("Host left", 9999.0)
 		log_("guest: host left")
 		main.on_host_left()
@@ -773,6 +782,7 @@ func _guest_msg(t: String, m: Dictionary) -> void:
 func _guest_start(m: Dictionary) -> void:
 	log_("guest: start received")
 	Net.reset_reliable()
+	host_present = true
 	Controls.locked = false
 	Net.epoch = int(m.e)
 	var sv: Dictionary = m.save
