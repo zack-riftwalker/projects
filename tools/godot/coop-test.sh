@@ -27,12 +27,12 @@ one() { # scenario [env...]
   wait $h; wait $g
   stop_srv
   # the watchdog's broken rules and script errors fail any scenario (co-log makes an error on purpose)
-  if grep -h "INVARIANT" "$TMP/$s.host.log" "$TMP/$s.guest.log"; then return 1; fi
+  if [ "$s" != co-watchdog ] && grep -h "INVARIANT" "$TMP/$s.host.log" "$TMP/$s.guest.log"; then return 1; fi
   if [ "$s" != co-log ] && grep -h -A2 "SCRIPT ERROR" "$TMP/$s.host.log" "$TMP/$s.guest.log"; then return 1; fi
   grep -q "COOP $s host PASS" "$TMP/$s.host.log" && grep -q "COOP $s guest PASS" "$TMP/$s.guest.log"
 }
 
-ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-bench co-lostdie co-coffee co-restart co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-solo co-badline co-pauserestart co-bossdmg co-stomp co-home co-log"
+ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-bench co-lostdie co-coffee co-restart co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-solo co-badline co-pauserestart co-bossdmg co-stomp co-home co-log co-fx co-watchdog co-soak"
 list=${1:-all}; [ "$list" = all ] && list=$ALL
 bad=0
 for s in $list; do
@@ -43,6 +43,10 @@ for s in $list; do
     done
     unset SCN_SLOW
     [ $ok = 1 ] && echo "PASS co-badline" || { echo "FAIL co-badline"; bad=1; }
+    continue
+  fi
+  if [ "$s" = co-soak ]; then              # two bots on a bad line for SOAK_S seconds (90): the watchdog and script errors judge it
+    if one co-soak SIM_LAG=150 SIM_JITTER=60 SIM_STALL_PCT=5 SCN_SLOW=1; then echo "PASS co-soak"; else echo "FAIL co-soak"; bad=1; grep -hE "COOP|INVARIANT|SCRIPT ERROR" "$TMP/co-soak.host.log" "$TMP/co-soak.guest.log" | tail -20; fi
     continue
   fi
   if one "$s"; then echo "PASS $s"; else echo "FAIL $s"; bad=1; grep -hE "COOP|SCRIPT ERROR|ERROR" "$TMP/$s.host.log" "$TMP/$s.guest.log" 2>/dev/null | tail -20; fi

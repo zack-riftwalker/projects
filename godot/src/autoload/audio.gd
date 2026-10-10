@@ -31,7 +31,16 @@ func _ready() -> void:
 	add_child(music_a)
 	add_child(music_b)
 
+var room_ctx = null                 # the room being simulated right now (RoomManager.tick sets it)
+var listen_room = null              # the local player's room: only its sounds play here
+var other_room_skipped := 0         # (counted for the tests)
+
 func sfx(sfx_name: String, opts := {}) -> void:
+	if room_ctx != null:
+		room_ctx.rec_sound(sfx_name, opts)          # (the guest in that room hears it too)
+		if listen_room != null and room_ctx != listen_room:
+			other_room_skipped += 1
+			return                    # a sound of the partner's room, simulated on this PC: not for this player's ears
 	if Game.mute or Game.vol_sfx <= 0 or not streams.has(sfx_name):
 		return
 	var now := Time.get_ticks_msec()

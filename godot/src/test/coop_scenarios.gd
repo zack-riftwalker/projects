@@ -90,6 +90,120 @@ func sc_co_connect() -> Array:
 	var ok2 := await wait_until(func(): return mgr().room.ents.size() >= want and coop().snaps_applied > 0, 3.0)
 	return [ok2, "creatures %d of %d, snapshots %d" % [mgr().room.ents.size(), want, coop().snaps_applied]]
 
+# the host's effects and sounds reach the guest in that room (the JS game relayed them; the Godot guest saw none of them), and
+# the host no longer hears the sounds of the guest's room
+func sc_co_fx() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "R02", 10.0)
+		await wait_secs(1.0)
+		var r: Room = coop()._remote_room()
+		var s0: int = Audio.other_room_skipped
+		var b := spawn_bug(r, coop().remote.x + 40.0, floor_y(r, coop().remote.x + 40.0, 9) + 1.0)
+		await wait_secs(0.5)
+		Audio.room_ctx = r                  # (a world event in that room, as RoomManager.tick would run it)
+		b.hit(9, 1.0, 0.0, "swipe", b)
+		Audio.room_ctx = null
+		var killed: bool = b.dead            # (a dead creature is freed soon after)
+		await wait_secs(2.0)
+		var skipped: int = Audio.other_room_skipped - s0
+		return [there and killed and skipped > 0, "guest in R02 %s, bug killed %s, sounds of that room not played here %d" % [there, killed, skipped]]
+	await wait_secs(1.0)
+	mgr().swap_to("R02", Vector2(60.0, 100.0))
+	var f0: int = coop().fx_played
+	var got := await wait_until(func(): return coop().fx_played > f0 + 2, 8.0)
+	return [got, "host effects played here: %d" % (coop().fx_played - f0)]
+
+# Soak (the JS game had one): two bots play for SOAK_S seconds (90 by default) on a bad line (coop-test.sh runs this one with
+# lag, jitter and stalls): they run, jump, claw and dash, die, change rooms, pause, rest, and the guest's line drops once.
+# Nothing is checked step by step: the watchdog's rules (any INVARIANT line fails the run) and script errors are the test.
+func _bot(rng: RandomNumberGenerator, st: Dictionary) -> Dictionary:
+	st.t -= get_physics_process_delta_time()
+	if st.t <= 0.0:
+		st.t = rng.randf_range(0.6, 2.0)
+		st.dir = "right" if rng.randf() < 0.6 else "left"
+	var inp := {st.dir: true}
+	if rng.randf() < 0.04:
+		inp["jump"] = true
+	if rng.randf() < 0.08:
+		inp["attack"] = true
+	if rng.randf() < 0.01:
+		inp["dash"] = true
+	return inp
+
+func sc_co_soak() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var secs := float(OS.get_environment("SOAK_S")) if OS.get_environment("SOAK_S") != "" else 90.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7 if role == "host" else 11
+	var st := {"t": 0.0, "dir": "right"}
+	var t0 := Time.get_ticks_msec()
+	var done := {}
+	var rooms := ["R01", "R02", "R03", "R04"]
+	while (Time.get_ticks_msec() - t0) / 1000.0 < secs:
+		var t := (Time.get_ticks_msec() - t0) / 1000.0
+		var p = mgr().player
+		Controls.script_input = _bot(rng, st)
+		if role == "host":
+			if t > 15.0 and not done.has("pause"):
+				done["pause"] = true
+				main.set_paused(true)
+				await wait_secs(2.0)
+				main.set_paused(false)
+			if t > 30.0 and not done.has("die") and p != null and not p.dead:
+				done["die"] = true
+				p.hp = 0
+				p.die()
+			if t > 45.0 and not done.has("room"):
+				done["room"] = true
+				mgr().swap_to(rooms[rng.randi() % rooms.size()], Vector2(60.0, 100.0))
+			if t > 62.0 and not done.has("restart"):
+				done["restart"] = true
+				main.pause_menu.restart_requested.emit()
+		else:
+			if t > 20.0 and not done.has("die") and p != null and not p.dead:
+				done["die"] = true
+				p.hp = 0
+				p.die()
+			if t > 35.0 and not done.has("room"):
+				done["room"] = true
+				mgr().swap_to("R02", Vector2(60.0, 100.0))
+			if t > 50.0 and not done.has("drop"):
+				done["drop"] = true
+				Net._force_close()           # the line drops: the relay keeps the seat, the guest comes back with its token
+			if t > 70.0 and not done.has("rest") and mgr().room.id == "R02" and not mgr().room.cps.is_empty() and p != null:
+				done["rest"] = true
+				mgr().rest(mgr().room, 0)
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	await wait_secs(4.0)                 # let it settle: the line comes back, deaths resolve
+	var ok: bool = Game.errors == 0 and coop().watchdog.count == 0 and Net.is_open
+	var info := "errors %d, watchdog reports %d, line open %s, events done %s" % [Game.errors, coop().watchdog.count, Net.is_open, str(done.keys())]
+	if role == "host":
+		ok = ok and coop().remote != null and coop().guest_ready
+	else:
+		var s0: int = coop().snaps_applied
+		var flowing := await wait_until(func(): return coop().snaps_applied > s0 + 5, 5.0)
+		ok = ok and flowing
+		info += ", snapshots flowing %s" % flowing
+	return [ok, info]
+
+# the watchdog itself: a stray partner body (a ghost, as G5 made) must be reported within a few seconds
+func sc_co_watchdog() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		var ghost := RemotePlayer.new(mgr().room)
+		mgr().room.add_child(ghost)
+		var seen := await wait_until(func(): return coop().watchdog.count > 0, 6.0)
+		ghost.queue_free()
+		return [seen, "ghost body reported: %s" % seen]
+	await wait_secs(8.0)
+	return [true, "guest idle"]
+
 # the guest's log lines and its script errors reach the host's log (one copy from the PC has both sides)
 func _boom():
 	var d := {}

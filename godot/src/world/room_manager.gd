@@ -195,8 +195,11 @@ func tick(dt: float) -> void:
 		return
 	Controls.poll()
 	Game.play_time += dt
+	Audio.listen_room = room
 	for r in rooms.values():
+		Audio.room_ctx = r
 		r.step(dt)
+	Audio.room_ctx = null
 
 func _tick_transition(dt: float) -> void:
 	trans.t += dt

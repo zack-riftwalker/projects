@@ -329,16 +329,60 @@ func reserved(tx: int, ty: int) -> bool:
 	return ch != " " and ch != "."
 
 # ---------------------------------------------------------------- effects (the JS Level helpers; the work is in Fx)
-func shake(a: float) -> void: fx.shake(a)
-func stop(t: float) -> void: hitstop = maxf(hitstop, t)
-func flash_screen(a: float, col = null) -> void: fx.flash_screen(a, col)
+# Co-op, as in the JS game: on the host every effect and sound of a room the guest is in is also written down (fx_out) and goes
+# out with the next snapshot, tagged with its cause: p1 the host player, p2 the guest (its hits applied here), all the world.
+# The guest plays them at the moment its delayed view reaches them; the partner's shakes and flashes stay on the partner's screen.
+var fx_out: Array = []
+var ctx := "all"
+
+static func _plain(v):
+	if v is Color:
+		return "#" + v.to_html(false)
+	if v is float:
+		return snappedf(v, 0.1)
+	if v is Array:
+		return v.map(func(x): return _plain(x))
+	return v
+
+func _rec(e: Array) -> void:
+	if mode == "host" and not remote_players.is_empty() and fx_out.size() < 80:
+		var out: Array = e.map(func(x): return _plain(x))
+		out.append(ctx)
+		fx_out.append(out)
+
+func rec_sound(sfx_name: String, opts: Dictionary) -> void:
+	_rec(["S", sfx_name, float(opts.get("vol", 1.0))])
+
+func shake(a: float) -> void:
+	_rec(["shake", a])
+	if ctx != "p2":                     # the partner's hits shake the partner's screen only
+		fx.shake(a)
+func stop(t: float) -> void:
+	if ctx != "p2":                     # (no hitstop here for the partner's hits either)
+		hitstop = maxf(hitstop, t)
+func flash_screen(a: float, col = null) -> void:
+	_rec(["flash_screen", a, col])
+	if ctx != "p2":
+		fx.flash_screen(a, col)
 func part(px: float, py: float, pvx: float, pvy: float, life: float, size: float, col, grav := 0.0, o = null): return fx.part(px, py, pvx, pvy, life, size, col, grav, o)
-func burst(px: float, py: float, n: int, cols, spd: float, grav := 300.0, o = null) -> void: fx.burst(px, py, n, cols, spd, grav, o)
-func dust(px: float, py: float, n: int, dir := 0.0) -> void: fx.dust(px, py, n, dir)
-func ring(px: float, py: float, r0: float, r1: float, col, life: float) -> void: fx.ring(px, py, r0, r1, col, life)
-func pop(px: float, py: float, text: String, col = "#ffffff", big := false) -> void: fx.pop(px, py, text, col, big)
-func spark(px: float, py: float, col = "#ffffff", n := 5) -> void: fx.spark(px, py, col, n)
-func explode(px: float, py: float, size: float, cols = null) -> void: fx.explode(px, py, size, cols)
+func burst(px: float, py: float, n: int, cols, spd: float, grav := 300.0, o = null) -> void:
+	_rec(["burst", px, py, n, cols, spd, grav, o])
+	fx.burst(px, py, n, cols, spd, grav, o)
+func dust(px: float, py: float, n: int, dir := 0.0) -> void:
+	_rec(["dust", px, py, n, dir])
+	fx.dust(px, py, n, dir)
+func ring(px: float, py: float, r0: float, r1: float, col, life: float) -> void:
+	_rec(["ring", px, py, r0, r1, col, life])
+	fx.ring(px, py, r0, r1, col, life)
+func pop(px: float, py: float, text: String, col = "#ffffff", big := false) -> void:
+	_rec(["pop", px, py, text, col, big])
+	fx.pop(px, py, text, col, big)
+func spark(px: float, py: float, col = "#ffffff", n := 5) -> void:
+	_rec(["spark", px, py, col, n])
+	fx.spark(px, py, col, n)
+func explode(px: float, py: float, size: float, cols = null) -> void:
+	_rec(["explode", px, py, size, cols])
+	fx.explode(px, py, size, cols)
 
 func drop(px: float, py: float, n: int, kind := "token") -> void:
 	for i in range(n):
@@ -647,7 +691,9 @@ func step(dt: float) -> void:
 	_move_platforms()
 
 	if p != null:
+		ctx = "p1"
 		p.update(dt)
+		ctx = "all"
 	_check_door()
 
 	# creatures (only the ones near a player think)
@@ -843,8 +889,10 @@ func interact() -> void:
 	var p = player
 	if p == null or p.dead or p.gone:
 		return
+	ctx = "p1"
 	interact_combat(p)
 	interact_goals(p)
+	ctx = "all"
 
 # what is under a player's feet that hurts: "" , "spike" , "liq" or "pit"
 func hazard_at(p) -> String:

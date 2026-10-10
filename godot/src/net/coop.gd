@@ -57,6 +57,8 @@ var host_lagging := false
 var line_down := false
 var snaps_applied := 0
 var zones_seen := {}
+var fx_played := 0              # guest: how many of the host's effects and sounds were played (the tests read it)
+var fx_q: Array = []             # guest: the host's effects and sounds, each played when the delayed view reaches it [at, entry]
 
 func setup(m) -> void:
 	main = m
@@ -162,10 +164,38 @@ func _on_room_built(r: Room) -> void:
 func _on_room_changed(r: Room) -> void:
 	if role == "guest":
 		puppets.clear()
+		fx_q.clear()                   # (effects of the room just left must not play in the new one)
 		host_body = null
 		zones_seen.clear()
 		if started:
 			Net.rel("room", {"to": r.id, "door": ""})
+
+const FX_NAMES := ["burst", "ring", "spark", "pop", "explode", "dust", "shake", "flash_screen"]
+const ECHO := ["hit", "clang", "squish", "bossHit", "token"]     # this screen already played them for its own actions
+
+# the host's effects and sounds (fx_out on the host), at the moment the delayed view shows what caused them. The host player's
+# shakes and flashes stay on the host's screen; the sounds the host player makes are quieter the farther away it is.
+func _play_fx(r: Room, p) -> void:
+	var now := hms()
+	while not fx_q.is_empty() and float(fx_q[0][0]) <= now:
+		var e: Array = fx_q.pop_front()[1]
+		if e.is_empty():
+			continue
+		var cause := String(e[e.size() - 1])
+		var what := String(e[0])
+		if what == "S":
+			if cause == "p2" and String(e[1]) in ECHO:
+				continue
+			var vol: float = float(e[2])
+			if cause == "p1" and host_body != null and p != null:
+				vol *= clampf(1.0 - Vector2(p.x - host_body.x, p.y - host_body.y).length() / 320.0, 0.25, 1.0)
+			Audio.sfx(String(e[1]), {"vol": vol})
+			fx_played += 1
+		elif what in FX_NAMES:
+			if (what == "shake" or what == "flash_screen") and cause == "p1":
+				continue
+			r.callv(what, e.slice(1, e.size() - 1))
+			fx_played += 1
 
 # a bad line: a round trip over 250 ms, a jumpy line or a host that went quiet
 func _laggy() -> bool:
@@ -465,7 +495,7 @@ func _host_hit(d: Dictionary) -> void:
 				var dmg := clampi(int(d.dmg), 1, 2) if how == "swipe" else (1 if how == "dash" else maxi(1, e.hp))
 				r.attacker = remote
 				var boxes: Array = e.hurtboxes()
-				e.hit(dmg, float(d.dx), float(d.dy), how, boxes[0] if boxes.size() > 0 else e)
+				_as_p2(r, func(): e.hit(dmg, float(d.dx), float(d.dy), how, boxes[0] if boxes.size() > 0 else e))
 	verdicts[verdict] = int(verdicts.get(verdict, 0)) + 1
 	if verdict != "OK":
 		log_("P2 %s eid %d: %s" % [String(d.how), nid, verdict])
@@ -484,7 +514,17 @@ func _host_crack(d: Dictionary) -> void:
 		return
 	if Vector2(tx * 16 + 8, ty * 16 + 8).distance_to(Vector2(remote.x + 5, remote.y + 5)) > 32.0 + 24.0:
 		return
-	r.break_tile(tx, ty)
+	_as_p2(r, func(): r.break_tile(tx, ty))
+
+# what the guest did, applied on this PC: its effects carry p2 (the guest showed its own already) and its sounds belong to its room
+func _as_p2(r: Room, f: Callable) -> void:
+	var c0 := r.ctx
+	var a0 = Audio.room_ctx
+	r.ctx = "p2"
+	Audio.room_ctx = r
+	f.call()
+	r.ctx = c0
+	Audio.room_ctx = a0
 
 func _host_pickup(d: Dictionary) -> void:
 	var r := _remote_room()
@@ -505,7 +545,7 @@ func _host_pickup(d: Dictionary) -> void:
 		if not String(it.id).begins_with("L"):
 			r.got[it.id] = true
 			Game.flags[it.id] = true
-		r.spark(it.x, it.y, Game.COL.goldHi, 4)
+		_as_p2(r, func(): r.spark(it.x, it.y, Game.COL.goldHi, 4))
 		if it.kind == "spark":
 			Game.fragments += 1
 			if Game.fragments % 4 == 0 and mgr.player != null:
@@ -745,6 +785,9 @@ func _send_snapshot() -> void:
 		s["bn"] = [r.banner.text, r.banner.sub]
 	if r.stats_line != "" and r.stats_t > 0.0:
 		s["sl"] = r.stats_line
+	if not r.fx_out.is_empty():
+		s["fx"] = r.fx_out
+		r.fx_out = []
 	snap_sent[snap_n] = hms()
 	if snap_sent.size() > 120:
 		snap_sent.erase(snap_sent.keys()[0])
@@ -823,6 +866,7 @@ func _guest_tick(dt: float) -> void:
 	for id in puppets:
 		_puppet_follow(puppets[id], rt, dt)
 	r.lenient = _laggy()
+	_play_fx(r, p)
 	dl_acc += dt
 	if dl_acc >= 0.5 and not Game.log_out.is_empty() and Net.is_open:
 		dl_acc = 0.0
@@ -922,10 +966,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 			var e2 = puppets[id]
 			puppets.erase(id)
 			r.ents.erase(e2)
-			if not (e2 is NullBoss):
-				r.burst(e2.cx, e2.cy, 8, [e2.col, "#ffffff"], 110.0, 300.0)
-				Audio.sfx("kill")
-			e2.queue_free()
+			e2.queue_free()               # (its death burst and sound come from the host, in fx)
 	# items (host truth; the pickup request flag survives)
 	var old_items := {}
 	for i in r.items:
@@ -976,6 +1017,10 @@ func _apply_snapshot(m: Dictionary) -> void:
 		r.banner = {"text": m.bn[0], "sub": m.bn[1], "t": 1.0}
 	else:
 		r.banner.text = ""
+	var at := hms() + clampf(snap_interval + 2.0 * Net.jitter, 0.08, 0.3)
+	for e in m.get("fx", []):
+		if fx_q.size() < 200:
+			fx_q.append([at, e])
 	r.stats_line = String(m.get("sl", ""))
 	r.stats_t = 1.0 if m.has("sl") else 0.0
 	# the host's body
