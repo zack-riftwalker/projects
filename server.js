@@ -41,9 +41,9 @@ function serveFile(req, res, rel) {
   const h = { 'Content-Type': MIME[path.extname(rel)] || 'application/octet-stream', ETag: ent.etag, 'Cache-Control': isMp3 ? 'public, max-age=31536000, immutable' : 'no-cache' };
   if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, h); return res.end(); }
   let body = ent.raw;
-  if (pre) {               // already gzip: send as is when the browser takes gzip (all do), unpack once otherwise
+  if (pre) {               // already gzip: send as is when the browser takes gzip (all do), unpack per request otherwise (not cached: ~40 MB for the wasm)
     h.Vary = 'Accept-Encoding';
-    if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) h['Content-Encoding'] = 'gzip'; else body = ent.plain || (ent.plain = zlib.gunzipSync(ent.raw));
+    if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) h['Content-Encoding'] = 'gzip'; else body = zlib.gunzipSync(ent.raw);
   } else
   if (ent.gz) {            // brotli (every current browser asks for it) is ~20 % smaller than gzip
     const ae = req.headers['accept-encoding'] || '';
