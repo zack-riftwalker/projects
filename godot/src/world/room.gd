@@ -15,6 +15,8 @@ var h := 0
 var pw := 0                # width in pixels
 var ph := 0
 var ents: Array = []
+var stomp_n := 0                 # guest: every stomp is its own attack (a stomp has no attack id of its own)
+var lenient := false             # guest on a bad line: no damage from creatures whose place is only guessed (set by Coop)
 var items: Array = []
 var plats: Array = []
 var projs: Array = []
@@ -873,20 +875,33 @@ func _hit_entity(e, d: int, dx: float, dy: float, how: String, b) -> String:
 	if e.has_method("blocks") and e.blocks(dx, dy, how):
 		res = "block"
 	var p = player
-	var atk_val: int = p.dash_id if how == "dash" else p.atk_id
+	if how == "stomp":
+		stomp_n += 1
+	var atk_val: int = p.dash_id if how == "dash" else (stomp_n if how == "stomp" else p.atk_id)
 	net_hit.emit(e.nid, how, d, dx, dy, atk_val)
-	if res == "hit" and e.hp - d <= 0:        # the host will kill it: the dash must not cost the guest hp (as solo)
+	# predict the outcome, as the JS game does: a creature this hit kills can no longer hurt me or be hit again, although the
+	# host's word of its death is a round trip away (the guess expires after 1 s if the host disagrees)
+	var base: int = int(e.get_meta("ph", e.hp)) if float(e.get_meta("ph_t", -1.0)) > time else e.hp
+	if not e.get("is_boss"):
+		e.set_meta("ph", base - d)
+		e.set_meta("ph_t", time + 1.0)
+		if base - d <= 0:
+			e.set_meta("pdead", time + 1.0)
+	if res == "hit" and base - d <= 0:        # the host will kill it: the dash must not cost the guest hp (as solo)
 		res = "kill"
 	if res == "hit":
 		Audio.sfx("hit")
 	return res
+
+func pred_dead(e) -> bool:
+	return mode == "guest" and float(e.get_meta("pdead", -1.0)) > time
 
 func interact_combat(p) -> void:
 	# claw
 	if p.atk_t > 0.0 and p.atk_live:
 		var box: Dictionary = p.atk_box()
 		for e in ents:
-			if e.dead or e.marks.get(p.hit_key, 0) == p.atk_id or e.no_hit:
+			if e.dead or e.marks.get(p.hit_key, 0) == p.atk_id or e.no_hit or pred_dead(e):
 				continue
 			for b in e.hurtboxes():
 				if not Game.overlap(box, b):
@@ -915,7 +930,7 @@ func interact_combat(p) -> void:
 	# touching
 	var hb: Dictionary = p.hurtbox()
 	for e in ents:
-		if e.dead:
+		if e.dead or pred_dead(e):
 			continue
 		for b in e.harmboxes():
 			if not Game.overlap(hb, b):
@@ -947,7 +962,7 @@ func interact_combat(p) -> void:
 				p.gain_meter()
 				if res3 != "":
 					stop(0.05)
-			elif p.grace <= 0.0:
+			elif p.grace <= 0.0 and not (lenient and e.get_meta("ex", false)):
 				p.hurt(e.dmg, b.x + b.w / 2.0)
 			break
 	# spikes, liquid, pits

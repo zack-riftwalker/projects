@@ -42,6 +42,7 @@ func run(name: String) -> bool:
 		"relpend": return t_relpend()
 		"misc": return t_misc()
 		"nullcoop": return t_nullcoop()
+		"guestpred": return t_guestpred()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -785,3 +786,53 @@ func t_nullcoop() -> bool:
 	var blast_hurt: bool = p.hp < hp0
 	pup.free()
 	return report("nullcoop", picks[0] >= 2 and picks[1] >= 2 and lead_ok and armed and blast_hurt, "targets P1 %d P2 %d, lead x %.0f (from 205), puppet armed %s, blast hurt %s" % [picks[0], picks[1], ap.x, armed, blast_hurt])
+
+# the guest's page (as the JS game): a creature my swipe kills cannot hurt me while the host's word is on its way; on a bad
+# line a creature whose place is only guessed does not hurt either; every stomp is its own attack
+func t_guestpred() -> bool:
+	Game.diff = "normal"
+	var room := new_room()
+	clear_ents(room)
+	room.cam.x = 0.0
+	var p = room.player
+	for i in range(30):
+		step_with(room, {})
+	room.mode = "guest"
+	var b := add_bug(room, p.x + p.w + 6.0, 199, -1)
+	b.hp = 1
+	b.speed = 0.0
+	b.nid = 7
+	var sent: Array = []
+	room.net_hit.connect(func(nid, how, dmg, dx, dy, atk): sent.append([how, atk]))
+	p.face = 1.0
+	step_with(room, {"attack": true})
+	for f in range(6):
+		step_with(room, {})
+	var predicted: bool = room.pred_dead(b)
+	b.x = p.x                           # the (not yet removed) creature now overlaps the guest
+	b.y = p.y
+	var hp0: int = p.hp
+	for f in range(10):
+		step_with(room, {})
+	var safe: bool = p.hp == hp0
+	# lenient: a guessed creature does not hurt
+	var b2 := add_bug(room, p.x, p.y, -1)
+	b2.speed = 0.0
+	b2.set_meta("ex", true)
+	room.lenient = true
+	p.inv = 0.0
+	for f in range(10):
+		step_with(room, {})
+	var lenient_ok: bool = p.hp == hp0
+	room.lenient = false
+	for f in range(10):
+		step_with(room, {})
+	var strict_hurts: bool = p.hp < hp0
+	# two stomps: two different attack numbers
+	var n0: int = room.stomp_n
+	room._hit_entity(b2, 1, 0.0, 1.0, "stomp", b2)
+	room._hit_entity(b2, 1, 0.0, 1.0, "stomp", b2)
+	var stomps: Array = sent.filter(func(x): return x[0] == "stomp")
+	var stomp_ok: bool = room.stomp_n == n0 + 2 and stomps.size() == 2 and stomps[0][1] != stomps[1][1]
+	Controls.script_input = null
+	return report("guestpred", predicted and safe and lenient_ok and strict_hurts and stomp_ok, "kill predicted %s, safe from it %s, guessed creature forgiven %s (hurts when not lenient %s), stomp ids %s" % [predicted, safe, lenient_ok, strict_hurts, str(stomps)])

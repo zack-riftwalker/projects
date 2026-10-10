@@ -142,8 +142,12 @@ func _on_room_built(r: Room) -> void:
 		r.item_collected.connect(func(id, kind): _host_item(r, id, kind))
 		r.fight_intro.connect(func(): _host_fight_intro(r))
 	elif role == "guest":
-		r.net_hit.connect(func(nid, how, dmg, dx, dy, atk): Net.rel("hit", {"eid": nid, "how": how, "dmg": dmg, "dx": dx, "dy": dy, "atk": atk}))
-		r.net_hurt.connect(func(d): Net.rel("hurt", {"d": d}))
+		r.net_hit.connect(func(nid, how, dmg, dx, dy, atk): Net.rel("hit", {"eid": nid, "how": how, "dmg": dmg, "dx": dx, "dy": dy, "atk": atk,
+			"px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
+		r.net_hurt.connect(func(d):
+			Net.rel("hurt", {"d": d})
+			if _laggy() and mgr.player != null:
+				mgr.player.inv += 0.4)          # a bad line: a little more mercy after each hit (as the JS game)
 		r.net_projhit.connect(func(pid): Net.rel("projhit", {"pid": pid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
@@ -155,6 +159,10 @@ func _on_room_changed(r: Room) -> void:
 		zones_seen.clear()
 		if started:
 			Net.rel("room", {"to": r.id, "door": ""})
+
+# a bad line: a round trip over 250 ms, a jumpy line or a host that went quiet
+func _laggy() -> bool:
+	return Net.rtt > 0.25 or Net.jitter > 0.08 or host_lagging
 
 func _on_local_died(r: Room) -> void:
 	if role == "host":
@@ -413,31 +421,30 @@ func _host_hit(d: Dictionary) -> void:
 		if int(e.marks.get(key, -1)) == int(d.atk):
 			verdict = "ALREADY"
 		else:
-			var box: Dictionary = remote.atk_box() if how == "swipe" else remote.hurtbox()
-			var window := Net.rtt / 2.0 + 0.35
-			var mine: Array = [box]
-			if how != "swipe":
-				# a stomp or a dash is the body itself, and the body seen here is 0.1 s or more behind: falling onto a creature it is
-				# still well above it. Its own recent reports are where it really was.
-				for smp in remote.samples:
-					if hms() - float(smp[0]) <= window:
-						mine.append({"x": smp[1] + 1.0, "y": smp[2] + 1.0, "w": remote.w - 2.0, "h": remote.h - 1.0})
-			var near := false
-			var up := 14.0 if how == "stomp" else 3.0       # falling, the body moves ~9 px between two reports and lands between them
-			var hist: Array = r.hist.get(nid, [])
-			for rec in hist:
-				if r.time - float(rec[0]) > window:
-					continue
-				for b in rec[1]:
-					for mb in mine:
-						if Game.overlap(mb, {"x": b.x - 3, "y": b.y - up, "w": b.w + 6, "h": b.h + 3 + up}):
-							var bc := Vector2(b.x + b.w / 2.0, b.y + b.h / 2.0)
-							if bc.distance_to(Vector2(mb.x + 4, mb.y + 4)) <= 64.0 + 40.0:
-								near = true
-			if not near:
-				for b in e.hurtboxes():
-					if Game.overlap(box, b) and Vector2(b.x + b.w / 2.0, b.y + b.h / 2.0).distance_to(Vector2(remote.x + 5, remote.y + 5)) <= 104.0:
-						near = true
+			# Lag compensation, as in the JS game: P2 hit the creature where ITS screen showed it, a round trip and the smoothing delay
+			# ago. So the distance is measured from where P2 says it stood, where this page sees it and where its recent reports put
+			# it, to where the creature was at any moment of the last second; the limit grows with speed and ping.
+			var pts: Array = [Vector2(remote.x + 5, remote.y + 5)]
+			if d.has("px"):
+				var gp := Vector2(float(d.px) + 5.0, float(d.py) + 5.0)
+				if absf(gp.x - remote.x - 5.0) + absf(gp.y - remote.y - 5.0) < 240.0:
+					pts.append(gp)
+			for smp in remote.samples:
+				if hms() - float(smp[0]) <= Net.rtt / 2.0 + 0.35:
+					pts.append(Vector2(smp[1] + 5.0, smp[2] + 5.0))
+			var bd := 1e9
+			var boxes_all: Array = e.hurtboxes().duplicate()
+			for rec in r.hist.get(nid, []):
+				boxes_all.append_array(rec[1])
+			for bx in boxes_all:
+				for pt in pts:
+					var ddx: float = maxf(maxf(bx.x - pt.x, 0.0), pt.x - (bx.x + bx.w))
+					var ddy: float = maxf(maxf(bx.y - pt.y, 0.0), pt.y - (bx.y + bx.h))
+					bd = minf(bd, sqrt(ddx * ddx + ddy * ddy))
+			var lim: float = 64.0 + (absf(e.vx) + absf(e.vy) + absf(remote.vx)) * (0.3 + Net.rtt) + 120.0 * Net.rtt
+			var near: bool = bd <= lim
+			if how == "stomp" and not e.stompable:
+				near = false
 			if not near:
 				verdict = "TOO FAR"
 			else:
@@ -447,6 +454,8 @@ func _host_hit(d: Dictionary) -> void:
 				var boxes: Array = e.hurtboxes()
 				e.hit(dmg, float(d.dx), float(d.dy), how, boxes[0] if boxes.size() > 0 else e)
 	verdicts[verdict] = int(verdicts.get(verdict, 0)) + 1
+	if verdict != "OK":
+		log_("P2 %s eid %d: %s" % [String(d.how), nid, verdict])
 	if Game.debug:
 		print("P2 hit %s eid %d" % [verdict, nid])
 
@@ -576,9 +585,12 @@ func _revive_host() -> void:
 	p.inv = 1.5
 	p.vx = 0.0
 	p.vy = 0.0
-	if remote == null or _remote_room() != mgr.room:
+	if remote == null or _remote_room() != mgr.room or remote.dead:
 		p.x = p.safe.x
 		p.y = p.safe.y
+	else:                               # next to the partner, as in the JS game (not under the boss where it fell)
+		p.x = remote.x
+		p.y = remote.y - 2.0
 	mgr.room.ring(p.x + 5, p.y + 5, 2, 18, Game.COL.clawdHi, 0.3)
 	log_("host: host got up")
 
@@ -586,7 +598,13 @@ func _revive_guest() -> void:
 	var same := _remote_room() == mgr.room
 	remote.dead = false
 	remote.down_t = -1.0
-	Net.rel("revive", {"x4": NetClasses.x4(remote.x), "y4": NetClasses.x4(remote.y), "hp": 3, "same": same})
+	var hp_ = mgr.player                 # next to the host, as in the JS game
+	var rx: float = hp_.x if same else remote.x
+	var ry: float = hp_.y - 2.0 if same else remote.y
+	remote.x = rx
+	remote.y = ry
+	remote.samples.clear()
+	Net.rel("revive", {"x4": NetClasses.x4(rx), "y4": NetClasses.x4(ry), "hp": 3, "same": same})
 	log_("host: guest revive sent")
 
 # also the host's "Restart room" (count_death false): the guest owns its body, so it is moved by the same event, not left behind
@@ -789,6 +807,9 @@ func _guest_tick(dt: float) -> void:
 		host_body.follow(rt + 0.08)
 	for id in puppets:
 		_puppet_follow(puppets[id], rt, dt)
+	r.lenient = _laggy()
+	if r.boss != null and (r.boss.dying or r.boss.dead):
+		p.inv = maxf(p.inv, 0.5)            # the boss is going down: nothing hurts any more (as the JS game)
 	# the guest's body goes out 30 times a second (20 on a bad line)
 	st_acc += dt
 	var hz := ST_HZ if Net.rtt < 0.2 else 20.0
@@ -816,6 +837,7 @@ func _puppet_follow(e, rt: float, dt: float) -> void:
 	if s.is_empty():
 		return
 	var last: Array = s[s.size() - 1]
+	e.set_meta("ex", rt >= last[0] + 0.05)      # only guessed (no fresh snapshot): a bad line forgives its touch
 	if rt >= last[0]:
 		var ex := minf(rt - last[0], 0.25)
 		e.x = last[1] + e.vx * ex

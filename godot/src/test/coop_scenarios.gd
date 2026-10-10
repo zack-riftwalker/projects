@@ -219,18 +219,22 @@ func sc_co_revive() -> Array:
 		return [down and up and secs > 5.0 and secs < 8.5 and both and back, "guest down %s, back after %.1f s, both down %s, both back on their benches %s" % [down, secs, both, back]]
 	await wait_secs(3.0)
 	var p2 = mgr().player
+	p2.x += 90.0                        # fall away from the host: the revive puts P2 next to it (as the JS game)
+	await wait_secs(0.5)
 	p2.hp = 0
 	p2.die()
 	var t1 := Time.get_ticks_msec()
 	var up2 := await wait_until(func(): return not p2.dead, 12.0)
 	var secs2 := (Time.get_ticks_msec() - t1) / 1000.0
 	var hp_back: int = p2.hp
+	var hb = coop().host_body
+	var beside: bool = hb != null and absf(p2.x - hb.x) < 30.0
 	# then both go down
 	await wait_secs(2.0)
 	p2.hp = 0
 	p2.die()
 	var back2 := await wait_until(func(): return mgr().player != null and not mgr().player.dead and mgr().room.id == "R01" and mgr().player.hp == mgr().player.max_hp, 10.0)
-	return [up2 and secs2 > 5.0 and secs2 < 9.0 and hp_back == 3 and back2, "back after %.1f s with %d hp, after both down: alive in %s hp %d" % [secs2, hp_back, mgr().room.id, mgr().player.hp]]
+	return [up2 and secs2 > 5.0 and secs2 < 9.0 and hp_back == 3 and beside and back2, "back after %.1f s with %d hp, beside the host %s, after both down: alive in %s hp %d" % [secs2, hp_back, beside, mgr().room.id, mgr().player.hp]]
 
 func sc_co_crack() -> Array:
 	Game.tools.bash = true
