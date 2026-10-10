@@ -465,3 +465,27 @@ func sc_co_joinfight() -> Array:
 	Net.message.connect(func(t, _m): if t == "start": starts[0] += 1)
 	var again := await wait_until(func(): return starts[0] >= 1, 8.0)
 	return [again, "start received again: %s" % again]
+
+# the guest rests at a bench in R02, then both go down: the guest comes back at that bench (G9)
+func sc_co_bench() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var known := await wait_until(func(): return coop().guest_bench == "R02", 10.0)
+		await wait_secs(1.0)
+		var p = mgr().player
+		p.hp = 0
+		p.die()
+		await wait_until(func(): return coop().remote.dead and p.dead, 5.0)
+		var back := await wait_until(func(): return mgr().player != null and not mgr().player.dead and not coop().remote.dead and coop()._remote_room() != null and coop()._remote_room().id == "R02", 12.0)
+		return [known and back, "bench known %s, guest respawned in R02 %s" % [known, back]]
+	await wait_secs(1.0)
+	mgr().swap_to("R02", Vector2(60.0, 100.0))
+	await wait_secs(1.0)
+	mgr().rest(mgr().room, 0)
+	await wait_secs(2.0)
+	var p2 = mgr().player
+	p2.hp = 0
+	p2.die()
+	var ok := await wait_until(func(): return not p2.dead and mgr().room.id == "R02", 14.0)
+	return [ok, "guest back in %s" % mgr().room.id]

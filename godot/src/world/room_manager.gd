@@ -9,6 +9,7 @@ signal room_changed(room: Room)
 signal restart_requested
 signal bench_requested(room: Room, index: int)
 signal end_requested
+signal rested(room_id: String)          # the local player rested at a bench (a guest tells the host)
 
 var host: Node2D                 # where rooms are added (Main.world)
 var hud                          # Hud (fade overlay), may be null in tests
@@ -153,6 +154,7 @@ func rest(r: Room, index: int) -> void:
 		r.burst(c.x, c.y - 22, 14, [Game.COL.ok, Game.COL.okHi, "#ffffff"], 100.0, 100.0, {"glow": 1})
 	Audio.sfx("checkpoint")
 	Game.write_save()
+	rested.emit(r.id)
 
 func rested_benches() -> Array:
 	var out: Array = []

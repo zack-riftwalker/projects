@@ -68,6 +68,7 @@ func setup(m) -> void:
 	mgr.local_died.connect(_on_local_died)
 	mgr.room_built.connect(_on_room_built)
 	mgr.room_changed.connect(_on_room_changed)
+	mgr.rested.connect(func(id): if role == "guest": Net.rel("bench", {"room": id}))      # the host respawns the guest there after a wipe
 	Net.connect_as(role, Game.net_code)
 
 func notice_set(text: String, secs: float) -> void:
