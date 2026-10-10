@@ -458,6 +458,8 @@ func _host_pickup(d: Dictionary) -> void:
 				mgr.player.max_hp = Game.max_hp
 				mgr.player.hp = mgr.player.max_hp
 			Game.write_save()
+		if it.kind == "coffee" and Game.diff == "easy" and remote.hp < remote.max_hp:      # (coffee only heals on easy, as in Room.collect)
+			Net.rel("heal", {"n": 1})
 		Net.rel("pick", {"room": r.id, "id": it.id, "by": "p2", "kind": it.kind})
 		return
 
@@ -957,6 +959,8 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				for it in r.items:
 					if String(it.id) == String(d.id):
 						it.dead = true
+			if String(d.kind) == "coffee":
+				Audio.sfx("heal")
 			if String(d.kind) == "token" and String(d.by) == "p2":
 				Game.tokens += 1
 				Audio.sfx("token")

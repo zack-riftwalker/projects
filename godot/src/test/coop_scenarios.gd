@@ -504,3 +504,26 @@ func sc_co_lostdie() -> Array:
 		return [rp.dead and t0 > 5.0, "after the report: down_t=%.1f (want about 6), still down one tick later: %s" % [t0, rp.dead]]
 	await wait_secs(5.0)
 	return [true, "guest idle"]
+
+# the guest drinks a coffee on easy and is healed (G19)
+func sc_co_coffee() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.diff = "easy"
+		await wait_secs(1.5)
+		mgr().player.x += 160.0                     # out of the way: the guest must be the one who picks it up
+		var r: Room = mgr().room
+		var rp = coop().remote
+		r.items.append({"kind": "coffee", "id": "cT1", "x": rp.x + 5.0, "y": rp.y + 5.0, "ph": 0.0})
+		await wait_secs(4.0)
+		var gone := true
+		for it in r.items:
+			if it.id == "cT1" and not it.get("dead", false):
+				gone = false
+		return [gone, "coffee taken by the guest: %s" % gone]
+	await wait_secs(1.0)
+	var p = mgr().player
+	p.hp = 2
+	var healed := await wait_until(func(): return p.hp == 3, 6.0)
+	return [healed, "guest hp 2 -> %d" % p.hp]
