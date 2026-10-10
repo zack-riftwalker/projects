@@ -112,6 +112,22 @@ module.exports = (S, h) => {
       if (process.env.MV_LOG) { console.log(guest.lines.slice(-15).join('\n')); console.log('--host'); await guest.page.screenshot({ path: process.env.MV_LOG + '.png' }); console.log(host.lines.slice(-10).join('\n')); }
       chk('join by code', guest.lines.some((l) => /COOP guest: start received/.test(l)));
       chk('host saw guest', host.lines.some((l) => /COOP host: guest joined/.test(l)));
+      // a join that failed (wrong code), then Back and New game: the world must still start
+      const late = await open('http://' + lan + ':' + srv.port + '/mv/?debug');
+      await late.page.keyboard.press('ArrowDown');
+      await late.page.keyboard.press('Enter');
+      await sleep(300);
+      await late.page.keyboard.type('000000', { delay: 250 });
+      await late.page.keyboard.press('Enter');
+      await sleep(2500);
+      await late.page.keyboard.press('Escape');
+      await sleep(300);
+      await late.page.keyboard.press('Enter');
+      await sleep(500);
+      await late.page.keyboard.down('ArrowRight');
+      for (let i = 0; i < 40 && !late.lines.some((l) => /CLAWD: x=/.test(l)); i++) await sleep(100);
+      await late.page.keyboard.up('ArrowRight');
+      chk('new game after a failed join', late.lines.some((l) => /CLAWD: x=/.test(l)));
     } finally { await browser.close(); await srv.stop(); }
     return R(!fails.length, info.join(' '));
   };

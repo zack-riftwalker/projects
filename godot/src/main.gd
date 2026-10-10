@@ -238,7 +238,8 @@ func _join_from_title(code: String) -> void:
 		coop = Coop.new()
 		coop.name = "Coop"
 		add_child(coop)
-		Net.fatal.connect(_join_failed)
+		if not Net.fatal.is_connected(_join_failed):
+			Net.fatal.connect(_join_failed)
 		coop.setup(self)
 	else:
 		coop.started = false
@@ -248,11 +249,21 @@ func _join_from_title(code: String) -> void:
 func _join_failed(why: String) -> void:
 	if title == null or not title.active:
 		return
-	Net.leave()
+	_drop_join()
 	title.fail("cannot join: " + why)
 
 func _cancel_join() -> void:
+	_drop_join()
+
+# a join that did not happen leaves no guest state behind: New game / Continue / Host co-op must start a normal game afterwards
+func _drop_join() -> void:
 	Net.leave()
+	Game.net_role = ""
+	Game.persist = true
+	if coop != null:
+		coop.queue_free()
+		coop = null
+	title.coop = null
 
 # the world: a save (or a new game), the co-op link, the first room
 func _begin_game(kind: String) -> void:
