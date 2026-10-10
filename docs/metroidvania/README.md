@@ -31,3 +31,9 @@
 | [`../PLAN-metroidvania-phase1.md`](../PLAN-metroidvania-phase1.md) | پلن فاز ۱ (پایه‌ی Godot) | Claude | انجام شد |
 | [`../../godot/`](../../godot) | MV1-01 تا MV1-08: پروژه‌ی Godot | Sonnet | انجام شد |
 | [`../reports/metroidvania-phase1.md`](../reports/metroidvania-phase1.md) | MV1-09: گزارش فاز ۱ و قدم‌های تست گوشی | Sonnet | انجام شد |
+
+## بعد از فاز ۲: ریویو و پایداری co-op
+
+| سند | کار | کی | وضعیت |
+|---|---|---|---|
+| [`07-js-vs-godot.md`](07-js-vs-godot.md) | مقایسه‌ی co-op نسخه‌ی JS با Godot، ریشه‌ی باگ‌ها، ۱۰ قانون برای تغییرهای بعدی، چیزهای باز | Claude | انجام شد |

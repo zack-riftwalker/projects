@@ -63,6 +63,16 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 - Keep the brotli page under 120 KB: the `cache` test checks it.
 - Kill only the servers you started. `pkill -f "node server.js"` can kill your own shell.
 
+## Godot version (`godot/`, branch `ph1`, served at `/mv/`)
+- Godot: `GODOT=$(bash tools/godot/setup-godot.sh | tail -1)`. Full check: `bash tools/godot/test-all.sh` (~25 min: unit tests, parity tapes, web export into `public/mv`, browser checks, every co-op scenario incl. a 90 s soak on a bad line). One co-op scenario: `bash tools/godot/coop-test.sh co-<name>`; one unit test: `$GODOT --headless --path godot -- --test=<name>`.
+- Co-op rules (details: `docs/metroidvania/07-js-vs-godot.md` §3):
+  - State over events: anything that must be right now (music, locks, deaths) is derived each frame or carried in snapshots.
+  - Host-side damage to P2 goes through `room.harm_zone` (the guest checks its own body).
+  - Every creature field the guest's combat reads goes through `NetClasses.record/apply`; the `parity` test fails otherwise.
+  - The partner is seen late: use its recent reports, with limits that grow with ping.
+  - A new kind of co-op bug gets a rule in `godot/src/net/watchdog.gd`. Any `INVARIANT` or `SCRIPT ERROR` line fails a scenario.
+- Commit the web export (`public/mv`) as its own last commit. Both pages must run the same build (debug overlay line 3; "DIFFERENT BUILDS" notice).
+
 ## Style
 - Match the game's compact ES2017 style: `G` namespace, no new dependencies, comments explain *why*.
 - Windows `.bat` files use CRLF (`.gitattributes`).
