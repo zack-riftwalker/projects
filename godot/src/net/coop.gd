@@ -710,9 +710,7 @@ func _send_snapshot() -> void:
 	for e in r.ents:
 		if e.dead and not (e.get("is_boss") and e.dying):
 			continue
-		var rec: Array = [e.nid, NetClasses.cls_of(e), NetClasses.x4(e.x), NetClasses.x4(e.y), roundi(e.vx), roundi(e.vy), e.hp, int(e.face), roundi(maxf(e.flash, 0.0) * 100.0)]
-		rec.append_array(e.net_fields())
-		en.append(rec)
+		en.append(NetClasses.record(e))
 	var it: Array = []
 	for i in r.items:
 		if i.get("dead", false):
@@ -890,13 +888,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 			r.entity_root.add_child(e)
 			if e is NullBoss:
 				r.boss = e
-		e.vx = float(rec[4])
-		e.vy = float(rec[5])
-		e.hp = int(rec[6])
-		e.face = float(rec[7])
-		if int(rec[8]) > 0:
-			e.flash = rec[8] / 100.0
-		e.net_apply(rec.slice(9))
+		NetClasses.apply(e, rec)
 		var samples: Array = e.get_meta("samples", [])
 		samples.append([tm, rec[2] / 4.0, rec[3] / 4.0])
 		while samples.size() > 8:

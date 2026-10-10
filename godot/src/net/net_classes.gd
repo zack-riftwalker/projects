@@ -30,5 +30,22 @@ static func make(cls: int, room: Room):
 	e.puppet = true
 	return e
 
+# one creature in a snapshot: [nid, class, x4, y4, vx, vy, hp, face, flash, ...its own net_fields()]. The host writes it, the
+# guest's puppet reads it (the position goes through the interpolation buffer, so apply() leaves x/y alone). The parity test
+# (run_tests: parity) uses the same two functions, so it checks exactly what the game sends.
+static func record(e) -> Array:
+	var rec: Array = [e.nid, cls_of(e), x4(e.x), x4(e.y), roundi(e.vx), roundi(e.vy), e.hp, int(e.face), roundi(maxf(e.flash, 0.0) * 100.0)]
+	rec.append_array(e.net_fields())
+	return rec
+
+static func apply(e, rec: Array) -> void:
+	e.vx = float(rec[4])
+	e.vy = float(rec[5])
+	e.hp = int(rec[6])
+	e.face = float(rec[7])
+	if int(rec[8]) > 0:
+		e.flash = rec[8] / 100.0
+	e.net_apply(rec.slice(9))
+
 static func x4(v: float) -> int:
 	return roundi(v * 4.0)

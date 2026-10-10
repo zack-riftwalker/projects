@@ -43,6 +43,7 @@ func run(name: String) -> bool:
 		"misc": return t_misc()
 		"nullcoop": return t_nullcoop()
 		"guestpred": return t_guestpred()
+		"parity": return t_parity()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -845,3 +846,102 @@ func t_guestpred() -> bool:
 	var stomp_ok: bool = room.stomp_n == n0 + 2 and stomps.size() == 2 and stomps[0][1] != stomps[1][1]
 	Controls.script_input = null
 	return report("guestpred", predicted and safe and lenient_ok and strict_hurts and stomp_ok, "kill predicted %s, safe from it %s, guessed creature forgiven %s (hurts when not lenient %s), stomp ids %s" % [predicted, safe, lenient_ok, strict_hurts, str(stomps)])
+
+# The JS game's netfields idea, for Godot. Every creature of every room is played on the host with a bot beside it, and every
+# frame its snapshot record goes into a puppet exactly as on the guest (NetClasses.record / apply). What the guest's combat
+# reads from the puppet must match the original: harm and hurt boxes, passive, dmg, dashable, stompable, no_hit (and for a
+# boss active, dying). A mismatch is a field the guest needs that is not sent: NULL's `passive` once was, so its copy on the
+# phone hurt nobody.
+func _boxes(arr: Array) -> Array:
+	var out: Array = []
+	for b in arr:
+		out.append([roundi(b.x), roundi(b.y), roundi(b.w), roundi(b.h)])
+	return out
+
+func _near_boxes(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in range(a.size()):
+		for k in range(4):
+			if absi(int(a[i][k]) - int(b[i][k])) > 1:
+				return false
+	return true
+
+func _parity_diff(e, q) -> String:
+	for f in ["passive", "dmg", "dashable", "stompable", "no_hit"]:
+		if e.get(f) != q.get(f):
+			return f
+	if e.get("is_boss"):
+		for f in ["active", "dying", "phase"]:
+			if e.get(f) != q.get(f):
+				return f
+	if not _near_boxes(_boxes(e.harmboxes()), _boxes(q.harmboxes())):
+		return "harmboxes"
+	if not _near_boxes(_boxes(e.hurtboxes()), _boxes(q.hurtboxes())):
+		return "hurtboxes"
+	return ""
+
+func t_parity() -> bool:
+	var m := new_manager()
+	var frames := {}
+	var bad := {}
+	var keys := ["right", "jump", "attack", "dash", "left", "down", "up"]
+	var rooms: Array = Game.rooms_meta.rooms.keys()
+	rooms.sort()
+	for rid in rooms:
+		Game.flags = {}
+		Game.diff = "normal"
+		m.swap_to(rid, null, null, true)
+		var room := m.room
+		var p = m.player
+		var pups := {}
+		var visits: Array = room.ents.filter(func(e): return not e.dead)
+		var total := 1500 if room.boss != null else maxi(300, visits.size() * 120)
+		for i in range(total):
+			var inp := {"right": (i >> 6) % 2 == 0}
+			inp[keys[(i >> 4) % keys.size()]] = true
+			Controls.script_input = inp
+			p.inv = 99.0
+			p.hp = p.max_hp
+			if room.boss == null and not visits.is_empty() and i % 120 == 0:
+				var e0 = visits[(i / 120) % visits.size()]
+				if not e0.dead:
+					p.x = e0.x - 24.0
+					p.y = e0.y - 6.0
+					p.vx = 0.0
+					p.vy = 0.0
+			if room.boss != null and i == 700 and room.boss.active:
+				room.boss.hpf = room.boss.max_hp / 2.0 - 0.5         # on to phase 2
+				room.boss.hit(1, 0.0, 0.0, "swipe", room.boss)
+			m.tick(Game.STEP)
+			for e in room.ents:
+				if e.dead or NetClasses.cls_of(e) < 0:
+					continue
+				var key: String = "%s:%s" % [rid, NetClasses.NAMES[NetClasses.cls_of(e)]]
+				var q = pups.get(e.get_instance_id())
+				if q == null:
+					q = NetClasses.make(NetClasses.cls_of(e), room)
+					pups[e.get_instance_id()] = q
+				NetClasses.apply(q, JSON.parse_string(JSON.stringify(NetClasses.record(e))))
+				q.x = e.x
+				q.y = e.y
+				frames[key] = int(frames.get(key, 0)) + 1
+				var d := _parity_diff(e, q)
+				if d != "" and OS.get_environment("PARITY_DEBUG") != "" and int(bad.get(key + ":" + d, 0)) < 3:
+					print("PARITY %s %s st=%s mode=%s host=%s pup=%s dmg %s/%s" % [key, d, e.get("st"), e.get("cur").mode if e.get("cur") != null else "", str(_boxes(e.harmboxes())), str(_boxes(q.harmboxes())), e.dmg, q.dmg])
+				if d != "":
+					var bk: String = key + ":" + d
+					bad[bk] = int(bad.get(bk, 0)) + 1
+				q.t += Game.STEP                  # (then the guest's own frame: the next record overwrites what it guessed)
+				if q.has_method("puppet_tick"):
+					q.puppet_tick(Game.STEP)
+		for q in pups.values():
+			q.free()
+	Controls.script_input = null
+	var fails: Array = []
+	for bk in bad:
+		var parts: PackedStringArray = String(bk).split(":")
+		var n: int = int(frames.get(parts[0] + ":" + parts[1], 1))
+		if float(bad[bk]) / n > 0.01:
+			fails.append("%s %d/%d" % [bk, bad[bk], n])
+	return report("parity", fails.is_empty() and frames.size() >= 5, "checked %s | over 1 %%: %s | all mismatches: %s" % [str(frames), str(fails), str(bad)])

@@ -464,6 +464,7 @@ func net_apply(f: Array) -> void:
 	land = Vector2(f[14] / 4.0, f[15] / 4.0)
 	dying = int(f[16]) == 1
 	passive = not active or dying                     # the puppet never runs start(): without this it stays a harmless corpse
+	dmg = int(Game.dv("big_hit")) if st == "sweep" else 1      # (as update() sets it: the sweep hits harder; found by the parity test)
 	_guest_strikes(was, was_marks)
 
 # the guest's page, every frame: the cursor arrives only 20-30 times a second, 20-30 px apart in flight, so it would jump over
