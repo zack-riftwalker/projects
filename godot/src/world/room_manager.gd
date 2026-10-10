@@ -93,7 +93,7 @@ func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> v
 		target.add_child(rp)
 	if old != null and old != target:
 		old.detach_local()
-		if old.remote_players.is_empty():
+		if old.remote_players.is_empty() or mode == "guest":     # the guest only shows the current room: the host's snapshots rebuild the rest
 			rooms.erase(old.id)
 			old.queue_free()
 	room = target
