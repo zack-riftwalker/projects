@@ -24,11 +24,13 @@ var message := ""
 var status := ""
 var blink_t := 0.0
 var coop: Coop = null
+var has_save := false
 
 func _ready() -> void:
 	visible = false
 
 func open() -> void:
+	has_save = Game.save_exists()          # (looked up once: items() runs every tick)
 	active = true
 	visible = true
 	page = "main"
@@ -42,7 +44,7 @@ func close() -> void:
 
 func items() -> Array:
 	var o: Array = []
-	if Game.save_exists():
+	if has_save:
 		o.append("Continue")
 	o.append("New game")
 	if Game.host_allowed():
@@ -129,8 +131,6 @@ func back() -> void:
 	if page == "settings" or page == "join":
 		if page == "settings":
 			Game.save_settings()
-			if Game.save_exists() and Game.persist:
-				pass
 		page = "main"
 		sel = 0
 		message = ""
