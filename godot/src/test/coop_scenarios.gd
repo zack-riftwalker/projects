@@ -527,3 +527,21 @@ func sc_co_coffee() -> Array:
 	p.hp = 2
 	var healed := await wait_until(func(): return p.hp == 3, 6.0)
 	return [healed, "guest hp 2 -> %d" % p.hp]
+
+# a second start that puts the guest in another room leaves no orphan body behind (G18)
+func sc_co_restart() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(3.5)
+		coop()._guest_left()
+		coop()._guest_joined()
+		await wait_secs(3.0)
+		return [true, "host re-sent start"]
+	await wait_secs(1.0)
+	mgr().swap_to("R02", Vector2(60.0, 100.0))
+	var orphans0: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	await wait_until(func(): return mgr().room.id == "R01", 6.0)
+	await wait_secs(2.5)
+	var orphans1: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	return [orphans1 <= orphans0, "orphan nodes %d -> %d" % [orphans0, orphans1]]

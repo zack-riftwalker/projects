@@ -692,6 +692,10 @@ func _guest_start(m: Dictionary) -> void:
 	Game.tokens = 0
 	started = true
 	var you: Dictionary = m.you
+	if mgr.player != null:                # a second start (the host came back): the old body must not leak
+		if mgr.player.get_parent() != null:
+			mgr.player.get_parent().remove_child(mgr.player)
+		mgr.player.queue_free()
 	mgr.player = null
 	mgr.mode = "guest"
 	mgr.swap_to(String(you.room), Vector2(you.x4 / 4.0, you.y4 / 4.0), null, true)
