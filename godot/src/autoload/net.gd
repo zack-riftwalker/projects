@@ -94,6 +94,7 @@ func leave() -> void:
 	closing = true
 	if ws != null:
 		ws.close(4010, "leave")
+		ws.poll()                         # (native: the close frame is only sent by poll(); the web build sends it at once)
 	is_open = false
 	role = "none"
 
