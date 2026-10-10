@@ -524,7 +524,7 @@ func t_focus() -> bool:
 	Controls.script_input = null
 	return report("focus", hp1 == 4 and absf(meter1 - 7.0) < 0.01 and short_ok, "hold 1.2 s: hp %d meter %.1f | hold 0.2 s: hp %d meter %.1f" % [hp1, meter1, p.hp, p.meter])
 
-func dash_into_bug(diff_name: String) -> Array:
+func dash_into_bug(diff_name: String, room_mode := "solo", bug_hp := 3) -> Array:
 	Game.diff = diff_name
 	Game.tools.bash = true
 	var room := new_room()
@@ -534,10 +534,11 @@ func dash_into_bug(diff_name: String) -> Array:
 	for i in range(30):
 		step_with(room, {})
 	var b := add_bug(room, p.x + p.w + 20.0, 199, -1)
-	b.hp = 3
+	b.hp = bug_hp
 	b.speed = 0.0
 	b.kb = 0.0                      # it stays put, so the dash carries Clawd clean through it
 	var hp0: int = p.hp
+	room.mode = room_mode
 	for f in range(20):
 		step_with(room, {"right": true, "dash": f == 1})
 	var out := [b.hp, hp0, p.hp]
@@ -549,8 +550,9 @@ func t_dashhurt() -> bool:
 	var n := dash_into_bug("normal")
 	var e := dash_into_bug("easy")
 	Game.diff = "normal"
-	var ok: bool = n[0] == 2 and n[2] == n[1] - 1 and e[0] == 2 and e[2] == e[1]
-	return report("dashhurt", ok, "normal: bug hp %d, player %d -> %d | easy: bug hp %d, player %d -> %d" % [n[0], n[1], n[2], e[0], e[1], e[2]])
+	var g := dash_into_bug("normal", "guest", 1)       # a guest's killing dash costs nothing either (the host decides, the guest predicts)
+	var ok: bool = n[0] == 2 and n[2] == n[1] - 1 and e[0] == 2 and e[2] == e[1] and g[2] == g[1]
+	return report("dashhurt", ok, "normal: bug hp %d, player %d -> %d | easy: bug hp %d, player %d -> %d | guest kill: player %d -> %d" % [n[0], n[1], n[2], e[0], e[1], e[2], g[1], g[2]])
 
 func add_ent(room: Room, e) -> void:
 	room.ents.append(e)

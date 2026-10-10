@@ -873,6 +873,8 @@ func _hit_entity(e, d: int, dx: float, dy: float, how: String, b) -> String:
 	var p = player
 	var atk_val: int = p.dash_id if how == "dash" else p.atk_id
 	net_hit.emit(e.nid, how, d, dx, dy, atk_val)
+	if res == "hit" and e.hp - d <= 0:        # the host will kill it: the dash must not cost the guest hp (as solo)
+		res = "kill"
 	if res == "hit":
 		Audio.sfx("hit")
 	return res
