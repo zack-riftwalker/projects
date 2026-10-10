@@ -75,12 +75,14 @@ module.exports = (S, h) => {
     const browser = await launch(true);
     const info = [], fails = [];
     const chk = (n, ok) => { info.push(n + '=' + (ok ? 'ok' : 'BAD')); if (!ok) fails.push(n); };
+    const logs = [];                 // every page's console: printed when a check fails, so a failure says why
     try {
       const open = async (url) => {
         const ctx = await browser.newContext({ viewport: { width: 768, height: 432 } });
         const page = await ctx.newPage();
         const lines = [];
         page.on('console', (m) => lines.push(m.text()));
+        logs.push([url, lines]);
         await page.goto(url);
         for (let i = 0; i < 300 && !lines.some((l) => /CLAWD: ready/.test(l)); i++) await sleep(100);
         await sleep(1500);
@@ -129,7 +131,13 @@ module.exports = (S, h) => {
       for (let i = 0; i < 40 && !late.lines.some((l) => /CLAWD: x=/.test(l)); i++) await sleep(100);
       await late.page.keyboard.up('ArrowRight');
       chk('new game after a failed join', late.lines.some((l) => /CLAWD: x=/.test(l)));
-    } finally { await browser.close(); await srv.stop(); }
+    } finally {
+      if (fails.length) {
+        for (const [u, ls] of logs) console.log('--- ' + u + '\n' + ls.slice(-15).join('\n'));
+        console.log('--- server\n' + String(srv.text || '').slice(-1500));
+      }
+      await browser.close(); await srv.stop();
+    }
     return R(!fails.length, info.join(' '));
   };
 

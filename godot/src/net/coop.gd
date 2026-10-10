@@ -816,6 +816,8 @@ func _send_snapshot() -> void:
 	if not r.fx_out.is_empty():
 		s["fx"] = r.fx_out
 		r.fx_out = []
+	if main.paused:
+		s["pz"] = 1                     # the pause is state too (as the JS game's hs): a guest that missed the event, or joined during it, follows
 	snap_sent[snap_n] = hms()
 	if snap_sent.size() > 120:
 		snap_sent.erase(snap_sent.keys()[0])
@@ -1044,6 +1046,10 @@ func _apply_snapshot(m: Dictionary) -> void:
 		r.banner = {"text": m.bn[0], "sub": m.bn[1], "t": 1.0}
 	else:
 		r.banner.text = ""
+	var pz := int(m.get("pz", 0)) == 1
+	if pz != main.paused and hms() - main.pause_changed_at > 1.5:      # (not right after this player pressed pause itself)
+		log_("guest: pause from the host's state (%s)" % pz)
+		main.set_paused(pz, true)
 	var at := hms() + clampf(snap_interval + 2.0 * Net.jitter, 0.08, 0.3)
 	for e in m.get("fx", []):
 		if fx_q.size() < 200:

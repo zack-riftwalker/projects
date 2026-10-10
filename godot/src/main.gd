@@ -301,8 +301,12 @@ func open_bench(r: Room, i: int) -> void:
 	bench_idx = i
 	bench_menu.open()
 
+var pause_changed_at := -10.0          # when this player last pressed pause (the host's snapshots wait a moment before correcting)
+
 func set_paused(v: bool, remote := false) -> void:
 	paused = v
+	if not remote:
+		pause_changed_at = Net.now()
 	if not remote and Net.is_active():          # (queued even while the line is down: it is sent when the line is back)
 		Net.rel("pause", {"on": v})
 	if v:

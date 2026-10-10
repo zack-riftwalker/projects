@@ -204,6 +204,23 @@ func sc_co_watchdog() -> Array:
 	await wait_secs(8.0)
 	return [true, "guest idle"]
 
+# the pause is state: a guest that missed the host's pause event (here: never sent) still pauses and resumes with the host
+func sc_co_pausestate() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(2.0)
+		main.paused = true                  # paused without the event, as if it had been lost
+		main.pause_menu.open()
+		await wait_secs(4.0)
+		main.paused = false
+		main.pause_menu.close()
+		await wait_secs(4.0)
+		return [true, "paused 4 s without telling"]
+	var paused := await wait_until(func(): return main.paused, 6.0)
+	var resumed := await wait_until(func(): return not main.paused, 7.0)
+	return [paused and resumed, "followed the host's pause %s and resume %s" % [paused, resumed]]
+
 # the guest's log lines and its script errors reach the host's log (one copy from the PC has both sides)
 func _boom():
 	var d := {}
