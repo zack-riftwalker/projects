@@ -41,6 +41,7 @@ func run(name: String) -> bool:
 		"platform": return t_platform()
 		"relpend": return t_relpend()
 		"misc": return t_misc()
+		"nullcoop": return t_nullcoop()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -739,3 +740,48 @@ func t_misc() -> bool:
 	var v = Game.dv("start_hp")
 	Game.diff = "normal"
 	return report("misc", kept == "hard" and v == 5, "?diff=hard with an easy save -> %s; dv with an unknown diff -> %s" % [kept, str(v)])
+
+# NULL in co-op: both players are targeted in turns, the partner is aimed at ahead, and the guest's puppet of NULL hurts (body, blasts)
+func t_nullcoop() -> bool:
+	var m := null_setup()
+	var room := m.room
+	var p = m.player
+	var boss = room.boss
+	var r2 := RemotePlayer.new(room)
+	room.remote_players.append(r2)
+	room.add_child(r2)
+	Controls.script_input = {}
+	var picks := [0, 0]
+	var last = null
+	for f in range(3600):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		r2.report(200.0, floor_y(room, 205.0, 7), 0.0, 0.0, 1.0, room.time)
+		r2.follow(room.time)
+		m.tick(Game.STEP)
+		if boss.active and boss.target != last:
+			last = boss.target
+			picks[1 if last == r2 else 0] += 1
+	Net.rtt = 0.1
+	r2.vx = 100.0
+	var ap: Vector2 = boss.aim_point(r2)
+	var lead_ok: bool = ap.x > 205.0 + 20.0
+	# the guest's puppet
+	var pup = NetClasses.make(5, room)
+	var f0: Array = boss.net_fields()
+	pup.net_apply(f0)
+	var armed: bool = not pup.passive and not pup.harmboxes().is_empty()
+	var fd := f0.duplicate(true)
+	fd[3] = NullBoss.STATES.find("dangling")
+	fd[13] = [[roundi((p.x + 5) * 4.0), roundi((p.y + 5) * 4.0)]]
+	pup.net_apply(fd)
+	var fi := f0.duplicate(true)
+	fi[3] = NullBoss.STATES.find("idle")
+	fi[13] = []
+	p.inv = 0.0
+	p.dash_t = 0.0
+	var hp0: int = p.hp
+	pup.net_apply(fi)
+	var blast_hurt: bool = p.hp < hp0
+	pup.free()
+	return report("nullcoop", picks[0] >= 2 and picks[1] >= 2 and lead_ok and armed and blast_hurt, "targets P1 %d P2 %d, lead x %.0f (from 205), puppet armed %s, blast hurt %s" % [picks[0], picks[1], ap.x, armed, blast_hurt])

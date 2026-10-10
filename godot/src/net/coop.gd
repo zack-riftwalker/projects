@@ -77,6 +77,7 @@ func notice_set(text: String, secs: float) -> void:
 
 func log_(s: String) -> void:
 	log_lines.append(s)
+	Game.dlog(s)
 	if Game.debug or Game.scenario != "":
 		print("COOP ", s)
 
@@ -532,9 +533,10 @@ func _revive_guest() -> void:
 	Net.rel("revive", {"x4": NetClasses.x4(remote.x), "y4": NetClasses.x4(remote.y), "hp": 3, "same": same})
 	log_("host: guest revive sent")
 
-func _respawn_both() -> void:
+# also the host's "Restart room" (count_death false): the guest owns its body, so it is moved by the same event, not left behind
+func _respawn_both(count_death := true) -> void:
 	both_t = -1.0
-	log_("host: both down, respawning")
+	log_("host: both down, respawning" if count_death else "host: restart, the guest comes too")
 	# the guest: its own bench or the start
 	var rid := guest_bench if guest_bench != "" else String(Game.rooms_meta.start.room)
 	var pos: Array = Game.rooms_meta.rooms[rid].get("start_pos", [24, 100])
@@ -549,7 +551,13 @@ func _respawn_both() -> void:
 	remote.samples.clear()
 	Net.rel("respawn", {"room": rid, "x4": NetClasses.x4(gx), "y4": NetClasses.x4(gy)})
 	mgr.player.downed = false
-	mgr.respawn(true)
+	mgr.respawn(count_death)
+
+func restart_both() -> bool:
+	if role != "host" or not guest_here or remote == null or mgr.player == null:
+		return false
+	_respawn_both(false)
+	return true
 
 # ---- the boss summon: the one who is not in the arena is brought in after a 3 s warning
 func _host_fight_intro(r: Room) -> void:

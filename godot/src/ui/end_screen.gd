@@ -17,20 +17,21 @@ func open() -> void:
 	visible = true
 	t = 0.0
 	Audio.music("clear")
+	Game.dlog("END time %s deaths %d fragments %d tokens %d fights %s" % [clock(Game.play_time), Game.deaths, Game.fragments, Game.tokens, str(Game.fights)])
 	queue_redraw()
 
 func update() -> void:
 	if not active:
 		return
 	t += Game.STEP
-	if t > 1.0:
+	if t > 4.0:
 		for a in ["jump", "attack", "start", "dash", "pause"]:
 			if Controls.pressed.get(a, false):
 				done.emit()
 	queue_redraw()
 
 func tap(_p: Vector2) -> void:
-	if active and t > 1.0:
+	if active and t > 4.0:
 		done.emit()
 
 static func clock(sec: float) -> String:
@@ -61,5 +62,5 @@ func _draw() -> void:
 		PixelText.draw_text(self, line, W / 2.0, 128, Game.COL.paper, {"align": "c"})
 		PixelText.draw_text(self, "damage taken  P1 %d - P2 %d - %s" % [last.dmg_taken[0], last.dmg_taken[1], last.diff], W / 2.0, 142, Game.COL.dim, {"align": "c", "tiny": true})
 	PixelText.draw_text(self, "to be continued in ~/node_modules", W / 2.0, 172, Game.COL.paper, {"align": "c"})
-	if t > 1.0 and int(t * 2.0) % 2 == 0:
+	if t > 4.0 and int(t * 2.0) % 2 == 0:
 		PixelText.draw_text(self, "press any button", W / 2.0, 196, Game.COL.dim, {"align": "c", "tiny": true})

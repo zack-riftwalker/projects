@@ -197,6 +197,30 @@ var scenario := ""
 var autotest := false
 var play_now := false               # ?play: no title screen
 
+# the debug log: the last 5 minutes of game and co-op events, so a session can be sent after it happened (?debug: pause > Copy log)
+var log_buf: Array = []
+
+func dlog(s: String) -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	log_buf.append([t, s])
+	while log_buf.size() > 4000 or (not log_buf.is_empty() and t - log_buf[0][0] > 300.0):
+		log_buf.pop_front()
+
+func log_text() -> String:
+	var out := "CLAWD %s | %s | diff %s | role %s\n" % [build_text, Time.get_datetime_string_from_system(), diff, net_role if net_role != "" else "solo"]
+	for e in log_buf:
+		var s := int(e[0])
+		out += "%d:%02d.%d %s\n" % [s / 60, s % 60, int(fmod(e[0], 1.0) * 10.0), e[1]]
+	return out
+
+# clipboard, and on the web also a .txt download (a phone's clipboard may refuse)
+func export_log() -> int:
+	var text := log_text()
+	DisplayServer.clipboard_set(text)
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("(function(t){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/plain'}));a.download='clawd-log.txt';document.body.appendChild(a);a.click();a.remove();})(%s)" % JSON.stringify(text))
+	return log_buf.size()
+
 func _ready() -> void:
 	var q := ""
 	if OS.has_feature("web"):

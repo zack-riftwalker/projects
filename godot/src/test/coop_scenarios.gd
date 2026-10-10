@@ -548,6 +548,20 @@ func sc_co_restart() -> Array:
 	var orphans1: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	return [orphans1 <= orphans0, "orphan nodes %d -> %d" % [orphans0, orphans1]]
 
+# the host's pause menu "Restart room" brings the guest back too (it used to stay where it was)
+func sc_co_pauserestart() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(3.0)
+		main.pause_menu.restart_requested.emit()
+		await wait_secs(3.0)
+		return [mgr().player != null and coop()._remote_room() != null, "restarted, guest room %s" % str(coop()._remote_room())]
+	await wait_secs(1.0)
+	mgr().swap_to("R02", Vector2(60.0, 100.0))
+	var back := await wait_until(func(): return mgr().room.id == String(Game.rooms_meta.start.room), 8.0)
+	return [back, "guest back in %s: %s" % [mgr().room.id, back]]
+
 # solo: two music changes inside a crossfade keep the last song (G15); a pause while the line is down is queued (G17)
 func sc_co_solo() -> Array:
 	Audio.music("title")

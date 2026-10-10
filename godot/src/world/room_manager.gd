@@ -67,6 +67,7 @@ func release_if_empty(r: Room) -> void:
 # the local player goes to another room (the partner may already be there). rebuild: throw the old copy of the target away first
 func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> void:
 	var old := room
+	Game.dlog("room %s -> %s%s" % [old.id if old != null else "-", room_id, " (rebuild)" if rebuild else ""])
 	var keep: Array = []               # partners standing in a room that is rebuilt move into the new copy
 	if rebuild and rooms.has(room_id):
 		var dead_room: Room = rooms[room_id]

@@ -73,24 +73,31 @@ func on_damage() -> void:
 		dmarks.clear()
 		fade = 1.0
 
-# who NULL aims at: the player who dealt the most damage in the last 5 s, unless it is far away or down (co-op); alone: the player
+# who NULL aims at: one target per attack, taken in turns (co-op), so both players get attacked whoever deals the damage; alone: the player
 func pick_target():
 	var ps: Array = room.players()
 	if ps.is_empty():
 		return room.player
-	var best = ps[0]
-	var bd := -1.0
-	for q in ps:
-		var d: float = room.recent_damage(q, 5.0)
-		if d > bd:
-			bd = d
-			best = q
-	if target != null and target in ps:
-		var near: bool = absf(target.x - cx) < 200.0
-		if near and bd <= room.recent_damage(target, 5.0) + 0.001:
-			best = target
-	target = best
-	return best
+	if target == null or not (target in ps):
+		target = ps[0]
+	return target
+
+func next_target() -> void:
+	var ps: Array = room.players()
+	if ps.is_empty():
+		return
+	var i: int = ps.find(target)
+	target = ps[(i + 1) % ps.size()] if i >= 0 else ps[room.rng.randi() % ps.size()]
+	if ps.size() > 1:
+		Game.dlog("NULL targets %s (hp %.1f)" % ["P2" if target.get("is_remote") else "P1", hpf])
+
+# where to aim at a player: the partner is seen late on this page and the guest sees NULL late again, so aim where it will be by then
+func aim_point(q) -> Vector2:
+	if not q.get("is_remote") or q.samples.is_empty():
+		return Vector2(q.x + 5, q.y + 5)
+	var last: Array = q.samples[q.samples.size() - 1]
+	var lead := clampf(Net.rtt + 0.18, 0.1, 0.45)
+	return Vector2(clampf(last[1] + q.vx * lead, 0.0, W - 10.0) + 5, float(last[2]) + 5)
 
 func update(dt: float) -> void:
 	tick(dt)
@@ -108,8 +115,9 @@ func update(dt: float) -> void:
 		return
 	st_t -= dt
 	var p = pick_target()
-	var pcx: float = p.x + 5
-	var pcy: float = p.y + 5
+	var ap := aim_point(p)
+	var pcx: float = ap.x
+	var pcy: float = ap.y
 	dmg = 1
 	match st:
 		"idle":
@@ -118,6 +126,10 @@ func update(dt: float) -> void:
 			ty = 96.0 + sin(t * 2.0) * 8.0
 			fade = move_toward(fade, 1.0, dt * 4.0)
 			if st_t <= 0.0:
+				next_target()
+				p = pick_target()
+				ap = aim_point(p)
+				pcx = ap.x
 				var seq: Array = PHASE2 if fast else PHASE1
 				var pick: String = seq[cycle % seq.size()]
 				cycle += 1
@@ -261,10 +273,10 @@ func update(dt: float) -> void:
 	trail = trail.filter(func(q): return q.life > 0.0)
 
 func pick_aim() -> void:
-	var p = pick_target()
+	var ap := aim_point(pick_target())
 	var a := -PI / 2.0 + room.rng.randf_range(-1.1, 1.1)
-	aim_from = Vector2(clampf(p.x + 5 + cos(a) * 84.0, 30.0, W - 30.0), clampf(p.y + sin(a) * 84.0, 24.0, 150.0))
-	aim = Vector2(p.x + 5, p.y + 5)
+	aim_from = Vector2(clampf(ap.x + cos(a) * 84.0, 30.0, W - 30.0), clampf(ap.y - 5 + sin(a) * 84.0, 24.0, 150.0))
+	aim = ap
 	Audio.sfx("warn", {"vol": 0.6})
 
 func orbit(dt: float) -> void:
@@ -279,8 +291,9 @@ func start_dangling(p) -> void:
 	dmarks.clear()
 	var targets: Array = room.players() if room.players().size() > 1 else [p]
 	for q in targets:
-		var qx: float = q.x + 5
-		var qy: float = q.y + 5
+		var qa := aim_point(q)
+		var qx: float = qa.x
+		var qy: float = qa.y
 		dmarks.append(Vector2(qx, qy))
 		var k := 0
 		while k < 3:                                      # three more within 96 px, never inside a wall
@@ -316,7 +329,7 @@ func start_deref(p) -> void:
 	set_state("deref", 0.7 * _tm())
 	deref_dur = st_t
 	deref_from = Vector2(cur.x, cur.y)
-	land = Vector2(clampf(p.x + 5, 24.0, W - 24.0), FLOOR)
+	land = Vector2(clampf(aim_point(p).x, 24.0, W - 24.0), FLOOR)
 	Audio.sfx("warn")
 
 func land_deref() -> void:
@@ -421,6 +434,8 @@ func net_fields() -> Array:
 	return [roundi(hpf * 10.0), max_hp, phase, STATES.find(st), roundi(fade * 100.0), roundi(cur.x * 4.0), roundi(cur.y * 4.0), roundi(cur.a * 100.0), MODES.find(cur.mode), 1 if jerk_t > 0.0 else 0, dir, 1 if active else 0, rm, dm, roundi(land.x * 4.0), roundi(land.y * 4.0), 1 if dying else 0]
 
 func net_apply(f: Array) -> void:
+	var was := st
+	var was_marks := dmarks.duplicate()
 	hpf = f[0] / 10.0
 	hp = ceili(hpf)
 	max_hp = int(f[1])
@@ -442,3 +457,22 @@ func net_apply(f: Array) -> void:
 		dmarks.append(Vector2(m[0] / 4.0, m[1] / 4.0))
 	land = Vector2(f[14] / 4.0, f[15] / 4.0)
 	dying = int(f[16]) == 1
+	passive = not active or dying                     # the puppet never runs start(): without this it stays a harmless corpse
+	_guest_strikes(was, was_marks)
+
+# the guest's page: the dangling blasts and the dereference slam happen on the host, so the guest checks its own body when it sees them
+func _guest_strikes(was: String, was_marks: Array) -> void:
+	var p = room.player
+	if was == "dangling" and st != "dangling":
+		for m in was_marks:
+			room.explode(m.x, m.y, 14.0)
+			if p != null and Vector2(p.x + 5, p.y + 5).distance_to(m) < 20.0:
+				p.hurt(1, m.x)
+		Audio.sfx("explode", {"vol": 0.6})
+		room.shake(0.4)
+	elif was == "deref" and st == "derefStuck":
+		room.shake(0.5)
+		Audio.sfx("thud")
+		room.dust(land.x, FLOOR, 8)
+		if p != null and Game.overlap(p.hurtbox(), {"x": land.x - 20.0, "y": FLOOR - 16.0, "w": 40.0, "h": 16.0}):
+			p.hurt(int(Game.dv("big_hit")), land.x)

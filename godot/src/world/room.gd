@@ -758,6 +758,7 @@ func _begin_fight() -> void:
 	events.append("bossStart")
 
 func on_player_hurt(q, d: int) -> void:
+	Game.dlog("%s hurt %d (hp %d) in %s%s" % ["P2" if q.get("is_remote") or mode == "guest" else "P1", d, q.hp, id, " fight" if fight.state == "active" else ""])
 	if mode == "guest":
 		net_hurt.emit(d)
 		return
@@ -781,7 +782,8 @@ func _start_reward() -> void:
 	if stats.coop:
 		stats_line += " - P2 %d hits" % stats.hits[1]
 	stats_line += " - r %.2f/s - won" % r
-	stats_t = 5.0
+	stats_t = 15.0                                   # long enough to read (and screenshot); it is also in the debug log
+	Game.dlog(stats_line + " | damage taken P1 %d P2 %d" % [stats.dmg[0], stats.dmg[1]])
 	Game.fights.append({"boss": "NULL", "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop})
 
 func record_loss() -> void:

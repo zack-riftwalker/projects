@@ -71,7 +71,8 @@ func _ready() -> void:
 	pause_menu.fullscreen_requested.connect(request_fullscreen)
 	pause_menu.restart_requested.connect(func():
 		set_paused(false)
-		manager.respawn(false))
+		if coop == null or not coop.restart_both():
+			manager.respawn(false))
 	hud_layer.add_child(pause_menu)
 	bench_menu = BenchMenu.new()
 	hud_layer.add_child(bench_menu)

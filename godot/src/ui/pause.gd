@@ -13,13 +13,18 @@ var sel := 0
 var page := "menu"            # "menu" or "map"
 var manager: RoomManager
 var blink_t := 0.0
+var log_msg := ""
 
 func options() -> Array:
-	return ["Resume", "Map", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
+	var o := ["Resume", "Map", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
+	if Game.debug:
+		o.append(log_msg if log_msg != "" else "Copy log (5 min)")
+	return o
 
 func open() -> void:
 	active = true
 	sel = 0
+	log_msg = ""
 	page = "menu"
 	visible = true
 	Audio.sfx("pause")
@@ -70,6 +75,7 @@ func choose(i: int) -> void:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
 		4: fullscreen_requested.emit()
+		5: log_msg = "Log copied: %d lines" % Game.export_log()
 	queue_redraw()
 
 # a tap in game coordinates (0..384, 0..216)
