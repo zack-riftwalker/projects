@@ -228,6 +228,8 @@ func _on_peer(on: bool, lag: bool, resume: bool) -> void:
 		_guest_left()
 
 func _guest_joined() -> void:
+	if remote != null:                   # a new join while the old partner is still here (reload within the grace time): no ghost
+		_guest_left()
 	log_("host: guest joined")
 	Net.reset_reliable()
 	guest_here = true
