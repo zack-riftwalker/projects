@@ -3,11 +3,16 @@
 module.exports = (S, h) => {
   const { startServer, get, chromium, R, ROOT, CODE, sleep } = h;
   const fs = require('fs'), path = require('path'), zlib = require('zlib');
+  // the phone-like guest connects over the container's LAN address (an insecure origin); the browsers share their launch flags
+  const lanIp = () => { let lan = '127.0.0.1'; for (const l of Object.values(require('os').networkInterfaces())) for (const a of l || []) if (a.family === 'IPv4' && !a.internal) lan = a.address; return lan; };
+  const BASE_ARGS = ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader'];
+  const BG_ARGS = ['--no-proxy-server', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'];
+  const launch = (bg) => chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: bg ? BASE_ARGS.concat(BG_ARGS) : BASE_ARGS });
 
   S['mv-serve'] = async () => {
     if (!fs.existsSync(path.join(ROOT, 'public/mv/index.html'))) return R(true, 'skipped: no Godot build in public/mv');
     const srv = await startServer();
-    const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
+    const browser = await launch(false);
     const fails = [], info = [];
     const chk = (name, ok) => { info.push(name + '=' + (ok ? 'ok' : 'BAD')); if (!ok) fails.push(name); };
     try {
@@ -29,7 +34,7 @@ module.exports = (S, h) => {
       const page = await ctx.newPage();
       page.on('pageerror', (e) => errs.push(e.message));
       let ready = false;
-      page.on('console', (m) => { if (/CLAWD: (selftest PASS|ready)/.test(m.text())) ready = true; });
+      page.on('console', (m) => { if (/CLAWD: selftest PASS/.test(m.text())) ready = true; if (/CLAWD: selftest FAIL/.test(m.text())) errs.push(m.text()); });
       await page.goto('http://127.0.0.1:' + srv.port + '/mv/?selftest');
       for (let i = 0; i < 400 && !ready; i++) await new Promise((r) => setTimeout(r, 100));
       chk('boots', ready && !errs.length);
@@ -41,11 +46,9 @@ module.exports = (S, h) => {
   // two browser tabs: the host on 127.0.0.1, the guest on the container's LAN address (an insecure origin, like the friend's phone)
   S['mv-coop'] = async () => {
     if (!fs.existsSync(path.join(ROOT, 'public/mv/index.html'))) return R(true, 'skipped: no Godot build in public/mv');
-    const os = require('os');
-    let lan = '127.0.0.1';
-    for (const l of Object.values(os.networkInterfaces())) for (const a of l || []) if (a.family === 'IPv4' && !a.internal) lan = a.address;
+    const lan = lanIp();
     const srv = await startServer();
-    const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-proxy-server', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+    const browser = await launch(true);
     const res = { host: null, guest: null }, errs = [];
     try {
       const open = async (role, url) => {
@@ -67,11 +70,9 @@ module.exports = (S, h) => {
   // the title screen with the keyboard: New game starts the world; Join co-op takes the 6 digits and reaches the host
   S['mv-title'] = async () => {
     if (!fs.existsSync(path.join(ROOT, 'public/mv/index.html'))) return R(true, 'skipped: no Godot build in public/mv');
-    const os = require('os');
-    let lan = '127.0.0.1';
-    for (const l of Object.values(os.networkInterfaces())) for (const a of l || []) if (a.family === 'IPv4' && !a.internal) lan = a.address;
+    const lan = lanIp();
     const srv = await startServer();
-    const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-proxy-server', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+    const browser = await launch(true);
     const info = [], fails = [];
     const chk = (n, ok) => { info.push(n + '=' + (ok ? 'ok' : 'BAD')); if (!ok) fails.push(n); };
     try {
@@ -136,11 +137,9 @@ module.exports = (S, h) => {
   // Taps must land on the drawn picture (not on the whole canvas), and the pad must stay on the menus: stick down + JUMP choose, DASH goes back.
   S['mv-phone'] = async () => {
     if (!fs.existsSync(path.join(ROOT, 'public/mv/index.html'))) return R(true, 'skipped: no Godot build in public/mv');
-    const os = require('os');
-    let lan = '127.0.0.1';
-    for (const l of Object.values(os.networkInterfaces())) for (const a of l || []) if (a.family === 'IPv4' && !a.internal) lan = a.address;
+    const lan = lanIp();
     const srv = await startServer();
-    const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--autoplay-policy=no-user-gesture-required', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--no-proxy-server', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
+    const browser = await launch(true);
     const info = [], fails = [];
     const chk = (n, ok, extra) => { info.push(n + '=' + (ok ? 'ok' : 'BAD' + (extra ? '(' + extra + ')' : ''))); if (!ok) fails.push(n); };
     try {
