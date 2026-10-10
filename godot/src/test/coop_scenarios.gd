@@ -122,6 +122,34 @@ func sc_co_hit() -> Array:
 	var gone := await wait_until(func(): return r2.ents.size() == 0, 3.0)
 	return [gone, "creature gone on the guest: %s" % gone]
 
+# the guest jumps on a creature: the stomp must kill it on the host (it bounced but did no damage: the host compared the
+# guest's late, higher position with the creature and said TOO FAR)
+func sc_co_stomp() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var r: Room = mgr().room
+		clear_creatures(r)
+		await wait_secs(0.5)
+		var gx: float = coop().remote.x
+		var b := spawn_bug(r, gx + 30.0, floor_y(r, gx + 30.0, 9) + 1.0)
+		var dead := await wait_until(func(): return b.dead, 8.0)
+		await wait_secs(0.5)
+		return [dead, "bug dead=%s, verdicts %s" % [dead, str(coop().verdicts)]]
+	var r2: Room = mgr().room
+	var seen := await wait_until(func(): return r2.ents.size() > 0, 6.0)
+	if not seen:
+		return [false, "never saw the creature"]
+	await wait_secs(0.8)
+	var p = mgr().player
+	var bug = r2.ents[0]
+	p.x = bug.x
+	p.y = bug.y - 48.0
+	p.vy = 0.0
+	var bounced := await wait_until(func(): return p.vy < -100.0, 2.0)
+	var gone := await wait_until(func(): return r2.ents.size() == 0, 3.0)
+	return [gone, "bounced %s, creature gone on the guest: %s" % [bounced, gone]]
+
 func sc_co_rooms() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
@@ -175,6 +203,7 @@ func sc_co_summon() -> Array:
 func sc_co_revive() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
+	mgr().room.fight_active = true             # the revive countdown is a boss-fight rule
 	if role == "host":
 		await wait_secs(2.0)
 		var down := await wait_until(func(): return coop().remote.dead, 10.0)
@@ -435,6 +464,7 @@ func sc_co_return() -> Array:
 func sc_co_hostdown() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
+	mgr().room.fight_active = true             # the revive countdown is a boss-fight rule
 	if role == "host":
 		await wait_secs(2.0)
 		var p = mgr().player
@@ -492,10 +522,50 @@ func sc_co_bench() -> Array:
 	var ok := await wait_until(func(): return not p2.dead and mgr().room.id == "R02", 14.0)
 	return [ok, "guest back in %s" % mgr().room.id]
 
+# outside a boss fight: the guest makes a bench its own by walking up to it, a death sends each player straight back to
+# its bench with full hp (no revive countdown)
+func sc_co_home() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var known := await wait_until(func(): return coop().guest_bench == "R02", 10.0)
+		var g_home := await wait_until(func(): return coop().remote.dead, 8.0)
+		var g_back := await wait_until(func(): return not coop().remote.dead, 5.0)
+		await wait_secs(1.0)
+		var p = mgr().player
+		p.hp = 0
+		p.die()
+		await wait_secs(0.3)
+		var downed: bool = p.downed
+		var back := await wait_until(func(): return mgr().player != null and not mgr().player.dead and mgr().player.hp == mgr().player.max_hp, 4.0)
+		return [known and g_home and g_back and back and not downed, "guest bench known %s, guest died %s and came back %s, host downed %s, host back on its bench %s" % [known, g_home, g_back, downed, back]]
+	await wait_secs(1.0)
+	mgr().swap_to("R02", Vector2(60.0, 100.0))
+	await wait_secs(0.5)
+	var r: Room = mgr().room
+	var c: Dictionary = r.cps[0]
+	var g = mgr().player
+	g.x = c.x - g.w / 2.0
+	g.y = c.y - g.h - 1.0
+	var rested := await wait_until(func(): return Game.bench == "R02", 4.0)
+	await wait_secs(0.5)
+	g.x = c.x + 60.0
+	g.y = floor_y(r, c.x + 60.0, 2)
+	await wait_secs(1.5)
+	g.hp = 0
+	g.die()
+	var downed: bool = g.downed
+	var t0 := Time.get_ticks_msec()
+	var back := await wait_until(func(): return not mgr().player.dead and mgr().room.id == "R02" and mgr().player.hp == mgr().player.max_hp, 5.0)
+	var secs := (Time.get_ticks_msec() - t0) / 1000.0
+	await wait_secs(4.0)
+	return [rested and back and not downed and secs < 4.0, "bench touched %s, downed %s, back in R02 with full hp %s after %.1f s" % [rested, downed, back, secs]]
+
 # a death the host sees only in the body report still gets the full revive countdown (G28)
 func sc_co_lostdie() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
+	mgr().room.fight_active = true             # the revive countdown is a boss-fight rule
 	if role == "host":
 		await wait_secs(2.0)
 		var rp = coop().remote

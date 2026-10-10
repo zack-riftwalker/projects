@@ -498,12 +498,12 @@ func step_guest(dt: float) -> void:
 			# pick things up: ask the host once per item
 			var pcx: float = p.x + p.w / 2.0
 			var pcy: float = p.y + p.h / 2.0
-			for it in items:
-				if it.get("asked", false) or it.get("dead", false):
+			for it in items:                # (asked again after 0.6 s: a refused request must not lose the item for good)
+				if time - float(it.get("asked", -10.0)) < 0.6 or it.get("dead", false):
 					continue
 				var rr := 11.0 if it.kind == "spark" else 9.0
 				if absf(pcx - it.x) < rr + 3 and absf(pcy - it.y) < rr and (not it.get("loose", false) or it.get("t", 1.0) > 0.2):
-					it.asked = true
+					it.asked = time
 					net_pickup.emit(it.id)
 	update_projs(dt)
 	for s2 in springs:
@@ -960,7 +960,7 @@ func interact_combat(p) -> void:
 			p.spring(s)
 
 func interact_goals(p) -> void:
-	if mode != "guest" and p.on_ground and not crossing and Game.bench != id and p.hp > 0:
+	if p.on_ground and not crossing and Game.bench != id and p.hp > 0:     # the guest too: its own respawn point (the host is told)
 		for i in range(cps.size()):         # walking up to a bench is enough to make it the respawn point
 			var c0: Dictionary = cps[i]
 			if absf(p.x + p.w / 2.0 - c0.x) < 12 and p.y + p.h > c0.y - 34 and p.y < c0.y:

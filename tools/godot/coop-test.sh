@@ -29,13 +29,13 @@ one() { # scenario [env...]
   grep -q "COOP $s host PASS" "$TMP/$s.host.log" && grep -q "COOP $s guest PASS" "$TMP/$s.guest.log"
 }
 
-ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-bench co-lostdie co-coffee co-restart co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-solo co-badline co-pauserestart co-bossdmg"
+ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-bench co-lostdie co-coffee co-restart co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-solo co-badline co-pauserestart co-bossdmg co-stomp co-home"
 list=${1:-all}; [ "$list" = all ] && list=$ALL
 bad=0
 for s in $list; do
   if [ "$s" = co-badline ]; then
     ok=1; export SCN_SLOW=1
-    for sub in co-hit co-summon; do
+    for sub in co-hit co-summon co-stomp; do
       one $sub SIM_LAG=150 SIM_JITTER=60 SIM_STALL_PCT=5 SCN_SLOW=1 || { ok=0; cp "$TMP/$sub.host.log" "$TMP/bad.$sub.host.log"; cp "$TMP/$sub.guest.log" "$TMP/bad.$sub.guest.log"; echo "  badline $sub failed"; tail -15 "$TMP/$sub.host.log" "$TMP/$sub.guest.log"; }
     done
     unset SCN_SLOW

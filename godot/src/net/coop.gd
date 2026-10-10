@@ -29,6 +29,8 @@ var snap_n := 0
 var snap_sent := {}
 var force_full := false
 var both_t := -1.0
+var host_home_t := -1.0          # host: dead outside a boss fight, back to its bench when this runs out
+var guest_home_t := -1.0         # host: the same for the guest
 var host_dn := 0
 var host_summon := {}
 var fight_seen := {}
@@ -330,7 +332,7 @@ func _host_msg(t: String, m: Dictionary) -> void:
 		Net.rtt = lerpf(Net.rtt, rtt, 0.1)
 		snap_sent.erase(sa)
 	if remote.dead and not was_dead:      # seen only in the report (the `die` event is late or lost): the revive countdown starts now
-		remote.down_t = REVIVE_T
+		_guest_fell()
 	if was_dead and not remote.dead:
 		log_("host: guest got up")
 
@@ -363,7 +365,14 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"room": _host_remote_to_room(String(d.to))
 		"crack": _host_crack(d)
 		"pickup": _host_pickup(d)
-		"bench": guest_bench = String(d.room)
+		"bench":
+			guest_bench = String(d.room)
+			Game.flags["bench:" + guest_bench] = true
+			var br := _remote_room()
+			if br != null and br.id == guest_bench:
+				for c in br.cps:
+					c.on = true
+			Game.write_save()
 		"summon_ok": pass
 		"pause": main.set_paused(bool(d.on), true)
 
@@ -406,16 +415,25 @@ func _host_hit(d: Dictionary) -> void:
 		else:
 			var box: Dictionary = remote.atk_box() if how == "swipe" else remote.hurtbox()
 			var window := Net.rtt / 2.0 + 0.35
+			var mine: Array = [box]
+			if how != "swipe":
+				# a stomp or a dash is the body itself, and the body seen here is 0.1 s or more behind: falling onto a creature it is
+				# still well above it. Its own recent reports are where it really was.
+				for smp in remote.samples:
+					if hms() - float(smp[0]) <= window:
+						mine.append({"x": smp[1] + 1.0, "y": smp[2] + 1.0, "w": remote.w - 2.0, "h": remote.h - 1.0})
 			var near := false
+			var up := 14.0 if how == "stomp" else 3.0       # falling, the body moves ~9 px between two reports and lands between them
 			var hist: Array = r.hist.get(nid, [])
 			for rec in hist:
 				if r.time - float(rec[0]) > window:
 					continue
 				for b in rec[1]:
-					if Game.overlap(box, {"x": b.x - 3, "y": b.y - 3, "w": b.w + 6, "h": b.h + 6}):
-						var bc := Vector2(b.x + b.w / 2.0, b.y + b.h / 2.0)
-						if bc.distance_to(Vector2(remote.x + 5, remote.y + 5)) <= 64.0 + 40.0:
-							near = true
+					for mb in mine:
+						if Game.overlap(mb, {"x": b.x - 3, "y": b.y - up, "w": b.w + 6, "h": b.h + 3 + up}):
+							var bc := Vector2(b.x + b.w / 2.0, b.y + b.h / 2.0)
+							if bc.distance_to(Vector2(mb.x + 4, mb.y + 4)) <= 64.0 + 40.0:
+								near = true
 			if not near:
 				for b in e.hurtboxes():
 					if Game.overlap(box, b) and Vector2(b.x + b.w / 2.0, b.y + b.h / 2.0).distance_to(Vector2(remote.x + 5, remote.y + 5)) <= 104.0:
@@ -453,7 +471,13 @@ func _host_pickup(d: Dictionary) -> void:
 	for it in r.items:
 		if it.get("dead", false) or String(it.id) != String(d.id):
 			continue
-		if absf(remote.x + 5 - it.x) > 28.0 or absf(remote.y + 5 - it.y) > 28.0:
+		# the body seen here is late (running or jumping it can be 30 px behind): its recent reports count too
+		var near := absf(remote.x + 5 - it.x) <= 28.0 and absf(remote.y + 5 - it.y) <= 28.0
+		for smp in remote.samples:
+			if hms() - float(smp[0]) <= Net.rtt / 2.0 + 0.35 and absf(smp[1] + 5 - it.x) <= 28.0 and absf(smp[2] + 5 - it.y) <= 28.0:
+				near = true
+		if not near:
+			log_("host: P2 pickup %s refused (too far)" % it.id)
 			return
 		it.dead = true
 		if not String(it.id).begins_with("L"):
@@ -477,6 +501,10 @@ func _host_died() -> void:
 	if not guest_here or remote == null:
 		mgr.respawn(true)
 		return
+	if not mgr.room.fight_active:       # the revive is a boss-fight rule: elsewhere a death sends you back to your bench, as alone
+		host_home_t = 1.2
+		log_("host: down outside a fight, back to the bench")
+		return
 	hp_.downed = true
 	hp_.down_t = REVIVE_T
 	host_dn += 1
@@ -487,16 +515,37 @@ func _guest_down() -> void:
 		return
 	remote.dead = true
 	remote.dn += 1
-	remote.down_t = REVIVE_T
-	log_("host: guest is down")
+	_guest_fell()
+
+# a guest death (event or report): a boss fight starts the revive countdown, anywhere else the guest goes back to its bench
+func _guest_fell() -> void:
+	var gr := _remote_room()
+	if gr != null and gr.fight_active:
+		remote.down_t = REVIVE_T
+		log_("host: guest is down")
+	else:
+		remote.down_t = -1.0
+		if guest_home_t < 0.0:
+			guest_home_t = 1.2
+		log_("host: guest died outside a fight, back to its bench")
 
 func _host_down_logic(dt: float) -> void:
 	var hp_ = mgr.player
 	if hp_ == null:
 		return
 	var guest_alive := guest_here and remote != null and not remote.dead and not remote.lagging
+	if host_home_t >= 0.0:
+		host_home_t -= dt
+		if host_home_t < 0.0:
+			hp_.downed = false
+			mgr.respawn(true)
+			return
+	if guest_home_t >= 0.0:
+		guest_home_t -= dt
+		if guest_home_t < 0.0 and guest_here and remote != null and remote.dead:
+			_send_guest_home()
 	var host_down: bool = hp_.dead and hp_.downed
-	var guest_down_: bool = guest_here and remote != null and remote.dead
+	var guest_down_: bool = guest_here and remote != null and remote.dead and guest_home_t < 0.0
 	if host_down and not guest_here:     # nobody left to bring the host back: same as dying alone
 		hp_.downed = false
 		mgr.respawn(true)
@@ -544,7 +593,13 @@ func _revive_guest() -> void:
 func _respawn_both(count_death := true) -> void:
 	both_t = -1.0
 	log_("host: both down, respawning" if count_death else "host: restart, the guest comes too")
-	# the guest: its own bench or the start
+	_send_guest_home()
+	mgr.player.downed = false
+	mgr.respawn(count_death)
+
+# the guest back to its own bench (or the start), full hp
+func _send_guest_home() -> void:
+	guest_home_t = -1.0
 	var rid := guest_bench if guest_bench != "" else String(Game.rooms_meta.start.room)
 	var pos: Array = Game.rooms_meta.rooms[rid].get("start_pos", [24, 100])
 	var sp = Game.bench_spawn(rid) if guest_bench != "" else null
@@ -557,8 +612,7 @@ func _respawn_both(count_death := true) -> void:
 	remote.y = gy
 	remote.samples.clear()
 	Net.rel("respawn", {"room": rid, "x4": NetClasses.x4(gx), "y4": NetClasses.x4(gy)})
-	mgr.player.downed = false
-	mgr.respawn(count_death)
+	log_("host: guest sent to %s" % rid)
 
 func restart_both() -> bool:
 	if role != "host" or not guest_here or remote == null or mgr.player == null:
@@ -845,7 +899,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 		var old = old_items.get(iid)
 		var d := {"kind": ITEM_KINDS[clampi(int(rec[1]), 0, 2)], "id": iid, "x": rec[2] / 4.0, "y": rec[3] / 4.0, "loose": iid.begins_with("L"), "t": 1.0, "ph": float(hash(iid) % 100) / 10.0, "ghost": false, "idx": 0, "vx": 0.0, "vy": 0.0}
 		if old != null:
-			d["asked"] = old.get("asked", false)
+			d["asked"] = old.get("asked", -10.0)
 		items.append(d)
 	r.items = items
 	# projectiles: flown locally between snapshots
@@ -997,9 +1051,10 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 
 func _guest_died() -> void:
 	var p = mgr.player
-	p.downed = true
-	guest_down_t = REVIVE_T
-	p.down_t = REVIVE_T
+	var in_fight: bool = mgr.room != null and mgr.room.fight_active
+	p.downed = in_fight                 # outside a boss fight there is no countdown: the host sends this body to its bench
+	guest_down_t = REVIVE_T if in_fight else -1.0
+	p.down_t = REVIVE_T if in_fight else -1.0
 	guest_dn += 1
 	Net.rel("die", {})
 	log_("guest: down")
