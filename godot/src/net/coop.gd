@@ -481,6 +481,10 @@ func _host_down_logic(dt: float) -> void:
 	var guest_alive := guest_here and remote != null and not remote.dead and not remote.lagging
 	var host_down: bool = hp_.dead and hp_.downed
 	var guest_down_: bool = guest_here and remote != null and remote.dead
+	if host_down and not guest_here:     # nobody left to bring the host back: same as dying alone
+		hp_.downed = false
+		mgr.respawn(true)
+		return
 	if host_down and guest_down_:
 		if both_t < 0.0:
 			both_t = 1.2

@@ -428,3 +428,21 @@ func sc_co_return() -> Array:
 		if c is RemotePlayer:
 			bodies += 1
 	return [bodies == 1 and r.ents.size() == coop().puppets.size() and rooms_away == ["R02"], "ents %d, puppets %d, host bodies %d (want 1), rooms while away %s" % [r.ents.size(), coop().puppets.size(), bodies, str(rooms_away)]]
+
+# the host is down and the guest leaves: the host must not lie there for good (G4)
+func sc_co_hostdown() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(2.0)
+		var p = mgr().player
+		p.hp = 0
+		p.die()
+		await wait_until(func(): return p.dead and p.downed, 3.0)
+		var up := await wait_until(func(): return mgr().player != null and not mgr().player.dead, 5.0)
+		return [up and not coop().guest_here, "host up again: %s, guest_here %s" % [up, coop().guest_here]]
+	await wait_secs(3.0)
+	Net.closing = true                       # like the web build: the close frame goes out at once (role stays, so poll() keeps flushing)
+	Net.ws.close(4010, "leave")
+	await wait_secs(8.0)
+	return [true, "guest left"]
