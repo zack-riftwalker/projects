@@ -61,11 +61,16 @@ func connect_as(r: String, c := "") -> void:
 	retry_at = -1.0
 	retry_n = 0
 	base_url = _base()
+	reset_reliable()
+	seq = 0
+	_open_socket(false)
+
+# a new partner session starts the numbering over on both sides (a stale rel_in would swallow its events as duplicates)
+func reset_reliable() -> void:
 	rel_next = 1
 	rel_out.clear()
 	rel_in = 0
-	seq = 0
-	_open_socket(false)
+	ack_due = -1.0
 
 func _open_socket(resume: bool) -> void:
 	ws = WebSocketPeer.new()

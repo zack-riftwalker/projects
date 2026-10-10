@@ -228,6 +228,7 @@ func _on_peer(on: bool, lag: bool, resume: bool) -> void:
 
 func _guest_joined() -> void:
 	log_("host: guest joined")
+	Net.reset_reliable()
 	guest_here = true
 	guest_ready = false
 	Net.epoch += 1
@@ -665,6 +666,7 @@ func _guest_msg(t: String, m: Dictionary) -> void:
 
 func _guest_start(m: Dictionary) -> void:
 	log_("guest: start received")
+	Net.reset_reliable()
 	Net.epoch = int(m.e)
 	var sv: Dictionary = m.save
 	Game.flags = sv.flags

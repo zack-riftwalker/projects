@@ -349,3 +349,22 @@ func sc_co_badline() -> Array:
 	if not a[0]:
 		return [false, "hit: " + str(a[1])]
 	return [true, "hit ok on a bad line"]
+
+# a fresh page joins with the code while the host keeps its state: the reliable channel must start over (G1, G5)
+func sc_co_rejoin() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(3.0)
+		var back := await wait_until(func(): return coop().guest_here and coop().guest_ready and coop().remote != null, 12.0)
+		await wait_secs(1.0)
+		var bodies: int = main.find_children("*", "RemotePlayer", true, false).size()
+		return [back, "guest ready again %s, RemotePlayer nodes %d (want 1)" % [back, bodies]]
+	await wait_secs(2.0)
+	Net.ws.close(4000, "test")
+	Net.connect_as("guest", Game.net_code)          # what a reloaded page does: fresh reliable channel, no token
+	coop().started = false
+	var again := await wait_until(func(): return coop().started, 8.0)
+	var snaps0: int = coop().snaps_applied
+	var flow := await wait_until(func(): return coop().snaps_applied > snaps0 + 5, 6.0)
+	return [again and flow, "restarted %s, snapshots flowing %s (+%d)" % [again, flow, coop().snaps_applied - snaps0]]
