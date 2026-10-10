@@ -238,6 +238,8 @@ func sc_co_crack() -> Array:
 	Controls.script_input = {"right": true}
 	var left2 := func():
 		var n := 0
+		if not is_instance_valid(r2):           # the guest already walked on through the wall and the room was dropped (it only shows the current room)
+			return 0
 		for ty in range(2, 13):
 			for tx in range(37, 40):
 				if r2.grid.tile(tx, ty) == TileGrid.CRACK:
