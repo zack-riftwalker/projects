@@ -108,8 +108,6 @@ func _ready() -> void:
 	elif Game.selftest:
 		selftest_frame = 0
 		selftest_x0 = room.player.x
-	elif Game.net_role != "":
-		pass
 	elif Game.shot_path != "":
 		if Game.scene == "hud":          # screenshot helper: Clawd next to the first sign, a Bug close by
 			room.player.x = 104.0
@@ -235,16 +233,19 @@ func _join_from_title(code: String) -> void:
 	Game.net_code = code
 	Game.persist = false
 	if coop == null:
-		coop = Coop.new()
-		coop.name = "Coop"
-		add_child(coop)
+		_make_coop()
 		if not Net.fatal.is_connected(_join_failed):
 			Net.fatal.connect(_join_failed)
-		coop.setup(self)
 	else:
 		coop.started = false
 		Net.connect_as("guest", code)
 	title.coop = coop
+
+func _make_coop() -> void:
+	coop = Coop.new()
+	coop.name = "Coop"
+	add_child(coop)
+	coop.setup(self)
 
 func _join_failed(why: String) -> void:
 	if title == null or not title.active:
@@ -276,10 +277,7 @@ func _begin_game(kind: String) -> void:
 	if Game.demo:
 		Game.tools.bash = true
 	if Game.net_role != "" and coop == null:
-		coop = Coop.new()
-		coop.name = "Coop"
-		add_child(coop)
-		coop.setup(self)
+		_make_coop()
 	if Game.net_role != "guest":
 		manager.start_game()
 	if Game.scenario != "":
@@ -357,8 +355,6 @@ func _input(event: InputEvent) -> void:
 				pause_menu.tap(gp)
 			else:
 				bench_menu.tap(gp)
-	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed and Game.touch_seen:
-		pass
 
 # Fullscreen (F, and the menu entries). Browsers only allow it inside a user gesture, and a gesture keeps the permission for a few
 # seconds: F runs straight from its key event; a menu entry (chosen on a press or in the next physics step) goes at once when a
