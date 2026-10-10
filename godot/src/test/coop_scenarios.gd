@@ -489,3 +489,18 @@ func sc_co_bench() -> Array:
 	p2.die()
 	var ok := await wait_until(func(): return not p2.dead and mgr().room.id == "R02", 14.0)
 	return [ok, "guest back in %s" % mgr().room.id]
+
+# a death the host sees only in the body report still gets the full revive countdown (G28)
+func sc_co_lostdie() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(2.0)
+		var rp = coop().remote
+		var m := {"t": "st", "e": Net.epoch, "room": mgr().room.id, "x4": int(rp.x * 4.0), "y4": int(rp.y * 4.0), "vx": 0, "vy": 0, "face": 1, "hp": 0, "maxhp": 5, "dead": 1, "dn": rp.dn + 1, "atk": [0, "f", false], "dash": [0, 0, 0, 0], "gt": 0.0, "sa": 0, "inv": 0.0}
+		coop()._host_msg("st", m)
+		var t0: float = rp.down_t
+		coop()._host_down_logic(0.016)
+		return [rp.dead and t0 > 5.0, "after the report: down_t=%.1f (want about 6), still down one tick later: %s" % [t0, rp.dead]]
+	await wait_secs(5.0)
+	return [true, "guest idle"]

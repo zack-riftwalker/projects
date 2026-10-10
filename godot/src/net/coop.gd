@@ -322,6 +322,8 @@ func _host_msg(t: String, m: Dictionary) -> void:
 		Net.jitter = lerpf(Net.jitter, absf(rtt - Net.rtt), 0.1)
 		Net.rtt = lerpf(Net.rtt, rtt, 0.1)
 		snap_sent.erase(sa)
+	if remote.dead and not was_dead:      # seen only in the report (the `die` event is late or lost): the revive countdown starts now
+		remote.down_t = REVIVE_T
 	if was_dead and not remote.dead:
 		log_("host: guest got up")
 
