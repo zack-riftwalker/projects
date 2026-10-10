@@ -304,7 +304,7 @@ func open_bench(r: Room, i: int) -> void:
 
 func set_paused(v: bool, remote := false) -> void:
 	paused = v
-	if not remote and Net.is_active() and Net.is_open:
+	if not remote and Net.is_active():          # (queued even while the line is down: it is sent when the line is back)
 		Net.rel("pause", {"on": v})
 	if v:
 		pause_menu.open()
