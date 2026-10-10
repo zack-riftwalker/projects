@@ -39,6 +39,7 @@ func run(name: String) -> bool:
 		"zombie": return t_zombie()
 		"dashhurt": return t_dashhurt()
 		"platform": return t_platform()
+		"relpend": return t_relpend()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -704,3 +705,16 @@ func t_null() -> bool:
 	Game.tools.bash = false
 	Game.flags = {}
 	return report("null", a_ok and b_ok, "seen %d states, missing %s, longest state %.1f s, feints=%s, phase %d | kill: reward at frame %d, bash=%s door open=%s fights=%s" % [seen.size(), missing, longest, feints > 0, boss.phase, dead_at, Game.tools.bash, door_open, str(Game.fights)])
+
+
+# a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
+func t_relpend() -> bool:
+	Net.rel_out.clear()
+	Net.rel_next = 1
+	Net.rel("a", {})
+	var p1: Array = Net._pending_events(0.0)
+	Net.rel("b", {})
+	var p2: Array = Net._pending_events(0.10)
+	var p3: Array = Net._pending_events(0.25)
+	Net.rel_out.clear()
+	return report("relpend", p1.size() == 1 and p2.size() == 1 and p3.size() == 2, "send a: %d, send b at 0.10: %d, at 0.25 (a is 0.25 s old, unacked): %d events (want 2)" % [p1.size(), p2.size(), p3.size()])

@@ -208,9 +208,7 @@ func _pending_events(t: float) -> Array:
 	for e in rel_out:
 		if due or e.sent < 0.0:
 			out.append({"i": e.i, "k": e.k, "d": e.d})
-	if not out.is_empty():
-		for e in rel_out:
-			e.sent = t
+			e.sent = t                      # (only what went out: a new event must not postpone the retransmit of an older one)
 	return out
 
 func send_msg(msg_type: String, fields := {}, droppable := false) -> void:
