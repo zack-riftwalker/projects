@@ -175,3 +175,22 @@ Phase 0 was executed by Sonnet (`docs/reports/metroidvania-phase0.md`). Claude r
 
 Plans: `docs/PLAN-metroidvania-phase1.md`, `docs/PLAN-metroidvania-phase2.md`.
 
+## 12. Phase 3 decisions (2026-10-10)
+
+Taken by Claude for the phase 3 plan (`docs/PLAN-metroidvania-phase3.md`), after phase 2 and the co-op review (`07-js-vs-godot.md`). The revive rule of `07-js-vs-godot.md` §5 (the 6 s revive only inside boss fights) stands.
+
+| # | decision |
+|---|---|
+| D19 | Phase 3 has two parts, each ending with a build Zakaria tests: **3A** the rest of THE SOURCE TREE (THE REVIEWER #1, catch, plugins), **3B** DEPENDENCY DEPTHS (MERGE CONFLICT v2, agents, the shop). Each part is one Sonnet session. |
+| D20 | Map: R08 (README.md) opens east into R09 (Makefile), a tall junction: one-way ledges up to R10 (THE REVIEWER arena) and R11 (try_catch.js, catch tutorial, plugin, "/proc/heap" end door); a low door down to D01. DEPTHS = D01–D03 (the three world 2 levels, edited), D04 (bench + shop), D05 (MERGE CONFLICT arena), D06 (agents tutorial, "/net" end door), D07 (secret). Only side doors: tall rooms use doors at their top and bottom. |
+| D21 | D03 (version_hell.lock) is one-way downward; bench travel is the way back (rule R3 of `03-abilities-and-gates.md`). |
+| D22 | **catch:** a swipe that starts at most `catch_window` before contact (0.10 s normal, 0.14 easy, 0.08 nightmare) catches a **yellow** projectile (it flies back at 1.5× speed, pierces, 2 damage, presses switches) or parries a catchable melee strike (the boss staggers). Outside the window the claw just destroys projectiles, as before. Yellow means catchable, always. |
+| D23 | Catch switches `Y` open catch gates `!`; agents press slot keys `k` that open agents gates `&`; both stay open (flags) and travel to the guest as state. |
+| D24 | **agents:** tap `special` with a full meter = two helpers for 11 s (spends the whole meter); hold `special` = focus (heal), as before. A cache station `R` refills the meter (20 s cooldown) next to every agents puzzle. |
+| D25 | **Plugins:** 3 notches ("context window"); six plugins: async/await (dash cooldown 0.1), cache (pickup radius), hot-reload (faster focus), eslint --fix (+5 meter per hit), try/finally (+0.4 s invulnerability), rubber duck (claw ×2 at 1 hp). Equipped only at benches. Found plugins are shared in co-op; each player has their own loadout. |
+| D26 | **Shop** (npm registry, in D04) sells four plugins for tokens (60–140). Each player pays from their own wallet. |
+| D27 | **Boss HP** = `T × R_PLAYER × u × difficulty`. `R_PLAYER` (claw hits per player per second) is 1.0 until Zakaria's fight list gives the real value; then only that constant changes. NULL T 60 u 1; THE REVIEWER #1 T 70 u 0.7; MERGE CONFLICT T 90 u 1 (split over two heads). |
+| D28 | **THE REVIEWER #1:** a duelist with lunge (catchable), comment bubbles (yellow, catchable), a counter stance ("CHANGES REQUESTED?": hitting into it is blocked and answered), a three-slash nitpick in phase 2 (the third is a big hit after a 0.7 s pause), and a shove against camping. He yields instead of exploding ("LGTM ✓ Approved") and returns later (#2, #3). Reward: catch. |
+| D29 | **MERGE CONFLICT v2:** v1 plus conflict markers (three bands; the floor band or the platform band is safe, the high band never is; with one head left they fire one after another) and git revert (a dead head returns with half hp unless the other dies within 8 s). In co-op each head targets one player. Reward: agents. |
+| D30 | **New enemies:** EXCEPTION (throws yellow, catchable errors; teaches catch) and FORK (a nest that spawns small bugs; feeds the meter for agents). World 2's Mimic, Logger, Noodle and Flaky are exact ports, checked frame by frame against the JS game. |
+

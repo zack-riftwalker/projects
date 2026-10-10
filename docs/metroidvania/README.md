@@ -1,14 +1,15 @@
 # سندهای متروید وینیای CLAWD
 
-این پوشه سندهای طراحی نسخه‌ی متروید وینیا رو نگه می‌داره. تصمیم‌های نهایی بعد از بررسی فاز ۰ تو بخش ۱۱ِ [`00-decisions.md`](00-decisions.md) هستن.
+این پوشه سندهای طراحی نسخه‌ی متروید وینیا رو نگه می‌داره. تصمیم‌های نهایی بعد از بررسی فاز ۰ تو بخش ۱۱ِ [`00-decisions.md`](00-decisions.md) هستن و تصمیم‌های فاز ۳ تو بخش ۱۲.
 
 ## پلن‌ها (برای Sonnet)
 
 | پلن | چی | وضعیت |
 |---|---|---|
 | [`../PLAN-metroidvania-phase0.md`](../PLAN-metroidvania-phase0.md) | فاز ۰: طراحی و ابزار Godot | انجام شد |
-| [`../PLAN-metroidvania-phase1.md`](../PLAN-metroidvania-phase1.md) | فاز ۱: پایه‌ی Godot، یه اتاق قابل بازی، تست گوشی | در صف |
-| [`../PLAN-metroidvania-phase2.md`](../PLAN-metroidvania-phase2.md) | فاز ۲: ۸ اتاق SOURCE TREE، NULL v2، دو دشمن جدید، co-op | بعد از فاز ۱ |
+| [`../PLAN-metroidvania-phase1.md`](../PLAN-metroidvania-phase1.md) | فاز ۱: پایه‌ی Godot، یه اتاق قابل بازی، تست گوشی | انجام شد |
+| [`../PLAN-metroidvania-phase2.md`](../PLAN-metroidvania-phase2.md) | فاز ۲: ۸ اتاق SOURCE TREE، NULL v2، دو دشمن جدید، co-op | انجام شد |
+| [`../PLAN-metroidvania-phase3.md`](../PLAN-metroidvania-phase3.md) | فاز ۳: ۳A بقیه‌ی SOURCE TREE (THE REVIEWER، catch، پلاگین‌ها)، ۳B منطقه‌ی DEPENDENCY DEPTHS (MERGE CONFLICT، agents، فروشگاه) | در صف |
 
 ## سندها
 
