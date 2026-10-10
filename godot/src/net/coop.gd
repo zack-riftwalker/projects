@@ -251,8 +251,9 @@ func _guest_joined() -> void:
 	remote = RemotePlayer.new(place_room)
 	remote.name = "Partner"
 	var pp = mgr.player
-	var px: float = pp.x + 14.0 if place_room == hr else float(Game.rooms_meta.rooms[place_room.id].start_pos[0])
-	var py: float = pp.y if place_room == hr else float(Game.rooms_meta.rooms[place_room.id].start_pos[1])
+	var sp0 = null if place_room == hr else Game.bench_spawn(place_room.id)       # (only R01 has a start_pos: other rooms use their bench or the floor)
+	var px: float = pp.x + 14.0 if place_room == hr else (sp0.x if sp0 != null else 24.0)
+	var py: float = pp.y if place_room == hr else (sp0.y if sp0 != null else _floor_y(place_room, 24.0, 5))
 	remote.x = px
 	remote.y = py
 	remote.hp = Game.max_hp
@@ -531,7 +532,7 @@ func _respawn_both() -> void:
 	log_("host: both down, respawning")
 	# the guest: its own bench or the start
 	var rid := guest_bench if guest_bench != "" else String(Game.rooms_meta.start.room)
-	var pos: Array = Game.rooms_meta.rooms[rid].start_pos
+	var pos: Array = Game.rooms_meta.rooms[rid].get("start_pos", [24, 100])
 	var sp = Game.bench_spawn(rid) if guest_bench != "" else null
 	var gx: float = sp.x if sp != null else float(pos[0])
 	var gy: float = sp.y if sp != null else float(pos[1])

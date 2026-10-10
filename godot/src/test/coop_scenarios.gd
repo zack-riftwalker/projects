@@ -446,3 +446,22 @@ func sc_co_hostdown() -> Array:
 	Net.ws.close(4010, "leave")
 	await wait_secs(8.0)
 	return [true, "guest left"]
+
+# a friend joins during a boss fight (the arena's previous room has no start_pos) (G32)
+func sc_co_joinfight() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("R05", Vector2(60.0, 100.0))
+		mgr().player.y = floor_y(mgr().room, 60.0, 7)
+		await wait_secs(0.5)
+		mgr().room.fight_active = true                 # as if the arena doors were shut
+		coop()._guest_left()
+		coop()._guest_joined()
+		await wait_secs(2.0)
+		return [coop().remote != null and coop().remote.get_parent() != null, "remote parent %s" % str(coop().remote.get_parent() if coop().remote != null else null)]
+	var starts := [0]
+	Net.message.connect(func(t, _m): if t == "start": starts[0] += 1)
+	var again := await wait_until(func(): return starts[0] >= 1, 8.0)
+	return [again, "start received again: %s" % again]

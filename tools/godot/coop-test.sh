@@ -29,7 +29,7 @@ one() { # scenario [env...]
   grep -q "COOP $s host PASS" "$TMP/$s.host.log" && grep -q "COOP $s guest PASS" "$TMP/$s.guest.log"
 }
 
-ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-crack co-resume co-rejoin co-hostgone co-hostdown co-return co-netfields co-badline"
+ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-badline"
 list=${1:-all}; [ "$list" = all ] && list=$ALL
 bad=0
 for s in $list; do
