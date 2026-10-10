@@ -545,3 +545,21 @@ func sc_co_restart() -> Array:
 	await wait_secs(2.5)
 	var orphans1: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	return [orphans1 <= orphans0, "orphan nodes %d -> %d" % [orphans0, orphans1]]
+
+# solo: two music changes inside a crossfade keep the last song (G15); a pause while the line is down is queued (G17)
+func sc_co_solo() -> Array:
+	Audio.music("title")
+	await wait_secs(1.0)
+	Audio.music("w1")
+	await wait_secs(0.2)
+	Audio.music("boss")
+	await wait_secs(1.5)
+	var music_ok: bool = Audio.music_a.playing
+	Net.role = "host"
+	Net.is_open = false
+	Net.rel_out.clear()
+	main.set_paused(true)
+	var queued: int = Net.rel_out.size()
+	main.set_paused(false)
+	Net.role = "none"
+	return [music_ok and queued == 1, "boss music still playing: %s; pause queued offline: %d (want 1)" % [music_ok, queued]]

@@ -40,6 +40,7 @@ func run(name: String) -> bool:
 		"dashhurt": return t_dashhurt()
 		"platform": return t_platform()
 		"relpend": return t_relpend()
+		"misc": return t_misc()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -718,3 +719,23 @@ func t_relpend() -> bool:
 	var p3: Array = Net._pending_events(0.25)
 	Net.rel_out.clear()
 	return report("relpend", p1.size() == 1 and p2.size() == 1 and p3.size() == 2, "send a: %d, send b at 0.10: %d, at 0.25 (a is 0.25 s old, unacked): %d events (want 2)" % [p1.size(), p2.size(), p3.size()])
+
+
+# ?diff= beats the save and an unknown value is ignored / harmless (G12, G13)
+func t_misc() -> bool:
+	Game.persist = true
+	Game.save_path = "user://misc_save.json"
+	Game.new_game()
+	Game.diff = "easy"
+	Game.write_save()
+	Game.diff = "hard"
+	Game.diff_from_url = true            # ?diff=hard
+	Game.load_save()
+	var kept: String = Game.diff
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://misc_save.json"))
+	Game.persist = false
+	Game.diff_from_url = false
+	Game.diff = "bogus"
+	var v = Game.dv("start_hp")
+	Game.diff = "normal"
+	return report("misc", kept == "hard" and v == 5, "?diff=hard with an easy save -> %s; dv with an unknown diff -> %s" % [kept, str(v)])

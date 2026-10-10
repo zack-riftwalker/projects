@@ -51,7 +51,7 @@ const FOCUS_TIME := 0.9
 const METER_MAX := 99
 
 func dv(key: String):
-	return DIFF[diff][key]
+	return DIFF.get(diff, DIFF.normal)[key]
 
 # max hp = the start value of the difficulty + one per 4 memory fragments
 var max_hp: int:
@@ -154,7 +154,9 @@ func load_save() -> bool:
 	bench = String(d.get("bench", ""))
 	tokens = int(d.get("tokens", 0))
 	fragments = int(d.get("fragments", 0))
-	diff = String(d.get("diff", "normal"))
+	var sd := String(d.get("diff", "normal"))
+	if not diff_from_url:                 # ?diff= wins over the save (and a damaged value falls back to normal)
+		diff = sd if DIFF.has(sd) else "normal"
 	coop_hp_pct = int(d.get("coop_hp_pct", 50))
 	play_time = float(d.get("time", 0.0))
 	deaths = int(d.get("deaths", 0))
@@ -221,7 +223,10 @@ func _ready() -> void:
 			"scenario": scenario = v
 			"autotest": autotest = true
 			"play": play_now = true
-			"diff": diff = v; diff_from_url = true
+			"diff":
+				if DIFF.has(v):
+					diff = v
+					diff_from_url = true
 			"scene": scene = v
 			"wait": shot_wait = int(v)
 			"full": full_shot = true

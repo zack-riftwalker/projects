@@ -11,7 +11,7 @@ run() { local name=$1; shift; if "$@" > "$TMP/$name.log" 2>&1; then rec "$name" 
 
 run smoke bash tools/godot/smoke.sh
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
-for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null end relpend; do
+for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null end relpend misc; do
   timeout 180 "$GODOT" --headless --path godot -- --test=$t > "$TMP/$t.log" 2>&1
   if grep -q "^TEST $t PASS" "$TMP/$t.log" && ! grep -q "SCRIPT ERROR" "$TMP/$t.log"; then rec "test-$t" PASS; else rec "test-$t" FAIL; echo "---- $t ----"; tail -20 "$TMP/$t.log"; fi
 done
