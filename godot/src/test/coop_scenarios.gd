@@ -90,6 +90,29 @@ func sc_co_connect() -> Array:
 	var ok2 := await wait_until(func(): return mgr().room.ents.size() >= want and coop().snaps_applied > 0, 3.0)
 	return [ok2, "creatures %d of %d, snapshots %d" % [mgr().room.ents.size(), want, coop().snaps_applied]]
 
+# the guest's log lines and its script errors reach the host's log (one copy from the PC has both sides)
+func _boom():
+	var d := {}
+	return d["boom"]
+
+func sc_co_log() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var has := func(sub: String) -> bool:
+		for e in Game.log_buf:
+			if String(e[1]).contains(sub):
+				return true
+		return false
+	if role == "host":
+		var line := await wait_until(func(): return has.call("P2> hello from P2"), 8.0)
+		var err := await wait_until(func(): return has.call("P2> ERROR") and has.call("boom"), 8.0)
+		return [line and err, "guest line in the host log %s, guest error in the host log %s" % [line, err]]
+	await wait_secs(1.0)
+	Game.dlog("hello from P2")
+	_boom()
+	await wait_secs(4.0)
+	return [Game.errors >= 1, "errors counted here %d" % Game.errors]
+
 func sc_co_hit() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]

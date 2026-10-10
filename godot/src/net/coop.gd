@@ -29,6 +29,7 @@ var snap_n := 0
 var snap_sent := {}
 var force_full := false
 var both_t := -1.0
+var dl_acc := 0.0
 var host_home_t := -1.0          # host: dead outside a boss fight, back to its bench when this runs out
 var guest_home_t := -1.0         # host: the same for the guest
 var host_dn := 0
@@ -308,6 +309,12 @@ func _on_msg(t: String, m: Dictionary) -> void:
 		_guest_msg(t, m)
 
 func _host_msg(t: String, m: Dictionary) -> void:
+	if t == "dl":                       # the guest's log lines (and its script errors) join this log
+		for line in m.get("v", []):
+			Game.dlog("P2> " + String(line).left(300))
+			if String(line).begins_with("ERROR"):
+				notice_set("P2 " + String(line).left(60), 6.0)
+		return
 	if t != "st" or remote == null or int(m.get("e", -1)) != Net.epoch:
 		return
 	var r := _remote_room()
@@ -806,6 +813,12 @@ func _guest_tick(dt: float) -> void:
 	for id in puppets:
 		_puppet_follow(puppets[id], rt, dt)
 	r.lenient = _laggy()
+	dl_acc += dt
+	if dl_acc >= 0.5 and not Game.log_out.is_empty() and Net.is_open:
+		dl_acc = 0.0
+		var lines: Array = Game.log_out.slice(0, 30)
+		Game.log_out = Game.log_out.slice(30)
+		Net.send_msg("dl", {"v": lines})
 	if r.boss != null and (r.boss.dying or r.boss.dead):
 		p.inv = maxf(p.inv, 0.5)            # the boss is going down: nothing hurts any more (as the JS game)
 	# the guest's body goes out 30 times a second (20 on a bad line)

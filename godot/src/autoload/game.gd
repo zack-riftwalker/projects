@@ -199,12 +199,50 @@ var play_now := false               # ?play: no title screen
 
 # the debug log: the last 5 minutes of game and co-op events, so a session can be sent after it happened (?debug: pause > Copy log)
 var log_buf: Array = []
+var log_out: Array = []              # guest: its lines still to go to the host, whose log then has both sides (as the JS game)
 
 func dlog(s: String) -> void:
 	var t := Time.get_ticks_msec() / 1000.0
 	log_buf.append([t, s])
 	while log_buf.size() > 4000 or (not log_buf.is_empty() and t - log_buf[0][0] > 300.0):
 		log_buf.pop_front()
+	if net_role == "guest":
+		log_out.append(s)
+		if log_out.size() > 200:
+			log_out.pop_front()
+
+# Script errors go into the debug log too (and from the phone to the PC's log): an error on the guest used to be invisible.
+# Godot calls a logger from any thread, so it only queues; _process moves the lines into the log.
+class ErrLog extends Logger:
+	var mutex := Mutex.new()
+	var q: Array = []
+	var seen := {}
+	func _log_error(_function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, error_type: int, _bt: Array) -> void:
+		if error_type == ERROR_TYPE_WARNING:
+			return
+		var msg := "ERROR %s:%d %s" % [file.get_file(), line, rationale if rationale != "" else code]
+		mutex.lock()
+		var n: int = int(seen.get(msg, 0)) + 1
+		seen[msg] = n
+		if (n <= 3 or n % 100 == 0) and q.size() < 50:       # the same error every frame must not flood the log
+			q.append(msg if n <= 3 else "%s (x%d)" % [msg, n])
+		mutex.unlock()
+	func _log_message(_message: String, _error: bool) -> void:
+		pass
+
+var err_log := ErrLog.new()
+var errors := 0                      # how many script errors this page had (the debug overlay shows it)
+
+func _process(_dt: float) -> void:
+	if err_log.q.is_empty():
+		return
+	err_log.mutex.lock()
+	var lines: Array = err_log.q.duplicate()
+	err_log.q.clear()
+	err_log.mutex.unlock()
+	for l in lines:
+		errors += 1
+		dlog(l)
 
 func log_text() -> String:
 	var out := "CLAWD %s | %s | diff %s | role %s\n" % [build_text, Time.get_datetime_string_from_system(), diff, net_role if net_role != "" else "solo"]
@@ -222,6 +260,7 @@ func export_log() -> int:
 	return log_buf.size()
 
 func _ready() -> void:
+	OS.add_logger(err_log)
 	var q := ""
 	if OS.has_feature("web"):
 		q = str(JavaScriptBridge.eval("location.search"))

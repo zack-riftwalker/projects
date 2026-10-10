@@ -94,6 +94,10 @@ func _text() -> String:
 		mem_txt += " (2m %.1f" % mem2 + (" 10m %.1f" % mem10 if mem10 >= 0.0 else "") + ")"
 	var l1 := "FPS %d | avg %.1f | low1%% %.1f | min1 %.1f | now-min %.1f" % [Engine.get_frames_per_second(), avg, low1, _avg(0), _avg(m)]
 	var l2 := "input %d ms (max %d) | audio %s ms | mem %s" % [roundi(input_ms), roundi(input_max), audio_ms, mem_txt]
+	if Net.is_active():
+		l2 += " | ping %d ms jit %d" % [roundi(Net.rtt * 1000.0), roundi(Net.jitter * 1000.0)]
+	if Game.errors > 0:
+		l2 += " | ERRORS %d (see log)" % Game.errors
 	var ws := DisplayServer.window_get_size()
 	var l3 := "%s | %s | %dx%d @%.2f | %s" % [Game.build_text, AudioServer.get_driver_name(), ws.x, ws.y, DisplayServer.screen_get_scale(), Time.get_time_string_from_system().substr(0, 5)]
 	return l1 + "\n" + l2 + "\n" + l3
