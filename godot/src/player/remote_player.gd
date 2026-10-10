@@ -50,7 +50,14 @@ func _init(r: Room) -> void:
 func hurtbox() -> Dictionary:
 	return {"x": x + 1, "y": y + 1, "w": w - 2, "h": h - 1}
 
-func hurt(_d: int, _src: float) -> bool:
+# The partner owns its hit points, so nothing here can hurt it. A host-side attack that calls this anyway (an area check written
+# for the local player) becomes a harm zone on the body as seen here: the guest checks its own body against it. Without this an
+# attack that forgot the partner did nothing to P2 at all (NULL's blasts and slam once did).
+func hurt(d: int, _src: float) -> bool:
+	if room != null and room.mode == "host" and not dead:
+		var hb := hurtbox()
+		room.harm_zone("r", hb.x - 2.0, hb.y - 2.0, hb.w + 4.0, hb.h + 4.0, d)
+		Game.dlog("zone for P2 (host code hurt the partner: %d)" % d)
 	return false
 
 func atk_box() -> Dictionary:

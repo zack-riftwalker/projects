@@ -507,6 +507,13 @@ func step_guest(dt: float) -> void:
 				if absf(pcx - it.x) < rr + 3 and absf(pcy - it.y) < rr and (not it.get("loose", false) or it.get("t", 1.0) > 0.2):
 					it.asked = time
 					net_pickup.emit(it.id)
+	# a zone lives 0.25 s here too (it stayed forever: walking into an old blast spot later still hurt)
+	for z in zones:
+		z.until -= dt
+	if not zones.is_empty():
+		zones = zones.filter(func(z): return z.until > 0.0)
+		if zones.is_empty():
+			zones_hit.clear()
 	update_projs(dt)
 	for s2 in springs:
 		if s2.t > 0.0:

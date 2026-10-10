@@ -772,20 +772,29 @@ func t_nullcoop() -> bool:
 	var f0: Array = boss.net_fields()
 	pup.net_apply(f0)
 	var armed: bool = not pup.passive and not pup.harmboxes().is_empty()
-	var fd := f0.duplicate(true)
-	fd[3] = NullBoss.STATES.find("dangling")
-	fd[13] = [[roundi((p.x + 5) * 4.0), roundi((p.y + 5) * 4.0)]]
-	pup.net_apply(fd)
-	var fi := f0.duplicate(true)
-	fi[3] = NullBoss.STATES.find("idle")
-	fi[13] = []
+	# the blasts: a harm zone on the host (the guest checks its own body against it); a direct hurt of the partner becomes one too
+	room.mode = "host"
+	room.zones.clear()
+	boss.dmarks = [Vector2(r2.x + 5, r2.y + 5)]
+	boss.blow_dangling()
+	var zone_blast: bool = room.zones.size() == 1 and room.zones[0].kind == "c"
+	r2.hurt(2, r2.x)
+	var zone_net: bool = room.zones.size() == 2 and room.zones[1].dmg == 2
+	# the guest's side: a zone hurts once, and is gone after 0.25 s (it used to stay forever)
+	room.mode = "guest"
+	room.zones = [{"id": 900, "kind": "c", "x": p.x + 5, "y": p.y + 5, "a": 20.0, "b": 0.0, "dmg": 1, "until": 0.25}]
+	room.zones_hit.clear()
 	p.inv = 0.0
-	p.dash_t = 0.0
+	p.dead = false
 	var hp0: int = p.hp
-	pup.net_apply(fi)
-	var blast_hurt: bool = p.hp < hp0
+	room.step_guest(Game.STEP)
+	var blast_hurt: bool = p.hp == hp0 - 1
+	for f in range(40):                  # (the hurt's hitstop holds the room for a few frames)
+		room.step_guest(Game.STEP)
+	var expired: bool = room.zones.is_empty()
+	room.mode = "solo"
 	pup.free()
-	return report("nullcoop", picks[0] >= 2 and picks[1] >= 2 and lead_ok and armed and blast_hurt, "targets P1 %d P2 %d, lead x %.0f (from 205), puppet armed %s, blast hurt %s" % [picks[0], picks[1], ap.x, armed, blast_hurt])
+	return report("nullcoop", picks[0] >= 2 and picks[1] >= 2 and lead_ok and armed and zone_blast and zone_net and blast_hurt and expired, "targets P1 %d P2 %d, lead x %.0f (from 205), puppet armed %s, blast zone %s, direct hurt -> zone %s, guest hurt by the zone %s, zone expired %s" % [picks[0], picks[1], ap.x, armed, zone_blast, zone_net, blast_hurt, expired])
 
 # the guest's page (as the JS game): a creature my swipe kills cannot hurt me while the host's word is on its way; on a bad
 # line a creature whose place is only guessed does not hurt either; every stomp is its own attack

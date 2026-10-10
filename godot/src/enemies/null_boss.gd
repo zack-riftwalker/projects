@@ -316,7 +316,10 @@ func blow_dangling() -> void:
 	for m in dmarks:
 		room.explode(m.x, m.y, 14.0)
 		Audio.sfx("explode", {"vol": 0.6})
+		room.harm_zone("c", m.x, m.y, 20.0, 0.0, 1)         # the guest checks its own body against the blast (it owns its damage)
 		for q in room.players():
+			if q.get("is_remote"):
+				continue
 			var qc := Vector2(q.x + 5, q.y + 5)
 			if qc.distance_to(m) < 20.0:
 				q.hurt(1, m.x)
@@ -345,7 +348,10 @@ func land_deref() -> void:
 	Audio.sfx("thud")
 	room.dust(land.x, FLOOR, 8)
 	var slam := {"x": land.x - 20.0, "y": FLOOR - 16.0, "w": 40.0, "h": 16.0}
+	room.harm_zone("r", slam.x, slam.y, slam.w, slam.h, int(Game.dv("big_hit")))
 	for q in room.players():
+		if q.get("is_remote"):
+			continue
 		if Game.overlap(q.hurtbox(), slam):
 			q.hurt(int(Game.dv("big_hit")), land.x)
 	set_state("derefStuck", _pm(0.8))
@@ -476,19 +482,14 @@ func puppet_tick(dt: float) -> void:
 	cur.y = ny
 	trail.append({"x": cur.x, "y": cur.y, "a": cur.a, "life": 0.15})
 
-# the guest's page: the dangling blasts and the dereference slam happen on the host, so the guest checks its own body when it sees them
+# the guest's page: what the dangling blasts and the dereference slam look like (their damage arrives as harm zones)
 func _guest_strikes(was: String, was_marks: Array) -> void:
-	var p = room.player
 	if was == "dangling" and st != "dangling":
 		for m in was_marks:
 			room.explode(m.x, m.y, 14.0)
-			if p != null and Vector2(p.x + 5, p.y + 5).distance_to(m) < 20.0:
-				p.hurt(1, m.x)
 		Audio.sfx("explode", {"vol": 0.6})
 		room.shake(0.4)
 	elif was == "deref" and st == "derefStuck":
 		room.shake(0.5)
 		Audio.sfx("thud")
 		room.dust(land.x, FLOOR, 8)
-		if p != null and Game.overlap(p.hurtbox(), {"x": land.x - 20.0, "y": FLOOR - 16.0, "w": 40.0, "h": 16.0}):
-			p.hurt(int(Game.dv("big_hit")), land.x)
