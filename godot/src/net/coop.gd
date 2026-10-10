@@ -509,8 +509,6 @@ func _host_down_logic(dt: float) -> void:
 		remote.down_t -= dt
 		if remote.down_t <= 0.0:
 			_revive_guest()
-	elif guest_down_ and hp_.dead and not hp_.downed:
-		pass
 
 func _revive_host() -> void:
 	var p = mgr.player
@@ -586,24 +584,27 @@ func _host_summon_logic(dt: float) -> void:
 				r.summon_ok = true
 	if host_summon.is_empty():
 		return
-	host_summon.t -= dt
-	notice_set("Partner fights NULL — joining in %d..." % maxi(1, ceili(host_summon.t)), 1.0)
-	if host_summon.t <= -1.0 or (host_summon.t <= 0.0 and mgr.player.on_ground):
-		var rid: String = host_summon.room
+	var rid := _summon_step(host_summon, dt)
+	if rid != "":
 		host_summon = {}
-		var rm: Room = mgr.rooms.get(rid)
-		var door = null
-		var tdef: Dictionary = Game.rooms_meta.rooms[rid]
-		var spawn := Vector2(24.0, 100.0)
-		if rm != null:
-			spawn = Vector2(24.0, _floor_y(rm, 24.0, 5))
-		mgr.player.frozen = false
-		mgr.player.inv = 1.5
-		mgr.swap_to(rid, spawn)
-		mgr.player.vx = 0.0
-		mgr.player.vy = 0.0
-		mgr.player.on_ground = true
 		mgr.room.summon_ok = _remote_room() == mgr.room
+
+# the boss summon, shared by both sides: count down, then the partner who was outside walks into the arena. Returns its room id once arrived.
+func _summon_step(sm: Dictionary, dt: float) -> String:
+	var p = mgr.player
+	sm.t -= dt
+	notice_set("Partner fights NULL — joining in %d..." % maxi(1, ceili(sm.t)), 1.0)
+	if not (sm.t <= -1.0 or (sm.t <= 0.0 and p.on_ground)):
+		return ""
+	p.frozen = false
+	p.inv = 1.5
+	mgr.swap_to(sm.room, Vector2(24.0, 100.0))
+	p.y = _floor_y(mgr.room, 24.0, 5)
+	p.x = 24.0
+	p.vx = 0.0
+	p.vy = 0.0
+	p.on_ground = true
+	return sm.room
 
 func _floor_y(r: Room, x: float, from_row: int) -> float:
 	var tx := floori((x + 5.0) / 16.0)
@@ -988,20 +989,8 @@ func _guest_died() -> void:
 func _guest_summon_logic(dt: float) -> void:
 	if guest_summon.is_empty():
 		return
-	var p = mgr.player
-	guest_summon.t -= dt
-	notice_set("Partner fights NULL — joining in %d..." % maxi(1, ceili(guest_summon.t)), 1.0)
-	if guest_summon.t <= -1.0 or (guest_summon.t <= 0.0 and p.on_ground):
-		var rid: String = guest_summon.room
+	var rid := _summon_step(guest_summon, dt)
+	if rid != "":
 		guest_summon = {}
-		p.frozen = false
-		p.inv = 1.5
-		mgr.swap_to(rid, Vector2(24.0, 100.0), null, false)
-		var r: Room = mgr.room
-		p.y = _floor_y(r, 24.0, 5)
-		p.x = 24.0
-		p.vx = 0.0
-		p.vy = 0.0
-		p.on_ground = true
 		Net.rel("summon_ok", {})
 		log_("guest: arrived in %s" % rid)
