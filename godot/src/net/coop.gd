@@ -211,6 +211,7 @@ func _on_local_died(r: Room) -> void:
 func _host_tick(dt: float) -> void:
 	for r in mgr.rooms.values():
 		_host_watch_room(r)
+	_hud(mgr.player)
 	if not guest_here or remote == null:
 		_host_down_logic(dt)
 		return
@@ -427,6 +428,32 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"summon_ok": pass
 		"pause": main.set_paused(bool(d.on), true)
 
+# the partner's line on the HUD (as the JS game): its hit points, a line-quality dot, and the state of a downed body
+func _hud(p) -> void:
+	var h = main.hud
+	if h == null:
+		return
+	var q = remote if role == "host" else host_body
+	if q == null:
+		h.partner_hp = -1
+		h.me_text = ""
+		return
+	h.partner_hp = q.hp
+	h.partner_max = q.max_hp
+	var lag: bool = q.lagging if role == "host" else host_lagging
+	h.partner_dot = "#8d8798" if (lag or not Net.is_open) else ("#7fe08a" if Net.rtt < 0.12 and Net.jitter < 0.04 else ("#ffd27a" if Net.rtt < 0.25 else "#ff6b6b"))
+	h.partner_text = ""
+	if q.dead:
+		h.partner_text = ("back in %d" % ceili(q.down_t)) if role == "host" and q.down_t > 0.0 else "down"
+	h.me_text = ""
+	if p != null and p.dead:
+		if q.dead:
+			h.me_text = "BOTH DOWN"
+		elif p.downed and p.down_t > 0.0:
+			h.me_text = "DOWN - BACK IN %d" % ceili(p.down_t)
+		elif p.downed:
+			h.me_text = "DOWN - REVIVING..."
+
 func _host_remote_to_room(to_id: String) -> void:
 	var old := _remote_room()
 	if old != null and old.id == to_id:
@@ -434,6 +461,7 @@ func _host_remote_to_room(to_id: String) -> void:
 	var target: Room = mgr.ensure_room(to_id)
 	if old != null:
 		old.remote_players.erase(remote)
+		old.fx_out.clear()              # (effects nobody will see; they must not play if the guest comes back)
 		remote.get_parent().remove_child(remote)
 	target.remote_players.append(remote)
 	remote.room = target
@@ -889,8 +917,7 @@ func _guest_tick(dt: float) -> void:
 		guest_down_t -= dt
 		p.down_t = guest_down_t
 	_guest_summon_logic(dt)
-	if main.hud != null:
-		main.hud.partner_hp = host_body.hp if host_body != null else -1
+	_hud(p)
 
 func _puppet_follow(e, rt: float, dt: float) -> void:
 	e.t += dt

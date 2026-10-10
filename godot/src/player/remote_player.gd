@@ -131,6 +131,9 @@ func _draw() -> void:
 	if inv > 0.0 and int(inv * 20.0) % 2 == 1:
 		return
 	ClawdDraw.draw_clawd(self, px, py, o)
+	# who it is (as the JS game): P2 on the host's screen, P1 on the guest's, or why it looks faint
+	var label := "away" if away else ("lag" if lagging else ("P2" if room != null and room.mode == "host" else "P1"))
+	PixelText.draw_text(self, label, px, py - 21, "#9cc4ff" if label == "P2" else "#ffb38a", {"align": "c", "tiny": true, "outline": Game.COL.ink})
 	if atk_t > 0.0:
 		var f2 := 0 if atk_t > 0.115 else (1 if atk_t > 0.05 else 2)
 		var pcy := py - 5

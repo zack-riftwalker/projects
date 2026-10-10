@@ -9,6 +9,10 @@ var age := 0.0
 var fade := 0.0
 var notice := ""
 var partner_hp := -1
+var partner_max := 0
+var partner_dot := ""            # line quality, as in the JS game: green good, yellow slow, red bad, grey the partner is not answering
+var partner_text := ""           # "down", "back in 4"
+var me_text := ""                # my own body is down: "DOWN - BACK IN 4", "BOTH DOWN"
 
 func set_room(r: Room) -> void:
 	room = r
@@ -76,8 +80,20 @@ func _draw() -> void:
 	if notice != "":
 		PixelText.draw_text(self, notice, W / 2.0, 22, Game.COL.paper, {"align": "c", "outline": Game.COL.ink})
 	if partner_hp >= 0:
-		for i in range(partner_hp):
-			draw_rect(Rect2(6 + i * 5, 22, 4, 4), Color("#6aa8ff"))
+		var n: int = maxi(partner_max, partner_hp)
+		for i in range(n):
+			draw_rect(Rect2(6 + i * 5, 22, 4, 4), Color("#6aa8ff") if i < partner_hp else Color("#2a3550"))
+		var dx := 8 + n * 5
+		if partner_dot != "":
+			draw_rect(Rect2(dx - 1, 21, 6, 6), Color(Game.COL.ink))
+			draw_rect(Rect2(dx, 22, 4, 4), Color(partner_dot))
+			dx += 8
+		if partner_text != "":
+			PixelText.draw_text(self, partner_text, dx, 20, "#8d8798", {"tiny": true})
+	if me_text != "":
+		var mw := PixelText.text_width(me_text) + 16
+		Gfx.panel(self, floori((W - mw) / 2.0), 40, mw, 15, "#17131f", "#ffb38a")
+		PixelText.draw_text(self, me_text, W / 2.0, 44, "#ffd9c4", {"align": "c"})
 	# room title tab
 	if age < 3.2:
 		var k := _ease_out(clampf(age / 0.4, 0.0, 1.0)) * (1.0 - _ease_in(clampf((age - 2.7) / 0.5, 0.0, 1.0)))
