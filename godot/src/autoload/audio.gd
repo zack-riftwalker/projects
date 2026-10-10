@@ -14,6 +14,7 @@ var music_name := ""
 var first_sfx_msec := -1       # when the first sound actually started (debug overlay)
 var first_touch_msec := -1
 var duck_db := 0.0
+var music_tw: Tween = null          # the running crossfade: a new music change ends it (its stop callback must not hit the new song)
 
 func _ready() -> void:
 	for n in SFX:
@@ -64,7 +65,10 @@ func music(music_key: String) -> void:
 	music_a.stream = st
 	music_a.volume_db = -60.0
 	music_a.play()
+	if music_tw != null and music_tw.is_valid():
+		music_tw.kill()
 	var tw := create_tween().set_parallel(true)
+	music_tw = tw
 	tw.tween_property(music_a, "volume_db", _music_db(), 0.5)
 	if music_b.playing:
 		tw.tween_property(music_b, "volume_db", -60.0, 0.5)
