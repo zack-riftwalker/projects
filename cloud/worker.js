@@ -1,5 +1,6 @@
 // CLAWD co-op relay on Cloudflare: static game (Workers assets) + one Durable Object that forwards messages between the host and one guest.
 // Same protocol as server.js, except where the platform forces a difference (see reports/cloud.md).
+// /mv/ (the Godot build, stored as .gz) is PC-server only: this worker serves plain assets, so public/.assetsignore keeps it out of the deploy.
 const SOCK_OPEN = 1;
 const MAX_PAYLOAD = 512 * 1024;
 const HB = '{"t":"hb"}';
