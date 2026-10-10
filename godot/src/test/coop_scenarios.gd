@@ -548,6 +548,53 @@ func sc_co_restart() -> Array:
 	var orphans1: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	return [orphans1 <= orphans0, "orphan nodes %d -> %d" % [orphans0, orphans1]]
 
+# NULL must hurt the guest: the guest stands in the arena for 25 s without i-frames and counts its hurts
+func sc_co_bossdmg() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("R05", Vector2(40.0, 100.0))
+		var p = mgr().player
+		p.y = floor_y(mgr().room, 40.0, 7)
+		p.x = 100.0
+		var active := await wait_until(func(): return mgr().room.fight.state == "active", 12.0)
+		var picks := {}
+		var touch := {}
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 28000:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			var b = mgr().room.boss
+			if b != null and b.target != null:
+				picks["P2" if b.target.get("is_remote") else "P1"] = true
+				if b.cur.mode == "fly" and b.target.get("is_remote"):
+					var rb = b.target.hurtbox()
+					if Game.overlap(rb, {"x": b.cur.x - 5, "y": b.cur.y - 5, "w": 10, "h": 10}):
+						touch[b.cycle] = true
+			await get_tree().physics_frame
+		return [active and picks.has("P2"), "fight active %s, NULL targeted %s, poke rounds that touched P2 here %d" % [active, str(picks.keys()), touch.size()]]
+	var there := await wait_until(func(): return mgr().room.id == "R05", 15.0)
+	var hurts := 0
+	var t1 := Time.get_ticks_msec()
+	var pup_passive := true
+	var by := {}
+	while Time.get_ticks_msec() - t1 < 25000:
+		var g = mgr().player
+		if g != null:
+			if g.hp < g.max_hp:
+				hurts += g.max_hp - g.hp
+				g.hp = g.max_hp
+				var b1 = mgr().room.boss
+				if b1 != null:
+					by[b1.st] = by.get(b1.st, 0) + 1
+			g.dead = false
+		var b2 = mgr().room.boss
+		if b2 != null and b2.active:
+			pup_passive = b2.passive
+		await get_tree().physics_frame
+	return [there and by.has("poke"), "in R05 %s, guest hurt %d times %s, puppet passive %s" % [there, hurts, str(by), pup_passive]]
+
 # the host's pause menu "Restart room" brings the guest back too (it used to stay where it was)
 func sc_co_pauserestart() -> Array:
 	if not await wait_joined():

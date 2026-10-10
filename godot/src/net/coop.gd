@@ -71,6 +71,12 @@ func setup(m) -> void:
 	mgr.rested.connect(func(id): if role == "guest": Net.rel("bench", {"room": id}))      # the host respawns the guest there after a wipe
 	Net.connect_as(role, Game.net_code)
 
+# the two pages must run the same build (a phone can keep an old copy): say so loudly, on both
+func _check_build(other: String) -> void:
+	log_("builds: mine %s, partner %s" % [Game.build_text, other])
+	if other != Game.build_text:
+		notice_set("DIFFERENT BUILDS - partner %s - reload both pages" % other.get_slice(" ", 1), 30.0)
+
 func notice_set(text: String, secs: float) -> void:
 	notice = text
 	notice_t = secs
@@ -265,7 +271,7 @@ func _guest_joined() -> void:
 	place_room.remote_players.append(remote)
 	place_room.add_child(remote)
 	var you := {"room": place_room.id, "x4": NetClasses.x4(px), "y4": NetClasses.x4(py), "hp": Game.max_hp, "max_hp": Game.max_hp}
-	Net.send_msg("start", {"save": {"tools": Game.tools, "flags": Game.flags, "diff": Game.diff, "coop_hp_pct": Game.coop_hp_pct, "fragments": Game.fragments}, "you": you, "tm": hms()})
+	Net.send_msg("start", {"save": {"tools": Game.tools, "flags": Game.flags, "diff": Game.diff, "coop_hp_pct": Game.coop_hp_pct, "fragments": Game.fragments}, "you": you, "tm": hms(), "build": Game.build_text})
 	if arena_door != null:
 		Net.rel("summon", {"room": hr.id, "warn": 3.0})
 		notice_set("P2 is joining the fight", 3.0)
@@ -341,6 +347,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"ready":
 			guest_ready = true
 			force_full = true
+			_check_build(String(d.get("build", "?")))
 		"hit": _host_hit(d)
 		"projhit":
 			var r := _remote_room()
@@ -712,7 +719,8 @@ func _guest_start(m: Dictionary) -> void:
 	p.max_hp = int(you.max_hp)
 	p.hp = int(you.hp)
 	notice_set("", 0.1)
-	Net.rel("ready", {})
+	_check_build(String(m.get("build", "?")))
+	Net.rel("ready", {"build": Game.build_text})
 
 func _guest_tick(dt: float) -> void:
 	if not started:
@@ -746,6 +754,8 @@ func _guest_tick(dt: float) -> void:
 
 func _puppet_follow(e, rt: float, dt: float) -> void:
 	e.t += dt
+	if e.has_method("puppet_tick"):
+		e.puppet_tick(dt)
 	if e.flash > 0.0:
 		e.flash -= dt
 	var s: Array = e.get_meta("samples", [])

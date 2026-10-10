@@ -460,6 +460,22 @@ func net_apply(f: Array) -> void:
 	passive = not active or dying                     # the puppet never runs start(): without this it stays a harmless corpse
 	_guest_strikes(was, was_marks)
 
+# the guest's page, every frame: the cursor arrives only 20-30 times a second, 20-30 px apart in flight, so it would jump over
+# the guest's body; it flies on locally between snapshots (the next snapshot corrects it)
+func puppet_tick(dt: float) -> void:
+	for q in trail:
+		q.life -= dt
+	trail = trail.filter(func(q): return q.life > 0.0)
+	if cur.mode != "fly":
+		return
+	var nx: float = cur.x + cos(cur.a) * 560.0 * dt
+	var ny: float = cur.y + sin(cur.a) * 560.0 * dt
+	if room.grid.solid_at(nx, ny):
+		return
+	cur.x = nx
+	cur.y = ny
+	trail.append({"x": cur.x, "y": cur.y, "a": cur.a, "life": 0.15})
+
 # the guest's page: the dangling blasts and the dereference slam happen on the host, so the guest checks its own body when it sees them
 func _guest_strikes(was: String, was_marks: Array) -> void:
 	var p = room.player
