@@ -368,3 +368,28 @@ func sc_co_rejoin() -> Array:
 	var snaps0: int = coop().snaps_applied
 	var flow := await wait_until(func(): return coop().snaps_applied > snaps0 + 5, 6.0)
 	return [again and flow, "restarted %s, snapshots flowing %s (+%d)" % [again, flow, coop().snaps_applied - snaps0]]
+
+# both down in the same room: both respawn there and the link keeps working (G2)
+func sc_co_wipe() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(2.0)
+		var p = mgr().player
+		p.hp = 0
+		p.die()
+		var both := await wait_until(func(): return coop().remote.dead and p.dead, 8.0)
+		var back := await wait_until(func(): return mgr().player != null and not mgr().player.dead and not coop().remote.dead, 12.0)
+		await wait_secs(1.5)
+		var rr = coop()._remote_room()
+		return [both and back and rr == mgr().room, "both down %s, back %s, _remote_room %s" % [both, back, str(rr)]]
+	await wait_secs(2.0)
+	var p2 = mgr().player
+	p2.hp = 0
+	p2.die()
+	await wait_until(func(): return not p2.dead, 14.0)
+	await wait_secs(1.0)
+	var snaps0: int = coop().snaps_applied
+	var flow := await wait_until(func(): return coop().snaps_applied > snaps0 + 5, 5.0)
+	var bodies: int = mgr().room.find_children("*", "RemotePlayer", true, false).size()
+	return [flow and bodies <= 1, "snapshots flow after the wipe: %s (+%d), host bodies %d" % [flow, coop().snaps_applied - snaps0, bodies]]

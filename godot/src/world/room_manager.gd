@@ -66,10 +66,16 @@ func release_if_empty(r: Room) -> void:
 # the local player goes to another room (the partner may already be there). rebuild: throw the old copy of the target away first
 func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> void:
 	var old := room
+	var keep: Array = []               # partners standing in a room that is rebuilt move into the new copy
 	if rebuild and rooms.has(room_id):
 		var dead_room: Room = rooms[room_id]
 		for rp in dead_room.remote_players.duplicate():
-			rp.reparent(host, false)
+			dead_room.remote_players.erase(rp)
+			dead_room.remove_child(rp)
+			if mode == "guest":           # the host's body is rebuilt from the next snapshot
+				rp.queue_free()
+			else:
+				keep.append(rp)
 		rooms.erase(room_id)
 		if dead_room == old:
 			old = null
@@ -81,6 +87,10 @@ func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> v
 	else:
 		target.attach_local(player, spawn)
 		Game.flags["room:%s:visited" % room_id] = true
+	for rp in keep:
+		rp.room = target
+		target.remote_players.append(rp)
+		target.add_child(rp)
 	if old != null and old != target:
 		old.detach_local()
 		if old.remote_players.is_empty():
