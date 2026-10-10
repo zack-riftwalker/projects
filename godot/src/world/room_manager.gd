@@ -102,11 +102,6 @@ func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> v
 	room_changed.emit(room)
 	if hud != null:
 		hud.set_room(room)
-	var song := String(room.def.get("music", ""))
-	if song != "":
-		Audio.music(song)
-	else:
-		Audio.stop_music(1.0)
 
 func start_game() -> void:
 	Game.load_meta()

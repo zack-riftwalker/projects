@@ -647,7 +647,8 @@ func sc_co_bossdmg() -> Array:
 					if Game.overlap(rb, {"x": b.cur.x - 5, "y": b.cur.y - 5, "w": 10, "h": 10}):
 						touch[b.cycle] = true
 			await get_tree().physics_frame
-		return [active and picks.has("P2"), "fight active %s, NULL targeted %s, poke rounds that touched P2 here %d" % [active, str(picks.keys()), touch.size()]]
+		var song_h := Audio.music_name
+		return [active and picks.has("P2") and song_h == "boss", "fight active %s, NULL targeted %s, poke rounds that touched P2 here %d, music %s" % [active, str(picks.keys()), touch.size(), song_h]]
 	var there := await wait_until(func(): return mgr().room.id == "R05", 15.0)
 	var hurts := 0
 	var t1 := Time.get_ticks_msec()
@@ -667,7 +668,8 @@ func sc_co_bossdmg() -> Array:
 		if b2 != null and b2.active:
 			pup_passive = b2.passive
 		await get_tree().physics_frame
-	return [there and by.has("poke"), "in R05 %s, guest hurt %d times %s, puppet passive %s" % [there, hurts, str(by), pup_passive]]
+	var song_g := Audio.music_name
+	return [there and by.has("poke") and song_g == "boss", "in R05 %s, guest hurt %d times %s, puppet passive %s, music %s" % [there, hurts, str(by), pup_passive, song_g]]
 
 # the host's pause menu "Restart room" brings the guest back too (it used to stay where it was)
 func sc_co_pauserestart() -> Array:
@@ -685,6 +687,7 @@ func sc_co_pauserestart() -> Array:
 
 # solo: two music changes inside a crossfade keep the last song (G15); a pause while the line is down is queued (G17)
 func sc_co_solo() -> Array:
+	main.music_auto = false
 	Audio.music("title")
 	await wait_secs(1.0)
 	Audio.music("w1")
@@ -692,6 +695,15 @@ func sc_co_solo() -> Array:
 	Audio.music("boss")
 	await wait_secs(1.5)
 	var music_ok: bool = Audio.music_a.playing
+	# a fade-out still running must not silence the next song (entering the arena, which has no song, then the fight starts)
+	Audio.music("w1")
+	await wait_secs(0.7)
+	Audio.stop_music(1.0)
+	await wait_secs(0.2)
+	Audio.music("boss")
+	await wait_secs(1.5)
+	var fade_ok: bool = Audio.music_a.playing and Audio.music_a.volume_db > -20.0 and Audio.music_name == "boss"
+	main.music_auto = true
 	Net.role = "host"
 	Net.is_open = false
 	Net.rel_out.clear()
@@ -699,4 +711,4 @@ func sc_co_solo() -> Array:
 	var queued: int = Net.rel_out.size()
 	main.set_paused(false)
 	Net.role = "none"
-	return [music_ok and queued == 1, "boss music still playing: %s; pause queued offline: %d (want 1)" % [music_ok, queued]]
+	return [music_ok and fade_ok and queued == 1, "boss music still playing: %s; after a fade-out: %s (%.0f dB); pause queued offline: %d (want 1)" % [music_ok, fade_ok, Audio.music_a.volume_db, queued]]

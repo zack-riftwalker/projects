@@ -67,8 +67,7 @@ func music(music_key: String) -> void:
 	music_a.stream = st
 	music_a.volume_db = -60.0
 	music_a.play()
-	if music_tw != null and music_tw.is_valid():
-		music_tw.kill()
+	_end_fade()
 	var tw := create_tween().set_parallel(true)
 	music_tw = tw
 	tw.tween_property(music_a, "volume_db", _music_db(), 0.5)
@@ -76,13 +75,22 @@ func music(music_key: String) -> void:
 		tw.tween_property(music_b, "volume_db", -60.0, 0.5)
 		tw.chain().tween_callback(music_b.stop)
 
+# one fade at a time: a fade-out that kept running after a new song started faded the new song to silence (the boss music,
+# which starts less than a second after entering the arena, whose room has no song of its own)
+func _end_fade() -> void:
+	if music_tw != null and music_tw.is_valid():
+		music_tw.kill()
+	music_tw = null
+
 func stop_music(fade := 0.0) -> void:
 	music_name = ""
+	_end_fade()
 	if fade <= 0.0:
 		music_a.stop()
 		music_b.stop()
 		return
 	var tw := create_tween().set_parallel(true)
+	music_tw = tw
 	for pl in [music_a, music_b]:
 		if pl.playing:
 			tw.tween_property(pl, "volume_db", -60.0, fade)

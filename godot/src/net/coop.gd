@@ -1041,16 +1041,13 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 			if r != null and r.id == String(d.room):
 				match String(d.ev):
 					"intro":
-						Audio.music("boss")
-						Audio.sfx("roar")
+						Audio.sfx("roar")           # (the music follows the snapshot's fight state: Main.song_for)
 					"phase":
 						r.shake(0.6)
 						r.flash_screen(0.5, "#bfe9ff")
 						Audio.sfx("glitch")
-					"reward":
-						Audio.music("toolget")
-					"done":
-						Audio.music("w1")
+					"reward", "done":
+						pass
 		"pick":
 			var rid2 := String(d.room)
 			Game.flags[String(d.id)] = true

@@ -740,8 +740,7 @@ func _start_intro() -> void:
 	cam.lock = {"x": (pw - W) / 2.0, "y": float(ph - H)}
 	for q in players():
 		q.frozen = true
-	Audio.music("boss")
-	Audio.sfx("roar")
+	Audio.sfx("roar")                      # (the music follows fight.state: Main.song_for)
 	events.append("bossIntro")
 	fight_intro.emit()
 
@@ -775,7 +774,6 @@ func _start_reward() -> void:
 	for q in players():
 		q.frozen = true
 	banner = {"text": "bash", "sub": "dash in any direction - breaks cracked % walls", "t": 3.0}
-	Audio.music("toolget")
 	# the fight statistics (to tune boss HP with real numbers)
 	var np: int = 2 if stats.coop else 1
 	var secs: float = maxf(stats.secs, 0.001)
@@ -804,7 +802,6 @@ func _finish_reward() -> void:
 		q.frozen = false
 	boss = null
 	banner.text = ""
-	Audio.music("w1")
 	Game.write_save()
 	update_doors()
 

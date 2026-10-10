@@ -442,6 +442,7 @@ func _physics_process(_d: float) -> void:
 		return
 	if manager.room == null:
 		return
+	_sync_music()
 	if demo_frame >= 0:
 		_demo_step()
 		return
@@ -461,6 +462,32 @@ func _physics_process(_d: float) -> void:
 	manager.tick(Game.STEP)
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
 		set_paused(true)
+
+# The music follows the state (the room, its fight), it is not started by events: a missed or reordered event (P2 summoned
+# into a running fight, a fade still running) can no longer leave the wrong song or silence.
+static func song_for(r: Room) -> String:
+	var want := String(r.def.get("music", ""))
+	match String(r.fight.state):
+		"intro", "active":
+			want = "boss"
+		"reward":
+			want = "toolget"
+		"done":
+			if want == "":
+				want = "w1"
+	return want
+
+var music_auto := true                 # (a test of the audio module turns this off)
+
+func _sync_music() -> void:
+	if not music_auto:
+		return
+	var want := song_for(manager.room)
+	if want == "":
+		if Audio.music_name != "":
+			Audio.stop_music(1.0)
+	elif want != Audio.music_name:
+		Audio.music(want)
 
 # the fixed 180-frame script of ?selftest: run right, jump, dash, swipe
 func _selftest_step() -> void:
