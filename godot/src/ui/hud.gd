@@ -41,7 +41,10 @@ func _draw() -> void:
 	# the context meter under the pips: 99 wide, marks at 33 and 66
 	var meter_y := hud_y + 11
 	draw_rect(Rect2(6, meter_y, Game.METER_MAX, 3), Color("#3a3346"))
-	draw_rect(Rect2(6, meter_y, int(p.meter), 3), Color("#ffe2c4"))
+	if p.agents_t > 0.0:                      # while the agents fly the bar shows how long they still have
+		draw_rect(Rect2(6, meter_y, int(Game.METER_MAX * clampf(p.agents_t / 11.0, 0.0, 1.0)), 3), Color("#f0b79a"))
+	else:
+		draw_rect(Rect2(6, meter_y, int(p.meter), 3), Color("#ffe2c4"))
 	draw_rect(Rect2(6 + 33, meter_y, 1, 3), Color(Game.COL.ink))
 	draw_rect(Rect2(6 + 66, meter_y, 1, 3), Color(Game.COL.ink))
 	var tk := str(room.tokens)

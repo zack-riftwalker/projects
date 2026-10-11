@@ -28,6 +28,7 @@ var dead := false
 var hit_wall := 0
 var marks := {}               # per-player marks: hit_p1 / dash_p1 -> attack id
 var no_hit := false
+var no_agent := false         # agents do not seek it
 var passive := false
 var dashable := true
 var always := false

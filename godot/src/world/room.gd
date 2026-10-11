@@ -71,6 +71,7 @@ signal item_collected(item_id: String, kind: String)
 signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
 signal plugin_got(plugin_id: String, by: String)
+signal net_agents
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
@@ -86,6 +87,10 @@ var stats_line := ""
 var stats_t := 0.0
 var end_door = null
 var pick_banner := {"text": "", "sub": "", "t": 0.0}      # "<plugin>" / "plugin - equip it at a bench" for 2 s
+var agents: Array = []         # the helpers of every player in this room (host / solo simulate them all)
+var agent_view: Array = []     # guest: [{owner, x, y, t}] as the host's snapshot lists them
+var keys: Array = []           # slot keys (letter k): {x, y, w, h, i}; only agents can press them
+var stations: Array = []       # cache stations (letter R): {x, y, w, h}
 var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
 var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
 signal door_crossed(door: Dictionary)
@@ -140,6 +145,7 @@ func load_room(room_id: String, snap = null) -> void:
 	var item_id := 0
 	var switch_n := 0
 	var plugin_n := 0
+	var key_n := 0
 	var spark_spots: Array = []
 	for ty in range(h):
 		var row := rows[ty]
@@ -169,6 +175,11 @@ func load_room(room_id: String, snap = null) -> void:
 						if not Game.owns_plugin(pid) and mode != "guest":
 							items.append({"kind": "plugin", "x": float(x + 8), "y": float(y + 8), "id": "plugin:" + pid, "ph": float(plugin_n)})
 					plugin_n += 1
+				"k":
+					keys.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": key_n})
+					key_n += 1
+				"R":
+					stations.append({"x": float(x + 2), "y": float(y), "w": 12.0, "h": 16.0})
 				"Y":
 					switches.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": switch_n})
 					switch_n += 1
@@ -793,6 +804,7 @@ func step(dt: float) -> void:
 		p.update(dt)
 		ctx = "all"
 	_check_door()
+	_step_agents(dt)
 
 	# creatures (only the ones near a player think)
 	var cx: float = cam.x
@@ -1176,6 +1188,15 @@ func interact_goals(p) -> void:
 	if end_door != null and Controls.pressed.get("up", false) and p.on_ground:
 		if absf(p.x + p.w / 2.0 - end_door.x) < 14 and absf(p.y + p.h - end_door.y) < 20:
 			end_requested.emit()
+	if p.cache_cool <= 0.0 and not stations.is_empty():
+		var hb2: Dictionary = p.hurtbox()
+		for st in stations:
+			if Game.overlap(hb2, st):
+				p.meter = float(Game.METER_MAX)
+				p.cache_cool = 20.0
+				pop(p.x + 5.0, p.y - 12.0, "cache hit", "#58f0c8", true)
+				Audio.sfx("agent")
+				break
 	sign_now = null
 	for s in signs:
 		if absf(p.x + p.w / 2.0 - s.x) < 26 and absf(p.y + p.h - s.y) < 30:
@@ -1267,6 +1288,49 @@ func collect(it: Dictionary) -> void:
 			pop(it.x, it.y - 10, "+1 coffee", Game.COL.paper)
 			burst(it.x, it.y, 8, [Game.COL.paper, Game.COL.clawd], 70.0, 100.0)
 			Audio.sfx("heal")
+
+# ---- agents (MV3-12) ----
+func cast_agents(p) -> void:
+	if mode == "guest":
+		net_agents.emit()                  # the host simulates them (the guest only draws what the snapshot lists)
+		return
+	agents.append(Agent.new(p, 0))
+	agents.append(Agent.new(p, 1))
+
+func _step_agents(dt: float) -> void:
+	if agents.is_empty():
+		return
+	var keep: Array = []
+	for a in agents:
+		var o = a.owner_p
+		var here: bool = is_instance_valid(o) and (o == player or o in remote_players) and not o.dead
+		if not here:
+			continue                                   # no agent outlives its owner leaving the room (or dying)
+		a.update(dt, self)
+		if a.life <= 0.0:
+			ring(a.x, a.y, 1, 10, "#ffe2c4", 0.25)
+			pop(a.x, a.y - 6, "done", Game.COL.okHi)
+			continue
+		keep.append(a)
+	agents = keep
+
+# an agent pressed slot key i; when every key of the room is pressed the agents gate opens for good
+func press_key(i: int) -> void:
+	var key := "key:%s:%d" % [id, i]
+	if Game.flag(key):
+		return
+	Game.flags[key] = true
+	Audio.sfx("uiOk")
+	var all := true
+	for k in keys:
+		if not Game.flag("key:%s:%d" % [id, k.i]):
+			all = false
+	if all and not Game.flag("gate:%s:agents" % id):
+		Game.flags["gate:%s:agents" % id] = true
+		Audio.sfx("gate")
+		shake(0.3)
+		update_doors()
+	Game.write_save()
 
 # catch (MV3-03): a catchable projectile turns around, faster, and hurts creatures instead of players. The same function runs for the
 # local player's swipe, and on the host for the guest's `catch` event.
@@ -1473,6 +1537,28 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 		for gc in gate_cells:
 			if not grid.gates_open[gc[2]]:
 				ci.draw_texture_rect_region(gate, Rect2(gc[0] * T, gc[1] * T, T, T), Rect2(7, 12, 16, 16))
+		for k in keys:
+			var lit := Game.flag("key:%s:%d" % [id, k.i])
+			ci.draw_rect(Rect2(k.x - 3, k.y - 3, 16, 16), Color("#17131f"))
+			ci.draw_rect(Rect2(k.x, k.y, 10, 10), Color("#231d2e"))
+			var kc := Color("#fff3b0") if lit else Color("#ffd97a")
+			ci.draw_rect(Rect2(k.x + 2, k.y + 2, 3, 3), kc)                       # the key: a ring and a shaft with two teeth
+			ci.draw_rect(Rect2(k.x + 5, k.y + 3, 4, 1), kc)
+			ci.draw_rect(Rect2(k.x + 7, k.y + 4, 1, 2), kc)
+			ci.draw_rect(Rect2(k.x + 5, k.y + 4, 1, 1), kc)
+			if lit:
+				ci.draw_rect(Rect2(k.x, k.y + 9, 10, 1), Color("#7fd08a"))
+		var me = player
+		for st in stations:
+			var cool: bool = me != null and me.cache_cool > 0.0
+			var rack := Color("#3a3346") if not cool else Color("#2a2433")
+			ci.draw_rect(Rect2(st.x - 1, st.y - 1, 14, 17), Color(Game.COL.ink))
+			ci.draw_rect(Rect2(st.x, st.y, 12, 16), rack)
+			for ro in range(3):
+				ci.draw_rect(Rect2(st.x + 1, st.y + 2 + ro * 5, 10, 3), Color("#231d2e"))
+				var on_l: bool = (int(time * (3.0 + ro)) + ro) % 2 == 0 and not cool
+				ci.draw_rect(Rect2(st.x + 2, st.y + 3 + ro * 5, 2, 1), Color("#58f0c8") if on_l else Color("#1f4a45"))
+				ci.draw_rect(Rect2(st.x + 6, st.y + 3 + ro * 5, 4, 1), Color("#3a3346"))
 		for sw in switches:
 			var on := switch_on(int(sw.i))
 			var swc := Color("#7fd08a") if on else Color("#ffd23f")
@@ -1513,6 +1599,10 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					if int(time * 3.0) % 2 == 0:
 						ci.draw_rect(Rect2(ix - 1, iy - 1, 2, 2), Color("#58f0c8"))
 	elif kind == "top":
+		for a in agents:
+			a.draw(ci)
+		for av in agent_view:
+			Agent._draw_at(ci, av.x, av.y, time + av.owner * 0.7, 9.0, [])
 		_draw_liquid(ci)
 		for q in projs:
 			if not q.dead:

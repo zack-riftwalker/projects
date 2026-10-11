@@ -56,6 +56,7 @@ func run(name: String) -> bool:
 		"w2enemies": return t_w2enemies()
 		"rooms3b": return t_rooms3b()
 		"merge": return t_merge()
+		"agents": return t_agents()
 		"fork": return t_fork()
 	return report(name, false, "unknown test")
 
@@ -1659,6 +1660,101 @@ func t_merge() -> bool:
 	Game.flags = {}
 	Game.fights = []
 	return report("merge", a_ok and hp_ok and bands_ok and dead0 and still_dead and back and end_ok, info)
+
+# MV3-12: agents. A tap of [special] with a full meter sends two helpers, a hold focuses; they kill a Bug, press D06's key (the gate opens);
+# the cache station fills the meter once per 20 s.
+func t_agents() -> bool:
+	Game.diff = "normal"
+	Game.flags = {}
+	Game.tools.agents = true
+	var info := ""
+	var room := plug_room()
+	var p = room.player
+	p.meter = 99.0
+	p.hp = p.max_hp
+	for f in range(8):                                    # a tap: 8 frames down, then up
+		step_with(room, {"special": f < 4})
+	var tap_ok: bool = room.agents.size() == 2 and p.meter == 0.0 and p.agents_t > 10.0
+	# a second tap while they fly does nothing
+	room.queue_free()
+	room = plug_room()
+	p = room.player
+	p.meter = 99.0
+	p.hp = p.max_hp - 1
+	for f in range(90):                                   # a hold: focus (heals one pip), no agents
+		step_with(room, {"special": true})
+	step_with(room, {})
+	var hold_ok: bool = room.agents.is_empty() and p.hp == p.max_hp
+	info += "tap casts=%s hold focuses=%s" % [tap_ok, hold_ok]
+	room.queue_free()
+	# the agents kill a Bug near their owner
+	room = plug_room()
+	p = room.player
+	p.meter = 99.0
+	var bug := add_bug(room, p.x + 50.0, p.y, 1.0)
+	bug.speed = 0.0
+	for f in range(8):
+		step_with(room, {"special": f < 4})
+	var killed := false
+	for f in range(240):
+		step_with(room, {})
+		if bug.dead:
+			killed = true
+			break
+	info += " | agents killed the bug=%s" % killed
+	room.queue_free()
+	# D06: the cache station, the key, the gate
+	Game.flags = {}
+	var m := new_manager()
+	m.swap_to("D06")
+	var r6 := m.room
+	clear_ents(r6)
+	var p6 = m.player
+	p6.x = 3.0 * 16 + 3.0                                  # stand in the cache station (letter R at column 3)
+	p6.y = floor_y(r6, p6.x + 5, 8)
+	p6.meter = 0.0
+	p6.inv = 999.0
+	Controls.script_input = {}
+	for f in range(10):
+		m.tick(Game.STEP)
+	var filled: bool = p6.meter == float(Game.METER_MAX) and p6.cache_cool > 19.0
+	p6.meter = 0.0                                         # 19 s later it does not fill again, 20 s later it does
+	var early := false
+	for f in range(60 * 19):
+		p6.inv = 999.0
+		m.tick(Game.STEP)
+		if p6.meter > 0.0:
+			early = true
+	for f in range(90):
+		p6.inv = 999.0
+		m.tick(Game.STEP)
+	var again: bool = p6.meter == float(Game.METER_MAX)
+	info += " | cache fills=%s, not early=%s, again after 20 s=%s" % [filled, not early, again]
+	# go to the key: it is inside the wall block at column 25, row 6; an agent presses it (the meter is full again)
+	p6.meter = float(Game.METER_MAX)
+	p6.x = 20.0 * 16
+	p6.y = floor_y(r6, p6.x + 5, 8)
+	p6.vx = 0.0
+	for f in range(8):
+		p6.inv = 999.0
+		Controls.script_input = {"special": f < 4}
+		m.tick(Game.STEP)
+	Controls.script_input = {}
+	var gate_closed: bool = r6.grid.solid(31, 10)
+	var opened := false
+	for f in range(400):
+		p6.inv = 999.0
+		m.tick(Game.STEP)
+		if Game.flag("gate:D06:agents"):
+			opened = true
+			break
+	r6.update_doors()
+	var gate_open: bool = not r6.grid.solid(31, 10) and Game.flag("key:D06:0")
+	info += " | gate was closed=%s, agent pressed the key and it opened=%s %s" % [gate_closed, opened, gate_open]
+	Controls.script_input = null
+	Game.tools.agents = false
+	Game.flags = {}
+	return report("agents", tap_ok and hold_ok and killed and filled and not early and again and gate_closed and opened and gate_open, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:

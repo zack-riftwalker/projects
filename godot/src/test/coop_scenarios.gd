@@ -1165,3 +1165,42 @@ func merge_head_kill(boss: MergeBoss, i: int) -> void:
 		if b.head == i:
 			boss.hit(999, 0.0, 0.0, "swipe", b)
 			return
+
+# MV3-12: the guest taps [special] with a full meter in D06: the host gives its body two agents, both pages see them, they press the slot key,
+# the agents gate opens on both pages.
+func sc_co_agents() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.agents = true
+		await wait_secs(1.0)
+		mgr().swap_to("D06", Vector2(60.0, 100.0))
+		var p = mgr().player
+		p.x = 60.0
+		p.y = floor_y(mgr().room, 60.0, 8)
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "D06" and absf(coop().remote.x - 320.0) < 12.0, 15.0)
+		var r: Room = mgr().room
+		clear_creatures(r)
+		var agents_seen := await wait_until(func(): return r.agents.size() == 2 and r.agents[0].owner_p.get("is_remote") == true, 10.0 * slow)
+		var key := await wait_until(func(): return Game.flag("key:D06:0") and Game.flag("gate:D06:agents") and r.grid.gates_open.agents, 12.0 * slow)
+		await wait_secs(1.0)
+		return [there and agents_seen and key, "guest at the key room %s, the guest's two agents on the host %s, key pressed + gate open %s" % [there, agents_seen, key]]
+	var has := await wait_until(func(): return Game.tools.get("agents", false), 10.0)
+	mgr().swap_to("D06", Vector2(320.0, 100.0))
+	var r2: Room = mgr().room
+	var g = mgr().player
+	g.x = 320.0
+	g.y = floor_y(r2, 320.0, 8)
+	g.vx = 0.0
+	g.inv = 999.0
+	await wait_secs(2.5)
+	g.meter = float(Game.METER_MAX)
+	Controls.script_input = {"special": true}
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	Controls.script_input = {}
+	var emptied := await wait_until(func(): return g.meter == 0.0, 2.0)
+	var view := await wait_until(func(): return r2.agent_view.size() == 2, 6.0 * slow)
+	var gate := await wait_until(func(): return r2.grid.gates_open.agents and Game.flag("key:D06:0"), 14.0 * slow)
+	return [has and emptied and view and gate, "has agents %s, meter emptied %s, the two agents drawn on the guest %s, gate open on the guest %s" % [has, emptied, view, gate]]

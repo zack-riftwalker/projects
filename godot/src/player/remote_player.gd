@@ -42,6 +42,7 @@ var ghost_since := 0.0
 var down_t := -1.0               # host: the revive countdown of the partner (-1: not down)
 var safe := {"x": 0.0, "y": 0.0}
 var tools := {}
+var agents_t := 0.0                # host: seconds its agents still have (the host simulates them)
 var loadout: Array = []          # the plugins it has on (its `loadout` event): the host judges its pickups and claw damage with them
 
 func _init(r: Room) -> void:

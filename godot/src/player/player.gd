@@ -81,6 +81,9 @@ var safe := {"x": 0.0, "y": 0.0}
 var prev_bottom := 0.0
 var meter := 0.0
 var agents: Array = []
+var agents_t := 0.0             # seconds the two agents still fly (the room simulates them)
+var special_t := 0.0            # how long [special] has been held (a tap casts agents, a hold focuses)
+var cache_cool := 0.0           # seconds until the cache station fills the meter again
 var grace := 0.0
 var frozen := false
 var look_t := 0.0
@@ -122,7 +125,11 @@ func set_safe(sx_: float, sy_: float) -> void:
 
 # the context meter (0-99): every landed claw hit and stomp fills it, focus spends it
 func gain_meter() -> void:
+	var was := meter
 	meter = minf(float(Game.METER_MAX), meter + float(Game.dv("meter_per_hit")) + float(Game.mod_meter_bonus()))
+	if was < Game.METER_MAX and meter >= Game.METER_MAX and tools.get("agents", false) and agents_t <= 0.0:
+		room.pop(x + 5, y - 14, "subagents ready", "#ffe2c4", true)
+		Audio.sfx("agent")
 
 func update(dt: float) -> void:
 	var grid := room.grid
@@ -191,6 +198,27 @@ func update(dt: float) -> void:
 		down = {}
 		pressed = {}
 		vx = 0.0
+
+	# --- agents: a TAP of [special] (released before the focus hold) with a full meter sends two helpers ---
+	if agents_t > 0.0:
+		agents_t -= dt
+	if cache_cool > 0.0:
+		cache_cool -= dt
+	if not frozen and Controls.down.get("special", false):          # (Controls, not `down`: a running focus empties `down`)
+		special_t += dt
+	elif not frozen and Controls.released.get("special", false):
+		if special_t < Game.FOCUS_HOLD and tools.get("agents", false):
+			if meter >= Game.METER_MAX and agents_t <= 0.0:
+				meter = 0.0
+				agents_t = 11.0
+				Audio.sfx("agent")
+				room.pop(x + 5, y - 14, "Task(subagent) x2", "#ffe2c4", true)
+				room.cast_agents(self)
+			else:
+				Audio.sfx("uiBack")
+		special_t = 0.0
+	else:
+		special_t = 0.0
 
 	var mx := (1.0 if down.get("right", false) else 0.0) - (1.0 if down.get("left", false) else 0.0)
 	var my := (1.0 if down.get("down", false) else 0.0) - (1.0 if down.get("up", false) else 0.0)

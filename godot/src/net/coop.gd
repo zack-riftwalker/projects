@@ -164,6 +164,7 @@ func _on_room_built(r: Room) -> void:
 				mgr.player.inv += 0.4)          # a bad line: a little more mercy after each hit (as the JS game)
 		r.net_projhit.connect(func(pid): Net.rel("projhit", {"pid": pid}))
 		r.net_catch.connect(func(pid): Net.rel("catch", {"pid": pid}))
+		r.net_agents.connect(func(): Net.rel("agents", {}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
@@ -427,6 +428,11 @@ func _host_rel(k: String, d: Dictionary) -> void:
 					ids.append(String(id))
 			remote.loadout = ids
 			log_("host: guest loadout %s" % str(ids))
+		"agents":
+			var ar := _remote_room()
+			if ar != null and remote.agents_t <= 0.0:
+				remote.agents_t = 11.0
+				ar.cast_agents(remote)
 		"crumble": _host_crumble(d)
 		"catch": _host_catch(d)
 		"parry": _host_parry(d)
@@ -897,12 +903,15 @@ func _send_snapshot() -> void:
 	for ci in r.grid.crumble:
 		var cc: Dictionary = r.grid.crumble[ci]
 		cr.append([ci % r.w, ci / r.w, cc.s, roundi(cc.t * 100.0)])
+	var ag: Array = []                  # the helpers of the guest's room: [owner 1 (host) | 2 (guest), x4, y4]
+	for a in r.agents:
+		ag.append([2 if a.owner_p.get("is_remote") == true else 1, NetClasses.x4(a.x), NetClasses.x4(a.y)])
 	var hz: Array = []
 	for z in r.zones:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn]
-	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "p1": p1,
+	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0}
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
@@ -1133,6 +1142,9 @@ func _apply_snapshot(m: Dictionary) -> void:
 	r.projs = projs
 	for pid in m.get("pl", []):
 		Game.flags["plugin:" + String(pid)] = true
+	r.agent_view = []
+	for rec in m.get("ag", []):
+		r.agent_view.append({"owner": int(rec[0]), "x": rec[1] / 4.0, "y": rec[2] / 4.0})
 	r.apply_crumbles(m.get("cr", []))
 	last_cr = {}
 	for rec in m.get("cr", []):

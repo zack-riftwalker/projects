@@ -73,6 +73,13 @@ func _host(b: Dictionary) -> void:
 		b["host-gets-up"] = [15.0, "host dead (downed %s)" % mgr.player.downed]
 	if rem != null and rem.dead and not rem.lagging:
 		b["guest-gets-up"] = [15.0, "guest dead (countdown %.1f)" % rem.down_t]
+	# no agent outlives its owner leaving the room (the host simulates every agent)
+	for r in mgr.rooms.values():
+		for a in r.agents:
+			var o = a.owner_p
+			if not is_instance_valid(o) or not (o == r.player or o in r.remote_players):
+				b["agent_owner"] = [1.0, "an agent in %s whose owner is gone" % r.id]
+				break
 	# a room is kept only while somebody is in it (a stale room comes back later with frozen creatures: G6)
 	for r in mgr.rooms.values():
 		if r != mgr.room and r.remote_players.is_empty():
