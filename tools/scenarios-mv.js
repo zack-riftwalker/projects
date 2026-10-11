@@ -232,14 +232,14 @@ module.exports = (S, h) => {
       await tapG(192, 52 + 6 * 20 + 9);
       chk('settings Back', await wait(() => pageIs('main')));
 
-      // 6. New game: the world starts and the pad stays; the pause menu has Fullscreen too (5th entry, 22 px apart from y 78)
+      // 6. New game: the world starts and the pad stays; the pause menu has Fullscreen too (6th entry, 19 px apart from y 52)
       await tapG(192, 100);
       chk('new game starts', await wait(() => pageIs('game'), 6000));
       await sleep(500);
       chk('pad in game', padVisible());
       chk('pause button', await press('pause'));
       await sleep(800);
-      await tapG(192, 78 + 4 * 22 + 9);
+      await tapG(192, 52 + 5 * 19 + 8);
       chk('pause Fullscreen', await wait(() => fsOn() === 2));
       if (process.env.MV_LOG) console.log(lines.filter((l) => /CLAWD/.test(l)).join('\n'));
     } finally { await browser.close(); await srv.stop(); }
