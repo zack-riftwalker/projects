@@ -513,13 +513,24 @@ func _physics_process(_d: float) -> void:
 		Controls.poll()
 		pause_menu.update()
 		return
-	if bench_menu.active:
+	if bench_menu.active or shop_menu.active:
 		Controls.poll()
-		bench_menu.update()
-		return
-	if shop_menu.active:
-		Controls.poll()
-		shop_menu.update()
+		if bench_menu.active:
+			bench_menu.update()
+		else:
+			shop_menu.update()
+		if not Net.is_active() or manager.player == null:
+			return                              # alone the world waits while a menu is open
+		# co-op: the partner's world goes on (the host simulates it); this body stands still and takes no input
+		manager.player.in_menu = true
+		manager.tick(Game.STEP)
+		if manager.player != null:
+			manager.player.in_menu = false
+			if manager.player.dead:              # hurt to death while choosing: the menu goes away
+				if shop_menu.active:
+					shop_menu.close()
+				if bench_menu.active:
+					bench_menu.close()
 		return
 	manager.tick(Game.STEP)
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):

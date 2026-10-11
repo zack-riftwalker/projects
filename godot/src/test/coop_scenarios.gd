@@ -1257,3 +1257,44 @@ func sc_co_shop() -> Array:
 	await wait_secs(0.5)
 	main.shop_menu.close()
 	return [asked and paid and owned and answered and Game.tokens == 110 and Game.owns_plugin("try_finally"), "asked %s, paid %s (tokens %d, want 110), owns it %s, late buyer answered %s and still has %d tokens, owns try_finally %s" % [asked, paid, Game.tokens, owned, answered, Game.tokens, Game.owns_plugin("try_finally")]]
+
+# MV3-FIX-3: an open bench menu / shop does not stop the co-op world (host: its rooms; guest: its own body), and the body takes no input
+func sc_co_menutick() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("D04", Vector2(60.0, 100.0))
+		var p = mgr().player
+		p.x = 60.0
+		p.y = floor_y(mgr().room, 60.0, 8)
+		await wait_secs(1.0)
+		var r: Room = mgr().room
+		main.shop_menu.open(r)
+		var t0: float = r.time
+		var x0: float = p.x
+		Controls.script_input = {"right": true}
+		await wait_secs(1.5)
+		Controls.script_input = {}
+		var ran: float = r.time - t0
+		var moved: float = absf(mgr().player.x - x0)
+		main.shop_menu.close()
+		await wait_secs(2.0)
+		return [ran > 1.0 and moved < 1.0, "host room ran %.2f s with the shop open (want > 1), body moved %.1f px (want 0)" % [ran, moved]]
+	await wait_secs(1.0)
+	mgr().swap_to("D04", Vector2(120.0, 100.0))
+	var g = mgr().player
+	g.x = 120.0
+	g.y = floor_y(mgr().room, 120.0, 8)
+	await wait_secs(3.0)
+	var r2: Room = mgr().room
+	main.shop_menu.open(r2)
+	var t1: float = r2.time
+	var gx: float = g.x
+	Controls.script_input = {"right": true}
+	await wait_secs(1.5)
+	Controls.script_input = {}
+	var ran2: float = r2.time - t1
+	var moved2: float = absf(mgr().player.x - gx)
+	main.shop_menu.close()
+	return [ran2 > 1.0 and moved2 < 1.0, "guest room ran %.2f s with the shop open (want > 1), body moved %.1f px (want 0)" % [ran2, moved2]]

@@ -86,6 +86,7 @@ var special_t := 0.0            # how long [special] has been held (a tap casts 
 var cache_cool := 0.0           # seconds until the cache station fills the meter again
 var grace := 0.0
 var frozen := false
+var in_menu := false            # a bench menu or the shop is open on this page while the co-op world goes on: no input, the body stands
 var look_t := 0.0
 var focus_hold := 0.0
 var focus_t := -1.0              # < 0: not focusing
@@ -133,8 +134,8 @@ func gain_meter() -> void:
 
 func update(dt: float) -> void:
 	var grid := room.grid
-	var down: Dictionary = {} if frozen else Controls.down
-	var pressed: Dictionary = {} if frozen else Controls.pressed
+	var down: Dictionary = {} if frozen or in_menu else Controls.down
+	var pressed: Dictionary = {} if frozen or in_menu else Controls.pressed
 	t += dt
 	var gi := ghosts.size() - 1
 	while gi >= 0:
@@ -204,9 +205,9 @@ func update(dt: float) -> void:
 		agents_t -= dt
 	if cache_cool > 0.0:
 		cache_cool -= dt
-	if not frozen and Controls.down.get("special", false):          # (Controls, not `down`: a running focus empties `down`)
+	if not frozen and not in_menu and Controls.down.get("special", false):          # (Controls, not `down`: a running focus empties `down`)
 		special_t += dt
-	elif not frozen and Controls.released.get("special", false):
+	elif not frozen and not in_menu and Controls.released.get("special", false):
 		if special_t < Game.FOCUS_HOLD and tools.get("agents", false):
 			if meter >= Game.METER_MAX and agents_t <= 0.0:
 				meter = 0.0

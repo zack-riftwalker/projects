@@ -1178,6 +1178,8 @@ func interact_combat(p) -> void:
 			p.spring(s)
 
 func interact_goals(p) -> void:
+	if p.get("in_menu") == true:
+		return                                 # (a menu is open: its up/down presses must not open a bench, the shop or the end)
 	if p.on_ground and not crossing and Game.bench != id and p.hp > 0:     # the guest too: its own respawn point (the host is told)
 		for i in range(cps.size()):         # walking up to a bench is enough to make it the respawn point
 			var c0: Dictionary = cps[i]
