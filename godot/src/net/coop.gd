@@ -1022,7 +1022,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 			puppets[id] = e
 			r.ents.append(e)
 			r.entity_root.add_child(e)
-			if e is NullBoss:
+			if e is Boss:
 				r.boss = e
 		NetClasses.apply(e, rec)
 		var samples: Array = e.get_meta("samples", [])

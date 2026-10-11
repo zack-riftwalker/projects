@@ -925,3 +925,65 @@ func sc_co_catch() -> Array:
 	Controls.script_input = {}
 	await wait_secs(1.0)
 	return [mine and r2.grid.gates_open.catch, "swung=%s saw it friendly=%s, gate open on the guest=%s" % [swung, mine, r2.grid.gates_open.catch]]
+
+# MV3-05: both fight THE REVIEWER. The host sees its attacks alternate between the two bodies, the guest is hurt by strikes through its
+# own contact check, and the guest's parry (catch) staggers the host's boss.
+func sc_co_reviewer() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.catch = true
+		await wait_secs(1.0)
+		mgr().swap_to("R10", Vector2(100.0, 100.0))
+		var p = mgr().player
+		p.x = 100.0
+		p.y = floor_y(mgr().room, 100.0, 8)
+		var active := await wait_until(func(): return mgr().room.fight.state == "active", 20.0)
+		var picks := {}
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 40000 * slow:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			var b = mgr().room.boss
+			if b != null and b.target != null:
+				picks["P2" if b.target.get("is_remote") else "P1"] = true
+			await get_tree().physics_frame
+		var b2 = mgr().room.boss
+		var par: Array = b2.parries if b2 != null else [0, 0]
+		var song := Audio.music_name
+		return [active and picks.has("P1") and picks.has("P2") and par[1] >= 1 and song == "tension", "fight active %s, targets %s, parries (P1/P2) %s, music %s" % [active, str(picks.keys()), str(par), song]]
+	var has_catch := await wait_until(func(): return Game.tools.get("catch", false), 10.0)
+	mgr().swap_to("R10", Vector2(260.0, 100.0))
+	var r2: Room = mgr().room
+	var g = mgr().player
+	g.x = 260.0
+	g.y = floor_y(r2, 260.0, 8)
+	var hurts := 0
+	var swings := 0
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 42000 * slow:
+		g = mgr().player
+		if g == null:
+			await get_tree().physics_frame
+			continue
+		if g.hp < g.max_hp:
+			hurts += g.max_hp - g.hp
+			g.hp = g.max_hp
+		g.dead = false
+		var press := false
+		var boss = r2.boss
+		if boss != null and boss.active and not g.parried.has(boss.strike_sid):
+			var face_to: float = 1.0 if boss.cx > g.x + 5.0 else -1.0
+			for hb in boss.harmboxes():
+				if hb is Dictionary and hb.has("sid") and hb.get("catchable", false) and hb.sid > 0 and not g.parried.has(hb.sid):
+					var front: float = g.x + g.w - 4.0 + 24.0 if face_to > 0.0 else g.x + 4.0 - 24.0
+					var gap: float = (hb.x - front) if face_to > 0.0 else (front - (hb.x + hb.w))
+					if gap < 16.0 and gap > -20.0 and absf(hb.y - g.y) < 30.0:
+						g.face = face_to
+						press = true
+		Controls.script_input = {"attack": press and g.atk_cd <= 0.0}
+		if press and g.atk_cd <= 0.0:
+			swings += 1
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	return [has_catch and g.parried.size() >= 1, "catch %s, swings %d, parried %d, hurt %d times" % [has_catch, swings, g.parried.size(), hurts]]

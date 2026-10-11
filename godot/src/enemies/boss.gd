@@ -20,6 +20,7 @@ var die_t := 0.0
 var drop_n := 24
 var gone := false
 var is_boss := true
+var target = null
 var body: DrawProxy
 var overlay: DrawProxy
 
@@ -49,6 +50,32 @@ func scale_hp(k: float) -> void:
 	max_hp = roundi(max_hp * k)
 	hpf = float(max_hp)
 	hp = max_hp
+
+# who the boss aims at: one target per attack, taken in turns (co-op), so both players get attacked whoever deals the damage; alone: the player
+func pick_target():
+	var ps: Array = room.players()
+	if ps.is_empty():
+		return room.player
+	if target == null or not (target in ps):
+		target = ps[0]
+	return target
+
+func next_target() -> void:
+	var ps: Array = room.players()
+	if ps.is_empty():
+		return
+	var i: int = ps.find(target)
+	target = ps[(i + 1) % ps.size()] if i >= 0 else ps[room.rng.randi() % ps.size()]
+	if ps.size() > 1:
+		Game.dlog("%s targets %s (hp %.1f)" % [boss_name, "P2" if target.get("is_remote") else "P1", hpf])
+
+# where to aim at a player: the partner is seen late on this page and the guest sees NULL late again, so aim where it will be by then
+func aim_point(q) -> Vector2:
+	if not q.get("is_remote") or q.samples.is_empty():
+		return Vector2(q.x + 5, q.y + 5)
+	var last: Array = q.samples[q.samples.size() - 1]
+	var lead := clampf(Net.rtt + 0.18, 0.1, 0.45)
+	return Vector2(clampf(last[1] + q.vx * lead, 0.0, Game.W - 10.0) + 5, float(last[2]) + 5)
 
 func set_state(s: String, t_ := 0.0) -> void:
 	st = s

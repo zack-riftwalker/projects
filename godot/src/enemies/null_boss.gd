@@ -25,7 +25,6 @@ var land := Vector2.ZERO         # dereference landing point
 var deref_from := Vector2.ZERO
 var deref_dur := 0.7
 var fade := 1.0
-var target = null
 var trail_node: DrawProxy
 
 func _init(r: Room, bx: float, by: float, base_hp := 60) -> void:
@@ -72,32 +71,6 @@ func on_damage() -> void:
 		rain_marks.clear()
 		dmarks.clear()
 		fade = 1.0
-
-# who NULL aims at: one target per attack, taken in turns (co-op), so both players get attacked whoever deals the damage; alone: the player
-func pick_target():
-	var ps: Array = room.players()
-	if ps.is_empty():
-		return room.player
-	if target == null or not (target in ps):
-		target = ps[0]
-	return target
-
-func next_target() -> void:
-	var ps: Array = room.players()
-	if ps.is_empty():
-		return
-	var i: int = ps.find(target)
-	target = ps[(i + 1) % ps.size()] if i >= 0 else ps[room.rng.randi() % ps.size()]
-	if ps.size() > 1:
-		Game.dlog("NULL targets %s (hp %.1f)" % ["P2" if target.get("is_remote") else "P1", hpf])
-
-# where to aim at a player: the partner is seen late on this page and the guest sees NULL late again, so aim where it will be by then
-func aim_point(q) -> Vector2:
-	if not q.get("is_remote") or q.samples.is_empty():
-		return Vector2(q.x + 5, q.y + 5)
-	var last: Array = q.samples[q.samples.size() - 1]
-	var lead := clampf(Net.rtt + 0.18, 0.1, 0.45)
-	return Vector2(clampf(last[1] + q.vx * lead, 0.0, W - 10.0) + 5, float(last[2]) + 5)
 
 func update(dt: float) -> void:
 	tick(dt)

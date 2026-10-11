@@ -48,6 +48,7 @@ func run(name: String) -> bool:
 		"rooms3": return t_rooms3()
 		"catch": return t_catch()
 		"exception": return t_exception()
+		"reviewer": return t_reviewer()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -979,6 +980,151 @@ func t_exception() -> bool:
 			ok = ok and good
 	Controls.script_input = null
 	return report("exception", ok, info)
+
+func reviewer_setup() -> RoomManager:
+	Game.flags = {}
+	Game.tools.catch = false
+	Game.fights = []
+	Game.diff = "normal"
+	var m := new_manager()
+	m.swap_to("R10")
+	var p = m.player
+	p.x = 100.0
+	p.y = floor_y(m.room, 105.0, 8)
+	return m
+
+# MV3-05: THE REVIEWER. A: every attack of both phases against a bot that stands still; B: a parry staggers; C: the stance blocks and
+# answers; D: standing next to him gets shoved; E: dying grants catch and opens the east door
+func t_reviewer() -> bool:
+	var m := reviewer_setup()
+	var room := m.room
+	var p = m.player
+	var boss: Reviewer = room.boss
+	var seen := {}
+	var longest := 0.0
+	var since := 0.0
+	var cur_state := ""
+	var slashes := {}
+	Controls.script_input = {}
+	var hp_ok: bool = boss.max_hp == 49
+	for f in range(7200):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		if f == 3000:
+			boss.hpf = boss.max_hp / 2.0 - 0.1
+			boss.on_damage()
+		m.tick(Game.STEP)
+		if boss.active:
+			var key: String = "%d:%s" % [boss.phase, boss.st]
+			seen[key] = true
+			if boss.st == "slash":
+				slashes[boss.slash] = true
+			if key != cur_state:
+				cur_state = key
+				since = 0.0
+			since += Game.STEP
+			longest = maxf(longest, since)
+	var need: Array = []
+	for st_ in ["idle", "lunge_tel", "lunge", "lunge_rec", "comments_tel", "comments_air", "comments_rec", "review", "review_open"]:
+		need.append("1:" + st_)
+		need.append("2:" + st_)
+	for st_ in ["nitpick_tel", "slash", "nitpick_gap", "nitpick_rec", "phase"]:
+		need.append("2:" + st_)
+	var missing: Array = []
+	for k in need:
+		if not seen.has(k):
+			missing.append(k)
+	var a_ok: bool = hp_ok and missing.is_empty() and longest <= 6.0 and slashes.size() == 3 and boss.phase == 2
+	var info := "A: %d states, missing %s, longest %.1f s, slashes %s, hp49=%s" % [seen.size(), str(missing), longest, str(slashes.keys()), hp_ok]
+	# B: a parry during a lunge staggers him (through the room's own parry code)
+	m = reviewer_setup()
+	room = m.room
+	p = m.player
+	boss = room.boss
+	Game.tools.catch = true
+	var started := false
+	for f in range(600):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if boss.active and boss.st == "lunge":
+			started = true
+			break
+	var sid0: int = boss.strike_sid
+	var hurt_sid := false                                 # (the lunge's strike box carries the id and is catchable)
+	for hb in boss.harmboxes():
+		if hb is Dictionary and hb.has("sid") and hb.catchable and hb.sid == sid0:
+			hurt_sid = true
+	p.x = boss.x + boss.w + 2.0 if boss.face > 0.0 else boss.x - 14.0
+	p.y = boss.y + 4.0
+	p.face = -boss.face
+	p.atk_t = 0.16
+	p.atk_live = true
+	p.atk_dir = "f"
+	p.atk_face = p.face
+	room.interact_combat(p)
+	var parried_ok: bool = started and sid0 > 0 and p.parried.has(sid0) and boss.st == "stagger"
+	info += " | B: lunge sid %d, parried=%s st=%s" % [sid0, p.parried.has(sid0), boss.st]
+	# C: the stance blocks a swipe and answers with a riposte at the attacker
+	boss.set_state("review", 1.2)
+	boss.riposted = false
+	var hp_c: int = boss.hp
+	room.attacker = p
+	var res: String = boss.hit(1, 1.0, 0.0, "swipe", boss)
+	var rip_box := false
+	for hb in boss.harmboxes():
+		if hb is Dictionary and hb.has("sid") and not hb.catchable:
+			rip_box = true
+	var c_ok: bool = res == "block" and boss.hp == hp_c and boss.st == "riposte" and rip_box
+	info += " | C: stance hit -> %s, st=%s, riposte box=%s" % [res, boss.st, rip_box]
+	# D: standing at his side for 1.2 s gets a shove (he is in the corner and cannot step away)
+	m = reviewer_setup()
+	room = m.room
+	p = m.player
+	boss = room.boss
+	for f in range(200):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if boss.active:
+			break
+	boss.x = 0.0
+	boss.face = 1.0
+	boss.set_state("idle", 8.0)
+	p.x = 16.0
+	p.y = boss.y
+	var shoved := false
+	for f in range(150):
+		p.inv = 999.0
+		p.x = 16.0
+		p.vx = 0.0
+		m.tick(Game.STEP)
+		if f % 20 == 0 and OS.get_environment("REV_DEBUG") != "":
+			print("D f=%d st=%s st_t=%.2f camp=%.2f x=%.1f px=%.1f py=%.1f by=%.1f active=%s" % [f, boss.st, boss.st_t, boss.camp_t, boss.x, p.x, p.y, boss.y, boss.active])
+		if boss.st == "shove_tel" or boss.st == "shove":
+			shoved = true
+			break
+	info += " | D: shove=%s" % shoved
+	# E: take the hp down to nothing: kneel, reward catch, flags, the east door opens
+	var door_before: bool = room.grid.tile(room.w, 8) == TileGrid.SOLID
+	var dead_at := -1
+	for f in range(2400):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		if boss.active and not boss.dying and f % 20 == 0:
+			room.attacker = p
+			boss.hit(3, 0.0, 0.0, "catch", boss)
+		m.tick(Game.STEP)
+		if Game.tools.catch and Game.flag("boss:REVIEWER1"):
+			dead_at = f
+			break
+	room.update_doors()
+	var door_open: bool = room.grid.tile(room.w, 8) == TileGrid.E
+	var e_ok: bool = dead_at > 0 and Game.flag("ability:catch") and door_before and door_open and Game.fights.size() == 1 and Game.fights[0].won and Game.fights[0].boss == "REVIEWER1"
+	info += " | E: reward at frame %d, door was closed=%s open=%s fights=%d" % [dead_at, door_before, door_open, Game.fights.size()]
+	Controls.script_input = null
+	Game.tools.catch = false
+	Game.flags = {}
+	Game.fights = []
+	return report("reviewer", a_ok and parried_ok and hurt_sid and c_ok and shoved and e_ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:
