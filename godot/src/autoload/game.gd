@@ -83,14 +83,14 @@ func boss_hp(b: Dictionary) -> int:
 # ---- plugins (MV3-06): like the charms of Hollow Knight. Owned = flag plugin:<id> (shared by both players); equipped = this player's own list ----
 const NOTCHES := 3                    # the "context window"
 const PLUGINS := [
-	{"id": "async_await", "name": "async/await", "cost": 2, "price": 0},
-	{"id": "cache", "name": "cache", "cost": 1, "price": 0},
-	{"id": "hot_reload", "name": "hot-reload", "cost": 2, "price": 90},
-	{"id": "eslint_fix", "name": "eslint --fix", "cost": 1, "price": 60},
-	{"id": "try_finally", "name": "try/finally", "cost": 1, "price": 80},
-	{"id": "rubber_duck", "name": "rubber duck", "cost": 2, "price": 140},
-	{"id": "verbose", "name": "--verbose", "cost": 1, "price": 0},
-	{"id": "restart_always", "name": "restart: always", "cost": 1, "price": 0},
+	{"id": "async_await", "name": "async/await", "cost": 2, "price": 0, "desc": "dash recharges twice as fast"},
+	{"id": "cache", "name": "cache", "cost": 1, "price": 0, "desc": "tokens fly to you from farther away"},
+	{"id": "hot_reload", "name": "hot-reload", "cost": 2, "price": 90, "desc": "healing (hold special) is much faster"},
+	{"id": "eslint_fix", "name": "eslint --fix", "cost": 1, "price": 60, "desc": "every hit fills the meter a bit more"},
+	{"id": "try_finally", "name": "try/finally", "cost": 1, "price": 80, "desc": "longer safe time after you get hurt"},
+	{"id": "rubber_duck", "name": "rubber duck", "cost": 2, "price": 140, "desc": "at 1 hp your claw hits twice as hard"},
+	{"id": "verbose", "name": "--verbose", "cost": 1, "price": 0, "desc": "dead code near you blinks green"},
+	{"id": "restart_always", "name": "restart: always", "cost": 1, "price": 0, "desc": "come back from a bench with a full meter"},
 ]
 var equipped: Array = []              # plugin ids (saved; the guest keeps its own in user://profile.json)
 signal loadout_changed

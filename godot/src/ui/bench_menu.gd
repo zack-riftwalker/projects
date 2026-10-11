@@ -122,10 +122,17 @@ func tap(p: Vector2) -> void:
 	if not active:
 		return
 	for i in range(options().size()):
-		if Rect2(W / 2.0 - 70, (70 if page != "plugins" else 64) + i * 22, 140, 18).has_point(p):
+		if Rect2(W / 2.0 - 70, (70 if page != "plugins" else 62) + i * row_step(), 140, row_h()).has_point(p):
 			sel = i
 			choose(i)
 			return
+
+# many plugins: tighter rows so the list still fits the screen
+func row_step() -> int:
+	return 22 if page != "plugins" or options().size() <= 6 else 17
+
+func row_h() -> int:
+	return 18 if row_step() == 22 else 14
 
 func _draw() -> void:
 	if not active:
@@ -136,6 +143,8 @@ func _draw() -> void:
 	if page == "plugins":
 		PixelText.draw_text(self, "context %d/%d" % [Game.notches_used(), Game.NOTCHES], W / 2.0, 50, Game.COL.gold, {"align": "c"})
 	for i in range(opts.size()):
-		var y := (70 if page != "plugins" else 64) + i * 22
-		Gfx.panel(self, W / 2.0 - 70, y, 140, 18, "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
-		PixelText.draw_text(self, opts[i], W / 2.0, y + 5, Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
+		var y := (70 if page != "plugins" else 62) + i * row_step()
+		Gfx.panel(self, W / 2.0 - 70, y, 140, row_h(), "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
+		PixelText.draw_text(self, opts[i], W / 2.0, y + (5 if row_h() == 18 else 3), Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
+	if page == "plugins" and sel < plugin_ids.size():
+		PixelText.draw_text(self, String(Game.plugin_def(String(plugin_ids[sel])).get("desc", "")), W / 2.0, H - 12, Game.COL.paper, {"align": "c", "tiny": true})

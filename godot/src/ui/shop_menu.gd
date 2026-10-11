@@ -147,6 +147,8 @@ func _draw() -> void:
 		PixelText.draw_text(self, label, W / 2.0, y + 5, (Game.COL.paper if afford else Game.COL.dim) if i == sel else Game.COL.dim, {"align": "c"})
 	if ids.is_empty():
 		PixelText.draw_text(self, "sold out: you own everything", W / 2.0, 100, Game.COL.dim, {"align": "c"})
+	if sel < ids.size():
+		PixelText.draw_text(self, String(Game.plugin_def(String(ids[sel])).get("desc", "")), W / 2.0, H - 42, Game.COL.paper, {"align": "c", "tiny": true})
 	PixelText.draw_text(self, "name - context cost - price", W / 2.0, H - 30, Game.COL.dim, {"align": "c", "tiny": true})
 	if msg != "":
 		PixelText.draw_text(self, msg, W / 2.0, H - 18, "#58f0c8", {"align": "c"})

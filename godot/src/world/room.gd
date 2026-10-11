@@ -1604,7 +1604,7 @@ func sx_default() -> float:
 
 func show_plugin_banner(pid: String) -> void:
 	Audio.sfx("gate")
-	pick_banner = {"text": String(Game.plugin_def(pid).get("name", pid)), "sub": "plugin - equip it at a bench", "t": 2.0}
+	pick_banner = {"text": String(Game.plugin_def(pid).get("name", pid)), "sub": String(Game.plugin_def(pid).get("desc", "equip it at a bench")), "t": 3.0}
 
 # hostile projectile. kinds: orb, shard
 func shoot(px: float, py: float, pvx: float, pvy: float, o = null) -> Dictionary:
