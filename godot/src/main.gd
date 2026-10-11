@@ -99,7 +99,7 @@ func _ready() -> void:
 	hud_layer.add_child(end_screen)
 	manager.end_requested.connect(func():
 		if not end_screen.active:
-			end_screen.open())
+			end_screen.open(String(manager.room.def.get("end", "to be continued"))))
 	if _wants_title():
 		_open_title()
 		return

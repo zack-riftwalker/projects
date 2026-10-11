@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '../../..'), OUT = path.join(__dirname, 'ou
 const WHAT = process.argv.slice(2).length ? process.argv.slice(2) : ['all'];
 const want = (k) => WHAT.includes('all') || WHAT.includes(k);
 const SFX = 'jump djump walljump land swipe swipeBig hit clang squish kill hurt die token spark heal dash spring crumble brk checkpoint shoot bossHit explode bigExplode uiMove uiOk uiBack text textLow textSys key gate agent agentHit warn charge laser drip splash thud roar glitch tick tock pause flap logo stamp'.split(' ');
+const COPY_MUSIC = new Set(['w1', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
 const LONG = new Set(['explode', 'bigExplode', 'roar', 'logo', 'die', 'gate', 'spark']);
 const mk = (...p) => { const d = path.join(...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(b64, 'base64')); return f; };
@@ -127,12 +128,14 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
         execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-c:a', 'libvorbis', '-q:a', '4', path.join(OUT, 'music/' + key + '.ogg')]);
         fs.unlinkSync(wav);
         index[key] = { len: +info.total.toFixed(3), loop_start: +info.loopStart.toFixed(3), once: info.once };
-        if (key === 'w1') put('music/w1.ogg', path.join(OUT, 'music/w1.ogg'));
+        if (COPY_MUSIC.has(key)) put('music/' + key + '.ogg', path.join(OUT, 'music/' + key + '.ogg'));
       }
     }
     fs.writeFileSync(path.join(OUT, 'music/index.json'), JSON.stringify(index, null, 1));
-    // only w1 is copied this phase, so the index in godot/assets lists only w1
-    const sub = { w1: index.w1 }; fs.writeFileSync(path.join(ASSETS, 'music/index.json'), JSON.stringify(sub, null, 1));
+    // the index in godot/assets lists the copied songs (the ones the game plays) and keeps the entries of earlier captures
+    const idxF = path.join(ASSETS, 'music/index.json'), sub = fs.existsSync(idxF) ? JSON.parse(fs.readFileSync(idxF)) : {};
+    for (const k of COPY_MUSIC) if (index[k]) sub[k] = index[k];
+    fs.writeFileSync(idxF, JSON.stringify(sub, null, 1));
     console.log('music', Object.keys(index).length);
   }
 

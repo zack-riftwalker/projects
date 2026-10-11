@@ -208,8 +208,10 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 func update_doors() -> void:
 	for d in grid.doors:
 		var lock: String = d.lock
-		var open := true
-		if lock == "fight":
+		var open: bool = Game.rooms_meta.rooms.has(String(d.to).get_slice(":", 0))      # a door to a room that does not exist (yet) never opens
+		if not open:
+			pass
+		elif lock == "fight":
 			open = not fight_active
 		elif lock.begins_with("until:"):
 			open = Game.flag(lock.substr(6))

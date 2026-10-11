@@ -45,6 +45,7 @@ func run(name: String) -> bool:
 		"guestpred": return t_guestpred()
 		"parity": return t_parity()
 		"bossreg": return t_bossreg()
+		"rooms3": return t_rooms3()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -417,7 +418,7 @@ func t_end() -> bool:
 	Game.persist = false
 	Game.flags = {}
 	var m := new_manager()
-	m.swap_to("R08")
+	m.swap_to("R11")
 	var room := m.room
 	var p = m.player
 	var ev := [0]
@@ -742,6 +743,101 @@ func t_bossreg() -> bool:
 	Game.flags = {}
 	Game.fights = []
 	return report("bossreg", ok, info)
+
+# walk through the door of `side` that leads to `to_id` (the player is put in front of it); returns true when it arrived
+func walk_door(m: RoomManager, to_id: String, side := "E") -> bool:
+	var r := m.room
+	var d = null
+	for dd in r.grid.doors:
+		if dd.side == side and String(dd.to).begins_with(to_id):
+			d = dd
+	var p = m.player
+	p.x = r.pw - p.w - 4.0 if side == "E" else 4.0
+	p.y = floor_y(r, p.x + 5, d.a)
+	p.vx = 0.0
+	p.vy = 0.0
+	Controls.script_input = {"right": side == "E", "left": side == "W"}
+	var n := 0
+	while m.room.id != to_id and n < 300:
+		m.tick(Game.STEP)
+		n += 1
+	for f in range(30):
+		m.tick(Game.STEP)
+	Controls.script_input = {}
+	return m.room.id == to_id
+
+# MV3-02: R07 -> R08 -> R09, each ledge of R09 reaches the next with one jump, R09:NE -> R10, R10 -> R11 once the boss flag is set,
+# R09:E (to a room that does not exist yet) stays solid
+func t_rooms3() -> bool:
+	Game.flags = {}
+	var m := new_manager()
+	m.swap_to("R07")
+	var ok := true
+	var info := ""
+	for to_id in ["R08", "R09"]:
+		var good := walk_door(m, to_id)
+		info += " ->%s %s" % [to_id, good]
+		ok = ok and good
+	var r9 := m.room
+	var p = m.player
+	# the ledges of R09, bottom to top: runs of '=' (then the solid shelf in front of the NE door)
+	var ledges: Array = []
+	for ty in range(r9.h - 1, -1, -1):
+		var row := r9.rows[ty]
+		var tx := row.find("====")
+		if tx >= 0:
+			ledges.append([tx, ty])
+	ledges.append([19, 9])                              # the shelf: 5 solid tiles at row 9
+	var reached := 0
+	for i in range(ledges.size() - 1):
+		var a: Array = ledges[i]
+		var b: Array = ledges[i + 1]
+		var fx_: float = a[0] * 16.0 + 32.0 - p.w / 2.0
+		p.x = fx_
+		p.y = a[1] * 16.0 - p.h
+		p.vx = 0.0
+		p.vy = 0.0
+		for f in range(6):
+			Controls.script_input = {}
+			m.tick(Game.STEP)
+		var goal_x: float = b[0] * 16.0 + (32.0 if b[0] < 19 else 40.0)
+		var landed := false
+		for f in range(60):
+			var dxg: float = goal_x - (p.x + p.w / 2.0)
+			Controls.script_input = {"jump": f < 40, "right": dxg > 3.0, "left": dxg < -3.0}
+			m.tick(Game.STEP)
+			if f > 10 and p.on_ground and absf(p.y + p.h - b[1] * 16.0) < 1.5:
+				landed = true
+				break
+		if landed:
+			reached += 1
+		else:
+			info += " BAD ledge %d (row %d) -> (row %d): ended at %.0f,%.0f" % [i, a[1], b[1], p.x, p.y]
+	ok = ok and reached == ledges.size() - 1 and ledges.size() == 7
+	info += " ledges %d reached %d" % [ledges.size(), reached]
+	# R09:E never opens
+	r9.update_doors()
+	var e_solid: bool = r9.grid.tile(r9.w, 26) == TileGrid.SOLID
+	Game.flags["phase:3b"] = true
+	r9.update_doors()
+	e_solid = e_solid and r9.grid.tile(r9.w, 26) == TileGrid.SOLID
+	Game.flags.erase("phase:3b")
+	info += " R09:E solid=%s" % e_solid
+	ok = ok and e_solid
+	var good2 := walk_door(m, "R10")
+	info += " ->R10 %s" % good2
+	var r10_w_ok: bool = m.room.id == "R10"
+	Game.flags["boss:REVIEWER1"] = true
+	m.room.update_doors()
+	m.room.fight_active = false
+	var good3 := false
+	if r10_w_ok:
+		good3 = walk_door(m, "R11")
+	info += " ->R11 %s" % good3
+	ok = ok and good2 and good3
+	Controls.script_input = null
+	Game.flags = {}
+	return report("rooms3", ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:

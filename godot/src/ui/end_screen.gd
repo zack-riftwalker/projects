@@ -8,11 +8,13 @@ signal done
 
 var active := false
 var t := 0.0
+var text := "to be continued"          # the room's `end` field (rooms.json)
 
 func _ready() -> void:
 	visible = false
 
-func open() -> void:
+func open(end_text := "to be continued") -> void:
+	text = end_text
 	active = true
 	visible = true
 	t = 0.0
@@ -58,9 +60,9 @@ func _draw() -> void:
 		if f.get("won", false):
 			last = f
 	if last != null:
-		var line := "NULL  %.0fs - P1 %d hits - P2 %d hits" % [last.secs, last.hits[0], last.hits[1]]
+		var line := "%s  %.0fs - P1 %d hits - P2 %d hits" % [last.boss, last.secs, last.hits[0], last.hits[1]]
 		PixelText.draw_text(self, line, W / 2.0, 128, Game.COL.paper, {"align": "c"})
 		PixelText.draw_text(self, "damage taken  P1 %d - P2 %d - %s" % [last.dmg_taken[0], last.dmg_taken[1], last.diff], W / 2.0, 142, Game.COL.dim, {"align": "c", "tiny": true})
-	PixelText.draw_text(self, "to be continued in ~/node_modules", W / 2.0, 172, Game.COL.paper, {"align": "c"})
+	PixelText.draw_text(self, text, W / 2.0, 172, Game.COL.paper, {"align": "c"})
 	if t > 4.0 and int(t * 2.0) % 2 == 0:
 		PixelText.draw_text(self, "press any button", W / 2.0, 196, Game.COL.dim, {"align": "c", "tiny": true})

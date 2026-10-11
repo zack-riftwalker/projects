@@ -157,30 +157,39 @@ func _draw_fights() -> void:
 	PixelText.draw_text(self, fight_average(fs), 24, 44 + 10 * 12 + 6, Game.COL.gold, {"tiny": true})
 	PixelText.draw_text(self, "press any button to go back", W / 2.0, H - 22, Game.COL.dim, {"align": "c", "tiny": true})
 
-# MAP page: every visited room as a rectangle (1 tile = 0.5 px), benches green, the player blinking
+# MAP page: the visited rooms as rectangles, scaled so that their bounding box fits 360 x 170 px (at most 0.5 px per tile), benches green
 func _draw_map() -> void:
-	PixelText.draw_text(self, "MAP", W / 2.0, 20, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})
+	PixelText.draw_text(self, "MAP", W / 2.0, 14, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})
 	var rooms: Dictionary = Game.rooms_meta.rooms
 	var x0 := 1e9
 	var x1 := -1e9
-	for id in rooms:
-		var m: Dictionary = rooms[id]
-		x0 = minf(x0, m.origin[0])
-		x1 = maxf(x1, m.origin[0] + m.size[0])
-	var ox: float = floorf((W - (x1 - x0) * 0.5) / 2.0 - x0 * 0.5)
-	var oy := 100.0
+	var y0 := 1e9
+	var y1 := -1e9
 	for id in rooms:
 		if not Game.flag("room:%s:visited" % id):
 			continue
 		var m: Dictionary = rooms[id]
-		var r := Rect2(ox + m.origin[0] * 0.5, oy + m.origin[1] * 0.5, m.size[0] * 0.5, m.size[1] * 0.5)
+		x0 = minf(x0, m.origin[0])
+		x1 = maxf(x1, m.origin[0] + m.size[0])
+		y0 = minf(y0, m.origin[1])
+		y1 = maxf(y1, m.origin[1] + m.size[1])
+	if x1 < x0:
+		x0 = 0.0; x1 = 1.0; y0 = 0.0; y1 = 1.0
+	var sc := minf(minf(360.0 / (x1 - x0), 170.0 / (y1 - y0)), 0.5)
+	var ox: float = floorf(W / 2.0 - (x1 - x0) * sc / 2.0 - x0 * sc)
+	var oy: float = floorf(114.0 - (y1 - y0) * sc / 2.0 - y0 * sc)
+	for id in rooms:
+		if not Game.flag("room:%s:visited" % id):
+			continue
+		var m: Dictionary = rooms[id]
+		var r := Rect2(ox + m.origin[0] * sc, oy + m.origin[1] * sc, m.size[0] * sc, m.size[1] * sc)
 		var here: bool = manager != null and manager.room != null and manager.room.id == id
 		draw_rect(r, Color("#17131f"))
 		draw_rect(r, Color("#f0a184") if here else Color("#8d8798"), false, 1.0)
 		for b in m.benches:
-			draw_rect(Rect2(r.position.x + b[0] * 0.5 - 1, r.position.y + b[1] * 0.5, 2, 2), Color("#7fd08a"))
+			draw_rect(Rect2(r.position.x + b[0] * sc - 1, r.position.y + b[1] * sc, 2, 2), Color("#7fd08a"))
 	if manager != null and manager.player != null and manager.room != null and int(blink_t * 3.0) % 2 == 0:
 		var m2: Dictionary = rooms[manager.room.id]
 		var p = manager.player
-		draw_rect(Rect2(floorf(ox + m2.origin[0] * 0.5 + p.x / 32.0), floorf(oy + m2.origin[1] * 0.5 + p.y / 32.0), 2, 2), Color.WHITE)
-	PixelText.draw_text(self, "press any button to go back", W / 2.0, H - 22, Game.COL.dim, {"align": "c", "tiny": true})
+		draw_rect(Rect2(floorf(ox + m2.origin[0] * sc + p.x / 16.0 * sc), floorf(oy + m2.origin[1] * sc + p.y / 16.0 * sc), 2, 2), Color.WHITE)
+	PixelText.draw_text(self, "press any button to go back", W / 2.0, H - 12, Game.COL.dim, {"align": "c", "tiny": true})
