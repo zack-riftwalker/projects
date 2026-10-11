@@ -558,12 +558,12 @@ If the host respawns (its `Player` is `queue_free`d) while its agents still fly 
 
 | fix | commit | old | new |
 |---|---|---|---|
-| FIX-1 | | | |
-| FIX-2 | | | |
-| FIX-3 | | | |
-| FIX-4 | | | |
-| FIX-5 | | | |
-| FIX-6 | | | |
-| FIX-7 | | | |
-| FIX-8 | | | |
-| FIX-9 | | — | — |
+| FIX-1 | 9c609ec | FAIL (second cast missing) | PASS |
+| FIX-2 | f71b7ad | FAIL (no net_sample) | PASS |
+| FIX-3 | d560af7 | FAIL (host room did not run) | PASS |
+| FIX-4 | 1232179 | FAIL (no filter_loadout) | PASS |
+| FIX-5 | e2e584b | FAIL (purchase stayed pending) | PASS |
+| FIX-6 | a60e153 | FAIL (hits [3,0]) | PASS |
+| FIX-7 | 04d5dcb | FAIL (strikes forgotten) | PASS |
+| FIX-8 | 91e7240 | FAIL (id reused) | PASS |
+| FIX-9 | bcc3403 | — | — |
