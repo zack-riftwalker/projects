@@ -100,7 +100,7 @@ func _draw() -> void:
 	# room title tab
 	if age < 3.2:
 		var k := _ease_out(clampf(age / 0.4, 0.0, 1.0)) * (1.0 - _ease_in(clampf((age - 2.7) / 0.5, 0.0, 1.0)))
-		var label: String = "~/src/" + str(room.def.get("title", room.id))
+		var label: String = String(Game.theme(room.world).path) + "/" + str(room.def.get("title", room.id))
 		var pw := PixelText.text_width(label) + 22
 		var px := floori(-pw + (pw + 6) * k + 0.5)
 		Gfx.panel(self, px, 30, pw, 15, "#17131f", "#3a3346")

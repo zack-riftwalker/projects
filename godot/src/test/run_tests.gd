@@ -54,6 +54,7 @@ func run(name: String) -> bool:
 		"plugins": return t_plugins()
 		"crumble": return t_crumble()
 		"w2enemies": return t_w2enemies()
+		"rooms3b": return t_rooms3b()
 		"fork": return t_fork()
 	return report(name, false, "unknown test")
 
@@ -816,7 +817,7 @@ func walk_door(m: RoomManager, to_id: String, side := "E") -> bool:
 	return m.room.id == to_id
 
 # MV3-02: R07 -> R08 -> R09, each ledge of R09 reaches the next with one jump, R09:NE -> R10, R10 -> R11 once the boss flag is set,
-# R09:E (to a room that does not exist yet) stays solid
+# R09:E (to D01, since 3B) is open
 func t_rooms3() -> bool:
 	Game.flags = {}
 	var m := new_manager()
@@ -864,14 +865,10 @@ func t_rooms3() -> bool:
 			info += " BAD ledge %d (row %d) -> (row %d): ended at %.0f,%.0f" % [i, a[1], b[1], p.x, p.y]
 	ok = ok and reached == ledges.size() - 1 and ledges.size() == 7
 	info += " ledges %d reached %d" % [ledges.size(), reached]
-	# R09:E never opens
+	# R09:E leads to D01 now (3B): its door is open
 	r9.update_doors()
-	var e_solid: bool = r9.grid.tile(r9.w, 26) == TileGrid.SOLID
-	Game.flags["phase:3b"] = true
-	r9.update_doors()
-	e_solid = e_solid and r9.grid.tile(r9.w, 26) == TileGrid.SOLID
-	Game.flags.erase("phase:3b")
-	info += " R09:E solid=%s" % e_solid
+	var e_solid: bool = r9.grid.tile(r9.w, 26) == TileGrid.E
+	info += " R09:E open=%s" % e_solid
 	ok = ok and e_solid
 	var good2 := walk_door(m, "R10")
 	info += " ->R10 %s" % good2
@@ -1486,6 +1483,39 @@ func t_fork() -> bool:
 	Controls.script_input = null
 	Game.flags = {}
 	return report("fork", ok, "max kids alive %d (want 4), spawned %d, dead=%s, entities after death %d -> %d, kids drop nothing=%s" % [max_kids, spawned, fk.dead, after0, after1, kid_loot])
+
+# MV3-10: every new door both ways (R09 <-> D01 <-> ... <-> D07); D03 is left at its bottom and reached again by bench travel
+func t_rooms3b() -> bool:
+	Game.flags = {"boss:MERGE": true, "boss:NULL": true, "boss:REVIEWER1": true}
+	var m := new_manager()
+	m.swap_to("R09")
+	var chain := ["R09", "D01", "D02", "D03", "D04", "D05", "D06", "D07"]
+	var ok := true
+	var info := ""
+	for i in range(chain.size() - 1):
+		var fwd := walk_door(m, chain[i + 1], "E")
+		var back := walk_door(m, chain[i], "W")
+		info += " %s<->%s %s/%s" % [chain[i], chain[i + 1], fwd, back]
+		ok = ok and fwd and back
+		if not fwd or not back:
+			break
+		if not walk_door(m, chain[i + 1], "E"):          # back in the next room for the following step
+			ok = false
+			break
+	# bench travel into D03 (the way up is not walkable): both benches rested, then travel from D04
+	Game.flags["bench:D03"] = true
+	Game.flags["bench:D04"] = true
+	m.swap_to("D04")
+	m.travel("D03")
+	for f in range(240):
+		m.tick(Game.STEP)
+		if m.room.id == "D03" and not m.trans.on:
+			break
+	var bench_ok: bool = m.room.id == "D03" and m.player.y > 33 * 16 - 40 and m.player.y < 34 * 16
+	info += " | bench travel D04->D03 %s (y %.0f)" % [bench_ok, m.player.y]
+	Controls.script_input = null
+	Game.flags = {}
+	return report("rooms3b", ok and bench_ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:

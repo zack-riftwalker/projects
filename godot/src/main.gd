@@ -191,6 +191,9 @@ func _ready() -> void:
 			rb.face = -1.0
 			var kinds := {"lunge": "lunge_tel", "comments": "comments_tel", "review": "review", "nitpick": "nitpick_tel", "shove": "shove_tel", "phase": "phase"}
 			rb.set_state(kinds.get(Game.scene.substr(9), "idle"), 5.0)
+		elif Game.scene.begins_with("roomat:"):       # screenshot helper: stand in a room at a place (roomat:<id>:<x>:<y>)
+			var ra := Game.scene.substr(7).split(":")
+			manager.swap_to(ra[0], Vector2(float(ra[1]), float(ra[2])))
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
 		elif Game.scene in ["title", "settings", "join", "end"]:       # screenshot helpers: the menus
