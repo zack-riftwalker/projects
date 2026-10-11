@@ -875,7 +875,7 @@ func step(dt: float) -> void:
 
 # ---------------------------------------------------------------- boss fight flow (MV2-06)
 func _step_fight(dt: float) -> void:
-	if boss == null:
+	if boss == null and fight.state != "reward":      # (the dead boss is freed by the room: the reward timer must not depend on it)
 		return
 	var trigger: float = float(def.boss.trigger_x)
 	match String(fight.state):

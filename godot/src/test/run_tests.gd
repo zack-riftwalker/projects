@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"bossfree": return t_bossfree()
 		"sidunique": return t_sidunique()
 		"strikeseen": return t_strikeseen()
 		"bossstats": return t_bossstats()
@@ -2129,3 +2130,33 @@ func t_sidunique() -> bool:
 	b.free()
 	room.queue_free()
 	return report("sidunique", ok, info)
+
+# The dead boss is freed by the room (queue_free) before the next frame: the reward must still run out, set the flag and open the door
+func t_bossfree() -> bool:
+	var m := null_setup()
+	var room := m.room
+	var p = m.player
+	var freed := false
+	var state := ""
+	for f in range(14000):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		if room.boss != null and is_instance_valid(room.boss) and room.boss.active and not room.boss.dying:
+			room.attacker = p
+			p.x = room.boss.x - 30.0
+			Controls.script_input = {"attack": f % 6 < 3}
+		m.tick(Game.STEP)
+		if not freed and is_instance_valid(room.boss) and room.boss.dead:
+			room.boss.free()                 # what the frame loop does with the dead boss before the next tick (the tests tick without frames)
+			freed = true
+		state = String(room.fight.state)
+		if state == "done":
+			break
+	room.update_doors()
+	var door_open: bool = room.grid.tile(room.w, 8) == TileGrid.E
+	var ok: bool = freed and state == "done" and Game.flag("boss:NULL") and not p.frozen and door_open
+	var info := "boss freed %s, fight %s (want done), flag %s, player frozen %s, door open %s" % [freed, state, Game.flag("boss:NULL"), p.frozen, door_open]
+	Controls.script_input = null
+	Game.tools.bash = false
+	Game.flags = {}
+	return report("bossfree", ok, info)
