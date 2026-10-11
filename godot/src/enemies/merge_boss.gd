@@ -24,6 +24,7 @@ var band_state := 0               # 0 none, 1 rise, 2 telegraph, 3 fire
 var band_t := 0.0
 var safe_band := 2                # 1 = M, 2 = L (H, 0, is never safe)
 var last = null
+var hsamp := [[], []]              # guest: per head [[tm, x, y], ...] from the snapshots, followed like any creature's position
 
 func _init(r: Room, bx: float, by: float, base_hp := 90) -> void:
 	super(r, W / 2.0, 120.0, 20, 20, base_hp)
@@ -467,6 +468,7 @@ func net_apply(f: Array) -> void:
 		h.n = int(r[10])
 		h.max = int(r[11])
 		if was_dead and not h.dead:
+			hsamp[i].clear()
 			room.pop(h.x, h.y - 20.0, "git revert", "#ffd97a", true)
 			Audio.sfx("glitch")
 	band_state = int(f[1][0])
@@ -481,3 +483,43 @@ func net_apply(f: Array) -> void:
 	for h in heads:
 		if h.st == "slam" and h.t >= 0.7 and not h.dead:
 			dmg = int(Game.dv("big_hit"))
+
+# guest: the snapshot that was just applied, at host time tm (Coop._apply_snapshot)
+func net_sample(tm: float) -> void:
+	for i in range(2):
+		var s: Array = hsamp[i]
+		s.append([tm, heads[i].x, heads[i].y])
+		while s.size() > 8:
+			s.pop_front()
+
+# guest: put each head where it was at render time rt, as Coop._puppet_follow does for whole creatures (a dead head falls: no guessing ahead)
+func puppet_follow_parts(rt: float) -> void:
+	for i in range(2):
+		var s: Array = hsamp[i]
+		if s.is_empty():
+			continue
+		var h: Dictionary = heads[i]
+		var last: Array = s[s.size() - 1]
+		if rt >= last[0]:
+			var vx := 0.0
+			var vy := 0.0
+			if s.size() >= 2 and not h.dead:
+				var prev: Array = s[s.size() - 2]
+				var dt_: float = maxf(0.0001, last[0] - prev[0])
+				vx = (last[1] - prev[1]) / dt_
+				vy = (last[2] - prev[2]) / dt_
+			var ex := minf(rt - last[0], 0.1)
+			h.x = last[1] + vx * ex
+			h.y = last[2] + vy * ex
+			continue
+		var done := false
+		for k in range(s.size() - 1):
+			if s[k][0] <= rt and rt <= s[k + 1][0]:
+				var u: float = (rt - s[k][0]) / maxf(0.0001, s[k + 1][0] - s[k][0])
+				h.x = lerpf(s[k][1], s[k + 1][1], u)
+				h.y = lerpf(s[k][2], s[k + 1][2], u)
+				done = true
+				break
+		if not done:
+			h.x = s[0][1]
+			h.y = s[0][2]

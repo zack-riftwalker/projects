@@ -1047,6 +1047,8 @@ func _puppet_follow(e, rt: float, dt: float) -> void:
 	e.t += dt
 	if e.has_method("puppet_tick"):
 		e.puppet_tick(dt)
+	if e.has_method("puppet_follow_parts"):
+		e.puppet_follow_parts(rt)
 	if e.flash > 0.0:
 		e.flash -= dt
 	var s: Array = e.get_meta("samples", [])
@@ -1107,6 +1109,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 			if e is Boss:
 				r.boss = e
 		NetClasses.apply(e, rec)
+		if e.has_method("net_sample"):
+			e.net_sample(tm)                  # (parts that move on their own: MERGE CONFLICT's heads)
 		var samples: Array = e.get_meta("samples", [])
 		samples.append([tm, rec[2] / 4.0, rec[3] / 4.0])
 		while samples.size() > 8:

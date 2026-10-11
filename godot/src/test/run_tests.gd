@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"mergeinterp": return t_mergeinterp()
 		"fork": return t_fork()
 	return report(name, false, "unknown test")
 
@@ -2034,3 +2035,28 @@ func t_parity() -> bool:
 		if float(bad[bk]) / n > 0.01:
 			fails.append("%s %d/%d" % [bk, bad[bk], n])
 	return report("parity", fails.is_empty() and frames.size() >= 5, "checked %s | over 1 %%: %s | all mismatches: %s" % [str(frames), str(fails), str(bad)])
+
+# MV3-FIX-2: the guest follows MERGE CONFLICT's heads through a buffer (between two snapshots: in between; after the last: a short guess)
+func t_mergeinterp() -> bool:
+	var room := new_room("D05")
+	var host := MergeBoss.new(room, 0, 0)
+	var pup := MergeBoss.new(room, 0, 0)
+	pup.puppet = true
+	host.heads[0].x = 100.0
+	host.heads[0].y = 90.0
+	pup.net_apply(host.net_fields())
+	pup.net_sample(0.0)
+	host.heads[0].x = 140.0
+	pup.net_apply(host.net_fields())
+	pup.net_sample(0.1)
+	pup.puppet_follow_parts(0.05)
+	var mid: float = pup.heads[0].x
+	pup.puppet_follow_parts(0.15)
+	var ahead: float = pup.heads[0].x
+	pup.puppet_follow_parts(0.5)
+	var capped: float = pup.heads[0].x
+	var ok: bool = absf(mid - 120.0) < 0.5 and absf(ahead - 160.0) < 0.5 and absf(capped - 180.0) < 0.5
+	room.queue_free()
+	host.free()
+	pup.free()
+	return report("mergeinterp", ok, "between %.1f (want 120), 0.05 s ahead %.1f (want 160), capped %.1f (want 180)" % [mid, ahead, capped])
