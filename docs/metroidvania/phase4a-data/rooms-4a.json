@@ -1,0 +1,1012 @@
+{
+ "H01": {
+  "file": "H01.txt",
+  "title": "brk.c",
+  "size": [
+   32,
+   16
+  ],
+  "origin": [
+   768,
+   -20
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [
+   "/proc/heap. Memory that was taken and never given back. Do not touch the green."
+  ],
+  "doors": [
+   {
+    "id": "H01:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "R11:E"
+   },
+   {
+    "id": "H01:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H02:W"
+   },
+   {
+    "id": "H01:N",
+    "side": "N",
+    "a": 16,
+    "b": 19,
+    "to": "H14:S"
+   }
+  ]
+ },
+ "H02": {
+  "file": "H02.txt",
+  "title": "malloc.c",
+  "size": [
+   194,
+   16
+  ],
+  "origin": [
+   800,
+   -20
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [
+   "malloc(): every blob you pop splits in two. Something down here allocates and never frees."
+  ],
+  "doors": [
+   {
+    "id": "H02:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H01:E"
+   },
+   {
+    "id": "H02:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H04:W"
+   },
+   {
+    "id": "H02:N",
+    "side": "N",
+    "a": 130,
+    "b": 133,
+    "to": "H12:S"
+   }
+  ]
+ },
+ "H04": {
+  "file": "H04.txt",
+  "title": "dangling_ptr.c",
+  "size": [
+   122,
+   20
+  ],
+  "origin": [
+   994,
+   -20
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [],
+  "doors": [
+   {
+    "id": "H04:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H02:E"
+   },
+   {
+    "id": "H04:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H03:W"
+   },
+   {
+    "id": "H04:N",
+    "side": "N",
+    "a": 106,
+    "b": 109,
+    "to": "H10:S",
+    "lock": "until:hatch:H10S"
+   }
+  ]
+ },
+ "H03": {
+  "file": "H03.txt",
+  "title": "free_list.h",
+  "size": [
+   32,
+   60
+  ],
+  "origin": [
+   1116,
+   -15
+  ],
+  "world": 3,
+  "music": "w3",
+  "terminal": true,
+  "flood": [
+   23,
+   45,
+   null
+  ],
+  "signs": [
+   "free_list.h: a terminal. Rest, and travel between terminals. The heap floods below; something deeper keeps it full.",
+   "A red firewall brick. ssh could tunnel through it (later)."
+  ],
+  "doors": [
+   {
+    "id": "H03:W",
+    "side": "W",
+    "a": 4,
+    "b": 7,
+    "to": "H04:E"
+   },
+   {
+    "id": "H03:NE",
+    "side": "E",
+    "a": 4,
+    "b": 7,
+    "to": "H13:W"
+   },
+   {
+    "id": "H03:E",
+    "side": "E",
+    "a": 18,
+    "b": 21,
+    "to": "H07:W"
+   },
+   {
+    "id": "H03:E2",
+    "side": "E",
+    "a": 36,
+    "b": 39,
+    "to": "H05:W",
+    "lock": "flood:1"
+   },
+   {
+    "id": "H03:E3",
+    "side": "E",
+    "a": 53,
+    "b": 56,
+    "to": "H15:W",
+    "lock": "flood:0"
+   },
+   {
+    "id": "H03:SW",
+    "side": "W",
+    "a": 53,
+    "b": 56,
+    "to": "D03:E2"
+   },
+   {
+    "id": "H03:S",
+    "side": "S",
+    "a": 14,
+    "b": 17,
+    "to": "D04:N",
+    "lock": "flood:0"
+   }
+  ]
+ },
+ "H13": {
+  "file": "H13.txt",
+  "title": "use_after_free.c",
+  "size": [
+   64,
+   14
+  ],
+  "origin": [
+   1148,
+   -20
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [
+   "I was freed. Why can I still hear you?",
+   "use after free: anything can happen here. Nothing does.",
+   "// TODO: remove this room"
+  ],
+  "doors": [
+   {
+    "id": "H13:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H03:NE"
+   }
+  ]
+ },
+ "H07": {
+  "file": "H07.txt",
+  "title": "free.c",
+  "size": [
+   64,
+   16
+  ],
+  "origin": [
+   1148,
+   -6
+  ],
+  "world": 3,
+  "music": "w3",
+  "valve": true,
+  "flood": [
+   14,
+   null,
+   null
+  ],
+  "signs": [
+   "free(): the valve takes a pointer. Catch one and give it back."
+  ],
+  "doors": [
+   {
+    "id": "H07:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H03:E"
+   },
+   {
+    "id": "H07:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H06:W2"
+   }
+  ]
+ },
+ "H05": {
+  "file": "H05.txt",
+  "title": "segfault.c",
+  "size": [
+   64,
+   16
+  ],
+  "origin": [
+   1148,
+   12
+  ],
+  "world": 3,
+  "music": "w3",
+  "flood": [
+   0,
+   null,
+   null
+  ],
+  "signs": [
+   "SEGFAULT: runs at you, blinks red, and dumps core. Stand clear.",
+   "This wall is core-dump proof. Well - almost. Bring a SEGFAULT here."
+  ],
+  "doors": [
+   {
+    "id": "H05:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H03:E2"
+   },
+   {
+    "id": "H05:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H06:W"
+   }
+  ]
+ },
+ "H15": {
+  "file": "H15.txt",
+  "title": "core_dump",
+  "size": [
+   64,
+   16
+  ],
+  "origin": [
+   1148,
+   29
+  ],
+  "world": 3,
+  "music": "w3",
+  "flood": [
+   0,
+   1,
+   null
+  ],
+  "signs": [
+   "Segmentation fault (core dumped). It stopped right here, mid-sentence.",
+   "Killed: out of memory. It was holding 3 GB of cat pictures.",
+   "panic: runtime error: index out of range [5] with length 5",
+   "PID 1 is locked behind this door. fork() never returns. (later)"
+  ],
+  "doors": [
+   {
+    "id": "H15:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H03:E3"
+   },
+   {
+    "id": "H15:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "F01:W"
+   }
+  ]
+ },
+ "H06": {
+  "file": "H06.txt",
+  "title": "stack_overflow.c",
+  "size": [
+   26,
+   64
+  ],
+  "origin": [
+   1212,
+   -29
+  ],
+  "world": 3,
+  "music": "w3",
+  "flood": [
+   37,
+   59,
+   null
+  ],
+  "rise": {
+   "trigger": 48,
+   "speed": 19,
+   "top": 8
+  },
+  "signs": [
+   "It is rising. Go UP."
+  ],
+  "doors": [
+   {
+    "id": "H06:W",
+    "side": "W",
+    "a": 50,
+    "b": 53,
+    "to": "H05:E"
+   },
+   {
+    "id": "H06:W2",
+    "side": "W",
+    "a": 32,
+    "b": 35,
+    "to": "H07:E"
+   },
+   {
+    "id": "H06:NW",
+    "side": "W",
+    "a": 2,
+    "b": 5,
+    "to": "H08:E"
+   }
+  ]
+ },
+ "H08": {
+  "file": "H08.txt",
+  "title": "gc.log",
+  "size": [
+   64,
+   16
+  ],
+  "origin": [
+   1148,
+   -36
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [
+   "gc: heap 98% full. Next collection: never.",
+   "gc: cannot free 0x7ffd3a10: still referenced by THE LEAK",
+   "gc: giving up. Whoever reads this: free it yourself."
+  ],
+  "doors": [
+   {
+    "id": "H08:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H06:NW"
+   },
+   {
+    "id": "H08:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "H09:E"
+   }
+  ]
+ },
+ "H09": {
+  "file": "H09.txt",
+  "title": "THE LEAK",
+  "size": [
+   24,
+   14
+  ],
+  "origin": [
+   1124,
+   -34
+  ],
+  "world": 3,
+  "music": "",
+  "boss": {
+   "id": "LEAK",
+   "class": "LeakBoss",
+   "name": "THE LEAK",
+   "sub": "malloc() without free()",
+   "trigger_x": 304,
+   "trigger_side": "E",
+   "T": 75,
+   "u": 0.8,
+   "reward": "sudo",
+   "banner": "sudo",
+   "banner_sub": "press [jump] again in mid-air",
+   "music": "boss",
+   "drop": 36
+  },
+  "signs": [],
+  "doors": [
+   {
+    "id": "H09:E",
+    "side": "E",
+    "a": 7,
+    "b": 10,
+    "to": "H08:W",
+    "lock": "fight"
+   },
+   {
+    "id": "H09:W",
+    "side": "W",
+    "a": 7,
+    "b": 10,
+    "to": "H10:E",
+    "lock": "until:boss:LEAK"
+   }
+  ]
+ },
+ "H10": {
+  "file": "H10.txt",
+  "title": "sudoers",
+  "size": [
+   64,
+   16
+  ],
+  "origin": [
+   1060,
+   -36
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [
+   "sudo: press [jump] again in mid-air. Up there: a hatch.",
+   "Permission granted.",
+   "This floor drops to dangling_ptr.c (hold [down] and press [jump])."
+  ],
+  "doors": [
+   {
+    "id": "H10:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H09:W"
+   },
+   {
+    "id": "H10:S",
+    "side": "S",
+    "a": 40,
+    "b": 43,
+    "to": "H04:N",
+    "sets": "hatch:H10S"
+   },
+   {
+    "id": "H10:N",
+    "side": "N",
+    "a": 50,
+    "b": 53,
+    "to": "H11:S",
+    "sets": "hatch:H10N"
+   }
+  ]
+ },
+ "H11": {
+  "file": "H11.txt",
+  "title": "mmap.c",
+  "size": [
+   200,
+   16
+  ],
+  "origin": [
+   1060,
+   -52
+  ],
+  "world": 3,
+  "music": "w3",
+  "end": "to be continued in /net",
+  "signs": [
+   "mmap.c: the whole heap is under your feet. The cable goes on to /net.",
+   "/net: connection refused (for now)."
+  ],
+  "doors": [
+   {
+    "id": "H11:S",
+    "side": "S",
+    "a": 50,
+    "b": 53,
+    "to": "H10:N",
+    "lock": "until:hatch:H10N"
+   },
+   {
+    "id": "H11:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "N01:W"
+   },
+   {
+    "id": "H11:N",
+    "side": "N",
+    "a": 60,
+    "b": 63,
+    "to": "T02:S"
+   }
+  ]
+ },
+ "H12": {
+  "file": "H12.txt",
+  "title": "alloca.h",
+  "size": [
+   24,
+   14
+  ],
+  "origin": [
+   920,
+   -34
+  ],
+  "world": 3,
+  "music": "w3",
+  "signs": [],
+  "doors": [
+   {
+    "id": "H12:S",
+    "side": "S",
+    "a": 10,
+    "b": 13,
+    "to": "H02:N"
+   },
+   {
+    "id": "H12:E",
+    "side": "E",
+    "a": 7,
+    "b": 10,
+    "to": "H16:W"
+   }
+  ]
+ },
+ "H16": {
+  "file": "H16.txt",
+  "title": "memory_pool.c",
+  "size": [
+   56,
+   14
+  ],
+  "origin": [
+   944,
+   -34
+  ],
+  "world": 3,
+  "music": "w3",
+  "plugins": [
+   "gzip"
+  ],
+  "signs": [],
+  "doors": [
+   {
+    "id": "H16:W",
+    "side": "W",
+    "a": 7,
+    "b": 10,
+    "to": "H12:E"
+   }
+  ]
+ },
+ "H14": {
+  "file": "H14.txt",
+  "title": "heap_top",
+  "size": [
+   32,
+   14
+  ],
+  "origin": [
+   768,
+   -34
+  ],
+  "world": 3,
+  "music": "w3",
+  "plugins": [
+   "sourcemap"
+  ],
+  "signs": [
+   "heap_top: the highest address anyone ever got. Nobody came back for this."
+  ],
+  "doors": [
+   {
+    "id": "H14:S",
+    "side": "S",
+    "a": 16,
+    "b": 19,
+    "to": "H01:N"
+   }
+  ]
+ },
+ "R13": {
+  "file": "R13.txt",
+  "title": "tests/",
+  "size": [
+   32,
+   14
+  ],
+  "origin": [
+   40,
+   -14
+  ],
+  "world": 1,
+  "music": "w1",
+  "signs": [
+   "tests/: 0 passed, 0 failed, 1 skipped.",
+   "// TODO: write tests"
+  ],
+  "doors": [
+   {
+    "id": "R13:S",
+    "side": "S",
+    "a": 14,
+    "b": 17,
+    "to": "R01:N"
+   }
+  ]
+ },
+ "R12": {
+  "file": "R12.txt",
+  "title": ".vscode/",
+  "size": [
+   32,
+   14
+  ],
+  "origin": [
+   276,
+   -16
+  ],
+  "world": 1,
+  "music": "w1",
+  "plugins": [
+   "verbose"
+  ],
+  "signs": [
+   "settings.json: \"editor.renderWhitespace\": \"all\". Someone wanted to see everything."
+  ],
+  "doors": [
+   {
+    "id": "R12:S",
+    "side": "S",
+    "a": 14,
+    "b": 17,
+    "to": "R02:N"
+   }
+  ]
+ },
+ "R15": {
+  "file": "R15.txt",
+  "title": "docker-compose.yml",
+  "size": [
+   40,
+   14
+  ],
+  "origin": [
+   460,
+   -14
+  ],
+  "world": 1,
+  "music": "w1",
+  "plugins": [
+   "restart_always"
+  ],
+  "signs": [
+   "restart: always. Whatever happens, come back up."
+  ],
+  "doors": [
+   {
+    "id": "R15:S",
+    "side": "S",
+    "a": 16,
+    "b": 19,
+    "to": "R03:N"
+   }
+  ]
+ },
+ "R01": {
+  "file": "R01.txt",
+  "title": "hello_world.py",
+  "size": [
+   202,
+   16
+  ],
+  "origin": [
+   0,
+   0
+  ],
+  "music": "w1",
+  "signs": [
+   "MOVE with the [move] and JUMP with [jump] - hold it to go higher.",
+   "Bugs. Swipe them with [attack] - or simply land on them.",
+   "Between two walls? Jump at one, then jump again. Clawd has grippy legs.",
+   "ZOMBIE PROCESS gets back up. Finish it off with [down] + [attack] in mid-air: kill -9."
+  ],
+  "doors": [
+   {
+    "id": "R01:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "R06:E"
+   },
+   {
+    "id": "R01:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "R02:W"
+   },
+   {
+    "id": "R01:N",
+    "side": "N",
+    "a": 54,
+    "b": 57,
+    "to": "R13:S"
+   }
+  ]
+ },
+ "R02": {
+  "file": "R02.txt",
+  "title": "branching_out.js",
+  "size": [
+   180,
+   18
+  ],
+  "origin": [
+   202,
+   -2
+  ],
+  "music": "w1",
+  "signs": [
+   "Up the shaft: jump into a wall, then jump again. And again.",
+   "Permission denied. (try sudo)"
+  ],
+  "doors": [
+   {
+    "id": "R02:W",
+    "side": "W",
+    "a": 11,
+    "b": 14,
+    "to": "R01:E"
+   },
+   {
+    "id": "R02:E",
+    "side": "E",
+    "a": 11,
+    "b": 14,
+    "to": "R03:W"
+   },
+   {
+    "id": "R02:N",
+    "side": "N",
+    "a": 88,
+    "b": 91,
+    "to": "R12:S"
+   }
+  ]
+ },
+ "R03": {
+  "file": "R03.txt",
+  "title": "the_linter.rb",
+  "size": [
+   186,
+   16
+  ],
+  "origin": [
+   382,
+   0
+  ],
+  "music": "w1",
+  "signs": [
+   "FIREWALL GUARDs block from the front. Bounce on them: hold [down] and swipe in mid-air.",
+   "A spring. Land on it."
+  ],
+  "doors": [
+   {
+    "id": "R03:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "R02:E"
+   },
+   {
+    "id": "R03:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "R04:W"
+   },
+   {
+    "id": "R03:N",
+    "side": "N",
+    "a": 94,
+    "b": 97,
+    "to": "R15:S"
+   }
+  ]
+ },
+ "D03": {
+  "file": "D03.txt",
+  "title": "version_hell.lock",
+  "size": [
+   26,
+   52
+  ],
+  "origin": [
+   1090,
+   8
+  ],
+  "world": 2,
+  "music": "w2",
+  "signs": [
+   "The way on is DOWN. Jump, hold [down] and press [dash] to bash through the cracked floor."
+  ],
+  "doors": [
+   {
+    "id": "D03:W",
+    "side": "W",
+    "a": 1,
+    "b": 3,
+    "to": "D02:E"
+   },
+   {
+    "id": "D03:E",
+    "side": "E",
+    "a": 45,
+    "b": 49,
+    "to": "D04:W"
+   },
+   {
+    "id": "D03:E2",
+    "side": "E",
+    "a": 30,
+    "b": 33,
+    "to": "H03:SW"
+   }
+  ]
+ },
+ "R11": {
+  "file": "R11.txt",
+  "title": "try_catch.js",
+  "size": [
+   32,
+   16
+  ],
+  "origin": [
+   736,
+   -20
+  ],
+  "world": 1,
+  "music": "w1",
+  "plugins": [
+   "async_await"
+  ],
+  "signs": [
+   "An EXCEPTION throws yellow errors. Swipe one just as it reaches you to catch it: it flies back. Hit the switch behind it."
+  ],
+  "doors": [
+   {
+    "id": "R11:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "R10:E"
+   },
+   {
+    "id": "R11:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "H01:W"
+   }
+  ]
+ },
+ "D04": {
+  "file": "D04.txt",
+  "title": "package.json",
+  "size": [
+   32,
+   16
+  ],
+  "origin": [
+   1116,
+   45
+  ],
+  "world": 2,
+  "music": "w2",
+  "signs": [
+   "Rest here. The npm registry sells plugins for tokens: stand at the stall and press [up]."
+  ],
+  "doors": [
+   {
+    "id": "D04:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "D03:E"
+   },
+   {
+    "id": "D04:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "D05:W"
+   },
+   {
+    "id": "D04:N",
+    "side": "N",
+    "a": 14,
+    "b": 17,
+    "to": "H03:S",
+    "lock": "flood:0"
+   }
+  ],
+  "terminal": true
+ },
+ "R08": {
+  "file": "R08.txt",
+  "title": "README.md",
+  "size": [
+   24,
+   16
+  ],
+  "origin": [
+   664,
+   0
+  ],
+  "world": 1,
+  "music": "w1",
+  "signs": [
+   "Next door: the ledges go up to a code review; the low door goes down to ~/node_modules."
+  ],
+  "doors": [
+   {
+    "id": "R08:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "R07:E"
+   },
+   {
+    "id": "R08:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "R09:W"
+   }
+  ],
+  "terminal": true
+ }
+}
