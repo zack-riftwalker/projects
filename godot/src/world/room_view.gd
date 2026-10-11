@@ -20,6 +20,10 @@ static func make_tileset(world := 1) -> TileSet:
 	ts.add_source(src, 0)
 	return ts
 
+# what a wall tile joins up with
+static func _wallish(t: int) -> bool:
+	return t == TileGrid.SOLID or t == TileGrid.DEAD or t == TileGrid.FIRE or t == TileGrid.THICK
+
 func build(rm: Room) -> void:
 	room = rm
 	for c in get_children():
@@ -52,12 +56,16 @@ func build(rm: Room) -> void:
 	for ty in range(g.h):
 		for tx in range(g.w):
 			var t := g.tile(tx, ty)
+			if t == TileGrid.DEAD:
+				if Game.flag("dead:" + room.id):
+					continue
+				t = TileGrid.SOLID                      # dead code looks like wall until it is found
 			match t:
 				TileGrid.SOLID:
-					var u := g.tile(tx, ty - 1) == TileGrid.SOLID or ty == 0
-					var d := g.tile(tx, ty + 1) == TileGrid.SOLID or ty == g.h - 1
-					var l := g.tile(tx - 1, ty) == TileGrid.SOLID
-					var r := g.tile(tx + 1, ty) == TileGrid.SOLID
+					var u := _wallish(g.tile(tx, ty - 1)) or ty == 0
+					var d := _wallish(g.tile(tx, ty + 1)) or ty == g.h - 1
+					var l := _wallish(g.tile(tx - 1, ty))
+					var r := _wallish(g.tile(tx + 1, ty))
 					var mask := int(u) | (int(d) << 1) | (int(l) << 2) | (int(r) << 3)
 					var variant := floori(Game.hash3(tx, ty, 1) * 4)
 					tiles.set_cell(Vector2i(tx, ty), 0, Vector2i(mask, variant))

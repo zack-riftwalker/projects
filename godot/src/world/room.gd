@@ -70,6 +70,7 @@ signal fight_intro
 signal item_collected(item_id: String, kind: String)
 signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
+signal net_reveal
 signal plugin_got(plugin_id: String, by: String)
 signal net_agents
 signal net_buy(plugin_id: String)
@@ -95,6 +96,11 @@ var keys: Array = []           # slot keys (letter k): {x, y, w, h, i}; only age
 var shops: Array = []          # npm registry stalls (letter $): {x (centre), y (bottom)}
 var stations: Array = []       # cache stations (letter R): {x, y, w, h}
 var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
+var dead_cells: Array = []     # [tx, ty] of the dead code (`;`): wall to look at, air to walk through
+var dead_groups: Array = []    # the pixel centres of its 4-connected groups (moths, the reveal burst)
+var fire_cells: Array = []     # firewall bricks (`N`) and bulkheads (`0`), drawn by the furniture layer
+var thick_cells: Array = []
+var rings: Array = []          # GET rings (`@`): decoration in 4A
 var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
 signal door_crossed(door: Dictionary)
 signal bench_requested(index: int)
@@ -158,9 +164,15 @@ func load_room(room_id: String, snap = null) -> void:
 			var y := ty * T
 			if TileGrid.CHARS.has(ch):
 				var t: int = TileGrid.CHARS[ch]
-				if t == TileGrid.CRACK and Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
+				if (t == TileGrid.CRACK or t == TileGrid.THICK) and Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
 					t = TileGrid.E
 				grid.tiles[ty * w + tx] = t
+				if t == TileGrid.DEAD:
+					dead_cells.append([tx, ty])
+				elif t == TileGrid.FIRE:
+					fire_cells.append([tx, ty])
+				elif t == TileGrid.THICK:
+					thick_cells.append([tx, ty])
 				if t == TileGrid.GATE_C or t == TileGrid.GATE_A:
 					gate_cells.append([tx, ty, "catch" if t == TileGrid.GATE_C else "agents"])
 				continue
@@ -188,6 +200,8 @@ func load_room(room_id: String, snap = null) -> void:
 				"Y":
 					switches.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": switch_n})
 					switch_n += 1
+				"@":
+					rings.append({"x": x + 8, "y": y + 8})
 				"S":
 					springs.append({"x": x + 2, "y": y + 9, "w": 12, "h": 7, "t": 0.0})
 				"o":
@@ -229,7 +243,34 @@ func load_room(room_id: String, snap = null) -> void:
 		var fid := "item:%s:f%d" % [id, i]
 		if not Game.flag(fid) and mode != "guest":
 			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
+	_group_dead()
 	rng.seed = 1
+
+# the 4-connected groups of dead code: where its moths fly and its reveal bursts
+func _group_dead() -> void:
+	dead_groups = []
+	var left := {}
+	for c in dead_cells:
+		left[c[1] * w + c[0]] = true
+	for c in dead_cells:
+		if not left.has(c[1] * w + c[0]):
+			continue
+		var stack := [c]
+		left.erase(c[1] * w + c[0])
+		var sx := 0.0
+		var sy := 0.0
+		var n := 0
+		while not stack.is_empty():
+			var q: Array = stack.pop_back()
+			sx += q[0] * T + 8.0
+			sy += q[1] * T + 8.0
+			n += 1
+			for o in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
+				var k: int = (q[1] + o[1]) * w + q[0] + o[0]
+				if q[0] + o[0] >= 0 and q[0] + o[0] < w and left.has(k):
+					left.erase(k)
+					stack.append([q[0] + o[0], q[1] + o[1]])
+		dead_groups.append({"x": sx / n, "y": sy / n})
 
 # the boss class named by rooms.json (a match, no reflection)
 func make_boss(bd: Dictionary, bx: float, by: float):
@@ -489,6 +530,58 @@ func break_tile(tx: int, ty: int) -> bool:
 			break_q.append({"tx": tx + o[0], "ty": ty + o[1], "t": 0.06})
 	return true
 
+# an explosion (a SEGFAULT): every bulkhead and crack within r of the centre breaks at once (solo and host)
+func blast(cx: float, cy: float, r: float) -> void:
+	if mode == "guest":
+		return
+	var tx0 := floori((cx - r) / T)
+	var tx1 := floori((cx + r) / T)
+	var ty0 := floori((cy - r) / T)
+	var ty1 := floori((cy + r) / T)
+	for ty in range(ty0, ty1 + 1):
+		for tx in range(tx0, tx1 + 1):
+			if tx < 0 or ty < 0 or tx >= w or ty >= h:
+				continue
+			var t := grid.tile(tx, ty)
+			if t != TileGrid.THICK and t != TileGrid.CRACK:
+				continue
+			if Vector2(tx * T + 8 - cx, ty * T + 8 - cy).length() > r:
+				continue
+			grid.tiles[ty * w + tx] = TileGrid.E
+			Game.flags["crack:%s:%d:%d" % [id, tx, ty]] = true
+			view.erase_tile(tx, ty)
+			burst(tx * T + 8, ty * T + 8, 12, ["#8d8798", "#c3bccd", "#4c4658"], 90.0, 300.0)
+			tile_broken.emit(tx, ty)
+	shake(0.5)
+	explode(cx, cy, 20)
+	Audio.sfx("explode")
+
+func dead_revealed() -> bool:
+	return Game.flag("dead:" + id)
+
+# the dead code of this room is shown for good (announce: the local player found it; false: a partner did, or a snapshot says so)
+func reveal_dead(announce := true) -> void:
+	Game.flags["dead:" + id] = true
+	if view != null:
+		for c in dead_cells:
+			view.tiles.erase_cell(Vector2i(c[0], c[1]))
+	if announce:
+		Audio.sfx("glitch")
+		for g in dead_groups:
+			burst(g.x, g.y, 10, ["#8d8798", "#c3bccd", "#4c4658"], 80.0, 200.0)
+		if not dead_groups.is_empty():
+			pop(dead_groups[0].x, dead_groups[0].y - 12, "dead code", "#c3bccd")
+
+# does a player's box touch unrevealed dead code?
+func _touches_dead(p) -> bool:
+	if dead_cells.is_empty() or dead_revealed():
+		return false
+	for ty in range(floori(p.y / T), floori((p.y + p.h - 0.001) / T) + 1):
+		for tx in range(floori(p.x / T), floori((p.x + p.w - 0.001) / T) + 1):
+			if grid.tile(tx, ty) == TileGrid.DEAD:
+				return true
+	return false
+
 func snapshot() -> Dictionary:
 	return {"cp": cp_index, "tokens": tokens, "got": got.duplicate(), "sparks": sparks.duplicate(), "clock": clock, "kills": kills, "hits": hits}
 
@@ -600,6 +693,9 @@ func step_guest(dt: float) -> void:
 	if p != null:
 		p.update(dt)
 		_check_door()
+		if not p.dead and _touches_dead(p):
+			reveal_dead()
+			net_reveal.emit()
 		if not p.dead and not p.gone:
 			interact_combat(p)
 			interact_goals(p)
@@ -723,7 +819,7 @@ func apply_crumbles(list: Array) -> void:
 func apply_tile(tx: int, ty: int) -> void:
 	pending_cracks.erase("%d:%d" % [tx, ty])
 	Game.flags["crack:%s:%d:%d" % [id, tx, ty]] = true
-	if grid.tile(tx, ty) == TileGrid.CRACK:
+	if grid.tile(tx, ty) == TileGrid.CRACK or grid.tile(tx, ty) == TileGrid.THICK:
 		grid.tiles[ty * w + tx] = TileGrid.E
 		view.erase_tile(tx, ty)
 		burst(tx * T + 8, ty * T + 8, 12, ["#8d8798", "#c3bccd", "#4c4658"], 90.0, 300.0)
@@ -821,6 +917,8 @@ func step(dt: float) -> void:
 		ctx = "p1"
 		p.update(dt)
 		ctx = "all"
+		if not p.dead and _touches_dead(p):
+			reveal_dead()
 	_check_door()
 	_step_agents(dt)
 
@@ -1595,8 +1693,95 @@ func _draw_liquid(ci: CanvasItem) -> void:
 					ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_a)
 					ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_b)
 				top = -1
+# firewall bricks, bulkheads, dead code (dotted once revealed, moths while hidden), GET rings
+func _draw_bricks(ci: CanvasItem) -> void:
+	for c in fire_cells:
+		var bx: int = c[0] * T
+		var by: int = c[1] * T
+		ci.draw_rect(Rect2(bx, by, T, T), Color("#a8183a"))
+		var mortar := Color("#1b1226")
+		var hi := Color("#ff4f6d")
+		ci.draw_rect(Rect2(bx, by + 7, T, 1), mortar)
+		ci.draw_rect(Rect2(bx, by + 15, T, 1), mortar)
+		ci.draw_rect(Rect2(bx + 7, by, 1, 7), mortar)
+		ci.draw_rect(Rect2(bx + 15, by, 1, 7), mortar)
+		ci.draw_rect(Rect2(bx + 3, by + 8, 1, 7), mortar)
+		ci.draw_rect(Rect2(bx + 11, by + 8, 1, 7), mortar)
+		ci.draw_rect(Rect2(bx, by, 7, 1), hi)
+		ci.draw_rect(Rect2(bx + 8, by, 7, 1), hi)
+		ci.draw_rect(Rect2(bx, by + 8, 3, 1), hi)
+		ci.draw_rect(Rect2(bx + 4, by + 8, 7, 1), hi)
+		ci.draw_rect(Rect2(bx + 12, by + 8, 4, 1), hi)
+	for c in thick_cells:
+		if grid.tile(c[0], c[1]) != TileGrid.THICK:
+			continue
+		var tx0: int = c[0] * T
+		var ty0: int = c[1] * T
+		ci.draw_rect(Rect2(tx0, ty0, T, T), Color("#3a3346"))
+		var bd := Color("#8d8798")
+		ci.draw_rect(Rect2(tx0, ty0, T, 1), bd)
+		ci.draw_rect(Rect2(tx0, ty0 + 15, T, 1), bd)
+		ci.draw_rect(Rect2(tx0, ty0, 1, T), bd)
+		ci.draw_rect(Rect2(tx0 + 15, ty0, 1, T), bd)
+		var rv := Color("#c3bccd")
+		for o in [[2, 2], [12, 2], [2, 12], [12, 12]]:
+			ci.draw_rect(Rect2(tx0 + o[0], ty0 + o[1], 2, 2), rv)
+	if not dead_cells.is_empty():
+		if dead_revealed():
+			var dotted := Color(0.55, 0.53, 0.6, 0.35)
+			for c in dead_cells:
+				var dx: int = c[0] * T
+				var dy: int = c[1] * T
+				for i in range(0, T, 2):
+					ci.draw_rect(Rect2(dx + i, dy, 1, 1), dotted)
+					ci.draw_rect(Rect2(dx + i, dy + 15, 1, 1), dotted)
+					ci.draw_rect(Rect2(dx, dy + i, 1, 1), dotted)
+					ci.draw_rect(Rect2(dx + 15, dy + i, 1, 1), dotted)
+		else:
+			var vb := verbose_cells()
+			for c in vb:
+				if int(time * 4.0) % 2 == 0:
+					var vx: int = c[0] * T
+					var vy: int = c[1] * T
+					var vc := Color("#58f0c8")
+					ci.draw_rect(Rect2(vx, vy, T, 1), vc)
+					ci.draw_rect(Rect2(vx, vy + 15, T, 1), vc)
+					ci.draw_rect(Rect2(vx, vy, 1, T), vc)
+					ci.draw_rect(Rect2(vx + 15, vy, 1, T), vc)
+			for g in dead_groups:
+				var near_verbose := false
+				for c in vb:
+					if absf(c[0] * T + 8.0 - g.x) < 48.0 and absf(c[1] * T + 8.0 - g.y) < 48.0:
+						near_verbose = true
+				for i in range(3):
+					var mx: int = floori(g.x + sin(time * 1.7 + i * 2.1) * 14.0)
+					var my: int = floori(g.y + cos(time * 2.3 + i * 1.3) * 10.0 - 4.0)
+					var wy := -1 if int(time * 8.0) % 2 == 0 else 1
+					ci.draw_rect(Rect2(mx, my, 1, 2), Color("#58f0c8") if near_verbose else Color("#e8e0f0"))
+					ci.draw_rect(Rect2(mx - 1, my + wy, 1, 1), Color("#c3bccd"))
+					ci.draw_rect(Rect2(mx + 1, my + wy, 1, 1), Color("#c3bccd"))
+	for rg in rings:
+		var ry: float = rg.y + floori(sin(time * 2.0) * 1.5)
+		ci.draw_arc(Vector2(rg.x, ry), 6.0, 0.0, TAU, 24, Color(Game.COL.ink), 4.0)
+		ci.draw_arc(Vector2(rg.x, ry), 6.0, 0.0, TAU, 24, Color("#7cc4ff"), 2.0)
+		PixelText.draw_text(ci, "GET", int(rg.x) - 5, int(ry) + 9, "#7cc4ff", {"tiny": true})
+
+# the unrevealed dead code near the local player, shown by the --verbose plugin (MV4-04)
+func verbose_cells() -> Array:
+	var p = player
+	if p == null or dead_revealed() or not Game.equipped.has("verbose") or not Game.owns_plugin("verbose"):
+		return []
+	var out: Array = []
+	var cx: float = p.x + p.w / 2.0
+	var cy: float = p.y + p.h / 2.0
+	for c in dead_cells:
+		if Vector2(c[0] * T + 8.0 - cx, c[1] * T + 8.0 - cy).length() <= 96.0:
+			out.append(c)
+	return out
+
 func draw_layer(kind: String, ci: CanvasItem) -> void:
 	if kind == "furniture":
+		_draw_bricks(ci)
 		# closed doors: a gate column just inside the edge so the player sees why it is closed
 		var gate := Gfx.tex("gate")
 		for d in grid.doors:

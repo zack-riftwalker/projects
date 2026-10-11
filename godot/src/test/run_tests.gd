@@ -67,6 +67,7 @@ func run(name: String) -> bool:
 		"mergeinterp": return t_mergeinterp()
 		"fork": return t_fork()
 		"nsdoors": return t_nsdoors()
+		"tiles4": return t_tiles4()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -2201,12 +2202,11 @@ func t_skipboss() -> bool:
 func t_nsdoors() -> bool:
 	Game.persist = false
 	Game.flags = {}
-	var ok := true
-	var info := ""
+	var res := {"ok": true, "info": ""}          # (a lambda copies plain locals: results go through a dictionary)
 	var chk := func(label: String, cond: bool) -> void:
 		if not cond:
-			ok = false
-			info += " BAD:" + label
+			res.ok = false
+			res.info += " BAD:" + label
 	# 1. the grid
 	var r10 := new_room("H10")
 	chk.call("H10 N open", r10.grid.tile(51, -1) == TileGrid.E)
@@ -2235,9 +2235,10 @@ func t_nsdoors() -> bool:
 	p.y = 6 * 16 - 10.0
 	p.vx = 0.0
 	p.vy = 0.0
-	var up_ok := false
+	for f in range(20):
+		m.tick(Game.STEP)                      # (land on the ledge first)
 	for f in range(120):
-		Controls.script_input = {"jump": f <= 12 or (f >= 20 and f <= 40)}
+		Controls.script_input = {"jump": f <= 12 or f >= 20}
 		m.tick(Game.STEP)
 		if m.room.id == "H11" and not m.trans.on:
 			break
@@ -2246,9 +2247,11 @@ func t_nsdoors() -> bool:
 	chk.call("up: hatch flag", Game.flag("hatch:H10N"))
 	chk.call("up: x", m.player.x >= 50 * 16 - 10 and m.player.x <= 54 * 16)
 	for f in range(90):
+		Controls.script_input = {"left": true, "jump": true}            # (jump stays held, as a player would; the push upward lands you in the hole: step onto the lip beside it to stay up)
 		m.tick(Game.STEP)
+	Controls.script_input = {}
 	chk.call("up: lands", m.player.on_ground and m.player.y + m.player.h <= 16 * 16)
-	info += " up y=%.0f" % m.player.y
+	res.info += " up y=%.0f" % m.player.y
 	# 3. down through the hatch
 	m.player.x = 51 * 16 + 3.0
 	m.player.y = 14 * 16.0
@@ -2262,6 +2265,7 @@ func t_nsdoors() -> bool:
 			break
 	chk.call("down: in H10", m.room.id == "H10")
 	chk.call("down: arrives at the top", first_y < 32.0)
+	res.info += " first_y=%.0f" % first_y
 	# 4. the floor drop
 	Game.flags = {}
 	m.swap_to("H10")
@@ -2278,7 +2282,7 @@ func t_nsdoors() -> bool:
 	chk.call("drop: in H04", m.room.id == "H04")
 	chk.call("drop: flag", Game.flag("hatch:H10S"))
 	m.room.update_doors()
-	var hn = m.room.grid.door_at("N", 41)
+	var hn = m.room.grid.door_at("N", 107)
 	chk.call("drop: H04 N open", hn != null and hn.open)
 	# 5. travel
 	Game.flags = {"bench:R08": true, "bench:H03": true, "bench:D03": true}
@@ -2294,4 +2298,58 @@ func t_nsdoors() -> bool:
 	Game.tools.sudo = false
 	m.queue_free()
 	Controls.script_input = null
-	return report("nsdoors", ok, info)
+	return report("nsdoors", res.ok, res.info)
+
+# MV4-02: dead code, firewall bricks, bulkheads, Room.blast
+func t_tiles4() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}          # (a lambda copies plain locals: results go through a dictionary)
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var r3 := new_room("H03")
+	chk.call("dead code is walkable", not r3.grid.solid(31, 5))
+	chk.call("dead code has a TileMap cell", r3.view.tiles.get_cell_source_id(Vector2i(31, 5)) != -1)
+	r3.queue_free()
+	var r12 := new_room("H12")
+	chk.call("firewall brick solid", r12.grid.solid(23, 8))
+	r12.queue_free()
+	var r5 := new_room("H05")
+	chk.call("bulkhead solid", r5.grid.solid(44, 11))
+	r5.blast(44 * 16 + 8, 11 * 16 + 8, 34)
+	chk.call("blast opens it", not r5.grid.solid(44, 11) and Game.flag("crack:H05:44:11"))
+	chk.call("blast leaves the wall above", r5.grid.solid(44, 6))
+	r5.queue_free()
+	var r5b := new_room("H05")
+	chk.call("stays open after a rebuild", not r5b.grid.solid(44, 11))
+	r5b.queue_free()
+	Game.flags = {}
+	# walking into the dead code reveals it, and the door behind it leads on
+	var m := new_manager()
+	m.swap_to("H03")
+	var p = m.player
+	p.x = 31 * 16 - 14.0
+	p.y = 8 * 16 - 10.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var found := -1
+	for f in range(120):
+		Controls.script_input = {"right": true}
+		m.tick(Game.STEP)
+		if found < 0 and Game.flag("dead:H03"):
+			found = f
+		if m.room.id == "H13" and not m.trans.on:
+			break
+	Controls.script_input = {}
+	chk.call("reveal within 30 frames", found >= 0 and found <= 30)
+	chk.call("walks on into H13", m.room.id == "H13")
+	res.info += " found at frame %d" % found
+	m.queue_free()
+	# a room built with the flag has no wall drawn over its dead code
+	var r3b := new_room("H03")
+	chk.call("revealed room draws no wall", r3b.view.tiles.get_cell_source_id(Vector2i(31, 5)) == -1)
+	r3b.queue_free()
+	Game.flags = {}
+	return report("tiles4", res.ok, res.info)

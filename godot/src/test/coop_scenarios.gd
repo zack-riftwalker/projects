@@ -1293,7 +1293,7 @@ func sc_co_menutick() -> Array:
 	main.shop_menu.open(r2)
 	var t1: float = r2.time
 	var gx: float = g.x
-	Controls.script_input = {"right": true}
+	Controls.script_input = {"left": true, "jump": true}
 	await wait_secs(1.5)
 	Controls.script_input = {}
 	var ran2: float = r2.time - t1
@@ -1332,13 +1332,14 @@ func sc_co_nsdoor() -> Array:
 	await wait_secs(0.6)                    # (let the body land on the ledge first)
 	for f in range(160):
 		miny = minf(miny, mgr().player.y)
-		Controls.script_input = {"jump": f <= 12 or (f >= 20 and f <= 40)}
+		Controls.script_input = {"jump": f <= 12 or f >= 20}
 		await get_tree().physics_frame
 		if mgr().room.id == "H11" and not mgr().trans.on:
 			break
-	Controls.script_input = {}
 	var up: bool = mgr().room.id == "H11"
+	Controls.script_input = {"left": true, "jump": true}
 	await wait_secs(1.5)
+	Controls.script_input = {}
 	mgr().player.x = 51.0 * 16.0 + 3.0
 	mgr().player.y = 14.0 * 16.0
 	mgr().player.vx = 0.0
@@ -1346,3 +1347,22 @@ func sc_co_nsdoor() -> Array:
 	var down := await wait_until(func(): return mgr().room.id == "H10", 6.0)
 	await wait_secs(2.0)
 	return [up and down, "guest up %s (min y %.0f, room %s), back down %s" % [up, miny, mgr().room.id, down]]
+
+# MV4-02: the guest walks through H03's dead code into H13; the host learns it (`reveal`) and keeps it for good
+func sc_co_deadcode() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		var seen := await wait_until(func(): return Game.flag("dead:H03"), 20.0)
+		await wait_secs(1.0)
+		return [seen, "host has dead:H03 = %s" % seen]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(2.0)
+	mgr().swap_to("H03", Vector2(31.0 * 16.0 - 14.0, 8.0 * 16.0 - 10.0))
+	await wait_secs(0.6)
+	Controls.script_input = {"right": true}
+	var moved := await wait_until(func(): return mgr().room.id == "H13", 8.0)
+	Controls.script_input = {}
+	await wait_secs(2.0)
+	return [moved and Game.flag("dead:H03"), "guest reached H13 %s, flag %s" % [moved, Game.flag("dead:H03")]]

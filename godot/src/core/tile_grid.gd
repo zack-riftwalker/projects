@@ -15,9 +15,12 @@ const BLINK_B := 8
 const LIQ := 9
 const GATE_C := 10         # `!`: solid until the room's catch switches are all pressed
 const GATE_A := 11         # `&`: solid until the room's slot keys are all pressed (3B)
+const DEAD := 12           # `;`: dead code: looks like wall, walked through; revealed for good once touched
+const FIRE := 13           # `N`: firewall brick: solid (ssh passes it in 4B)
+const THICK := 14          # `0`: bulkhead: solid; only Room.blast breaks it
 const T := 16
 
-const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A}
+const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK}
 
 var w := 0
 var h := 0
@@ -57,8 +60,10 @@ func door_at(side: String, ty: int):
 
 func solid(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
-	if t == SOLID or t == CRACK:
+	if t == SOLID or t == CRACK or t == FIRE or t == THICK:
 		return true
+	if t == DEAD:
+		return false
 	if t == GATE_C:
 		return not gates_open.catch
 	if t == GATE_A:

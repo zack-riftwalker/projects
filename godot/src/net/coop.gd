@@ -173,6 +173,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
+		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
 
 func _on_room_changed(r: Room) -> void:
 	if role == "guest":
@@ -458,6 +459,12 @@ func _host_rel(k: String, d: Dictionary) -> void:
 			_host_door_sets(String(d.get("door", "")))
 			_host_remote_to_room(String(d.to))
 		"crack": _host_crack(d)
+		"reveal":
+			var rid2 := String(d.room)
+			Game.flags["dead:" + rid2] = true
+			Game.write_save()
+			if mgr.rooms.has(rid2):
+				mgr.rooms[rid2].reveal_dead(false)
 		"pickup": _host_pickup(d)
 		"bench":
 			guest_bench = String(d.room)
@@ -922,7 +929,7 @@ func _send_snapshot() -> void:
 	var gf: Array = []                  # the room's switch / key / gate flags: state, applied by the guest on every snapshot
 	for fk in Game.flags:
 		var fks := String(fk)
-		if (fks.begins_with("switch:") or fks.begins_with("key:") or fks.begins_with("gate:")) and fks.get_slice(":", 1) == r.id:
+		if (fks.begins_with("switch:") or fks.begins_with("key:") or fks.begins_with("gate:") or fks.begins_with("dead:")) and fks.get_slice(":", 1) == r.id:
 			gf.append(fks)
 	var pl: Array = []                  # owned plugins: state (the guest's pickup request or the `plugin` event may be lost)
 	for d in Game.PLUGINS:
@@ -1192,6 +1199,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 	last_gf = m.get("gf", [])
 	last_gf_room = r.id
 	for fk in last_gf:
+		if String(fk) == "dead:" + r.id and not Game.flag(String(fk)):
+			r.reveal_dead(false)
 		Game.flags[String(fk)] = true
 	r.update_doors()
 	# damage areas
