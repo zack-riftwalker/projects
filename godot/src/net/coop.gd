@@ -918,6 +918,8 @@ func _send_snapshot() -> void:
 		cr.append([ci % r.w, ci / r.w, cc.s, roundi(cc.t * 100.0)])
 	var ag: Array = []                  # the helpers of the guest's room: [owner 1 (host) | 2 (guest), x4, y4]
 	for a in r.agents:
+		if not is_instance_valid(a.owner_p):
+			continue                        # (its owner was just freed; the room drops the agent on its next step)
 		ag.append([2 if a.owner_p.get("is_remote") == true else 1, NetClasses.x4(a.x), NetClasses.x4(a.y)])
 	var hz: Array = []
 	for z in r.zones:
