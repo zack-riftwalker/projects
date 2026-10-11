@@ -43,13 +43,13 @@
 
 | task | part | what | owner | status |
 |---|---|---|---|---|
-| MV3-01 | 3A | boss framework: registry, HP formula, generic reward, fight list page, per-boss music | Sonnet | todo |
-| MV3-02 | 3A | rooms R08 (edit), R09, R10, R11; map scaling; end-door texts | Sonnet | todo |
-| MV3-03 | 3A | catch: parry projectiles and strikes; switches `Y`; gate tiles `!`; co-op | Sonnet | todo |
-| MV3-04 | 3A | EXCEPTION enemy; the guard's diagonal-dash fix | Sonnet | todo |
-| MV3-05 | 3A | THE REVIEWER #1 | Sonnet | todo |
-| MV3-06 | 3A | plugins: ownership, bench loadout, six effects, pickups `U`, co-op | Sonnet | todo |
-| MV3-07 | 3A | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MV3-01 | 3A | boss framework: registry, HP formula, generic reward, fight list page, per-boss music | Sonnet | done |
+| MV3-02 | 3A | rooms R08 (edit), R09, R10, R11; map scaling; end-door texts | Sonnet | done |
+| MV3-03 | 3A | catch: parry projectiles and strikes; switches `Y`; gate tiles `!`; co-op | Sonnet | done |
+| MV3-04 | 3A | EXCEPTION enemy; the guard's diagonal-dash fix | Sonnet | done |
+| MV3-05 | 3A | THE REVIEWER #1 | Sonnet | done |
+| MV3-06 | 3A | plugins: ownership, bench loadout, six effects, pickups `U`, co-op | Sonnet | done |
+| MV3-07 | 3A | tests, build, playtest steps, report → **stop** | Sonnet | done |
 | MV3-08 | 3B | world 2 assets and rendering (tiles, backdrop, platform, liquid); crumbling tiles in co-op | Sonnet | todo |
 | MV3-09 | 3B | Mimic, Logger, Noodle, Flaky (exact ports, checked against the JS game); FORK nest | Sonnet | todo |
 | MV3-10 | 3B | DEPENDENCY DEPTHS rooms D01–D07; R09's low door opens | Sonnet | todo |
