@@ -247,7 +247,8 @@ func load_room(room_id: String, snap = null) -> void:
 		if not Game.flag(fid) and mode != "guest":
 			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
 	_group_dead()
-	liquid_y = flood_target()
+	if def.has("flood"):
+		liquid_y = flood_target()
 	rng.seed = 1
 
 # THE HEAP's water: the surface row of this room at the current flood level (null = dry). Pixel y = row * 16 + 6
@@ -260,6 +261,11 @@ func flood_target():
 # solo / host: the water follows the flood level (26 px/s) and, in a rising room, climbs after the players (MV4-03)
 func _step_flood(dt: float) -> void:
 	if not def.has("flood"):
+		# THE LEAK's arena: once the fight is won the tide drains away (the boss writes liquid_y itself while it lives)
+		if liquid_y != null and def.has("boss") and (fight.state == "done" or fight.state == "reward"):
+			liquid_y += 60.0 * dt
+			if liquid_y > ph + 60:
+				liquid_y = null
 		return
 	if def.has("rise") and Game.heap_flood() > 0:
 		var ps := players()
@@ -323,6 +329,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 	match String(bd.get("class", "NullBoss")):
 		"Reviewer": b = Reviewer.new(self, bx, by, hp_)
 		"MergeBoss": b = MergeBoss.new(self, bx, by, hp_)
+		"LeakBoss": b = LeakBoss.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))
@@ -1041,8 +1048,10 @@ func _step_fight(dt: float) -> void:
 	var trigger: float = float(def.boss.trigger_x)
 	match String(fight.state):
 		"none":
+			var from_east: bool = String(def.boss.get("trigger_side", "W")) == "E"        # an arena entered from the east starts below trigger_x
 			for q in players():
-				if q.x + q.w / 2.0 > trigger:
+				var qx: float = q.x + q.w / 2.0
+				if (qx < trigger) if from_east else (qx > trigger):
 					_start_intro()
 					break
 		"intro":

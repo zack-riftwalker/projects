@@ -73,6 +73,7 @@ func run(name: String) -> bool:
 		"w3assets": return t_w3assets()
 		"w3enemies": return t_w3enemies()
 		"segfault": return t_segfault()
+		"leak": return t_leak()
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 	return report(name, false, "unknown test")
@@ -2726,3 +2727,89 @@ func t_stackover() -> bool:
 	Controls.script_input = null
 	Game.flags = {}
 	return report("stackover", res.ok, res.info)
+
+# MV4-08: THE LEAK. Entered from the east, floods in levels, sends GC drones, rewards sudo and drains the arena
+func t_leak() -> bool:
+	Game.persist = false
+	Game.diff = "normal"
+	Game.flags = {}
+	Game.tools.sudo = false
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var m := new_manager()
+	m.swap_to("H09", Vector2(373.0, 166.0))
+	var room := m.room
+	var p = m.player
+	var b: LeakBoss = room.boss
+	chk.call("boss hp", b != null and b.max_hp == Game.boss_hp(room.def.boss))
+	# 1. the intro starts only below x 304
+	for f in range(60):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+	chk.call("no intro at the east wall", room.fight.state == "none")
+	var f2 := 0
+	while f2 < 200 and room.fight.state == "none":
+		p.inv = 999.0
+		Controls.script_input = {"left": true}
+		m.tick(Game.STEP)
+		f2 += 1
+	Controls.script_input = {}
+	chk.call("intro below 304", room.fight.state != "none" and p.x + 5.0 < 304.0)
+	for f in range(400):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if room.fight.state == "active":
+			break
+	chk.call("fight active", room.fight.state == "active")
+	# 2. level 1
+	room.attacker = p
+	b.hit(21, 0.0, 0.0, "swipe", b)
+	chk.call("level 1 at 66%", b.level == 1)
+	for f in range(60 * 6):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		m.tick(Game.STEP)
+	chk.call("water at FLOOR-14", room.liquid_y != null and absf(room.liquid_y - (Boss.FLOOR - 14.0)) < 4.0)
+	p.x = 180.0
+	p.y = Boss.FLOOR - 10.0
+	chk.call("the floor is wet", room.hazard_at(p) == "liq")
+	# 3. the GC drone
+	var gc: GcDrone = null
+	for f in range(60 * 12):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		m.tick(Game.STEP)
+		for e in room.ents:
+			if e is GcDrone and not e.dead:
+				gc = e
+		if gc != null:
+			break
+	chk.call("a GC drone", gc != null)
+	if gc != null:
+		var before: float = b.flood_y
+		gc.hit(1, 1.0, 0.0, "swipe")
+		chk.call("popping it lets the water rise 30", absf(b.flood_y - before - 30.0) <= 1.0)
+	# 4. the kill
+	p.hp = p.max_hp
+	var did := room.skip_boss()
+	chk.call("killed", did)
+	var drained := false
+	for f in range(60 * 14):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		m.tick(Game.STEP)
+		if room.fight.state == "done" and room.liquid_y == null:
+			drained = true
+			break
+	room.update_doors()
+	chk.call("sudo", Game.tools.sudo and Game.flag("boss:LEAK") and Game.flag("ability:sudo"))
+	chk.call("W door opens", room.grid.tile(-1, 8) == TileGrid.E)
+	chk.call("the arena drains", drained)
+	chk.call("flood level 0", Game.heap_flood() == 0)
+	Controls.script_input = null
+	Game.tools.sudo = false
+	Game.flags = {}
+	return report("leak", res.ok, res.info)

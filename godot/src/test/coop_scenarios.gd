@@ -1459,3 +1459,78 @@ func sc_co_segfault() -> Array:
 	await wait_secs(1.5)
 	var hp1: int = mgr().player.hp
 	return [open and hp1 < hp0, "guest: bulkhead open %s, hp %d -> %d" % [open, hp0, hp1]]
+
+# MV4-08: both fight THE LEAK. At level 1 the guest's water follows the host's, the wet floor hurts the guest through its own hazard check,
+# and a guest that pops a GC drone lets the host's boss raise its tide by 30.
+func sc_co_leak() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var arrive := Vector2(373.0, 166.0)
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("H09", arrive)
+		var r: Room = mgr().room
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "H09", 15.0)
+		Controls.script_input = {"left": true}
+		var started := await wait_until(func(): return r.fight.state == "active", 20.0)
+		Controls.script_input = {}
+		mgr().player.inv = 999.0
+		r.attacker = mgr().player
+		r.boss.hit(roundi(r.boss.max_hp * 0.4), 0.0, 0.0, "swipe", r.boss)
+		var lvl: int = r.boss.level
+		var last: float = r.boss.flood_y
+		var jump := 0.0
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 50000.0 * slow and jump < 25.0:
+			await get_tree().physics_frame
+			mgr().player.inv = 999.0
+			mgr().player.hp = mgr().player.max_hp
+			jump = maxf(jump, r.boss.flood_y - last)
+			last = r.boss.flood_y
+		await wait_secs(1.0)
+		return [there and started and lvl == 1 and jump >= 25.0, "host: guest there %s, fight %s, level %d, the guest's pop raised the tide by %.0f" % [there, started, lvl, jump]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(2.0)
+	mgr().swap_to("H09", arrive)
+	var r2: Room = mgr().room
+	Controls.script_input = {"left": true}
+	var fight := await wait_until(func(): return r2.fight.state == "active", 25.0)
+	Controls.script_input = {}
+	var lv := await wait_until(func(): return r2.boss != null and r2.boss.level >= 1, 15.0)
+	await wait_secs(5.0)
+	var diff: float = absf(r2.liquid_y - coop().last_lq / 4.0) if r2.liquid_y != null else 999.0
+	# the wet floor
+	var p = mgr().player
+	p.x = 180.0
+	p.y = 166.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var hp0: int = p.hp
+	var hurt := await wait_until(func(): return p.hp < hp0 or p.dead, 4.0)
+	p.hp = p.max_hp
+	# a GC drone
+	var gc = null
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 30000.0 * slow and gc == null:
+		await get_tree().physics_frame
+		p.hp = p.max_hp
+		p.inv = 999.0
+		for e in r2.ents:
+			if e is GcDrone and not e.dead:
+				gc = e
+	var popped := false
+	var seen_gc: bool = gc != null
+	if gc != null:
+		for f in range(40):
+			if not is_instance_valid(gc):
+				break
+			p.x = gc.x
+			p.y = gc.y + 3.0
+			p.vx = 0.0
+			p.vy = 0.0
+			await get_tree().physics_frame
+			if f == 25 and is_instance_valid(gc):
+				r2._hit_entity(gc, 1, 1.0, 0.0, "swipe", gc)
+				popped = true
+	await wait_secs(2.0)
+	return [fight and lv and diff < 10.0 and hurt and seen_gc and popped, "guest: fight %s, level 1 %s, water off by %.1f, wet floor hurt %s, drone seen %s, hit it %s" % [fight, lv, diff, hurt, seen_gc, popped]]
