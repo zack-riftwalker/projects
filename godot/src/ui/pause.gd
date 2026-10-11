@@ -21,7 +21,14 @@ func options() -> Array:
 	if Game.debug:
 		o.append("Refight bosses" if refight_msg == "" else refight_msg)
 		o.append(log_msg if log_msg != "" else "Copy log (5 min)")
+	if can_skip_boss():
+		o.append("Skip boss (temp)")
 	return o
+
+# TEMPORARY: only in a boss fight, alone or as the host
+func can_skip_boss() -> bool:
+	var r = manager.room if manager != null else null
+	return r != null and r.boss != null and is_instance_valid(r.boss) and String(r.fight.state) in ["intro", "active"] and Game.net_role != "guest"
 
 func open() -> void:
 	active = true
@@ -70,6 +77,10 @@ func update() -> void:
 func choose(i: int) -> void:
 	sel = i
 	Audio.sfx("uiOk")
+	if options()[i] == "Skip boss (temp)":       # (its index moves with ?debug, so it is matched by its label)
+		if manager.room.skip_boss():
+			resume_requested.emit()
+		return
 	match i:
 		0: resume_requested.emit()
 		1: page = "map"

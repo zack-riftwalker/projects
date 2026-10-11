@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"skipboss": return t_skipboss()
 		"bossfree": return t_bossfree()
 		"sidunique": return t_sidunique()
 		"strikeseen": return t_strikeseen()
@@ -2160,3 +2161,35 @@ func t_bossfree() -> bool:
 	Game.tools.bash = false
 	Game.flags = {}
 	return report("bossfree", ok, info)
+
+# the temporary pause-menu "Skip boss": offered only in a fight, ends it with the normal reward (flag, ability, door)
+func t_skipboss() -> bool:
+	var m := null_setup()
+	var room := m.room
+	var p = m.player
+	var pause := PauseMenu.new()
+	pause.manager = m
+	var before: bool = pause.can_skip_boss()
+	for f in range(600):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if room.fight.state == "active":
+			break
+	var during: bool = pause.can_skip_boss()
+	var did: bool = room.skip_boss()
+	var state := ""
+	for f in range(900):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		state = String(room.fight.state)
+		if state == "done":
+			break
+	room.update_doors()
+	var door_open: bool = room.grid.tile(room.w, 8) == TileGrid.E
+	var after: bool = pause.can_skip_boss()
+	var ok: bool = not before and during and did and state == "done" and Game.flag("boss:NULL") and Game.flag("ability:bash") and door_open and not after
+	var info := "offered before the fight %s (want false), in it %s, skipped %s, fight %s, flag %s, door %s, offered after %s (want false)" % [before, during, did, state, Game.flag("boss:NULL"), door_open, after]
+	pause.free()
+	Game.tools.bash = false
+	Game.flags = {}
+	return report("skipboss", ok, info)

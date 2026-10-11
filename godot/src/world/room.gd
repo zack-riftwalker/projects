@@ -915,6 +915,18 @@ func _start_intro() -> void:
 	events.append("bossIntro")
 	fight_intro.emit()
 
+# TEMPORARY (pause menu "Skip boss"): the boss dies at once and the normal reward follows (flag, ability, doors)
+func skip_boss() -> bool:
+	if mode == "guest" or boss == null or not is_instance_valid(boss) or player == null:
+		return false
+	if fight.state == "intro":
+		_begin_fight()
+	if fight.state != "active" or boss.dying:
+		return false
+	attacker = player
+	boss.hit(99999, 0.0, 0.0, "swipe", boss)
+	return true
+
 func _begin_fight() -> void:
 	fight.state = "active"
 	var ps := players()
