@@ -16,7 +16,8 @@ func _init(r: Room, px: float, py: float) -> void:
 	face = -1.0 if Game.hash3(px, py, 1) < 0.5 else 1.0
 
 func blocks(dx: float, dy: float, how: String) -> bool:
-	return (how == "swipe" or how == "agent" or how == "dash") and dy == 0.0 and dx == -face
+	# the side, not the exact value: a diagonal dash from the front is blocked too (a swipe up or down has dx 0 and still lands)
+	return (how == "swipe" or how == "agent" or how == "dash") and Game.sign_of(dx) == -face
 
 func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
 	if blocks(dx, dy, how):
@@ -24,20 +25,7 @@ func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
 	return super.hit(d, dx, dy, how, b)
 
 func _sees_player() -> bool:
-	var tp := to_player()
-	if absf(tp.dx) > 112.0 or absf(tp.dy) > 48.0:
-		return false
-	var p = tp.p
-	var x0 := cx
-	var y0 := cy
-	var x1: float = p.x + 5
-	var y1: float = p.y + 5
-	var n := maxi(1, int(ceilf(maxf(absf(x1 - x0), absf(y1 - y0)) / 8.0)))
-	for i in range(1, n):
-		var k := float(i) / n
-		if room.grid.solid_at(lerpf(x0, x1, k), lerpf(y0, y1, k)):
-			return false
-	return true
+	return sees_player(112.0, 48.0)
 
 func update(dt: float) -> void:
 	tick(dt)

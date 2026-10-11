@@ -269,6 +269,7 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"t": return Typo.new(self, x, y)
 		"G": return Guard.new(self, x, y)
 		"Z": return Zombie.new(self, x, y)
+		"X": return ExceptionFoe.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 

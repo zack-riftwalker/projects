@@ -47,6 +47,7 @@ func run(name: String) -> bool:
 		"bossreg": return t_bossreg()
 		"rooms3": return t_rooms3()
 		"catch": return t_catch()
+		"exception": return t_exception()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -612,8 +613,14 @@ func t_guard() -> bool:
 			bounced = p.vy < 0.0
 			break
 	var pogo_ok: bool = g.hp == hp1 - 1 and bounced
+	# 4. a diagonal dash from the front is blocked as well; one from behind, and a swipe upwards, are not
+	g.face = 1.0
+	var diag_front: bool = g.blocks(-0.7071, 0.7071, "dash") and g.blocks(-0.7071, -0.7071, "dash")
+	var diag_back: bool = not g.blocks(0.7071, 0.7071, "dash")
+	var swipe_up: bool = not g.blocks(0.0, -1.0, "swipe")
+	var diag_ok: bool = diag_front and diag_back and swipe_up
 	Controls.script_input = null
-	return report("guard", front_ok and back_ok and pogo_ok, "front blocked=%s | behind hit=%s | pogo hit=%s bounce=%s (hp %d of %d)" % [front_ok, back_ok, pogo_ok, bounced, g.hp, hp0])
+	return report("guard", front_ok and back_ok and pogo_ok and diag_ok, "front blocked=%s | behind hit=%s | pogo hit=%s bounce=%s (hp %d of %d) | diagonal dash from the front blocked=%s, from behind not=%s, swipe up not=%s" % [front_ok, back_ok, pogo_ok, bounced, g.hp, hp0, diag_front, diag_back, swipe_up])
 
 func t_zombie() -> bool:
 	Game.diff = "normal"
@@ -924,6 +931,54 @@ func t_catch() -> bool:
 	Game.tools.catch = false
 	Game.flags = {}
 	return report("catch", ok, info)
+
+# MV3-04: EXCEPTION winds up 0.5 s, throws a catchable yellow error, only with a line of sight
+func t_exception() -> bool:
+	Game.diff = "normal"
+	Game.flags = {}
+	var info := ""
+	var ok := true
+	for walled in [false, true]:
+		var m := new_manager()
+		m.swap_to("R11")
+		var room := m.room
+		clear_ents(room)
+		var p = m.player
+		p.x = 40.0
+		p.y = floor_y(room, 45.0, 8)
+		p.inv = 999.0
+		var e := ExceptionFoe.new(room, 0, 0)
+		e.x = 140.0
+		e.y = p.y - 4.0
+		e.nid = 77
+		add_ent(room, e)
+		if walled:                                   # a solid block on the line between the two
+			room.grid.tiles[(floori((p.y + 5.0) / 16.0)) * room.w + 5] = TileGrid.SOLID
+			room.grid.tiles[(floori((p.y + 5.0) / 16.0) - 1) * room.w + 5] = TileGrid.SOLID
+		var wind_f := -1
+		var throw_f := -1
+		var prev := ""
+		var q = null
+		for f in range(300):
+			p.hp = p.max_hp
+			m.tick(Game.STEP)
+			if e.state == "windup" and prev != "windup" and wind_f < 0:
+				wind_f = f
+			prev = e.state
+			if throw_f < 0 and not room.projs.is_empty():
+				throw_f = f
+				q = room.projs[0]
+		if walled:
+			var quiet: bool = wind_f < 0 and throw_f < 0
+			info += " | walled: no wind-up/throw=%s" % quiet
+			ok = ok and quiet
+		else:
+			var len_f: int = throw_f - wind_f
+			var good: bool = wind_f >= 0 and throw_f >= 0 and absf(len_f - 30.0) <= 2.0 and q != null and q.catchable and q.kind == "err" and q.vx < 0.0 and q.col == "#ffd23f"
+			info += "wind-up %d frames (want 30), catchable=%s vx=%s" % [len_f, q != null and q.catchable, str(q.vx) if q != null else "-"]
+			ok = ok and good
+	Controls.script_input = null
+	return report("exception", ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:
