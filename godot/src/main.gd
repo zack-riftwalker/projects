@@ -473,12 +473,12 @@ static func song_for(r: Room) -> String:
 	var want := String(r.def.get("music", ""))
 	match String(r.fight.state):
 		"intro", "active":
-			want = "boss"
+			want = String(r.def.boss.get("music", "boss")) if r.def.has("boss") else "boss"
 		"reward":
 			want = "toolget"
 		"done":
 			if want == "":
-				want = "w1"
+				want = "w%d" % int(r.def.get("world", 1))
 	return want
 
 var music_auto := true                 # (a test of the audio module turns this off)

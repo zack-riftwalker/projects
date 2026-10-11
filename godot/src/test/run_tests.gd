@@ -44,6 +44,7 @@ func run(name: String) -> bool:
 		"nullcoop": return t_nullcoop()
 		"guestpred": return t_guestpred()
 		"parity": return t_parity()
+		"bossreg": return t_bossreg()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -710,6 +711,37 @@ func t_null() -> bool:
 	Game.flags = {}
 	return report("null", a_ok and b_ok, "seen %d states, missing %s, longest state %.1f s, feints=%s, phase %d | kill: reward at frame %d, bash=%s door open=%s fights=%s" % [seen.size(), missing, longest, feints > 0, boss.phase, dead_at, Game.tools.bash, door_open, str(Game.fights)])
 
+
+# MV3-01: the boss comes from rooms.json (class, hp formula), the reward from its entry, and the Fights page shows the list
+func t_bossreg() -> bool:
+	var m := null_setup()
+	var room := m.room
+	var ok := true
+	var info := ""
+	var normal_hp: int = room.boss.max_hp
+	var is_null: bool = room.boss is NullBoss and room.boss.boss_name == "NULL"
+	Game.diff = "hard"
+	var hard_hp: int = Game.boss_hp(room.def.boss)
+	Game.diff = "normal"
+	info += "normal=%d hard=%d class_ok=%s" % [normal_hp, hard_hp, is_null]
+	ok = ok and normal_hp == 60 and hard_hp == 78 and is_null
+	room.stats = {"secs": 10.0, "hits": [5, 0], "dmg": [0, 0], "coop": false}
+	room._start_reward()
+	room._finish_reward()
+	var reward_ok: bool = Game.tools.bash and Game.flag("boss:NULL") and Game.flag("ability:bash") and room.boss == null
+	info += " reward=%s" % reward_ok
+	ok = ok and reward_ok
+	var n_fights: int = Game.fights.size()
+	ok = ok and n_fights == 1 and room.stats_line.begins_with("NULL 10s")
+	Game.fights = [{"boss": "NULL", "secs": 72.0, "hits": [41, 30], "dmg_taken": [3, 2], "won": true, "diff": "normal", "coop": true}]
+	var line := PauseMenu.fight_line(Game.fights[0])
+	var avg := PauseMenu.fight_average(Game.fights)
+	info += " line='%s' avg='%s'" % [line, avg]
+	ok = ok and line == "NULL 72s P1 41 P2 30 r 0.49 won normal" and avg == "average r (won fights): 0.49 over 1 fights"
+	Game.tools.bash = false
+	Game.flags = {}
+	Game.fights = []
+	return report("bossreg", ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:

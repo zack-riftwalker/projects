@@ -25,7 +25,7 @@
              "doors": [ { "id": "R04:W", "side": "W", "a": 9, "b": 12, "to": "R03:E" },
                         { "id": "R04:E", "side": "E", "a": 9, "b": 12, "to": "R05:W" } ] },
     "R05": { "file": "R05.txt", "title": "NULL", "size": [24, 14], "origin": [592, 2], "music": "",
-             "boss": { "id": "NULL", "trigger_x": 80 },
+             "boss": {"id": "NULL", "class": "NullBoss", "name": "NULL", "sub": "the null pointer", "trigger_x": 80, "T": 60, "u": 1.0, "reward": "bash", "banner": "bash", "banner_sub": "dash in any direction - breaks cracked % walls", "music": "boss", "drop": 24},
              "signs": [],
              "doors": [ { "id": "R05:W", "side": "W", "a": 7, "b": 10, "to": "R04:E", "lock": "fight" },
                         { "id": "R05:E", "side": "E", "a": 7, "b": 10, "to": "R07:W", "lock": "until:boss:NULL" } ] },

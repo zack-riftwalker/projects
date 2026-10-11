@@ -183,9 +183,7 @@ func load_room(room_id: String, snap = null) -> void:
 						ents.append(e)
 	if def.has("boss") and not Game.flag("boss:" + def.boss.id) and mode != "guest":
 		var bs: Dictionary = boss_spawn if boss_spawn != null else {"x": pw - 80.0, "y": ph - 48.0}
-		boss = NullBoss.new(self, bs.x, bs.y, roundi(60.0 * float(Game.dv("boss_hp_mult"))))
-		boss.nid = next_nid
-		next_nid += 1
+		boss = make_boss(def.boss, bs.x, bs.y)
 		ents.append(boss)
 	spark_spots.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for i in range(mini(3, spark_spots.size())):
@@ -193,6 +191,18 @@ func load_room(room_id: String, snap = null) -> void:
 		if not Game.flag(fid) and mode != "guest":
 			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
 	rng.seed = 1
+
+# the boss class named by rooms.json (a match, no reflection)
+func make_boss(bd: Dictionary, bx: float, by: float):
+	var hp_: int = Game.boss_hp(bd)
+	var b
+	match String(bd.get("class", "NullBoss")):
+		_: b = NullBoss.new(self, bx, by, hp_)
+	b.boss_name = String(bd.get("name", bd.id))
+	b.drop_n = int(bd.get("drop", 24))
+	b.nid = next_nid
+	next_nid += 1
+	return b
 
 # closed doors are solid; recomputed every step (a fight, a boss flag)
 func update_doors() -> void:
@@ -803,10 +813,7 @@ func _begin_fight() -> void:
 	for q in ps:
 		q.frozen = false
 	if ps.size() >= 2:                                   # both are in the arena: the co-op factor applies
-		var k := 1.0 + float(Game.coop_hp_pct) / 100.0
-		boss.max_hp = roundi(boss.max_hp * k)
-		boss.hpf = float(boss.max_hp)
-		boss.hp = boss.max_hp
+		boss.scale_hp(1.0 + float(Game.coop_hp_pct) / 100.0)
 	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "coop": ps.size() >= 2}
 	boss.start()
 	events.append("bossStart")
@@ -826,28 +833,30 @@ func _start_reward() -> void:
 	Audio.sfx("kill")
 	for q in players():
 		q.frozen = true
-	banner = {"text": "bash", "sub": "dash in any direction - breaks cracked % walls", "t": 3.0}
+	var bd: Dictionary = def.boss
+	banner = {"text": String(bd.banner), "sub": String(bd.banner_sub), "t": 3.0}
 	# the fight statistics (to tune boss HP with real numbers)
 	var np: int = 2 if stats.coop else 1
 	var secs: float = maxf(stats.secs, 0.001)
 	var r: float = float(stats.hits[0] + stats.hits[1]) / np / secs
-	stats_line = "NULL %ds - P1 %d hits" % [roundi(secs), stats.hits[0]]
+	stats_line = "%s %ds - P1 %d hits" % [bd.name, roundi(secs), stats.hits[0]]
 	if stats.coop:
 		stats_line += " - P2 %d hits" % stats.hits[1]
 	stats_line += " - r %.2f/s - won" % r
 	stats_t = 15.0                                   # long enough to read (and screenshot); it is also in the debug log
 	Game.dlog(stats_line + " | damage taken P1 %d P2 %d" % [stats.dmg[0], stats.dmg[1]])
-	Game.fights.append({"boss": "NULL", "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop})
+	Game.fights.append({"boss": bd.id, "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop})
 
 func record_loss() -> void:
 	if fight.state == "active":
-		Game.fights.append({"boss": "NULL", "secs": snappedf(stats.secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": false, "diff": Game.diff, "coop": stats.coop})
+		Game.fights.append({"boss": def.boss.id, "secs": snappedf(stats.secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": false, "diff": Game.diff, "coop": stats.coop})
 		Game.write_save()
 
 func _finish_reward() -> void:
-	Game.tools.bash = true
-	Game.flags["ability:bash"] = true
-	Game.flags["boss:NULL"] = true
+	var bd: Dictionary = def.boss
+	Game.tools[String(bd.reward)] = true
+	Game.flags["ability:" + String(bd.reward)] = true
+	Game.flags["boss:" + String(bd.id)] = true
 	fight.state = "done"
 	fight_active = false
 	cam.lock = null

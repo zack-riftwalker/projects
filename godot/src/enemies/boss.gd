@@ -44,6 +44,12 @@ func _ready() -> void:
 	overlay.cb = draw_boss_overlay
 	add_child(overlay)
 
+# the co-op factor (a second player in the arena); MERGE CONFLICT overrides it (two heads)
+func scale_hp(k: float) -> void:
+	max_hp = roundi(max_hp * k)
+	hpf = float(max_hp)
+	hp = max_hp
+
 func set_state(s: String, t_ := 0.0) -> void:
 	st = s
 	st_t = t_

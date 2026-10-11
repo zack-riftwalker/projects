@@ -40,7 +40,7 @@ var host_summon := {}
 var fight_seen := {}
 var phase_seen := {}
 var fight_active_seen := {}
-var bash_sent := false
+var abilities_sent := {}                # tool name -> true once the guest was told (boss rewards: bash, catch, ...)
 
 # ---- guest
 var started := false
@@ -243,10 +243,13 @@ func _host_watch_room(r: Room) -> void:
 	if r.fight_active != fight_active_seen.get(r.id, false):
 		fight_active_seen[r.id] = r.fight_active
 		Net.rel("door", {"room": r.id, "id": "fight", "closed": r.fight_active})
-	if Game.tools.bash and not bash_sent:
-		bash_sent = true
-		Net.rel("ability", {"name": "bash"})
-		Net.rel("flag", {"k": "boss:NULL", "v": true})
+	for tname in Game.tools:
+		if Game.tools[tname] and not abilities_sent.has(tname):
+			abilities_sent[tname] = true
+			Net.rel("ability", {"name": tname})
+			for fk in Game.flags:                 # the boss flags that came with it (door locks read them)
+				if String(fk).begins_with("boss:"):
+					Net.rel("flag", {"k": fk, "v": true})
 
 func _host_tile(r: Room, tx: int, ty: int) -> void:
 	if guest_here:
@@ -295,7 +298,7 @@ func _guest_joined() -> void:
 	fight_seen.clear()
 	phase_seen.clear()
 	fight_active_seen.clear()
-	bash_sent = false
+	abilities_sent = {}
 	var hr: Room = mgr.room
 	var arena_door = null
 	var place_room: Room = hr

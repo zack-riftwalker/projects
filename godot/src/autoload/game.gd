@@ -40,15 +40,21 @@ func flag(key: String) -> bool:
 
 # ---- difficulty (docs/metroidvania/05-difficulty-model.md, changes from 00-decisions.md §11) ----
 const DIFF := {
-	"easy":      {"start_hp": 7, "big_hit": 1, "boss_hp_mult": 0.7, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 16, "telegraph_mult": 1.3, "punish_mult": 1.3, "inv_after_hit": 1.6, "dash_iframes": true},
-	"normal":    {"start_hp": 5, "big_hit": 2, "boss_hp_mult": 1.0, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 11, "telegraph_mult": 1.0, "punish_mult": 1.0, "inv_after_hit": 1.3, "dash_iframes": false},
-	"hard":      {"start_hp": 5, "big_hit": 2, "boss_hp_mult": 1.3, "enemy_hp_mult": 1.0, "enemy_hp_extra": 1, "meter_per_hit": 11, "telegraph_mult": 1.0, "punish_mult": 1.0, "inv_after_hit": 1.3, "dash_iframes": false},
-	"nightmare": {"start_hp": 3, "big_hit": 2, "boss_hp_mult": 1.6, "enemy_hp_mult": 1.5, "enemy_hp_extra": 2, "meter_per_hit": 8, "telegraph_mult": 1.0, "punish_mult": 0.9, "inv_after_hit": 1.0, "dash_iframes": false},
+	"easy":      {"catch_window": 0.14, "start_hp": 7, "big_hit": 1, "boss_hp_mult": 0.7, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 16, "telegraph_mult": 1.3, "punish_mult": 1.3, "inv_after_hit": 1.6, "dash_iframes": true},
+	"normal":    {"catch_window": 0.1, "start_hp": 5, "big_hit": 2, "boss_hp_mult": 1.0, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 11, "telegraph_mult": 1.0, "punish_mult": 1.0, "inv_after_hit": 1.3, "dash_iframes": false},
+	"hard":      {"catch_window": 0.1, "start_hp": 5, "big_hit": 2, "boss_hp_mult": 1.3, "enemy_hp_mult": 1.0, "enemy_hp_extra": 1, "meter_per_hit": 11, "telegraph_mult": 1.0, "punish_mult": 1.0, "inv_after_hit": 1.3, "dash_iframes": false},
+	"nightmare": {"catch_window": 0.08, "start_hp": 3, "big_hit": 2, "boss_hp_mult": 1.6, "enemy_hp_mult": 1.5, "enemy_hp_extra": 2, "meter_per_hit": 8, "telegraph_mult": 1.0, "punish_mult": 0.9, "inv_after_hit": 1.0, "dash_iframes": false},
 }
+# Boss hp (decision D9): T seconds of fight x R_PLAYER claw hits per player per second x u (how hard the boss is to hit).
+# PROVISIONAL: replaced by the value measured from the fight list (pause > Fights). Never inline boss hp numbers.
+const R_PLAYER := 1.0
 const FOCUS_COST := 33
 const FOCUS_HOLD := 0.25       # hold [special] this long before focus starts
 const FOCUS_TIME := 0.9
 const METER_MAX := 99
+
+func boss_hp(b: Dictionary) -> int:
+	return maxi(1, roundi(float(b.T) * R_PLAYER * float(b.u) * float(dv("boss_hp_mult"))))
 
 func dv(key: String):
 	return DIFF.get(diff, DIFF.normal)[key]
@@ -82,7 +88,7 @@ var fights: Array = []
 
 func fresh() -> void:
 	flags = {}
-	tools = {"bash": false, "sudo": false, "agents": false, "opus": false}
+	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false}
 	bench = ""
 	tokens = 0
 	fragments = 0
@@ -172,7 +178,7 @@ func bench_spawn(room_id: String):
 	return Vector2(b[0][0] * 16 + 3, b[0][1] * 16 + 6)
 
 # the tools Clawd owns (phase 1 test build: bash only)
-var tools := {"bash": false, "sudo": false, "agents": false, "opus": false}
+var tools := {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false}
 var shake_opt := 1.0
 var low_fx := false          # G.save.data.opt.min
 

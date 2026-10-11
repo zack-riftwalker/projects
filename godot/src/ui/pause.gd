@@ -14,10 +14,12 @@ var page := "menu"            # "menu" or "map"
 var manager: RoomManager
 var blink_t := 0.0
 var log_msg := ""
+var refight_msg := ""
 
 func options() -> Array:
-	var o := ["Resume", "Map", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
+	var o := ["Resume", "Map", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
 	if Game.debug:
+		o.append("Refight bosses" if refight_msg == "" else refight_msg)
 		o.append(log_msg if log_msg != "" else "Copy log (5 min)")
 	return o
 
@@ -25,6 +27,7 @@ func open() -> void:
 	active = true
 	sel = 0
 	log_msg = ""
+	refight_msg = ""
 	page = "menu"
 	visible = true
 	Audio.sfx("pause")
@@ -44,7 +47,7 @@ func update() -> void:
 	if not active:
 		return
 	blink_t += Game.STEP
-	if page == "map":
+	if page == "map" or page == "fights":
 		if Controls.pressed.get("pause", false) or Controls.pressed.get("jump", false) or Controls.pressed.get("attack", false) or Controls.pressed.get("dash", false) or Controls.pressed.get("start", false):
 			page = "menu"
 			Audio.sfx("uiBack")
@@ -70,23 +73,25 @@ func choose(i: int) -> void:
 	match i:
 		0: resume_requested.emit()
 		1: page = "map"
-		2: restart_requested.emit()
-		3:
+		2: page = "fights"
+		3: restart_requested.emit()
+		4:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
-		4: fullscreen_requested.emit()
-		5: log_msg = "Log copied: %d lines" % Game.export_log()
+		5: fullscreen_requested.emit()
+		6: refight_bosses()
+		7: log_msg = "Log copied: %d lines" % Game.export_log()
 	queue_redraw()
 
 # a tap in game coordinates (0..384, 0..216)
 func tap(p: Vector2) -> void:
 	if not active:
 		return
-	if page == "map":
+	if page != "menu":
 		page = "menu"
 		return
 	for i in range(options().size()):
-		if Rect2(W / 2.0 - 70, 78 + i * 22, 140, 18).has_point(p):
+		if Rect2(W / 2.0 - 70, 52 + i * 19, 140, 17).has_point(p):
 			choose(i)
 
 func _draw() -> void:
@@ -96,12 +101,61 @@ func _draw() -> void:
 	if page == "map":
 		_draw_map()
 		return
-	PixelText.draw_text(self, "PAUSED", W / 2.0, 52, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
+	if page == "fights":
+		_draw_fights()
+		return
+	PixelText.draw_text(self, "PAUSED", W / 2.0, 30, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
 	var opts := options()
 	for i in range(opts.size()):
-		var y := 78 + i * 22
-		Gfx.panel(self, W / 2.0 - 70, y, 140, 18, "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
-		PixelText.draw_text(self, opts[i], W / 2.0, y + 5, Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
+		var y := 52 + i * 19
+		Gfx.panel(self, W / 2.0 - 70, y, 140, 17, "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
+		PixelText.draw_text(self, opts[i], W / 2.0, y + 4, Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
+
+# ?debug: forget the beaten bosses so they can be fought again for more measurements (abilities and plugins stay)
+func refight_bosses() -> void:
+	if Game.net_role == "guest":
+		refight_msg = "the host does this"
+		return
+	var n := 0
+	for k in Game.flags.keys():
+		if String(k).begins_with("boss:"):
+			Game.flags.erase(k)
+			n += 1
+	Game.write_save()
+	refight_msg = "%d bosses can be fought again (restart the room)" % n
+
+# one line per fight: NULL 72s P1 41 P2 30 r 0.99 won normal
+static func fight_line(f: Dictionary) -> String:
+	var secs := maxf(float(f.secs), 0.001)
+	var np: int = 2 if f.get("coop", false) else 1
+	var r: float = (float(f.hits[0]) + float(f.hits[1])) / np / secs
+	var s := "%s %ds P1 %d" % [f.boss, roundi(secs), f.hits[0]]
+	if np == 2:
+		s += " P2 %d" % f.hits[1]
+	return s + " r %.2f %s %s" % [r, "won" if f.won else "lost", f.diff]
+
+static func fight_average(fs: Array) -> String:
+	var sum := 0.0
+	var n := 0
+	for f in fs:
+		if f.won:
+			var np: int = 2 if f.get("coop", false) else 1
+			sum += (float(f.hits[0]) + float(f.hits[1])) / np / maxf(float(f.secs), 0.001)
+			n += 1
+	return "average r (won fights): %.2f over %d fights" % [sum / n if n > 0 else 0.0, n]
+
+func _draw_fights() -> void:
+	PixelText.draw_text(self, "FIGHTS", W / 2.0, 20, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})
+	if Game.net_role == "guest":
+		PixelText.draw_text(self, "the host keeps the fight list", W / 2.0, 90, Game.COL.dim, {"align": "c"})
+		return
+	var fs: Array = Game.fights
+	if fs.is_empty():
+		PixelText.draw_text(self, "no fights yet", W / 2.0, 90, Game.COL.dim, {"align": "c"})
+	for i in range(mini(10, fs.size())):
+		PixelText.draw_text(self, fight_line(fs[fs.size() - 1 - i]), 24, 44 + i * 12, Game.COL.paper, {"tiny": true})
+	PixelText.draw_text(self, fight_average(fs), 24, 44 + 10 * 12 + 6, Game.COL.gold, {"tiny": true})
+	PixelText.draw_text(self, "press any button to go back", W / 2.0, H - 22, Game.COL.dim, {"align": "c", "tiny": true})
 
 # MAP page: every visited room as a rectangle (1 tile = 0.5 px), benches green, the player blinking
 func _draw_map() -> void:
