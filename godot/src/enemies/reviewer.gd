@@ -376,7 +376,7 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 	elif st == "phase":
 		_bubble(ci, "Hmm. Let me take another look.")
 	elif st == "kneel":
-		_bubble(ci, "LGTM ✓ Approved.")
+		_bubble(ci, "LGTM! Approved.")
 	elif st == "riposte" and st_t > 0.28:
 		PixelText.draw_text(ci, "!", cx - 1.0, y - 10.0, Game.COL.hazardHi, {"outline": INK})
 	if st == "shove_tel":
