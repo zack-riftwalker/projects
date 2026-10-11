@@ -409,6 +409,8 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"i": return Dripper.new(self, x, y)
 		"p": return Pendulum.new(self, x, y)
 		"d": return Drone.new(self, x, y)
+		"x": return Segfault.new(self, x, y)
+		"q": return StackOverflow.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 

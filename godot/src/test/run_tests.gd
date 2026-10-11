@@ -72,6 +72,8 @@ func run(name: String) -> bool:
 		"plugins4": return t_plugins4()
 		"w3assets": return t_w3assets()
 		"w3enemies": return t_w3enemies()
+		"segfault": return t_segfault()
+		"stackover": return t_stackover()
 		"rise": return t_rise()
 	return report(name, false, "unknown test")
 
@@ -2602,3 +2604,125 @@ func t_w3enemies() -> bool:
 	Controls.script_input = null
 	Game.flags = {}
 	return report("w3enemies", res.ok, res.info)
+
+func _crack_flags() -> int:
+	var n := 0
+	for k in Game.flags:
+		if String(k).begins_with("crack:"):
+			n += 1
+	return n
+
+# MV4-07: a SEGFAULT that runs into the bulkhead breaks it and hurts the player beside it; a plain kill dumps no core
+func t_segfault() -> bool:
+	Game.persist = false
+	Game.diff = "normal"
+	Game.flags = {"gate:H07:catch": true}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var room := _dry_room("H05")
+	var p = room.player
+	p.x = 43 * 16 - 12.0
+	p.y = 13 * 16 - 10.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var sg := Segfault.new(room, 30 * 16, 12 * 16)
+	sg.face = 1.0
+	add_ent(room, sg)
+	var hp0: int = p.hp
+	var f := 0
+	while f < 360 and not Game.flag("crack:H05:44:12"):
+		p.inv = 0.0 if sg.state == "arm" else p.inv
+		step_with(room, {})
+		f += 1
+	for i in range(30):
+		step_with(room, {})
+	chk.call("bulkhead broken", Game.flag("crack:H05:44:12") and not room.grid.solid(44, 12))
+	chk.call("the segfault is gone", sg.dead)
+	chk.call("the player was hurt once", p.hp == hp0 - 1)
+	res.info += " frames %d hp %d->%d" % [f, hp0, p.hp]
+	room.queue_free()
+	# a plain kill: no blast
+	Game.flags = {"gate:H07:catch": true}
+	var r2 := _dry_room("H05")
+	var sg2 := Segfault.new(r2, 20 * 16, 12 * 16)
+	add_ent(r2, sg2)
+	sg2.set_state("chase")
+	r2.player.x = 5 * 16.0
+	r2.player.y = 13 * 16 - 10.0
+	var before := _crack_flags()
+	sg2.hit(1, 1.0, 0.0, "swipe")
+	sg2.hit(1, 1.0, 0.0, "swipe")
+	chk.call("two hits kill it", sg2.dead)
+	for i in range(30):
+		r2.player.inv = 99.0
+		step_with(r2, {})
+	chk.call("no blast", _crack_flags() == before and r2.grid.solid(44, 12))
+	r2.queue_free()
+	Controls.script_input = null
+	Game.flags = {}
+	return report("segfault", res.ok, res.info)
+
+# MV4-07: a STACK OVERFLOW topples toward you, slams, and spills three bugs; three claws unwind it for nothing
+func t_stackover() -> bool:
+	Game.persist = false
+	Game.diff = "normal"
+	Game.flags = {"boss:LEAK": true, "gate:H07:catch": true}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var room := _dry_room("H06")
+	var p = room.player
+	p.x = 10 * 16.0
+	p.y = 61 * 16 - 10.0
+	p.vx = 0.0
+	p.vy = 0.0
+	for i in range(10):
+		p.inv = 99.0
+		step_with(room, {})
+	var tw := StackOverflow.new(room, p.x - 40 - 2, 61 * 16 - 16)
+	add_ent(room, tw)
+	var bugs0 := 0
+	for e in room.ents:
+		if e is Bug:
+			bugs0 += 1
+	p.inv = 0.0
+	var hp0: int = p.hp
+	var f := 0
+	while f < 120 and not tw.dead:
+		step_with(room, {})
+		f += 1
+	var bugs1 := 0
+	for e in room.ents:
+		if e is Bug:
+			bugs1 += 1
+	chk.call("tower fell apart", tw.dead)
+	chk.call("three bugs", bugs1 - bugs0 == 3)
+	chk.call("the slam hurt", p.hp < hp0)
+	res.info += " frames %d bugs +%d hp %d->%d" % [f, bugs1 - bugs0, hp0, p.hp]
+	room.queue_free()
+	# three claws while it stands
+	var r2 := _dry_room("H06")
+	var tw2 := StackOverflow.new(r2, 10 * 16, 61 * 16 - 16)
+	add_ent(r2, tw2)
+	r2.player.x = 20 * 16.0
+	r2.player.y = 61 * 16 - 10.0
+	var b0 := 0
+	for e in r2.ents:
+		if e is Bug:
+			b0 += 1
+	for i in range(3):
+		tw2.hit(1, 1.0, 0.0, "swipe")
+	var b1 := 0
+	for e in r2.ents:
+		if e is Bug:
+			b1 += 1
+	chk.call("three hits kill it with no bugs", tw2.dead and b1 == b0)
+	r2.queue_free()
+	Controls.script_input = null
+	Game.flags = {}
+	return report("stackover", res.ok, res.info)

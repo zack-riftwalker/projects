@@ -1425,3 +1425,37 @@ func sc_co_flood() -> Array:
 	mgr().player.vy = 0.0
 	await wait_secs(4.0)
 	return [lvl and moved and err_h3 < 8.0 and rose2 and close, "guest: flood level 1 %s, H03 water followed %s (off by %.1f), H06 rising %s, water close to the host's %s" % [lvl, moved, err_h3, rose2, close]]
+
+# MV4-07: both stand at H05's bulkhead; the host's SEGFAULT runs into it. The wall breaks on both screens and the guest takes the blast
+# through its own harm-zone check.
+func sc_co_segfault() -> Array:
+	Game.flags["gate:H07:catch"] = true
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var host_pos := Vector2(43.0 * 16.0 - 26.0, 13.0 * 16.0 - 10.0)
+	var guest_pos := Vector2(43.0 * 16.0 - 12.0, 13.0 * 16.0 - 10.0)
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("H05", host_pos)
+		var r: Room = mgr().room
+		clear_creatures(r)
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "H05", 15.0)
+		await wait_secs(1.0)
+		var sg := Segfault.new(r, 30 * 16, 12 * 16)
+		sg.face = 1.0
+		r.add_entity(sg)
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 25000.0 * slow and not Game.flag("crack:H05:44:12"):
+			mgr().player.inv = 99.0
+			await get_tree().physics_frame
+		await wait_secs(2.0)
+		return [there and Game.flag("crack:H05:44:12") and not r.grid.solid(44, 12), "host: guest there %s, bulkhead broken %s" % [there, not r.grid.solid(44, 12)]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(2.0)
+	mgr().swap_to("H05", guest_pos)
+	var r2: Room = mgr().room
+	var hp0: int = mgr().player.hp
+	var open := await wait_until(func(): return not r2.grid.solid(44, 12), 25.0)
+	await wait_secs(1.5)
+	var hp1: int = mgr().player.hp
+	return [open and hp1 < hp0, "guest: bulkhead open %s, hp %d -> %d" % [open, hp0, hp1]]
