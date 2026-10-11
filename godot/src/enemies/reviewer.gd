@@ -20,7 +20,6 @@ const PEN := "#ff4f6d"
 
 var cycle := 0
 var strike_sid := 0           # the id of the strike in progress (0: none); the guest's parry names it
-var sid_seq := 0
 var slash := 0                # nitpick: which slash (1..3)
 var riposted := false
 var camp_t := 0.0             # how long a player has been standing at his side
@@ -43,8 +42,7 @@ func _sp() -> float:
 	return 1.15 if phase == 2 else 1.0
 
 func _new_strike() -> void:
-	sid_seq += 1
-	strike_sid = sid_seq
+	strike_sid = Game.next_strike_id()
 
 func _phys(dt: float, grav := 900.0) -> void:
 	vy = minf(vy + grav * dt, 320.0)

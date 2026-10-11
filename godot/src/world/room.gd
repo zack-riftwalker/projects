@@ -920,6 +920,8 @@ func _begin_fight() -> void:
 	var ps := players()
 	for q in ps:
 		q.frozen = false
+		if q.get("parried") != null:
+			q.parried.clear()
 	if ps.size() >= 2:                                   # both are in the arena: the co-op factor applies
 		boss.scale_hp(1.0 + float(Game.coop_hp_pct) / 100.0)
 	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "other": [0, 0], "coop": ps.size() >= 2, "caught": 0}

@@ -995,6 +995,7 @@ func _guest_start(m: Dictionary) -> void:
 	var p = mgr.player
 	p.max_hp = int(you.max_hp)
 	p.hp = int(you.hp)
+	p.parried.clear()                    # (a new host session restarts its strike ids)
 	notice_set("", 0.1)
 	_check_build(String(m.get("build", "?")))
 	Game.load_profile()                  # the guest's own loadout (user://profile.json); the host judges its pickups and hits with it

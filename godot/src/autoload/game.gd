@@ -61,6 +61,11 @@ const FOCUS_HOLD := 0.25       # hold [special] this long before focus starts
 const FOCUS_TIME := 0.9
 const METER_MAX := 99
 
+var strike_seq := 0                   # strike ids (catchable boss strikes): unique for the session, so a new boss never reuses a parried one
+func next_strike_id() -> int:
+	strike_seq += 1
+	return strike_seq
+
 func boss_hp(b: Dictionary) -> int:
 	return maxi(1, roundi(float(b.T) * R_PLAYER * float(b.u) * float(dv("boss_hp_mult"))))
 

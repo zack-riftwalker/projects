@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"sidunique": return t_sidunique()
 		"strikeseen": return t_strikeseen()
 		"bossstats": return t_bossstats()
 		"loadout": return t_loadout()
@@ -2111,3 +2112,20 @@ func t_strikeseen() -> bool:
 	var info := "known strikes %s (want 8 and 9 among them)" % str(boss.strike_seen.keys())
 	m.queue_free()
 	return report("strikeseen", ok, info)
+
+# MV3-FIX-8: a second REVIEWER never hands out a strike id the first one used
+func t_sidunique() -> bool:
+	var room := new_room("R10")
+	var a := Reviewer.new(room, 100, 100)
+	var used := {}
+	for k in range(3):
+		a._new_strike()
+		used[a.strike_sid] = true
+	var b := Reviewer.new(room, 100, 100)
+	b._new_strike()
+	var ok: bool = not used.has(b.strike_sid) and b.strike_sid > 0
+	var info := "first boss %s, second boss %d" % [str(used.keys()), b.strike_sid]
+	a.free()
+	b.free()
+	room.queue_free()
+	return report("sidunique", ok, info)
