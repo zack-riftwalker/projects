@@ -507,13 +507,16 @@ func recent_damage(q, secs: float) -> float:
 			sum += e.d
 	return sum
 
-func boss_damage(_boss, d: float) -> void:
+func boss_damage(_boss, d: float, how := "swipe") -> void:
 	if attacker == null:
 		return
 	dmg_log.append({"t": time, "who": attacker, "d": d})
 	if fight.state == "active":
 		var i: int = 1 if (attacker in remote_players) else 0
-		stats.hits[i] += 1
+		if how == "swipe":
+			stats.hits[i] += 1                 # R_PLAYER counts claw hits only
+		else:
+			stats.other[i] += 1                # agents, caught projectiles, dashes: shown apart
 
 func heal(q, n: int) -> void:
 	q.hp = mini(q.max_hp, q.hp + n)
@@ -919,7 +922,7 @@ func _begin_fight() -> void:
 		q.frozen = false
 	if ps.size() >= 2:                                   # both are in the arena: the co-op factor applies
 		boss.scale_hp(1.0 + float(Game.coop_hp_pct) / 100.0)
-	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "coop": ps.size() >= 2, "caught": 0}
+	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "other": [0, 0], "coop": ps.size() >= 2, "caught": 0}
 	boss.start()
 	events.append("bossStart")
 
@@ -949,12 +952,12 @@ func _start_reward() -> void:
 		stats_line += " - P2 %d hits" % stats.hits[1]
 	stats_line += " - r %.2f/s - won" % r
 	stats_t = 15.0                                   # long enough to read (and screenshot); it is also in the debug log
-	Game.dlog(stats_line + " | damage taken P1 %d P2 %d" % [stats.dmg[0], stats.dmg[1]])
-	Game.fights.append({"boss": bd.id, "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop, "caught": stats.get("caught", 0)})
+	Game.dlog(stats_line + " | damage taken P1 %d P2 %d | other damage P1 %d P2 %d" % [stats.dmg[0], stats.dmg[1], stats.get("other", [0, 0])[0], stats.get("other", [0, 0])[1]])      # (.get: a test sets stats by hand, without it)
+	Game.fights.append({"boss": bd.id, "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "other": stats.get("other", [0, 0]).duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop, "caught": stats.get("caught", 0)})
 
 func record_loss() -> void:
 	if fight.state == "active":
-		Game.fights.append({"boss": def.boss.id, "secs": snappedf(stats.secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": false, "diff": Game.diff, "coop": stats.coop})
+		Game.fights.append({"boss": def.boss.id, "secs": snappedf(stats.secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "other": stats.get("other", [0, 0]).duplicate(), "won": false, "diff": Game.diff, "coop": stats.coop})
 		Game.write_save()
 
 func _finish_reward() -> void:

@@ -122,7 +122,7 @@ func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
 	_sums()
 	room.burst(h.x, h.y, 6, [MAIN[h.i], "#ffffff"], 120.0, 200.0, {"glow": 1})
 	Audio.sfx("bossHit")
-	room.boss_damage(self, dm)
+	room.boss_damage(self, dm, how)
 	if h.hp <= 0.0:
 		h.hp = 0.0
 		h.dead = true

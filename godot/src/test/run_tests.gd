@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"bossstats": return t_bossstats()
 		"loadout": return t_loadout()
 		"mergeinterp": return t_mergeinterp()
 		"fork": return t_fork()
@@ -2072,3 +2073,24 @@ func t_loadout() -> bool:
 	var c: Array = Game.filter_loadout(["async_await"])
 	var ok: bool = a == ["async_await"] and b == ["async_await", "cache"] and c.is_empty()
 	return report("loadout", ok, "owned only %s, notches + no duplicates %s, nothing owned %s" % [str(a), str(b), str(c)])
+
+# MV3-FIX-6: only claw swipes count as hits on the Fights page (agents, catches, dashes are counted apart)
+func t_bossstats() -> bool:
+	var m := reviewer_setup()
+	var room := m.room
+	var p = m.player
+	for f in range(900):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if room.fight.state == "active":
+			break
+	var boss: Reviewer = room.boss
+	boss.set_state("idle", 5.0)
+	room.attacker = p
+	boss.hit(1, 1.0, 0.0, "agent", null)
+	boss.hit(1, 1.0, 0.0, "catch", null)
+	boss.hit(1, 1.0, 0.0, "swipe", null)
+	var ok: bool = room.fight.state == "active" and room.stats.hits[0] == 1 and room.stats.other[0] == 2
+	var info := "fight %s, hits %s (want [1, 0]), other %s (want [2, 0])" % [room.fight.state, str(room.stats.hits), str(room.stats.get("other"))]
+	m.queue_free()
+	return report("bossstats", ok, info)

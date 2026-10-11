@@ -99,7 +99,7 @@ func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
 	var b = box if box != null else self
 	room.burst(b.x + b.w / 2.0, b.y + b.h / 2.0, 6, [col, "#ffffff"], 120.0, 200.0, {"glow": 1})
 	Audio.sfx("bossHit")
-	room.boss_damage(self, dmg)
+	room.boss_damage(self, dmg, how)
 	on_damage()
 	if hpf <= 0.0 and not dying:
 		hp = 0
