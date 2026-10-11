@@ -96,3 +96,10 @@ func _guest(b: Dictionary) -> void:
 		b["guest-one-room"] = [2.0, "the guest keeps %d rooms" % mgr.rooms.size()]
 	if mgr.player != null and mgr.player.dead:
 		b["guest-gets-up"] = [15.0, "dead (downed %s)" % mgr.player.downed]
+	# a gate stands open exactly when the host's last snapshot listed its flag (switches and keys are state, not events)
+	if mgr.room.id == coop.last_gf_room:
+		var gid: String = mgr.room.id
+		var want_c: bool = ("gate:%s:catch" % gid) in coop.last_gf
+		var want_a: bool = ("gate:%s:agents" % gid) in coop.last_gf
+		if mgr.room.grid.gates_open.catch != want_c or mgr.room.grid.gates_open.agents != want_a:
+			b["gate_state"] = [1.0, "gates open catch=%s agents=%s, the host says %s/%s" % [mgr.room.grid.gates_open.catch, mgr.room.grid.gates_open.agents, want_c, want_a]]

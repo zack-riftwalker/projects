@@ -70,6 +70,8 @@ signal fight_intro
 signal item_collected(item_id: String, kind: String)
 signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
+signal net_catch(pid: int)
+signal net_parry(nid: int, sid: int)
 var boss_spawn = null
 var boss = null                            # the boss of this room (R05: NULL) while it is not beaten
 var fight := {"state": "none", "t": 0.0}   # none | intro | active | reward | done
@@ -81,6 +83,8 @@ var banner := {"text": "", "sub": "", "t": 0.0}
 var stats_line := ""
 var stats_t := 0.0
 var end_door = null
+var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
+var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
 signal door_crossed(door: Dictionary)
 signal bench_requested(index: int)
 signal end_requested
@@ -129,6 +133,7 @@ func load_room(room_id: String, snap = null) -> void:
 	update_doors()
 	var sign_n := 0
 	var item_id := 0
+	var switch_n := 0
 	var spark_spots: Array = []
 	for ty in range(h):
 		var row := rows[ty]
@@ -141,6 +146,8 @@ func load_room(room_id: String, snap = null) -> void:
 				if t == TileGrid.CRACK and Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
 					t = TileGrid.E
 				grid.tiles[ty * w + tx] = t
+				if t == TileGrid.GATE_C or t == TileGrid.GATE_A:
+					gate_cells.append([tx, ty, "catch" if t == TileGrid.GATE_C else "agents"])
 				continue
 			match ch:
 				" ", ".", "|":
@@ -149,6 +156,9 @@ func load_room(room_id: String, snap = null) -> void:
 					start = {"x": float(x + 3), "y": float(y + 6)}
 				"C":
 					cps.append({"x": x + 8, "y": y + T, "on": Game.flag("bench:" + id), "tx": tx})
+				"Y":
+					switches.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": switch_n})
+					switch_n += 1
 				"S":
 					springs.append({"x": x + 2, "y": y + 9, "w": 12, "h": 7, "t": 0.0})
 				"o":
@@ -206,6 +216,8 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 
 # closed doors are solid; recomputed every step (a fight, a boss flag)
 func update_doors() -> void:
+	grid.gates_open.catch = Game.flag("gate:%s:catch" % id)
+	grid.gates_open.agents = Game.flag("gate:%s:agents" % id)
 	for d in grid.doors:
 		var lock: String = d.lock
 		var open: bool = Game.rooms_meta.rooms.has(String(d.to).get_slice(":", 0))      # a door to a room that does not exist (yet) never opens
@@ -816,7 +828,7 @@ func _begin_fight() -> void:
 		q.frozen = false
 	if ps.size() >= 2:                                   # both are in the arena: the co-op factor applies
 		boss.scale_hp(1.0 + float(Game.coop_hp_pct) / 100.0)
-	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "coop": ps.size() >= 2}
+	stats = {"secs": 0.0, "hits": [0, 0], "dmg": [0, 0], "coop": ps.size() >= 2, "caught": 0}
 	boss.start()
 	events.append("bossStart")
 
@@ -847,7 +859,7 @@ func _start_reward() -> void:
 	stats_line += " - r %.2f/s - won" % r
 	stats_t = 15.0                                   # long enough to read (and screenshot); it is also in the debug log
 	Game.dlog(stats_line + " | damage taken P1 %d P2 %d" % [stats.dmg[0], stats.dmg[1]])
-	Game.fights.append({"boss": bd.id, "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop})
+	Game.fights.append({"boss": bd.id, "secs": snappedf(secs, 0.1), "hits": stats.hits.duplicate(), "dmg_taken": stats.dmg.duplicate(), "won": true, "diff": Game.diff, "coop": stats.coop, "caught": stats.get("caught", 0)})
 
 func record_loss() -> void:
 	if fight.state == "active":
@@ -890,6 +902,11 @@ func record_hist() -> void:
 		while h_.size() > 0 and time - h_[0][0] > 1.0:
 			h_.pop_front()
 		hist[e.nid] = h_
+		for sb in e.harmboxes():
+			if sb is Dictionary and sb.has("sid"):
+				e.strike_seen[sb.sid] = time
+		if e.strike_seen.size() > 8:
+			e.strike_seen.clear()
 
 # a short-lived damage area the guest checks against its own body: kind "c" circle (x, y, r), "r" rectangle (x, y, w, h)
 func harm_zone(kind: String, zx: float, zy: float, za: float, zb: float, dmg: int) -> void:
@@ -975,18 +992,48 @@ func interact_combat(p) -> void:
 				if res != "":
 					p.on_hit(e, res, b)
 				break
+		var win: bool = p.catch_window_open()
 		for q in projs:
-			if q.dead or not q.cut or q.get("friendly", false):
+			if q.dead or q.get("friendly", false):
 				continue
-			if q.x + q.r > box.x and q.x - q.r < box.x + box.w and q.y + q.r > box.y and q.y - q.r < box.y + box.h:
-				q.dead = true
+			if not (q.x + q.r > box.x and q.x - q.r < box.x + box.w and q.y + q.r > box.y and q.y - q.r < box.y + box.h):
+				continue
+			if win and q.get("catchable", false):          # a yellow attack met a swipe that has just started: caught
+				catch_proj(q, p)
 				if mode == "guest":
-					net_projhit.emit(q.id)
-				spark(q.x, q.y, q.col, 6)
-				Audio.sfx("clang")
-				stop(0.03)
-				if p.atk_dir == "d":
-					p.bounce(0.85)
+					q["pred_until"] = time + 0.5          # (keep the local copy until a snapshot shows it friendly)
+					net_catch.emit(q.id)
+				continue
+			if not q.cut:
+				continue
+			q.dead = true
+			if mode == "guest":
+				net_projhit.emit(q.id)
+			spark(q.x, q.y, q.col, 6)
+			Audio.sfx("clang")
+			stop(0.03)
+			if p.atk_dir == "d":
+				p.bounce(0.85)
+		if win:                                             # strikes a boss marks as catchable (harmboxes with a strike id)
+			for e in ents:
+				if e.dead:
+					continue
+				for sb in e.harmboxes():
+					if sb is Dictionary and sb.has("sid") and sb.get("catchable", false) and not p.parried.has(sb.sid) and Game.overlap(box, sb):
+						p.parried[sb.sid] = true
+						if p.parried.size() > 64:
+							p.parried.clear()
+							p.parried[sb.sid] = true
+						Audio.sfx("clang")
+						spark((box.x + sb.x + sb.w / 2.0) / 2.0, sb.y + sb.h / 2.0, "#ffd23f", 8)
+						stop(0.06)
+						shake(0.3)
+						p.gain_meter()
+						if mode == "guest":
+							net_parry.emit(e.nid, int(sb.sid))
+						else:
+							attacker = p
+							e.parried(p, int(sb.sid))
 		for s in springs:
 			if p.atk_dir == "d" and Game.overlap(box, s):
 				p.spring(s)
@@ -996,6 +1043,8 @@ func interact_combat(p) -> void:
 		if e.dead or pred_dead(e):
 			continue
 		for b in e.harmboxes():
+			if b is Dictionary and b.has("sid") and p.parried.has(b.sid):
+				continue
 			if not Game.overlap(hb, b):
 				continue
 			if e.passive:                       # a corpse hurts nobody, but a stomp still finishes it
@@ -1134,9 +1183,50 @@ func collect(it: Dictionary) -> void:
 			burst(it.x, it.y, 8, [Game.COL.paper, Game.COL.clawd], 70.0, 100.0)
 			Audio.sfx("heal")
 
+# catch (MV3-03): a catchable projectile turns around, faster, and hurts creatures instead of players. The same function runs for the
+# local player's swipe, and on the host for the guest's `catch` event.
+func catch_proj(q: Dictionary, by) -> void:
+	q.friendly = true
+	q.vx *= -1.5
+	q.vy *= -1.5
+	q.life = 2.0
+	q.dmg = 2
+	q.pierce = true
+	q.hit = {}
+	q["by"] = by
+	Audio.sfx("clang")
+	Audio.sfx("uiOk")
+	stop(0.06)
+	ring(q.x, q.y, 2, 16, "#ffd23f", 0.25)
+	if by.has_method("gain_meter"):
+		by.gain_meter()
+	if mode != "guest" and fight.state == "active" and stats.has("caught"):
+		stats.caught += 1
+
+func switch_on(i: int) -> bool:
+	return Game.flag("switch:%s:%d" % [id, i])
+
+# a caught projectile touched switch i (host / solo); when every switch of the room is pressed the gate opens for good
+func press_switch(i: int) -> void:
+	var key := "switch:%s:%d" % [id, i]
+	if Game.flag(key):
+		return
+	Game.flags[key] = true
+	Audio.sfx("uiOk")
+	var all := true
+	for s2 in switches:
+		if not Game.flag("switch:%s:%d" % [id, s2.i]):
+			all = false
+	if all and not Game.flag("gate:%s:catch" % id):
+		Game.flags["gate:%s:catch" % id] = true
+		Audio.sfx("gate")
+		shake(0.3)
+		update_doors()
+	Game.write_save()
+
 # hostile projectile. kinds: orb, shard
 func shoot(px: float, py: float, pvx: float, pvy: float, o = null) -> Dictionary:
-	var q := {"id": next_pid, "x": px, "y": py, "vx": pvx, "vy": pvy, "r": 3.0, "kind": "orb", "col": Game.COL.hazard, "life": 4.0, "g": 0.0, "dmg": 1, "tile": true, "cut": true, "t": 0.0, "dead": false}
+	var q := {"id": next_pid, "x": px, "y": py, "vx": pvx, "vy": pvy, "r": 3.0, "kind": "orb", "col": Game.COL.hazard, "life": 4.0, "g": 0.0, "dmg": 1, "tile": true, "cut": true, "t": 0.0, "dead": false, "friendly": false, "catchable": false}
 	if o != null:
 		for k in o:
 			q[k] = o[k]
@@ -1161,6 +1251,10 @@ func update_projs(dt: float) -> void:
 			q.dead = true
 			spark(q.x, q.y, q.col, 4)
 			continue
+		if q.get("friendly", false):
+			if mode != "guest":
+				_friendly_proj_hits(q)
+			continue
 		for pl in players():
 			if pl.get("is_remote"):
 				continue                         # the partner checks its own body
@@ -1177,6 +1271,23 @@ func update_projs(dt: float) -> void:
 	if projs.size() > 30:
 		projs = projs.filter(func(q): return not q.dead)
 
+# a caught projectile: hurts every creature it touches once, presses switches
+func _friendly_proj_hits(q: Dictionary) -> void:
+	for e in ents:
+		if e.dead or q.hit.has(e.nid):
+			continue
+		for b in e.hurtboxes():
+			if q.x + q.r > b.x and q.x - q.r < b.x + b.w and q.y + q.r > b.y and q.y - q.r < b.y + b.h:
+				q.hit[e.nid] = true
+				var by = q.get("by")
+				attacker = by if by != null and is_instance_valid(by) else null
+				e.hit(int(q.dmg), signf(q.vx), 0.0, "catch", b)
+				spark(q.x, q.y, "#ffffff", 5)
+				break
+	for sw in switches:
+		if q.x + q.r > sw.x and q.x - q.r < sw.x + sw.w and q.y + q.r > sw.y and q.y - q.r < sw.y + sw.h:
+			press_switch(int(sw.i))
+
 func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 	var px := floori(q.x + 0.5)
 	var py := floori(q.y + 0.5)
@@ -1191,10 +1302,19 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px - 2, py, 5, 1), col)
 			if not minus:
 				ci.draw_rect(Rect2(px, py - 2, 1, 5), col)
+		"comment":
+			PixelText.draw_text(ci, "//", px - 3, py - 3, q.col, {"outline": Game.COL.ink})
+		"err":
+			Fx._disc(ci, px, py, q.r + 1, ink)
+			Fx._disc(ci, px, py, q.r, col)
+			ci.draw_rect(Rect2(px, py - 2, 1, 3), ink)
+			ci.draw_rect(Rect2(px, py + 2, 1, 1), ink)
 		_:
 			Fx._disc(ci, px, py, q.r + 1, ink)
 			Fx._disc(ci, px, py, q.r, col)
 			Fx._disc(ci, px - 1, py - 1, maxf(0.5, q.r - 2), Color.WHITE)
+	if q.get("friendly", false):                          # a caught one has a white core
+		Fx._disc(ci, px, py, maxf(1.0, q.r - 2), Color.WHITE)
 
 # ---------------------------------------------------------------- drawing of what is not an entity
 func draw_layer(kind: String, ci: CanvasItem) -> void:
@@ -1207,6 +1327,17 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 			var gx := 0 if d.side == "W" else pw - T
 			for ty in range(d.a, d.b + 1):
 				ci.draw_texture_rect_region(gate, Rect2(gx, ty * T, T, T), Rect2(7, 12, 16, 16))
+		for gc in gate_cells:
+			if not grid.gates_open[gc[2]]:
+				ci.draw_texture_rect_region(gate, Rect2(gc[0] * T, gc[1] * T, T, T), Rect2(7, 12, 16, 16))
+		for sw in switches:
+			var on := switch_on(int(sw.i))
+			var swc := Color("#7fd08a") if on else Color("#ffd23f")
+			var sxp: float = sw.x + 5.0
+			var syp: float = sw.y + 5.0
+			Fx._disc(ci, sxp, syp, 6, Color(Game.COL.ink))
+			Fx._disc(ci, sxp, syp, 5, swc)
+			PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
 			ci.draw_texture(Gfx.tex("platform_48"), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
 		for c in cps:

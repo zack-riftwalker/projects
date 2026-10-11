@@ -32,6 +32,7 @@ var passive := false
 var dashable := true
 var always := false
 var nid := 0                  # network id (co-op)
+var strike_seen := {}         # host: strike id -> room time it was last active (the guest's parry is checked against it)
 var puppet := false           # a guest's copy: it only shows what the host sends
 
 func _init(r: Room, px: float, py: float, ew: float, eh: float) -> void:
@@ -53,6 +54,10 @@ func hurtboxes() -> Array:
 
 func harmboxes() -> Array:
 	return [self]
+
+# a player parried one of this creature's catchable strikes (a harmbox with `sid` and `catchable`)
+func parried(_by, _sid: int) -> void:
+	pass
 
 # returns "block", "kill", "hit" or ""
 func hit(d: int, dx: float, _dy: float, how: String, _b = null) -> String:

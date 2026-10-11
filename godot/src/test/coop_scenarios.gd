@@ -870,3 +870,58 @@ func sc_co_solo() -> Array:
 	main.set_paused(false)
 	Net.role = "none"
 	return [music_ok and fade_ok and queued == 1, "boss music still playing: %s; after a fade-out: %s (%.0f dB); pause queued offline: %d (want 1)" % [music_ok, fade_ok, Audio.music_a.volume_db, queued]]
+
+# MV3-03: the guest swipes a catchable projectile the host threw. The host's real projectile turns around, presses the switch of R11 and
+# the gate opens on both pages (the gate and switch flags are state in the snapshots).
+func sc_co_catch() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.catch = true
+		await wait_secs(1.0)
+		mgr().swap_to("R11", Vector2(40.0, 100.0))
+		mgr().player.x = 40.0
+		mgr().player.y = floor_y(mgr().room, 40.0, 8)
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "R11" and absf(coop().remote.x - 230.0) < 12.0, 15.0)
+		if not there:
+			return [false, "the guest never stood at x=230 in R11"]
+		var r: Room = mgr().room
+		clear_creatures(r)
+		await wait_secs(1.0)
+		var q: Dictionary = r.shoot(305.0, 200.0, -60.0, 0.0, {"kind": "err", "col": "#ffd23f", "r": 4.0, "catchable": true, "cut": true, "life": 6.0, "dmg": 1})
+		var caught := await wait_until(func(): return q.get("friendly", false), 8.0)
+		var gate := await wait_until(func(): return Game.flag("gate:R11:catch") and r.grid.gates_open.catch, 6.0)
+		await wait_secs(1.0)
+		return [caught and gate, "projectile caught on the host=%s (vx %.0f), gate open=%s, switch=%s" % [caught, q.get("vx", 0.0), gate, Game.flag("switch:R11:0")]]
+	var has_catch := await wait_until(func(): return Game.tools.get("catch", false), 10.0)      # (the host's ability event)
+	mgr().swap_to("R11", Vector2(230.0, 100.0))
+	var in_room: bool = has_catch and mgr().room.id == "R11"
+	if not in_room:
+		return [false, "never in R11 with catch (room %s, catch %s)" % [mgr().room.id, str(Game.tools.get("catch"))]]
+	var r2: Room = mgr().room
+	var p = mgr().player
+	p.x = 230.0
+	p.y = floor_y(r2, 230.0, 8)
+	p.vx = 0.0
+	p.vy = 0.0
+	p.inv = 999.0
+	var swung := false
+	var mine := false
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 14000 * slow and not r2.grid.gates_open.catch:
+		p.inv = 999.0
+		p.face = 1.0
+		var press := false
+		for q in r2.projs:
+			if q.kind == "err" and not q.get("friendly", false) and q.get("catchable", false) and not q.dead:
+				if q.x - q.r - (p.x + p.w - 4.0 + 24.0) < 2.0:
+					press = true
+			elif q.kind == "err" and q.get("friendly", false):
+				mine = true
+		Controls.script_input = {"attack": press and not swung}
+		if press:
+			swung = true
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	await wait_secs(1.0)
+	return [mine and r2.grid.gates_open.catch, "swung=%s saw it friendly=%s, gate open on the guest=%s" % [swung, mine, r2.grid.gates_open.catch]]

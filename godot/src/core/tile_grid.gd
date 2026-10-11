@@ -13,9 +13,11 @@ const CRUMBLE := 6
 const BLINK_A := 7
 const BLINK_B := 8
 const LIQ := 9
+const GATE_C := 10         # `!`: solid until the room's catch switches are all pressed
+const GATE_A := 11         # `&`: solid until the room's slot keys are all pressed (3B)
 const T := 16
 
-const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ}
+const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A}
 
 var w := 0
 var h := 0
@@ -23,6 +25,7 @@ var tiles := PackedByteArray()
 var crumble := {}          # index -> {s, t}
 var blink_hold := {}       # index -> true
 var blink_phase := 0
+var gates_open := {"catch": false, "agents": false}        # the room sets them from its flags every step
 var doors: Array = []      # {side: "W"|"E", a, b, open}: rows a..b of the left/right edge are walkable while open
 
 func tile(tx: int, ty: int) -> int:
@@ -49,6 +52,10 @@ func solid(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
 	if t == SOLID or t == CRACK:
 		return true
+	if t == GATE_C:
+		return not gates_open.catch
+	if t == GATE_A:
+		return not gates_open.agents
 	if t < CRUMBLE or t == LIQ:
 		return false
 	var i := ty * w + tx

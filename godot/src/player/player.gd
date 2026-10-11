@@ -64,6 +64,7 @@ var atk_dir := "f"
 var atk_face := 1.0
 var atk_live := false
 var atk_dmg := 1
+var parried := {}                # strike ids this player parried (catch): that strike can no longer hurt it
 var inv := 0.0
 var hurt_t := 0.0
 var dead := false
@@ -111,6 +112,10 @@ func atk_box() -> Dictionary:
 	if atk_dir == "d":
 		return {"x": x - 8, "y": y + h - 3, "w": w + 16, "h": rr}
 	return {"x": x + w - 4 if atk_face > 0 else x + 4 - rr, "y": y - 7, "w": rr, "h": h + 12}
+
+# catch: a swipe that has just started (the first catch_window seconds of the 0.17 s swing) catches a yellow attack
+func catch_window_open() -> bool:
+	return bool(tools.get("catch", false)) and atk_t > 0.17 - float(Game.dv("catch_window"))
 
 func set_safe(sx_: float, sy_: float) -> void:
 	safe.x = sx_

@@ -40,6 +40,8 @@ var host_summon := {}
 var fight_seen := {}
 var phase_seen := {}
 var fight_active_seen := {}
+var last_gf: Array = []                  # guest: the switch / key / gate flags of the room, as the last snapshot said
+var last_gf_room := ""
 var abilities_sent := {}                # tool name -> true once the guest was told (boss rewards: bash, catch, ...)
 
 # ---- guest
@@ -158,6 +160,8 @@ func _on_room_built(r: Room) -> void:
 			if _laggy() and mgr.player != null:
 				mgr.player.inv += 0.4)          # a bad line: a little more mercy after each hit (as the JS game)
 		r.net_projhit.connect(func(pid): Net.rel("projhit", {"pid": pid}))
+		r.net_catch.connect(func(pid): Net.rel("catch", {"pid": pid}))
+		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
 
@@ -412,6 +416,8 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				for q in r.projs:
 					if int(q.id) == int(d.pid):
 						q.dead = true
+		"catch": _host_catch(d)
+		"parry": _host_parry(d)
 		"hurt":
 			var r2 := _remote_room()
 			if r2 != null:
@@ -532,6 +538,32 @@ func _host_hit(d: Dictionary) -> void:
 		log_("P2 %s eid %d: %s" % [String(d.how), nid, verdict])
 	if Game.debug:
 		print("P2 hit %s eid %d" % [verdict, nid])
+
+# the guest swiped a catchable projectile it saw: reverse the real one if it still exists (the guest predicted the same)
+func _host_catch(d: Dictionary) -> void:
+	var r := _remote_room()
+	if r == null:
+		return
+	for q in r.projs:
+		if int(q.id) == int(d.pid) and not q.dead and q.get("catchable", false) and not q.get("friendly", false):
+			_as_p2(r, func(): r.catch_proj(q, remote))
+			return
+	log_("P2 catch pid %d: no such catchable projectile" % int(d.pid))
+
+# the guest parried a strike of creature nid: accepted if that strike was active within the last rtt/2 + 0.35 s
+func _host_parry(d: Dictionary) -> void:
+	var r := _remote_room()
+	if r == null:
+		return
+	for e in r.ents:
+		if e.nid == int(d.nid) and not e.dead:
+			var sid := int(d.sid)
+			if r.time - float(e.strike_seen.get(sid, -99.0)) <= Net.rtt / 2.0 + 0.35:
+				r.attacker = remote
+				_as_p2(r, func(): e.parried(remote, sid))
+			else:
+				log_("P2 parry nid %d sid %d: that strike was not active" % [int(d.nid), sid])
+			return
 
 func _host_crack(d: Dictionary) -> void:
 	var r := _remote_room()
@@ -804,13 +836,18 @@ func _send_snapshot() -> void:
 	var pj: Array = []
 	for q in r.projs:
 		if not q.dead:
-			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg])
+			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg, 1 if q.get("friendly", false) else 0, 1 if q.get("catchable", false) else 0])
+	var gf: Array = []                  # the room's switch / key / gate flags: state, applied by the guest on every snapshot
+	for fk in Game.flags:
+		var fks := String(fk)
+		if (fks.begins_with("switch:") or fks.begins_with("key:") or fks.begins_with("gate:")) and fks.get_slice(":", 1) == r.id:
+			gf.append(fks)
 	var hz: Array = []
 	for z in r.zones:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn]
-	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "p1": p1,
+	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0}
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
@@ -1021,13 +1058,27 @@ func _apply_snapshot(m: Dictionary) -> void:
 		var pid := int(rec[0])
 		var q: Dictionary = old_pj.get(pid, {})
 		if q.is_empty():
-			q = {"id": pid, "kind": rec[1], "r": float(rec[6]), "col": rec[7], "life": 4.0, "g": 0.0, "dmg": int(rec[8]), "tile": false, "cut": true, "t": 0.0, "dead": false}
+			q = {"id": pid, "kind": rec[1], "r": float(rec[6]), "col": rec[7], "life": 4.0, "g": 0.0, "dmg": int(rec[8]), "tile": false, "cut": true, "t": 0.0, "dead": false, "friendly": false, "catchable": false}
+		var host_friendly: bool = int(rec[9]) == 1
+		q.catchable = int(rec[10]) == 1
+		if host_friendly:
+			q.friendly = true
+			q.erase("pred_until")
+		if float(q.get("pred_until", -1.0)) > r.time:          # this player caught it a moment ago: keep the local copy until the host agrees
+			projs.append(q)
+			continue
 		q.x = rec[2] / 4.0
 		q.y = rec[3] / 4.0
 		q.vx = float(rec[4])
 		q.vy = float(rec[5])
+		q.dmg = int(rec[8])
 		projs.append(q)
 	r.projs = projs
+	last_gf = m.get("gf", [])
+	last_gf_room = r.id
+	for fk in last_gf:
+		Game.flags[String(fk)] = true
+	r.update_doors()
 	# damage areas
 	for z in m.hz:
 		var zid := int(z[0])

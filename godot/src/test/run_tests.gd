@@ -46,6 +46,7 @@ func run(name: String) -> bool:
 		"parity": return t_parity()
 		"bossreg": return t_bossreg()
 		"rooms3": return t_rooms3()
+		"catch": return t_catch()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -838,6 +839,91 @@ func t_rooms3() -> bool:
 	Controls.script_input = null
 	Game.flags = {}
 	return report("rooms3", ok, info)
+
+# MV3-03: catch. One projectile flies at the player (facing it); the swipe starts at frame 0 and the projectile reaches the claw box at frame k.
+# Returns "caught" (friendly, reversed x1.5), "destroyed" (dead, never friendly) or "hurt"
+func catch_case(k: int, with_ability: bool, diff_name := "normal") -> String:
+	Game.flags = {}
+	Game.diff = diff_name
+	Game.tools.catch = with_ability
+	var m := new_manager()
+	m.swap_to("R11")
+	var room := m.room
+	clear_ents(room)
+	var p = m.player
+	p.x = 100.0
+	p.y = floor_y(room, 105.0, 8)
+	p.face = 1.0
+	p.hp = p.max_hp
+	Controls.script_input = {}
+	for f in range(10):
+		m.tick(Game.STEP)
+	var hp0: int = p.hp
+	var sp := 130.0
+	var xf: float = p.x + p.w - 4 + 24.0 + 4.0                # the claw box's front edge plus the projectile radius
+	var q: Dictionary = room.shoot(xf + float(k) * sp / 60.0, p.y + 5.0, -sp, 0.0, {"kind": "err", "col": "#ffd23f", "r": 4.0, "catchable": true, "cut": true, "life": 3.0, "dmg": 1})
+	var out := "hurt"
+	for f in range(40):
+		Controls.script_input = {"attack": f == 0}
+		m.tick(Game.STEP)
+		if q.get("friendly", false):
+			out = "caught"
+			break
+		if q.dead:
+			out = "destroyed" if p.hp == hp0 else "hurt"
+			break
+	var vx_ok: bool = out != "caught" or absf(q.vx - 195.0) < 1.0
+	Controls.script_input = null
+	Game.tools.catch = false
+	return out if vx_ok else "wrong speed %.0f" % q.vx
+
+func t_catch() -> bool:
+	var ok := true
+	var info := ""
+	var early := catch_case(2, true)
+	var late := catch_case(5, true)
+	var none := catch_case(2, false)
+	var easy := catch_case(5, true, "easy")        # the easy window (0.14 s) still catches where the normal one (0.10 s) has just closed
+	var hard_edge := catch_case(5, true, "nightmare")
+	info += "frame2=%s frame5=%s noability=%s easy5=%s nightmare5=%s" % [early, late, none, easy, hard_edge]
+	ok = early == "caught" and late == "destroyed" and none == "destroyed" and easy == "caught" and hard_edge == "destroyed"
+	# a caught projectile hurts a Bug for 2 and presses the switch; the gate opens and stays open
+	Game.flags = {}
+	Game.diff = "normal"
+	Game.tools.catch = true
+	var m := new_manager()
+	m.swap_to("R11")
+	var room := m.room
+	clear_ents(room)
+	var p = m.player
+	p.x = 40.0
+	p.y = floor_y(room, 45.0, 8)
+	p.inv = 999.0
+	var bug := add_bug(room, 150.0, p.y, -1.0)
+	bug.hp = 5
+	var q: Dictionary = room.shoot(100.0, p.y + 5.0, -200.0, 0.0, {"kind": "err", "col": "#ffd23f", "r": 4.0, "catchable": true, "life": 3.0, "dmg": 1})
+	room.catch_proj(q, p)
+	for f in range(40):
+		m.tick(Game.STEP)
+	var bug_ok: bool = bug.hp == 3
+	var sw: Dictionary = room.switches[0]
+	var q2: Dictionary = room.shoot(250.0, sw.y + 5.0, -200.0, 0.0, {"kind": "err", "col": "#ffd23f", "r": 4.0, "catchable": true, "life": 3.0, "dmg": 1})
+	room.catch_proj(q2, p)
+	var closed_before: bool = room.grid.solid(24, 11)
+	for f in range(60):
+		m.tick(Game.STEP)
+	var gate_open: bool = not room.grid.solid(24, 11) and Game.flag("gate:R11:catch") and Game.flag("switch:R11:0")
+	var room2 := Room.new()
+	main.world.add_child(room2)
+	room2.load_room("R11")
+	room2.build_nodes()
+	room2.update_doors()
+	var stays: bool = not room2.grid.solid(24, 11)
+	info += " | bug hp 5->%d switch/gate: closed before=%s open=%s after rebuild=%s" % [bug.hp, closed_before, gate_open, stays]
+	ok = ok and bug_ok and closed_before and gate_open and stays
+	Game.tools.catch = false
+	Game.flags = {}
+	return report("catch", ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:
