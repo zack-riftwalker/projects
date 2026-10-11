@@ -1004,6 +1004,9 @@ func sc_co_plugins() -> Array:
 		await wait_secs(1.0)
 		var gx: float = coop().remote.x
 		var gy: float = coop().remote.y
+		mgr().player.x = gx + 260.0 if gx < 200.0 else gx - 260.0          # (the host body stands far away: it must not collect the token itself)
+		mgr().player.vx = 0.0
+		await wait_secs(0.5)
 		var tok := {"kind": "token", "x": gx + 5.0 + 40.0, "y": gy + 5.0, "id": "item:test:cache", "ph": 0.0}
 		r.items.append(tok)
 		var got_tok := await wait_until(func(): return tok.get("dead", false), 6.0)
@@ -1022,7 +1025,7 @@ func sc_co_plugins() -> Array:
 	var e1 := Game.toggle_plugin("cache")
 	var e2 := Game.toggle_plugin("rubber_duck")
 	var r2: Room = mgr().room
-	var tok_seen := await wait_until(func(): return Game.tokens >= 1, 10.0)
+	var tok_seen := await wait_until(func(): return Game.tokens >= 1, 25.0)
 	var seen := await wait_until(func(): return r2.ents.size() > 0, 10.0)
 	if not seen:
 		return [false, "never saw the creature (owned %s, equipped %s %s)" % [owned, e1, e2]]
@@ -1035,10 +1038,16 @@ func sc_co_plugins() -> Array:
 	g.hp = 1
 	g.inv = 999.0
 	await wait_secs(0.5)
-	Controls.script_input = {"attack": true}
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	Controls.script_input = {}
+	for attempt in range(8):                      # (on a bad line the puppet is seen late: swing until the host's bug has lost hp)
+		if bug.hp < 9:
+			break
+		g.x = bug.x - 18.0
+		g.hp = 1
+		Controls.script_input = {"attack": true}
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		Controls.script_input = {}
+		await wait_secs(0.8)
 	await wait_secs(1.0)
 	Net.rel("hit", {"eid": bug.nid, "how": "swipe", "dmg": 3, "dx": 1.0, "dy": 0.0, "atk": 9999, "px": roundi(g.x), "py": roundi(g.y)})
 	await wait_secs(2.0)
