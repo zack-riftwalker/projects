@@ -177,6 +177,20 @@ func _ready() -> void:
 				b.cur.mode = "aim"
 				b.cur.t = 5.0
 				b.pick_aim()
+		elif Game.scene.begins_with("reviewer:"):       # screenshot helper: THE REVIEWER in the telegraph of an attack (reviewer:<lunge|comments|review|nitpick|shove|phase>)
+			manager.swap_to("R10")
+			var p2 = manager.player
+			p2.x = 120.0
+			p2.y = 166.0
+			p2.inv = 999.0
+			var r2: Room = manager.room
+			r2._start_intro()
+			r2.fight.t = 0.0
+			r2._begin_fight()
+			var rb = r2.boss
+			rb.face = -1.0
+			var kinds := {"lunge": "lunge_tel", "comments": "comments_tel", "review": "review", "nitpick": "nitpick_tel", "shove": "shove_tel", "phase": "phase"}
+			rb.set_state(kinds.get(Game.scene.substr(9), "idle"), 5.0)
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
 		elif Game.scene in ["title", "settings", "join", "end"]:       # screenshot helpers: the menus
