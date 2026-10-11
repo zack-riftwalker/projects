@@ -194,3 +194,16 @@ Taken by Claude for the phase 3 plan (`docs/PLAN-metroidvania-phase3.md`), after
 | D29 | **MERGE CONFLICT v2:** v1 plus conflict markers (three bands; the floor band or the platform band is safe, the high band never is; with one head left they fire one after another) and git revert (a dead head returns with half hp unless the other dies within 8 s). In co-op each head targets one player. Reward: agents. |
 | D30 | **New enemies:** EXCEPTION (throws yellow, catchable errors; teaches catch) and FORK (a nest that spawns small bugs; feeds the meter for agents). World 2's Mimic, Logger, Noodle and Flaky are exact ports, checked frame by frame against the JS game. |
 
+
+## 13. World design for phases 4 and 5 (2026-10-11)
+
+Designed by Claude in `08-world-design.md` (with the raw rooms and doors in `world-phase45.json`, and the interactive atlas https://claude.ai/artifact/3idnat2P5utcSquVZ7oSyp). Zakaria approved the design and the decisions below on 2026-10-11. The phase 4 and 5 plans are built on that document: its room ids, positions, sizes, doors and gates are the source of truth.
+
+| # | decision |
+|---|---|
+| D31 | Rooms get **top and bottom doors (N/S)** next to the side doors. Going up through a top door gives a small upward push so the player lands on a ledge; going down through a floor door is a fall. Needed for THREAD TOWER, the shafts and the floor and ceiling secrets. |
+| D32 | **Fast travel only between terminal benches**, one per zone: R08 (SOURCE TREE), D04 (DEPENDENCY DEPTHS), H03 (THE HEAP), N03 (THE NETWORK), T08 (THREAD TOWER), G03 (GIT HISTORY), X04 (DEPENDENCY HELL), P06 (PRODUCTION). Other benches only save and heal. The plugin `on_call` (secret in PRODUCTION) allows travel from any bench. |
+| D33 | The `opus` shortcut runs from the top of THREAD TOWER down to the NETWORK's airgap (room T16 `goto`), instead of THREAD TOWER → SOURCE TREE (`03-abilities-and-gates.md`). THREAD TOWER reaches SOURCE TREE through the trapdoor into THE HEAP (T02 → H11) and the terminals. |
+| D34 | THE REVIEWER #2 appears in the NETWORK hub (N03) only when the player comes back to it holding `curl` or `ssh`, so he is optional. DEPENDENCY HELL is an optional zone (`--force` opens secrets and, in phase 6, KERNEL). |
+| D35 | Eight new memory fragments (16 in the game, so max hp reaches 9): H12, H15, N19, T14, G15, X13, P16, R13. |
+| D36 | New enemies of phases 4 and 5: SEGFAULT, STACK OVERFLOW (THE HEAP), SCRAPER, WORM, DDOS, SPYWARE (THE NETWORK), POLYMORPHIC (GIT HISTORY), RANSOMWARE (DEPENDENCY HELL), BLOATWARE (PRODUCTION), next to the JS ports (Slime, Lint, Racer, Heisenbug, Drone and the hazards Dripper, Pendulum, Gear, FireJet). |
