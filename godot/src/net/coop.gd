@@ -546,7 +546,15 @@ func _host_hit(d: Dictionary) -> void:
 				var dmg := clampi(int(d.dmg), 1, allowed) if how == "swipe" else (1 if how == "dash" else maxi(1, e.hp))
 				r.attacker = remote
 				var boxes: Array = e.hurtboxes()
-				_as_p2(r, func(): e.hit(dmg, float(d.dx), float(d.dy), how, boxes[0] if boxes.size() > 0 else e))
+				var pick = boxes[0] if boxes.size() > 0 else e
+				var pd := 1e9
+				for bx2 in boxes:                           # (a creature with several hurtboxes, like MERGE CONFLICT's heads: the one nearest to P2)
+					var bdx: float = clampf(remote.x + 5.0, bx2.x, bx2.x + bx2.w) - remote.x - 5.0
+					var bdy: float = clampf(remote.y + 5.0, bx2.y, bx2.y + bx2.h) - remote.y - 5.0
+					if bdx * bdx + bdy * bdy < pd:
+						pd = bdx * bdx + bdy * bdy
+						pick = bx2
+				_as_p2(r, func(): e.hit(dmg, float(d.dx), float(d.dy), how, pick))
 	verdicts[verdict] = int(verdicts.get(verdict, 0)) + 1
 	if verdict != "OK":
 		log_("P2 %s eid %d: %s" % [String(d.how), nid, verdict])
@@ -875,7 +883,7 @@ func _send_snapshot() -> void:
 	var pj: Array = []
 	for q in r.projs:
 		if not q.dead:
-			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg, 1 if q.get("friendly", false) else 0, 1 if q.get("catchable", false) else 0])
+			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg, 1 if q.get("friendly", false) else 0, 1 if q.get("catchable", false) else 0, roundi(float(q.get("hgt", 0.0))), roundi(float(q.g)), 1 if q.cut else 0])
 	var gf: Array = []                  # the room's switch / key / gate flags: state, applied by the guest on every snapshot
 	for fk in Game.flags:
 		var fks := String(fk)
@@ -1107,7 +1115,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 		var pid := int(rec[0])
 		var q: Dictionary = old_pj.get(pid, {})
 		if q.is_empty():
-			q = {"id": pid, "kind": rec[1], "r": float(rec[6]), "col": rec[7], "life": 4.0, "g": 0.0, "dmg": int(rec[8]), "tile": false, "cut": true, "t": 0.0, "dead": false, "friendly": false, "catchable": false}
+			q = {"id": pid, "kind": rec[1], "r": float(rec[6]), "col": rec[7], "life": 4.0, "dmg": int(rec[8]), "tile": false, "cut": int(rec[13]) == 1, "t": 0.0, "dead": false, "friendly": false, "catchable": false, "hgt": float(rec[11]), "g": float(rec[12])}
 		var host_friendly: bool = int(rec[9]) == 1
 		q.catchable = int(rec[10]) == 1
 		if host_friendly:

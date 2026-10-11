@@ -191,6 +191,30 @@ func _ready() -> void:
 			rb.face = -1.0
 			var kinds := {"lunge": "lunge_tel", "comments": "comments_tel", "review": "review", "nitpick": "nitpick_tel", "shove": "shove_tel", "phase": "phase"}
 			rb.set_state(kinds.get(Game.scene.substr(9), "idle"), 5.0)
+		elif Game.scene.begins_with("merge:"):          # screenshot helper: MERGE CONFLICT in an attack (merge:<markers|lunge|revert>)
+			manager.swap_to("D05")
+			var p3 = manager.player
+			p3.x = 150.0
+			p3.y = 166.0
+			p3.inv = 999.0
+			var r3: Room = manager.room
+			r3._start_intro()
+			r3.fight.t = 0.0
+			r3._begin_fight()
+			var mb = r3.boss
+			mb.busy = 99.0
+			var mk := Game.scene.substr(6)
+			if mk == "markers":
+				mb._start_markers()
+				mb.band_state = 2
+				mb.band_t = 0.5
+				mb.safe_band = 1
+			elif mk == "lunge":
+				mb.act(mb.heads[1], "lunge")
+				mb.heads[1].t = 0.3
+			elif mk == "revert":
+				mb.hit(999, 0.0, 0.0, "swipe", mb.hurtboxes()[0])
+				mb.heads[0].rv = 5.0
 		elif Game.scene.begins_with("roomat:"):       # screenshot helper: stand in a room at a place (roomat:<id>:<x>:<y>)
 			var ra := Game.scene.substr(7).split(":")
 			manager.swap_to(ra[0], Vector2(float(ra[1]), float(ra[2])))

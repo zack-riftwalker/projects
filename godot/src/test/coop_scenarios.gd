@@ -1085,3 +1085,83 @@ func sc_co_crumble() -> Array:
 	p.y = floor_y(r, 60.0, 9)
 	var gone := await wait_until(func(): return not r.grid.crumble.has(i), 8.0 * slow)
 	return [predicted and confirmed and fell2 and gone, "predicted %s, confirmed by the host %s, fell %s, back %s" % [predicted, confirmed, fell2, gone]]
+
+# MV3-11: both fight MERGE CONFLICT. Head 0 aims at the host, head 1 at the guest; a band that fires hurts the guest through its own contact
+# check; the guest sees the `git revert in N` countdown over the dead head and the head coming back.
+func sc_co_merge() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("D05", Vector2(100.0, 100.0))
+		var p = mgr().player
+		p.x = 100.0
+		p.y = floor_y(mgr().room, 100.0, 8)
+		var active := await wait_until(func(): return mgr().room.fight.state == "active", 20.0)
+		var boss: MergeBoss = mgr().room.boss
+		var ok_targets := false
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 4000:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			var t_a = boss.target_of(boss.heads[0])
+			var t_b = boss.target_of(boss.heads[1])
+			if t_a != null and t_b != null and not t_a.get("is_remote") and t_b.get("is_remote"):
+				ok_targets = true
+			await get_tree().physics_frame
+		# three conflict markers with the floor band unsafe-for-sure (M is the resolved one)
+		for trial in range(3):
+			for h in boss.heads:
+				h.st = "rest"
+			boss.band_state = 0
+			boss.busy = 99.0
+			boss._start_markers()
+			boss.safe_band = 1
+			await wait_until(func(): return boss.band_state == 0, 6.0 * slow)
+			await wait_secs(0.5)
+		# kill head 0: the guest sees the countdown; after 8 s it is back
+		for h in boss.heads:
+			h.st = "rest"
+		boss.band_state = 0
+		boss.busy = 99.0
+		merge_head_kill(boss, 0)
+		var came_back := await wait_until(func(): return not boss.heads[0].dead, 12.0 * slow)
+		await wait_secs(1.5)
+		return [active and ok_targets and came_back, "fight active %s, heads aim at different players %s, head 0 came back %s (hp %.0f)" % [active, ok_targets, came_back, boss.heads[0].hp]]
+	var has := await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	mgr().swap_to("D05", Vector2(260.0, 100.0))
+	var r2: Room = mgr().room
+	var g = mgr().player
+	g.x = 260.0
+	g.y = floor_y(r2, 260.0, 8)
+	var hurt_by_band := false
+	var seen_rv := false
+	var seen_back := false
+	var was_dead := false
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 60000 * slow and not seen_back:
+		g = mgr().player
+		if g != null:
+			g.dead = false
+			if g.hp < g.max_hp:
+				if r2.boss != null and r2.boss.band_state == 3:
+					hurt_by_band = true
+				g.hp = g.max_hp
+			g.vx = 0.0
+		var b = r2.boss
+		if b != null and b is MergeBoss:
+			var h0: Dictionary = b.heads[0]
+			if h0.dead and h0.rv > 0.0 and h0.rv <= 8.0:
+				seen_rv = true
+			if h0.dead:
+				was_dead = true
+			elif was_dead and seen_rv:
+				seen_back = true
+		await get_tree().physics_frame
+	return [hurt_by_band and seen_rv and seen_back, "band hurt the guest %s, countdown seen %s, head came back %s" % [hurt_by_band, seen_rv, seen_back]]
+
+func merge_head_kill(boss: MergeBoss, i: int) -> void:
+	for b in boss.hurtboxes():
+		if b.head == i:
+			boss.hit(999, 0.0, 0.0, "swipe", b)
+			return

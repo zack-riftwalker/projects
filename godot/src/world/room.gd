@@ -221,6 +221,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 	var b
 	match String(bd.get("class", "NullBoss")):
 		"Reviewer": b = Reviewer.new(self, bx, by, hp_)
+		"MergeBoss": b = MergeBoss.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))
@@ -1397,6 +1398,12 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px - 2, py, 5, 1), col)
 			if not minus:
 				ci.draw_rect(Rect2(px, py - 2, 1, 5), col)
+		"wave":
+			var hg := int(q.get("hgt", 10.0))
+			ci.draw_rect(Rect2(px - 3, py - hg, 6, hg), col)
+			ci.draw_rect(Rect2(px - 1, py - hg, 2, hg - 2), Color.WHITE)
+			ci.draw_rect(Rect2(px - 4, py - hg + 2, 1, hg - 2), ink)
+			ci.draw_rect(Rect2(px + 3, py - hg + 2, 1, hg - 2), ink)
 		"log":
 			ci.draw_rect(Rect2(px - 5, py - 2, 10, 4), ink)
 			ci.draw_rect(Rect2(px - 4, py - 1, 5, 2), col)

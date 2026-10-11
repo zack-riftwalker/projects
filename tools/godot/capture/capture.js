@@ -174,7 +174,34 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
       return out;
     });
     for (const [k, v] of Object.entries(d)) put('sprites/' + k + '.png', save('sprites/' + k + '.png', v));
-    console.log('boss sprites', Object.keys(d).length);
+    // MERGE CONFLICT's heads: `headSpr` and `HEADS` of js/bosses.js (they live inside that script's closure, so the builder is repeated here)
+    const mh = await png(() => {
+      const K = G.COL.ink, out = {};
+      const headSpr = (main, lo, hi, open) => {
+        const p = G.pix(36, 30);
+        p.ell(15, 13, 11, 9, main);
+        p.rect(14, 8, 16, 8, main);
+        p.rect(14, 16 + (open ? 3 : 0), 15, 5, lo);
+        for (let i = 0; i < 5; i++) { p.px(17 + i * 3, 16, '#fff'); if (open) p.px(17 + i * 3, 18, '#fff'); }
+        if (open) p.rect(15, 16, 13, 3, '#2a0f1c');
+        p.ell(11, 9, 5, 3, hi);
+        p.rect(17, 9, 4, 3, '#fff').rect(19, 10, 2, 2, K).rect(16, 7, 6, 1, K);
+        p.rect(4, 3, 3, 4, hi).rect(8, 1, 3, 4, hi);
+        p.px(28, 10, K).px(28, 12, K);
+        p.outline(K);
+        return p.c;
+      };
+      const HEADS = [{ main: '#4ec9b0', lo: '#23806e', hi: '#b5f5e6' }, { main: '#e05a8a', lo: '#8c2356', hi: '#ffc2d8' }];
+      HEADS.forEach((h, i) => {
+        const a = headSpr(h.main, h.lo, h.hi, 0), b = headSpr(h.main, h.lo, h.hi, 1);
+        out['merge_head_' + i + '_0'] = a.toDataURL('image/png').split(',')[1];
+        out['merge_head_' + i + '_1'] = b.toDataURL('image/png').split(',')[1];
+        out['merge_dead_' + i] = G.tint(a, '#4a4458').toDataURL('image/png').split(',')[1];
+      });
+      return out;
+    });
+    for (const [k, v] of Object.entries(mh)) put('sprites/' + k + '.png', save('sprites/' + k + '.png', v));
+    console.log('merge sprites', Object.keys(mh).length);
   }
 
   if (want('levels')) {

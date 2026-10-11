@@ -55,6 +55,7 @@ func run(name: String) -> bool:
 		"crumble": return t_crumble()
 		"w2enemies": return t_w2enemies()
 		"rooms3b": return t_rooms3b()
+		"merge": return t_merge()
 		"fork": return t_fork()
 	return report(name, false, "unknown test")
 
@@ -1516,6 +1517,148 @@ func t_rooms3b() -> bool:
 	Controls.script_input = null
 	Game.flags = {}
 	return report("rooms3b", ok and bench_ok, info)
+
+func merge_setup() -> RoomManager:
+	Game.flags = {}
+	Game.tools.agents = false
+	Game.fights = []
+	Game.diff = "normal"
+	var m := new_manager()
+	m.swap_to("D05")
+	var p = m.player
+	p.x = 100.0
+	p.y = floor_y(m.room, 105.0, 8)
+	return m
+
+func merge_head_hit(boss: MergeBoss, i: int, dmg: int) -> void:
+	var hb: Array = boss.hurtboxes()
+	for b in hb:
+		if b.head == i:
+			boss.hit(dmg, 0.0, 0.0, "swipe", b)
+			return
+
+# MV3-11: MERGE CONFLICT. The safe band is never H and never hurts; a band hurts when you stand in it; killing a head and waiting 8 s brings it
+# back with half hp; killing both within the window ends the fight (agents, flag, east door).
+func t_merge() -> bool:
+	# A: the fight against a bot that stands still and cannot be hurt: every head attack shows up, nothing stalls
+	var m := merge_setup()
+	var seen := {}
+	var stall := 0.0
+	var longest := 0.0
+	var snap_state := ""
+	for f in range(5400):
+		m.player.inv = 999.0
+		m.player.hp = m.player.max_hp
+		if f == 2700 and m.room.boss.active:                 # from here on one head fights alone (the revert is held back)
+			merge_head_hit(m.room.boss, 0, 999)
+			m.room.boss.heads[0].rv = 9999.0
+		m.tick(Game.STEP)
+		var b: MergeBoss = m.room.boss
+		if b != null and b.active:
+			var key := ""
+			for h in b.heads:
+				key += h.st + ","
+			key += str(b.band_state)
+			for h in b.heads:
+				seen[h.st] = true
+			if key != snap_state:
+				snap_state = key
+				stall = 0.0
+			stall += Game.STEP
+			longest = maxf(longest, stall)
+	var a_ok: bool = seen.has("lunge") and seen.has("spit") and seen.has("slam") and seen.has("markers") and longest < 9.0
+	m.queue_free()
+	m = merge_setup()
+	var room := m.room
+	var p = m.player
+	var boss: MergeBoss = room.boss
+	var info := "A: heads did %s, longest unchanged state %.1f s | " % [str(seen.keys()), longest]
+	var hp_ok: bool = boss.heads[0].max == 45 and boss.heads[1].max == 45 and boss.max_hp == 90
+	for f in range(400):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if boss.active:
+			break
+	# 1. the bands: stand in the safe one (never hurt) and in an unsafe one (hurt), ten rounds
+	var safe_seen := {}
+	var safe_hurt := 0
+	var unsafe_hurt := 0
+	for round_ in range(10):
+		p.inv = 0.0
+		p.hp = 50
+		boss.band_state = 0
+		for h in boss.heads:
+			h.st = "rest"
+		boss.busy = 99.0
+		boss._start_markers()
+		safe_seen[boss.safe_band] = true
+		# stand in the safe band during the whole attack: floor = L (2), platform = M (1)
+		var want_safe: bool = round_ % 2 == 0
+		var stand: int = boss.safe_band if want_safe else (1 if boss.safe_band == 2 else 2)
+		if stand == 2:
+			p.x = 200.0
+			p.y = 166.0
+		else:
+			p.x = 90.0
+			p.y = 118.0
+		p.vx = 0.0
+		p.vy = 0.0
+		for f in range(260):
+			p.inv = 0.0
+			m.tick(Game.STEP)
+			p.x = 200.0 if stand == 2 else 90.0
+			p.vx = 0.0
+			if boss.band_state == 0:
+				break
+		if OS.get_environment("MERGE_DEBUG") != "":
+			print("round %d safe=%d stand=%d hp=%d/%d band_state=%d p=(%.0f,%.0f) frames" % [round_, boss.safe_band, stand, p.hp, p.max_hp, boss.band_state, p.x, p.y])
+		if want_safe and p.hp < 50:
+			safe_hurt += 1
+		if not want_safe and p.hp == 50:
+			unsafe_hurt += 1
+		p.hp = p.max_hp
+	var bands_ok: bool = not safe_seen.has(0) and safe_hurt == 0 and unsafe_hurt == 0 and safe_seen.size() >= 1
+	info += "hp 45+45=%s | bands: safe seen %s, hurt in the safe band %d, not hurt in an unsafe band %d" % [hp_ok, str(safe_seen.keys()), safe_hurt, unsafe_hurt]
+	# 2. kill head 0, wait 8 s: it is back with half hp
+	boss.band_state = 0
+	for h in boss.heads:
+		h.st = "rest"
+	boss.busy = 99.0
+	merge_head_hit(boss, 0, 999)
+	var dead0: bool = boss.heads[0].dead and boss.phase == 2
+	var rv0: float = boss.heads[0].rv
+	for f in range(60 * 7):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+	var still_dead: bool = boss.heads[0].dead
+	for f in range(90):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+	var back: bool = not boss.heads[0].dead and absf(boss.heads[0].hp - 23.0) < 0.01 and boss.phase == 1
+	info += " | head 0 killed=%s countdown %.1f, still dead at 7 s=%s, back with %.0f hp=%s" % [dead0, rv0, still_dead, boss.heads[0].hp, back]
+	# 3. kill both inside the window: defeated
+	boss.busy = 99.0
+	merge_head_hit(boss, 0, 999)
+	for f in range(120):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+	merge_head_hit(boss, 1, 999)
+	var dead_at := -1
+	for f in range(900):
+		p.inv = 999.0
+		m.tick(Game.STEP)
+		if Game.tools.agents and Game.flag("boss:MERGE"):
+			dead_at = f
+			break
+	room.update_doors()
+	var door_open: bool = room.grid.tile(room.w, 8) == TileGrid.E
+	var end_ok: bool = dead_at > 0 and Game.flag("ability:agents") and door_open and Game.fights.size() == 1 and Game.fights[0].boss == "MERGE"
+	info += " | both dead inside the window: reward at frame %d, east door open=%s" % [dead_at, door_open]
+	Controls.script_input = null
+	Game.tools.agents = false
+	Game.flags = {}
+	Game.fights = []
+	return report("merge", a_ok and hp_ok and bands_ok and dead0 and still_dead and back and end_ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:
