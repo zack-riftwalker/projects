@@ -70,6 +70,7 @@ func run(name: String) -> bool:
 		"tiles4": return t_tiles4()
 		"flood": return t_flood()
 		"plugins4": return t_plugins4()
+		"w3assets": return t_w3assets()
 		"rise": return t_rise()
 	return report(name, false, "unknown test")
 
@@ -2488,3 +2489,21 @@ func t_plugins4() -> bool:
 	Game.equipped = []
 	Game.flags = {}
 	return report("plugins4", res.ok, res.info)
+
+# MV4-05: world 3's art and music are there, and a HEAP room builds
+func t_w3assets() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	for path in ["res://assets/tiles/w3_tiles.png", "res://assets/bg/w3.png", "res://assets/sprites/leak_0.png", "res://assets/sprites/leak_1.png", "res://assets/music/w3.ogg", "res://assets/theme/w3.json", "res://assets/sprites/platform_w3.png"]:
+		chk.call(path, ResourceLoader.exists(path))
+	chk.call("theme liq", String(Game.theme(3).liq) == "#58f0c8")
+	var r := new_room("H01")
+	chk.call("H01 builds", r.view != null and r.view.tiles != null and r.world == 3)
+	chk.call("H01 plays w3", main.song_for(r) == "w3")
+	r.queue_free()
+	return report("w3assets", res.ok, res.info)

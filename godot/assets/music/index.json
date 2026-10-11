@@ -38,5 +38,10 @@
   "len": 55.714,
   "loop_start": 4.286,
   "once": false
+ },
+ "w3": {
+  "len": 41.739,
+  "loop_start": 0,
+  "once": false
  }
 }

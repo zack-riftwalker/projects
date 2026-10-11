@@ -1,6 +1,6 @@
 // Captures art, tiles, font, background, sound effects, music and level maps from the current game (public/index.html)
 // into godot/assets/ (and everything, including music, into tools/godot/capture/out/). Usage: node capture.js <what...>
-// what: sprites tiles font bg sfx music levels boss all
+// what: sprites tiles font bg sfx music levels boss leak all
 'use strict';
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
@@ -9,7 +9,7 @@ const WHAT = process.argv.slice(2).length ? process.argv.slice(2) : ['all'];
 const want = (k) => WHAT.includes('all') || WHAT.includes(k);
 const WORLDS = (process.env.WORLDS || '1,2').split(',').map(Number);     // tiles, bg and theme are captured for these worlds
 const SFX = 'jump djump walljump land swipe swipeBig hit clang squish kill hurt die token spark heal dash spring crumble brk checkpoint shoot bossHit explode bigExplode uiMove uiOk uiBack text textLow textSys key gate agent agentHit warn charge laser drip splash thud roar glitch tick tock pause flap logo stamp'.split(' ');
-const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
+const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'w3', 'w3_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
 const LONG = new Set(['explode', 'bigExplode', 'roar', 'logo', 'die', 'gate', 'spark']);
 const mk = (...p) => { const d = path.join(...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(b64, 'base64')); return f; };
@@ -149,6 +149,28 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
     for (const k of COPY_MUSIC) if (index[k]) sub[k] = index[k];
     fs.writeFileSync(idxF, JSON.stringify(sub, null, 1));
     console.log('music', Object.keys(index).length);
+  }
+
+  if (want('leak')) {
+    // THE LEAK: `leakSpr` of index.html (a closure of the Leak boss, so the builder is repeated here)
+    const lk = await png(() => {
+      const K = G.COL.ink, out = {};
+      [0, 1].forEach((f) => {
+        const p = G.pix(60, 46);
+        p.ell(30, 26 - (f ? 0 : 1), 26 + (f ? 1 : 0), 19 - (f ? 1 : 0), '#58f0c8');
+        p.clear(0, 44, 60, 2);
+        p.ell(30, 30, 20, 11, '#3fd1b0');
+        p.ell(20, 14, 9, 4, '#d2fff2');
+        p.ell(30, 28, 8, 7, '#127a80'); p.ell(30, 28, 5, 4, '#0b4d5c'); p.ell(28, 26, 2, 1.5, '#9cf7e0');   // the core
+        p.rect(17, 19, 5, 6, K).rect(38, 19, 5, 6, K).rect(18, 20, 2, 2, '#fff').rect(39, 20, 2, 2, '#fff');
+        p.rect(10, 40, 3, 4, '#58f0c8').rect(45, 41, 3, 3, '#58f0c8');
+        p.outline('#0c4f58');
+        out['leak_' + f] = p.c.toDataURL('image/png').split(',')[1];
+      });
+      return out;
+    });
+    for (const [k, v] of Object.entries(lk)) put('sprites/' + k + '.png', save('sprites/' + k + '.png', v));
+    console.log('leak sprites', Object.keys(lk).length);
   }
 
   if (want('boss')) {
