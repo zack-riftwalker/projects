@@ -50,13 +50,13 @@
 | MV3-05 | 3A | THE REVIEWER #1 | Sonnet | done |
 | MV3-06 | 3A | plugins: ownership, bench loadout, six effects, pickups `U`, co-op | Sonnet | done |
 | MV3-07 | 3A | tests, build, playtest steps, report → **stop** | Sonnet | done |
-| MV3-08 | 3B | world 2 assets and rendering (tiles, backdrop, platform, liquid); crumbling tiles in co-op | Sonnet | todo |
-| MV3-09 | 3B | Mimic, Logger, Noodle, Flaky (exact ports, checked against the JS game); FORK nest | Sonnet | todo |
-| MV3-10 | 3B | DEPENDENCY DEPTHS rooms D01–D07; R09's low door opens | Sonnet | todo |
-| MV3-11 | 3B | MERGE CONFLICT v2 | Sonnet | todo |
-| MV3-12 | 3B | agents; slot keys `k`; gate tiles `&`; cache station `R`; co-op | Sonnet | todo |
-| MV3-13 | 3B | the shop `$` (npm registry); co-op purchases | Sonnet | todo |
-| MV3-14 | 3B | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MV3-08 | 3B | world 2 assets and rendering (tiles, backdrop, platform, liquid); crumbling tiles in co-op | Sonnet | done |
+| MV3-09 | 3B | Mimic, Logger, Noodle, Flaky (exact ports, checked against the JS game); FORK nest | Sonnet | done |
+| MV3-10 | 3B | DEPENDENCY DEPTHS rooms D01–D07; R09's low door opens | Sonnet | done |
+| MV3-11 | 3B | MERGE CONFLICT v2 | Sonnet | done |
+| MV3-12 | 3B | agents; slot keys `k`; gate tiles `&`; cache station `R`; co-op | Sonnet | done |
+| MV3-13 | 3B | the shop `$` (npm registry); co-op purchases | Sonnet | done |
+| MV3-14 | 3B | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ---
 

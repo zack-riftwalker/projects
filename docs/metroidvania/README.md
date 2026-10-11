@@ -9,7 +9,7 @@
 | [`../PLAN-metroidvania-phase0.md`](../PLAN-metroidvania-phase0.md) | فاز ۰: طراحی و ابزار Godot | انجام شد |
 | [`../PLAN-metroidvania-phase1.md`](../PLAN-metroidvania-phase1.md) | فاز ۱: پایه‌ی Godot، یه اتاق قابل بازی، تست گوشی | انجام شد |
 | [`../PLAN-metroidvania-phase2.md`](../PLAN-metroidvania-phase2.md) | فاز ۲: ۸ اتاق SOURCE TREE، NULL v2، دو دشمن جدید، co-op | انجام شد |
-| [`../PLAN-metroidvania-phase3.md`](../PLAN-metroidvania-phase3.md) | فاز ۳: ۳A بقیه‌ی SOURCE TREE (THE REVIEWER، catch، پلاگین‌ها)، ۳B منطقه‌ی DEPENDENCY DEPTHS (MERGE CONFLICT، agents، فروشگاه) | ۳A انجام شد، ۳B در صف |
+| [`../PLAN-metroidvania-phase3.md`](../PLAN-metroidvania-phase3.md) | فاز ۳: ۳A بقیه‌ی SOURCE TREE (THE REVIEWER، catch، پلاگین‌ها)، ۳B منطقه‌ی DEPENDENCY DEPTHS (MERGE CONFLICT، agents، فروشگاه) | انجام شد (۳A و ۳B) |
 
 ## سندها
 
