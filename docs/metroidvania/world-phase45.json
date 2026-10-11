@@ -1,0 +1,4913 @@
+{
+ "rooms": [
+  {
+   "id": "H01",
+   "zone": "heap",
+   "title": "brk.c",
+   "x": 768,
+   "y": -20,
+   "w": 32,
+   "h": 16,
+   "role": "path",
+   "feats": [
+    "vista"
+   ],
+   "brief": "آستانه‌ی HEAP. از پشت دروازه‌ی catch در R11 بیرون می‌آی روی یه لبه‌ی بلند؛ زیر پات دریاچه‌ی سبز حافظه‌ست و دور، نور فانوس GC روی دیوارها می‌چرخه. یه حلقه‌ی GET بالای سرته که هنوز بهش نمی‌رسی (راز curl).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "R11",
+     "gate": "catch",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 16,
+     "b": 19,
+     "to": "H14",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H02",
+   "zone": "heap",
+   "title": "malloc.c",
+   "x": 800,
+   "y": -20,
+   "w": 194,
+   "h": 16,
+   "role": "path",
+   "feats": [
+    "js:3-1"
+   ],
+   "brief": "کانال اصلی (مرحله‌ی 3-1 بازی JS، ویرایش‌شده). یاد می‌ده: ریتم چکه‌کن‌ها، Slimeهایی که با مرگ دو تا می‌شن، پاندول‌ها و چاله‌های مایع. سقف یه جا ترک داره و توکن‌ها یه قوس به سمتش ساختن (راز bash). روی حوض بزرگ یه پل ریخته هست که بعدها با revert ازش رد می‌شی.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 130,
+     "b": 133,
+     "to": "H12",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H04",
+   "zone": "heap",
+   "title": "dangling_ptr.c",
+   "x": 994,
+   "y": -20,
+   "w": 122,
+   "h": 20,
+   "role": "path",
+   "feats": [
+    "js:3-2"
+   ],
+   "brief": "چالش قبل از هاب (3-2، کوتاه‌شده): سکوهای «اشاره‌گر معلق» که زیر پات فرو می‌ریزن، خار و Lintهای عمودی. آخرش به بالای هاب می‌رسی. بعداً یه دریچه‌ی سقفی از H10 اینجا می‌افته (میان‌بر برگشت بعد از باس).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 106,
+     "b": 109,
+     "to": "H10",
+     "gate": "drop",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H03",
+   "zone": "heap",
+   "title": "free_list.h",
+   "x": 1116,
+   "y": -15,
+   "w": 32,
+   "h": 60,
+   "role": "hub",
+   "feats": [
+    "terminal",
+    "flood"
+   ],
+   "brief": "هاب و ترمینال HEAP: یه چاه عمیق که یه «لیست پیوندی» از بلوک‌های شناور با فلش تا ته‌اش می‌ره. نیمکت بالاست؛ پایین رو سیل پوشونده. هر بار سطح سیل پایین بیاد، درهای تازه‌ای کنار چاه پیدا می‌شن: free.c (سطح ۲)، segfault.c (سطح ۱)، core_dump و دریچه‌ی کف به D04 (سطح ۰). کنار نیمکت پروانه‌ها دور یه دیوار می‌چرخن. دیوار غربی پایین آجر فایروال به D03 ـه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 4,
+     "b": 7,
+     "to": "H04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 4,
+     "b": 7,
+     "to": "H13",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 18,
+     "b": 21,
+     "to": "H07",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 36,
+     "b": 39,
+     "to": "H05",
+     "gate": "flood1",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 53,
+     "b": 56,
+     "to": "H15",
+     "gate": "flood0",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 53,
+     "b": 56,
+     "to": "D03",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 14,
+     "b": 17,
+     "to": "D04",
+     "gate": "flood0",
+     "note": "drop",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H13",
+   "zone": "heap",
+   "title": "use_after_free.c",
+   "x": 1148,
+   "y": -20,
+   "w": 64,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "moth"
+   ],
+   "brief": "راز dead code، درست کنار نیمکت هاب. اتاقی که «آزاد شده» ولی هنوز هست؛ اشیای رهاشده هنوز حرف می‌زنن («I was freed. Why can I still hear you?»). اولین دیدار با پروانه. جایزه: صندوق توکن و lore.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H03",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H07",
+   "zone": "heap",
+   "title": "free.c",
+   "x": 1148,
+   "y": -6,
+   "w": 64,
+   "h": 16,
+   "role": "puzzle",
+   "feats": [
+    "valve"
+   ],
+   "brief": "پازل شیر free(): یه EXCEPTION گلوله‌ی زرد («اشاره‌گر») پرت می‌کنه؛ با catch برگردونش تو دهنه‌ی شیر. سطح سیل کل HEAP از ۲ به ۱ می‌آد (غرش، و آب همه جا پایین می‌ره). دیوار شرقی dead code ـه و مستقیم به وسط stack_overflow.c باز می‌شه (میان‌بر مخفی).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H06",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H05",
+   "zone": "heap",
+   "title": "segfault.c",
+   "x": 1148,
+   "y": 12,
+   "w": 64,
+   "h": 16,
+   "role": "path",
+   "feats": [
+    "flood"
+   ],
+   "brief": "راهروی پایینی (بعد از سطح ۱). دشمن جدید SEGFAULT: سمتت می‌دوه، قرمز چشمک می‌زنه و منفجر می‌شه؛ انفجارش دیوار ترکِ خیلی ضخیم رو هم می‌شکنه. پازل: یه SEGFAULT رو تا دیوار ضخیم بکشون.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H03",
+     "gate": "flood1",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H06",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H15",
+   "zone": "heap",
+   "title": "core_dump",
+   "x": 1148,
+   "y": 29,
+   "w": 64,
+   "h": 16,
+   "role": "secret",
+   "feats": [
+    "frag",
+    "flood"
+   ],
+   "brief": "بعد از مرگ THE LEAK و تخلیه‌ی کامل (سطح ۰) پیدا می‌شه: پروسس‌های کرش‌کرده که وسط کار یخ زدن، مثل یه موزه. تکه‌ی حافظه و lore. درِ قفل یه باس اختیاری فاز ۶ (FORK BOMB) اینجاست.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H03",
+     "gate": "flood0",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H08",
+   "zone": "heap",
+   "title": "gc.log",
+   "x": 1148,
+   "y": -36,
+   "w": 64,
+   "h": 16,
+   "role": "bench",
+   "feats": [
+    "bench"
+   ],
+   "brief": "نیمکت قبل از باس، اتاق فانوس GC. لاگ‌های GC روی دیوار داستان رو می‌گن: «cannot free: still referenced by THE LEAK».",
+   "doors": [
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H09",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H06",
+   "zone": "heap",
+   "title": "stack_overflow.c",
+   "x": 1212,
+   "y": -29,
+   "w": 26,
+   "h": 64,
+   "role": "path",
+   "feats": [
+    "js:3-3",
+    "rising"
+   ],
+   "brief": "صحنه‌ی امضای HEAP (3-3): وقتی پات به کف چاه می‌رسه مایع شروع به بالا اومدن می‌کنه («It is rising. Go UP»). صعود با پرش دیواری و سکوها، و STACK OVERFLOWها که روت می‌افتن. بالا به gc.log می‌رسی. بعد از مرگ LEAK دیگه بالا نمی‌آد.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 50,
+     "b": 53,
+     "to": "H05",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 32,
+     "b": 35,
+     "to": "H07",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 2,
+     "b": 5,
+     "to": "H08",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H09",
+   "zone": "heap",
+   "title": "THE LEAK",
+   "x": 1124,
+   "y": -34,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:THE LEAK"
+   ],
+   "brief": "آرنای THE LEAK (24×14، همون 3-B). سیل تو هر فاز بالا می‌آد و سکوهای بالا جای امنن؛ پهپاد GC گاهی رد می‌شه و زدنش سطح سیل رو یه کم پایین می‌آره. جایزه: sudo.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "H08",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "H10",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H10",
+   "zone": "heap",
+   "title": "sudoers",
+   "x": 1060,
+   "y": -36,
+   "w": 64,
+   "h": 16,
+   "role": "reward",
+   "feats": [
+    "ability:sudo"
+   ],
+   "brief": "اتاق جایزه: آموزش پرش دوم روی لبه‌هایی که ۵ کاشی بالان و دیوار ندارن. یه دریچه در کف به H04 می‌افته (میان‌بر برگشت به هاب)، و یه دریچه‌ی سقفی که فقط از پایین و با sudo باز می‌شه به mmap.c.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "H09",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 40,
+     "b": 43,
+     "to": "H04",
+     "gate": "drop",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 50,
+     "b": 53,
+     "to": "H11",
+     "gate": "sudo",
+     "note": "hatch",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H11",
+   "zone": "heap",
+   "title": "mmap.c",
+   "x": 1060,
+   "y": -52,
+   "w": 200,
+   "h": 16,
+   "role": "path",
+   "feats": [
+    "vista"
+   ],
+   "brief": "راهروی بالایی به NETWORK: لبه‌های sudo و پهپادهایی که بالای سرت شناورن. از پنجره‌ها کل HEAP زیر پاته. سقفش یه دریچه داره که فقط از بالا باز می‌شه (پای THREAD TOWER).",
+   "doors": [
+    {
+     "side": "S",
+     "a": 50,
+     "b": 53,
+     "to": "H10",
+     "gate": "sudo",
+     "note": "hatch",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "N01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 60,
+     "b": 63,
+     "to": "T02",
+     "gate": "lever",
+     "note": "trapdoor",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H12",
+   "zone": "heap",
+   "title": "alloca.h",
+   "x": 920,
+   "y": -34,
+   "w": 24,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "frag"
+   ],
+   "brief": "اتاق کوچیک بالای malloc.c (از ترک سقف). تکه‌ی حافظه. دیوار شرقیش آجر فایروال نازکه: یه راز داخل راز.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "H02",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "H16",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H16",
+   "zone": "heap",
+   "title": "memory_pool.c",
+   "x": 944,
+   "y": -34,
+   "w": 56,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "انبار پنهان پشت دیوار فایروال H12: صندوق توکن و پلاگین gzip (توکن‌ها ×۱.۵).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "H12",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "H14",
+   "zone": "heap",
+   "title": "heap_top",
+   "x": 768,
+   "y": -34,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "بالای HEAP، با curl از حلقه‌ی H01. پلاگین sourcemap (نقشه چیزهای جمع‌نشده‌ی اتاق‌های دیده‌شده رو نشون می‌ده).",
+   "doors": [
+    {
+     "side": "S",
+     "a": 16,
+     "b": 19,
+     "to": "H01",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N01",
+   "zone": "net",
+   "title": "eth0",
+   "x": 1260,
+   "y": -52,
+   "w": 48,
+   "h": 16,
+   "role": "gate",
+   "feats": [],
+   "brief": "دروازه‌ی HEAP: پل فیبر نوری با بسته‌های نور. یه دریچه در کف مستقیم به بالای هاب روتر می‌افته.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "H11",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 34,
+     "b": 37,
+     "to": "N03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "N04",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N04",
+   "zone": "net",
+   "title": "robots.txt",
+   "x": 1308,
+   "y": -52,
+   "w": 32,
+   "h": 16,
+   "role": "path",
+   "feats": [
+    "clue"
+   ],
+   "brief": "تابلو: «User-agent: * / Disallow: /backup». سرنخ اصلی NETWORK: جایی که خزنده‌ها رو منع کرده دقیقاً جاییه که یه چیزی قایم شده.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "N01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "N05",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N19",
+   "zone": "net",
+   "title": "/backup",
+   "x": 1400,
+   "y": -72,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "frag",
+    "moth"
+   ],
+   "brief": "راز dead code (سرنخ robots.txt): تکه‌ی حافظه و نسخه‌ی پشتیبان یه تابلوی قدیمی.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "N05",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N05",
+   "zone": "net",
+   "title": "sitemap.xml",
+   "x": 1340,
+   "y": -58,
+   "w": 120,
+   "h": 20,
+   "role": "path",
+   "feats": [],
+   "brief": "اتاق تارهای WEB CRAWLER: خط‌های نور مثل تار عنکبوت. SCRAPERها از قلاب‌هایی شبیه حلقه‌ی GET آویزونن. سقفش یه جا dead code ـه (/backup) و کفش یه جا (404). از اینجا خط CI در آسمان پیداست.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 70,
+     "b": 73,
+     "to": "N19",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 15,
+     "b": 18,
+     "to": "N04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 52,
+     "b": 55,
+     "to": "N20",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 15,
+     "b": 18,
+     "to": "N08",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N20",
+   "zone": "net",
+   "title": "404",
+   "x": 1380,
+   "y": -38,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "offmap",
+    "moth"
+   ],
+   "brief": "اتاقی که روی نقشه ثبت نمی‌شه: نقشه به‌جاش «404 Not Found» می‌نویسه. lore و صندوق توکن.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 12,
+     "b": 15,
+     "to": "N05",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N08",
+   "zone": "net",
+   "title": "crawl_queue",
+   "x": 1460,
+   "y": -110,
+   "w": 26,
+   "h": 72,
+   "role": "path",
+   "feats": [],
+   "brief": "چاه عمودی صف خزنده: صعود با پرش دیواری بین تارها، SCRAPERها از بالا پایین می‌آن. یه شکاف curl به token_ring باز می‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 67,
+     "b": 70,
+     "to": "N05",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "N09",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 50,
+     "b": 53,
+     "to": "N18",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N09",
+   "zone": "net",
+   "title": "WEB CRAWLER",
+   "x": 1428,
+   "y": -112,
+   "w": 32,
+   "h": 20,
+   "role": "boss",
+   "feats": [
+    "boss:WEB CRAWLER"
+   ],
+   "brief": "آرنای WEB CRAWLER (32×20، بلندتر برای بازی روی سقف): عنکبوت روباتیک از سقف آویزون می‌شه و تار لیزری می‌کشه؛ فقط وقتی روی سقفه آسیب‌پذیره، پس باید بالا بری. طعمه‌هایی هست که پرتو indexing اول اونا رو هدف می‌گیره. جایزه: curl.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 13,
+     "b": 16,
+     "to": "N08",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 15,
+     "b": 18,
+     "to": "N10",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N10",
+   "zone": "net",
+   "title": "GET.http",
+   "x": 1340,
+   "y": -112,
+   "w": 88,
+   "h": 20,
+   "role": "reward",
+   "feats": [
+    "ability:curl"
+   ],
+   "brief": "اتاق جایزه: آموزش curl روی حلقه‌های GET بالای شکاف‌ها، از تکی تا زنجیره‌ای.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 15,
+     "b": 18,
+     "to": "N09",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 15,
+     "b": 18,
+     "to": "N11",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N11",
+   "zone": "net",
+   "title": "airgap",
+   "x": 1240,
+   "y": -104,
+   "w": 100,
+   "h": 46,
+   "role": "path",
+   "feats": [
+    "vista"
+   ],
+   "brief": "صحنه‌ی امضای NETWORK: «شکاف هوایی» بین ماشین‌ها. با زنجیره‌ی لنگرهای curl از روی خلأ پایین می‌ری تا پای THREAD TOWER؛ برج بالای سرته و HEAP زیر پات. یه دریچه‌ی سقفی (با کابل اسپاگتی) میان‌بر برگشت از بالای برجه.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "N10",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 41,
+     "b": 44,
+     "to": "T01",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 40,
+     "b": 43,
+     "to": "T16",
+     "gate": "drop",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N03",
+   "zone": "net",
+   "title": "core_router",
+   "x": 1290,
+   "y": -36,
+   "w": 32,
+   "h": 48,
+   "role": "hub",
+   "feats": [
+    "terminal",
+    "boss:THE REVIEWER #2"
+   ],
+   "brief": "هاب و ترمینال NETWORK: روتر مرکزی. بالای اتاق سکوهایی تا eth0، پایینش آرنا. وقتی با اولین توانایی NETWORK (curl یا ssh) برگردی، THE REVIEWER #2 منتظره («second review»). اگه هیچ‌وقت با توانایی به کف هاب نیای، می‌شه ازش رد شد.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 4,
+     "b": 7,
+     "to": "N01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 41,
+     "b": 44,
+     "to": "N06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 41,
+     "b": 44,
+     "to": "N12",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N06",
+   "zone": "net",
+   "title": "traceroute",
+   "x": 1238,
+   "y": -3,
+   "w": 52,
+   "h": 16,
+   "role": "path",
+   "feats": [],
+   "brief": "راه هاب به loopback، با تابلوهای hop: «1 router 2 ms… 2 * * *…».",
+   "doors": [
+    {
+     "side": "E",
+     "a": 8,
+     "b": 11,
+     "to": "N03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 26,
+     "b": 29,
+     "to": "N07",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N07",
+   "zone": "net",
+   "title": "ttl",
+   "x": 1260,
+   "y": 13,
+   "w": 24,
+   "h": 32,
+   "role": "path",
+   "feats": [],
+   "brief": "چاه عمودی بین loopback و traceroute؛ فقط با پرش دیواری (بدون sudo، چون بازیکنی که از DEPTHS می‌آد شاید sudo نداشته باشه).",
+   "doors": [
+    {
+     "side": "N",
+     "a": 4,
+     "b": 7,
+     "to": "N06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 4,
+     "b": 7,
+     "to": "N02",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N02",
+   "zone": "net",
+   "title": "loopback",
+   "x": 1236,
+   "y": 45,
+   "w": 48,
+   "h": 16,
+   "role": "gate",
+   "feats": [
+    "lever"
+   ],
+   "brief": "در پشتی DEPTHS: از D07 (پشت دروازه‌ی agents در D06) به اینجا. یه اهرم دروازه‌ی D06 رو از این طرف هم باز می‌کنه، تا حلقه‌ی SOURCE TREE ← HEAP ← NETWORK ← DEPTHS برای هر ترتیبی بسته بشه.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 28,
+     "b": 31,
+     "to": "N07",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "D07",
+     "gate": "agents",
+     "note": "lever",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N12",
+   "zone": "net",
+   "title": "port_scan",
+   "x": 1322,
+   "y": -2,
+   "w": 64,
+   "h": 16,
+   "role": "path",
+   "feats": [],
+   "brief": "درهای پورت (22، 80، 443) که با زمان‌بندی باز و بسته می‌شن؛ ریتم رو یاد بگیر. در co-op یکی می‌تونه پورت رو باز نگه داره.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "N03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "N13",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N13",
+   "zone": "net",
+   "title": "iptables",
+   "x": 1386,
+   "y": -12,
+   "w": 80,
+   "h": 24,
+   "role": "path",
+   "feats": [],
+   "brief": "دشمن جدید WORM که توی دیوارهای نازک حرکت می‌کنه. آجرهای فایروال همه جا که هنوز ازشون رد نمی‌شی (vista). کفش یه جا ترک داره (honeypot).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 17,
+     "b": 20,
+     "to": "N12",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 34,
+     "b": 37,
+     "to": "N21",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 17,
+     "b": 20,
+     "to": "N14",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N21",
+   "zone": "net",
+   "title": "honeypot",
+   "x": 1400,
+   "y": 12,
+   "w": 48,
+   "h": 16,
+   "role": "secret",
+   "feats": [
+    "plugin",
+    "arena"
+   ],
+   "brief": "طعمه: یه گنج پشت شیشه. وارد که بشی درها قفل می‌شن و موج DDOS می‌آد. جایزه: پلاگین rate_limit (گلوله‌های دشمن کندتر).",
+   "doors": [
+    {
+     "side": "N",
+     "a": 20,
+     "b": 23,
+     "to": "N13",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N14",
+   "zone": "net",
+   "title": "dmz",
+   "x": 1466,
+   "y": -4,
+   "w": 32,
+   "h": 16,
+   "role": "bench",
+   "feats": [
+    "bench"
+   ],
+   "brief": "نیمکت قبل از FIREWALL. سقفش آجر فایروال token_ring ـه.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 24,
+     "b": 27,
+     "to": "N18",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "N13",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "N15",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N15",
+   "zone": "net",
+   "title": "FIREWALL",
+   "x": 1498,
+   "y": -2,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:THE FIREWALL"
+   ],
+   "brief": "آرنای THE FIREWALL: سپر جلوش؛ فقط از پشت یا وقتی سپر رو پرت کرده آسیب می‌خوره. چهار «پورت» روی دیوار که بستنشون سپر رو می‌اندازه؛ هر چهارمین فرصت ضربه، ضدحمله می‌کنه (rate limiter). جایزه: ssh.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "N14",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "N16",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N16",
+   "zone": "net",
+   "title": "ssh_tunnel",
+   "x": 1522,
+   "y": -6,
+   "w": 40,
+   "h": 16,
+   "role": "reward",
+   "feats": [
+    "ability:ssh"
+   ],
+   "brief": "اتاق جایزه: آموزش ssh (رو به دیوار نازک ۰.۳ ثانیه بمون تا رد بشی). دیوار شرقی به 22/tcp باز می‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "N15",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "N17",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N17",
+   "zone": "net",
+   "title": "22/tcp",
+   "x": 1562,
+   "y": -6,
+   "w": 26,
+   "h": 82,
+   "role": "path",
+   "feats": [],
+   "brief": "چاه پورت ssh به سمت پایین (GIT HISTORY). وسط چاه یه درِ بی‌دستگیره به شرق هست که از طرف PRODUCTION باز می‌شه (CDN).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "N16",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 33,
+     "b": 36,
+     "to": "P15",
+     "gate": "lever",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 4,
+     "b": 7,
+     "to": "G01",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N18",
+   "zone": "net",
+   "title": "token_ring",
+   "x": 1486,
+   "y": -80,
+   "w": 24,
+   "h": 76,
+   "role": "loop",
+   "feats": [],
+   "brief": "حلقه‌ی دور هاب: بسته‌ها روی یه مسیر دایره‌ای می‌چرخن. ورودی بالا با curl، ورودی پایین با ssh؛ با هر دو، دو بال NETWORK بی‌واسطه به هم وصل می‌شن.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 20,
+     "b": 23,
+     "to": "N08",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 4,
+     "b": 7,
+     "to": "N14",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T01",
+   "zone": "tower",
+   "title": "pthread_create.c",
+   "x": 1176,
+   "y": -72,
+   "w": 64,
+   "h": 20,
+   "role": "bench",
+   "feats": [
+    "bench",
+    "vista"
+   ],
+   "brief": "پای برج و نیمکت. از airgap می‌رسی و برای اولین بار سه ریسه‌ی برج رو بالای سرت می‌بینی.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "N11",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "T02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 24,
+     "b": 27,
+     "to": "TC1",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T02",
+   "zone": "tower",
+   "title": "async_await.ts",
+   "x": 1090,
+   "y": -72,
+   "w": 86,
+   "h": 20,
+   "role": "path",
+   "feats": [
+    "js:4-1"
+   ],
+   "brief": "طبقه‌ی پایه (4-1، کوتاه‌شده): بلوک‌های await که نصف وقت هستن. یه دریچه در کف که فقط از بالا باز می‌شه به mmap.c (میان‌بر TOWER ↔ HEAP).",
+   "doors": [
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "T01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 30,
+     "b": 33,
+     "to": "H11",
+     "gate": "lever",
+     "note": "trapdoor",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "TA1",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 58,
+     "b": 61,
+     "to": "TB1",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "TA1",
+   "zone": "tower",
+   "title": "thread_0.c",
+   "x": 1090,
+   "y": -116,
+   "w": 26,
+   "h": 44,
+   "role": "path",
+   "feats": [
+    "blink"
+   ],
+   "brief": "ریسه‌ی ۰، پایین: بلوک‌های چشمکی (async) در صعود عمودی.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "T02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "T04",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "TB1",
+   "zone": "tower",
+   "title": "thread_1.c",
+   "x": 1138,
+   "y": -116,
+   "w": 26,
+   "h": 44,
+   "role": "path",
+   "feats": [
+    "heisenbug"
+   ],
+   "brief": "ریسه‌ی ۱، پایین: Heisenbugها که فقط وقتی نگاهشون نمی‌کنی حرکت می‌کنن. یه دیوار ترک‌دار به heisenbug.log.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "T02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 13,
+     "b": 16,
+     "to": "T15",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "T04",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "TC1",
+   "zone": "tower",
+   "title": "thread_2.c",
+   "x": 1190,
+   "y": -116,
+   "w": 26,
+   "h": 44,
+   "role": "path",
+   "feats": [
+    "gears"
+   ],
+   "brief": "ریسه‌ی ۲، پایین: چرخ‌دنده‌های ثابت و غلتان؛ زمان‌بندی.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "T01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "T04",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T15",
+   "zone": "tower",
+   "title": "heisenbug.log",
+   "x": 1164,
+   "y": -110,
+   "w": 26,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin",
+    "arena"
+   ],
+   "brief": "اتاق چالش اختیاری: چند Heisenbug که باید با نگاه کردن نگهشون داری تا از یه راهروی باریک رد بشی. جایزه: پلاگین hot_path (dash با ضربه به دشمن دوباره پر می‌شه).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "TB1",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T04",
+   "zone": "tower",
+   "title": "race_condition.go",
+   "x": 1090,
+   "y": -136,
+   "w": 150,
+   "h": 20,
+   "role": "path",
+   "feats": [
+    "js:4-2",
+    "bench"
+   ],
+   "brief": "طبقه‌ی میانی (4-2، کوتاه‌شده) که هر سه ریسه رو قطع می‌کنه: Racerها و نیمکت وسط برج. از اینجا انتخاب می‌کنی کدوم ریسه رو بالا بری.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "TA1",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 58,
+     "b": 61,
+     "to": "TB1",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 110,
+     "b": 113,
+     "to": "TC1",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "TA2",
+     "gate": "sudo",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 58,
+     "b": 61,
+     "to": "TB2",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "TA2",
+   "zone": "tower",
+   "title": "deadlock.rs",
+   "x": 1090,
+   "y": -198,
+   "w": 26,
+   "h": 62,
+   "role": "path",
+   "feats": [
+    "js:4-3",
+    "sudo"
+   ],
+   "brief": "ریسه‌ی ۰، بالا (4-3): صعود با sudo. یه دیوار dead code به volatile.h.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "T04",
+     "gate": "sudo",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 35,
+     "b": 38,
+     "to": "T14",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "T08",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "TB2",
+   "zone": "tower",
+   "title": "mutex.c",
+   "x": 1138,
+   "y": -198,
+   "w": 26,
+   "h": 62,
+   "role": "path",
+   "feats": [
+    "mutex"
+   ],
+   "brief": "ریسه‌ی ۱، بالا: درهای mutex که فقط تا وقتی کلید فشرده‌ست بازن. تنها: کلید رو بزن و بدو؛ دو نفره: یکی نگه داره. درِ آرنای RACE CONDITION پایین همین ریسه‌ست.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "T04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 55,
+     "b": 58,
+     "to": "T06",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "T08",
+     "gate": "mutex",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "TC2",
+   "zone": "tower",
+   "title": "semaphore.h",
+   "x": 1190,
+   "y": -198,
+   "w": 26,
+   "h": 62,
+   "role": "reward",
+   "feats": [
+    "ability:breakpoint"
+   ],
+   "brief": "ریسه‌ی ۲، بالا (بعد از RACE CONDITION): آموزش breakpoint روی پیستون‌ها و سکوهای متحرک؛ لبه‌های sudo. بالاش به while_true.js می‌رسه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 55,
+     "b": 58,
+     "to": "T06",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 6,
+     "b": 9,
+     "to": "T09",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T06",
+   "zone": "tower",
+   "title": "RACE CONDITION",
+   "x": 1164,
+   "y": -150,
+   "w": 26,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:RACE CONDITION"
+   ],
+   "brief": "آرنای RACE CONDITION، دقیقاً بین ریسه‌ی ۱ و ۲: دو ریسه‌ی سریع که اول هم‌گامن و هر فاز بیشتر از هم جدا می‌شن؛ زدن یکی اون یکی رو تندتر می‌کنه. جایزه: breakpoint.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "TB2",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "TC2",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T14",
+   "zone": "tower",
+   "title": "volatile.h",
+   "x": 1066,
+   "y": -170,
+   "w": 24,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "frag",
+    "moth"
+   ],
+   "brief": "راز dead code کنار ریسه‌ی ۰: تکه‌ی حافظه.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "TA2",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T08",
+   "zone": "tower",
+   "title": "scheduler.c",
+   "x": 1090,
+   "y": -218,
+   "w": 76,
+   "h": 20,
+   "role": "hub",
+   "feats": [
+    "terminal"
+   ],
+   "brief": "بالای برج، ترمینال: ساعت بزرگ زمان‌بند که عقربه‌هاش سکوهای چرخانن. از پنجره‌ها کل دنیا پیداست.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "TA2",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 58,
+     "b": 61,
+     "to": "TB2",
+     "gate": "mutex",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "T09",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T09",
+   "zone": "tower",
+   "title": "while_true.js",
+   "x": 1166,
+   "y": -218,
+   "w": 64,
+   "h": 20,
+   "role": "puzzle",
+   "feats": [
+    "wrap"
+   ],
+   "brief": "اتاقی که تموم نمی‌شه: از شرق بیرون بری، از غرب همون اتاق برمی‌گردی؛ هر دور یه چیز کوچیک عوض می‌شه (شمارنده‌ی i روی دیوار، دشمن‌ها). باید `break;` رو پیدا کنی (کلیدی که فقط تو دور سوم پیداست) تا درِ شرقی به آرنا باز بشه.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 30,
+     "b": 33,
+     "to": "TC2",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "T08",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "T09",
+     "gate": "wrap",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "T10",
+     "gate": "break",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T10",
+   "zone": "tower",
+   "title": "INFINITE LOOP",
+   "x": 1230,
+   "y": -214,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:INFINITE LOOP"
+   ],
+   "brief": "آرنای INFINITE LOOP: مار حلقه‌ای که فقط دُمش آسیب می‌خوره؛ یه کلید «break» تو آرنا ۳ ثانیه فریزش می‌کنه؛ فاز ۲ دو مار تودرتو. جایزه: opus.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "T09",
+     "gate": "break",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "T11",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T11",
+   "zone": "tower",
+   "title": "busy_wait.c",
+   "x": 1254,
+   "y": -218,
+   "w": 48,
+   "h": 20,
+   "role": "reward",
+   "feats": [
+    "ability:opus"
+   ],
+   "brief": "اتاق جایزه‌ی opus. یه پیستون خیلی تند (busy-wait) راه شرق به PRODUCTION رو بسته؛ با breakpoint فریزش کن. کف اتاق یه دسته کابل اسپاگتیه که با opus می‌بُری (میان‌بر goto).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "T10",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 24,
+     "b": 27,
+     "to": "T16",
+     "gate": "opus",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "P01",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "T16",
+   "zone": "tower",
+   "title": "goto",
+   "x": 1270,
+   "y": -198,
+   "w": 26,
+   "h": 94,
+   "role": "shortcut",
+   "feats": [
+    "cable"
+   ],
+   "brief": "چاه میان‌بر از بالای برج تا airgap و پای برج. بعد از بریدن کابل با opus، برگشت از بالای برج به NETWORK چند ثانیه‌ست.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 8,
+     "b": 11,
+     "to": "T11",
+     "gate": "opus",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "N11",
+     "gate": "drop",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P01",
+   "zone": "prod",
+   "title": "build.yml",
+   "x": 1302,
+   "y": -218,
+   "w": 100,
+   "h": 20,
+   "role": "path",
+   "feats": [
+    "conveyor"
+   ],
+   "brief": "اولین مرحله‌ی خط CI/CD در آسمان: نوار نقاله‌ی build. اگه ضربه بخوری «build failed» و به اول همین مرحله برمی‌گردی.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "T11",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 13,
+     "b": 16,
+     "to": "P02",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P02",
+   "zone": "prod",
+   "title": "test.yml",
+   "x": 1402,
+   "y": -212,
+   "w": 100,
+   "h": 24,
+   "role": "path",
+   "feats": [
+    "conveyor"
+   ],
+   "brief": "مرحله‌ی تست: سه دروازه‌ی unit، integration و e2e، هر کدوم یه چالش کوتاه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "P01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 17,
+     "b": 20,
+     "to": "P03",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P03",
+   "zone": "prod",
+   "title": "deploy.yml",
+   "x": 1502,
+   "y": -204,
+   "w": 88,
+   "h": 36,
+   "role": "path",
+   "feats": [
+    "conveyor",
+    "vista"
+   ],
+   "brief": "مرحله‌ی deploy: نوار نقاله‌ها پایین می‌رن به سمت PRODUCTION؛ کل NETWORK و HEAP زیر پاته.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "P02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 23,
+     "b": 26,
+     "to": "P04",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P04",
+   "zone": "prod",
+   "title": "staging",
+   "x": 1590,
+   "y": -190,
+   "w": 40,
+   "h": 20,
+   "role": "bench",
+   "feats": [
+    "bench"
+   ],
+   "brief": "نیمکت؛ دروازه‌ی بالایی خوشه‌ی PRODUCTION.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "P03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "P05",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P05",
+   "zone": "prod",
+   "title": "release_queue",
+   "x": 1630,
+   "y": -190,
+   "w": 26,
+   "h": 100,
+   "role": "path",
+   "feats": [],
+   "brief": "چاه پایین‌رونده به هاب، با لنگرهای curl و لبه‌های sudo. دیوار غربیش dead code ـه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "P04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 47,
+     "b": 50,
+     "to": "P16",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 93,
+     "b": 96,
+     "to": "P06",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P16",
+   "zone": "prod",
+   "title": "backup.tar.gz",
+   "x": 1606,
+   "y": -150,
+   "w": 24,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "frag",
+    "moth"
+   ],
+   "brief": "راز dead code: تکه‌ی حافظه.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "P05",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P06",
+   "zone": "prod",
+   "title": "load_balancer",
+   "x": 1656,
+   "y": -104,
+   "w": 48,
+   "h": 32,
+   "role": "hub",
+   "feats": [
+    "terminal"
+   ],
+   "brief": "هاب و ترمینال PRODUCTION: سکوهایی که مثل load balancer تو رو بین چند مسیر پخش می‌کنن. هر دو ورودی PRODUCTION اینجا به هم می‌رسن.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "P05",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 2,
+     "b": 5,
+     "to": "P08",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 17,
+     "b": 20,
+     "to": "P09",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P08",
+   "zone": "prod",
+   "title": "incident.log",
+   "x": 1638,
+   "y": -72,
+   "w": 26,
+   "h": 80,
+   "role": "path",
+   "feats": [
+    "fire"
+   ],
+   "brief": "چاه پایینی: هشدارها (آژیر قرمز) هر چند ثانیه وضعیت اتاق رو عوض می‌کنن (فواره‌های آتش روشن و خاموش). یه آژیر دائمی هست که با breakpoint ساکتش می‌کنی (راز).",
+   "doors": [
+    {
+     "side": "N",
+     "a": 20,
+     "b": 23,
+     "to": "P06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 49,
+     "b": 52,
+     "to": "P17",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "P18",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P18",
+   "zone": "prod",
+   "title": "pagerduty.log",
+   "x": 1638,
+   "y": 8,
+   "w": 26,
+   "h": 74,
+   "role": "path",
+   "feats": [
+    "bench"
+   ],
+   "brief": "نیمه‌ی پایینی چاه، با نیمکت. درِ CDN (به NETWORK) و بالای آسانسور rollback اینجاست.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 19,
+     "b": 22,
+     "to": "P15",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "P08",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 39,
+     "b": 42,
+     "to": "P07",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P17",
+   "zone": "prod",
+   "title": "on_call",
+   "x": 1664,
+   "y": -30,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "راز breakpoint: پلاگین on_call (سفر سریع از هر نیمکت، نه فقط ترمینال‌ها).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "P08",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P15",
+   "zone": "prod",
+   "title": "cdn",
+   "x": 1588,
+   "y": 20,
+   "w": 50,
+   "h": 16,
+   "role": "shortcut",
+   "feats": [
+    "lever"
+   ],
+   "brief": "میان‌بر به NETWORK: اهرمش این طرفه؛ وقتی کشیدیش، درِ بی‌دستگیره‌ی 22/tcp باز می‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "N17",
+     "gate": "lever",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "P18",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P07",
+   "zone": "prod",
+   "title": "rollback.sh",
+   "x": 1612,
+   "y": 40,
+   "w": 26,
+   "h": 174,
+   "role": "gate",
+   "feats": [
+    "lift"
+   ],
+   "brief": "آسانسور طولانی rollback: از ته GIT HISTORY تا وسط PRODUCTION سوارش می‌شی.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "P18",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 163,
+     "b": 166,
+     "to": "G14",
+     "gate": "revert",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P09",
+   "zone": "prod",
+   "title": "hotfix_friday.sh",
+   "x": 1704,
+   "y": -96,
+   "w": 225,
+   "h": 18,
+   "role": "path",
+   "feats": [
+    "js:5-1"
+   ],
+   "brief": "(5-1) فواره‌های آتش، پهپادها و تابلوی «This is fine». نیمکت آخرش.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "P06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "P10",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P10",
+   "zone": "prod",
+   "title": "THE REVIEWER #3",
+   "x": 1929,
+   "y": -94,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:THE REVIEWER #3"
+   ],
+   "brief": "آرنای THE REVIEWER #3: بازبینی نهایی قبل از deploy. همه‌ی حرکت‌های قبلیش، تندتر، به‌علاوه‌ی یه حرکت تازه که catch رو امتحان می‌کنه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "P09",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "P11",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P11",
+   "zone": "prod",
+   "title": "deadline",
+   "x": 1953,
+   "y": -104,
+   "w": 160,
+   "h": 24,
+   "role": "path",
+   "feats": [
+    "chase"
+   ],
+   "brief": "فرار DEADLINE: دیوار قرمز ددلاین از پشت دنبالت می‌آد و باید تا آخر اتاق بدوی و بالا بری. آخرش یه نیمکت، تا اگه پیش MONOLITH مردی فرار رو تکرار نکنی.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 17,
+     "b": 20,
+     "to": "P10",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 15,
+     "b": 18,
+     "to": "P12",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P12",
+   "zone": "prod",
+   "title": "THE MONOLITH",
+   "x": 2113,
+   "y": -96,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:THE MONOLITH"
+   ],
+   "brief": "آرنای باس نهایی THE MONOLITH: هر فاز یه توانایی می‌خواد؛ فاز آخر «refactor»: به چهار میکروسرویس تقسیم می‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "P11",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "P13",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "P13",
+   "zone": "prod",
+   "title": "exit_0",
+   "x": 2137,
+   "y": -100,
+   "w": 32,
+   "h": 16,
+   "role": "end",
+   "feats": [
+    "ending"
+   ],
+   "brief": "پایان: 06:00، «343 tests passing • 1 moth relocated • exit code 0».",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "P12",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G01",
+   "zone": "git",
+   "title": "HEAD",
+   "x": 1540,
+   "y": 76,
+   "w": 48,
+   "h": 16,
+   "role": "gate",
+   "feats": [
+    "bench"
+   ],
+   "brief": "ورودی و نیمکت: «HEAD -> main». زیر پات زنجیره‌ی کامیت‌ها پایین می‌ره؛ شرقش ماشین‌آلات آسانسور rollback پیداست.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 26,
+     "b": 29,
+     "to": "N17",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "G02",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G02",
+   "zone": "git",
+   "title": "git_log",
+   "x": 1400,
+   "y": 80,
+   "w": 140,
+   "h": 24,
+   "role": "path",
+   "feats": [],
+   "brief": "پلکان کامیت‌ها: هر سکو یه کامیته با پیامش (lore). یه کف ترک‌دار به old/hello_world.py.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 5,
+     "b": 8,
+     "to": "G01",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 20,
+     "b": 23,
+     "to": "G16",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 19,
+     "b": 22,
+     "to": "G03",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G16",
+   "zone": "git",
+   "title": "old/hello_world.py",
+   "x": 1404,
+   "y": 104,
+   "w": 46,
+   "h": 24,
+   "role": "secret",
+   "feats": [
+    "lore",
+    "plugin"
+   ],
+   "brief": "راز: نسخه‌ی سپیای اتاق اول بازی «سه کامیت پیش»، با یه تابلوی حذف‌شده («TODO: add a boss»). پلاگین.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 16,
+     "b": 19,
+     "to": "G02",
+     "gate": "bash",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G03",
+   "zone": "git",
+   "title": "branch",
+   "x": 1360,
+   "y": 96,
+   "w": 40,
+   "h": 40,
+   "role": "hub",
+   "feats": [
+    "terminal"
+   ],
+   "brief": "هاب و ترمینال GIT: شاخه می‌شه. غرب feature/a، پایین feature/b؛ هر دو آخر به merge می‌رسن.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 3,
+     "b": 6,
+     "to": "G02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 17,
+     "b": 20,
+     "to": "G04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 16,
+     "b": 19,
+     "to": "G06",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G04",
+   "zone": "git",
+   "title": "feature/a",
+   "x": 1270,
+   "y": 104,
+   "w": 90,
+   "h": 20,
+   "role": "path",
+   "feats": [
+    "checkout"
+   ],
+   "brief": "اهرم‌های checkout: بلوک‌های سبز (+) و قرمز (−) با هر کشیدن جاشون عوض می‌شه. سقفش dead code ـه (stash). دیوار غربیش آجر فایروال به vendor/ (DEPENDENCY HELL).",
+   "doors": [
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "G03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "G05",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "G09",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 9,
+     "b": 12,
+     "to": "X12",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G05",
+   "zone": "git",
+   "title": "stash@{0}",
+   "x": 1270,
+   "y": 90,
+   "w": 40,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin",
+    "moth"
+   ],
+   "brief": "راز: چیزی که یکی stash کرد و یادش رفت. پلاگین nohup (یه بار ضربه‌ی کشنده رو با ۱ جون رد می‌کنی، تا نیمکت بعدی).",
+   "doors": [
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "G04",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G09",
+   "zone": "git",
+   "title": "checkout",
+   "x": 1270,
+   "y": 124,
+   "w": 30,
+   "h": 60,
+   "role": "path",
+   "feats": [
+    "checkout",
+    "key"
+   ],
+   "brief": "چاه پایین feature/a با پازل checkout وسط سقوط. کلید شاخه‌ی A.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "G04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 51,
+     "b": 54,
+     "to": "G08",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G06",
+   "zone": "git",
+   "title": "feature/b",
+   "x": 1360,
+   "y": 136,
+   "w": 90,
+   "h": 20,
+   "role": "path",
+   "feats": [],
+   "brief": "شاخه‌ی دوم: ZOMBIE PROCESSها و نسخه‌های قدیمی دشمن‌های اول (Bug v0.1).",
+   "doors": [
+    {
+     "side": "N",
+     "a": 16,
+     "b": 19,
+     "to": "G03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "G07",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G07",
+   "zone": "git",
+   "title": "bisect",
+   "x": 1450,
+   "y": 128,
+   "w": 64,
+   "h": 48,
+   "role": "puzzle",
+   "feats": [
+    "key"
+   ],
+   "brief": "پازل git bisect: هر دوراهی یه انتخاب good/bad؛ انتخاب غلط برت می‌گردونه نصفه‌ی قبل. سرنخ‌ها روی تابلوها. کلید شاخه‌ی B.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 17,
+     "b": 20,
+     "to": "G06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 30,
+     "b": 33,
+     "to": "G10",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G08",
+   "zone": "git",
+   "title": "merge",
+   "x": 1300,
+   "y": 170,
+   "w": 60,
+   "h": 24,
+   "role": "puzzle",
+   "feats": [
+    "merge"
+   ],
+   "brief": "اتاق merge: دو در از دو شاخه. خروجی پایینی فقط با هر دو کلید باز می‌شه («Merge branch feature/a»).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 5,
+     "b": 8,
+     "to": "G09",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "G10",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 16,
+     "b": 19,
+     "to": "G11",
+     "gate": "merge",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G10",
+   "zone": "git",
+   "title": "cherry-pick",
+   "x": 1360,
+   "y": 176,
+   "w": 154,
+   "h": 16,
+   "role": "path",
+   "feats": [],
+   "brief": "راهرو از bisect به merge؛ یه «کامیت» (صندوق) رو می‌چینی.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 5,
+     "b": 8,
+     "to": "G08",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 120,
+     "b": 123,
+     "to": "G07",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G11",
+   "zone": "git",
+   "title": "regression_test",
+   "x": 1300,
+   "y": 194,
+   "w": 40,
+   "h": 16,
+   "role": "bench",
+   "feats": [
+    "bench"
+   ],
+   "brief": "نیمکت قبل از REGRESSION.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 16,
+     "b": 19,
+     "to": "G08",
+     "gate": "merge",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "G12",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G12",
+   "zone": "git",
+   "title": "REGRESSION",
+   "x": 1340,
+   "y": 196,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:REGRESSION"
+   ],
+   "brief": "آرنای REGRESSION: سایه‌ای که ۵ ثانیه‌ی آخر حرکتت رو تکرار می‌کنه؛ فاز ۲ دو سایه (تو co-op سایه‌ی هر دو بازیکن). جایزه: revert.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "G11",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "G13",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G13",
+   "zone": "git",
+   "title": "reflog",
+   "x": 1364,
+   "y": 192,
+   "w": 60,
+   "h": 20,
+   "role": "reward",
+   "feats": [
+    "ability:revert"
+   ],
+   "brief": "اتاق جایزه: آموزش revert (نشانگر بذار، بعد برگرد بهش). یه کلید فشاری که نشانگر روش در رو باز نگه می‌داره.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "G12",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "G14",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G14",
+   "zone": "git",
+   "title": "revert.sh",
+   "x": 1424,
+   "y": 192,
+   "w": 188,
+   "h": 20,
+   "role": "path",
+   "feats": [
+    "crumble-bridge",
+    "plate"
+   ],
+   "brief": "پازل آخر GIT: پل‌های فروریز و کلیدهای فشاری با هم. ته اتاق آسانسور rollback به PRODUCTION. یه کف package-lock هم داره.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "G13",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 46,
+     "b": 49,
+     "to": "G15",
+     "gate": "force",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "P07",
+     "gate": "revert",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "G15",
+   "zone": "git",
+   "title": "initial_commit",
+   "x": 1460,
+   "y": 212,
+   "w": 40,
+   "h": 16,
+   "role": "secret",
+   "feats": [
+    "frag",
+    "lore"
+   ],
+   "brief": "راز --force: عمیق‌ترین نقطه‌ی GIT، «Initial commit». تکه‌ی حافظه و lore (اولین باری که پروانه دیده شد).",
+   "doors": [
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "G14",
+     "gate": "force",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X01",
+   "zone": "hell",
+   "title": "npm_install --deep",
+   "x": 952,
+   "y": 21,
+   "w": 26,
+   "h": 60,
+   "role": "gate",
+   "feats": [],
+   "brief": "ورودی: از یه طاقچه زیر لبه‌ی گودال D02 (فقط با تاب خوردن روی curl) پایین می‌افتی تو چاه بسته‌ها. کف چاه بسته‌ست تا peer depها حل بشن.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 8,
+     "b": 11,
+     "to": "D02",
+     "gate": "curl",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 51,
+     "b": 54,
+     "to": "X02",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 51,
+     "b": 54,
+     "to": "X03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "X04",
+     "gate": "merge",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X02",
+   "zone": "hell",
+   "title": "peer_deps@1",
+   "x": 890,
+   "y": 61,
+   "w": 62,
+   "h": 20,
+   "role": "puzzle",
+   "feats": [
+    "key"
+   ],
+   "brief": "دوقلوی چپ (v1): آینه‌ی X03. نصف کلید.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "X01",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X03",
+   "zone": "hell",
+   "title": "peer_deps@2",
+   "x": 978,
+   "y": 61,
+   "w": 62,
+   "h": 20,
+   "role": "puzzle",
+   "feats": [
+    "key"
+   ],
+   "brief": "دوقلوی راست (v2): آینه‌ی X02. نصف دیگه‌ی کلید. وقتی هر دو حل بشن، کف چاه باز می‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "X01",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X13",
+   "zone": "hell",
+   "title": ".cache",
+   "x": 890,
+   "y": 81,
+   "w": 62,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "frag",
+    "moth"
+   ],
+   "brief": "راز dead code غرب left-pad: تکه‌ی حافظه.",
+   "doors": [
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "X04",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X04",
+   "zone": "hell",
+   "title": "left-pad",
+   "x": 952,
+   "y": 81,
+   "w": 40,
+   "h": 20,
+   "role": "hub",
+   "feats": [
+    "terminal",
+    "lore"
+   ],
+   "brief": "هاب و ترمینال: یادبود «۱۱ خطی که اینترنت رو شکست». نیمکت.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "X01",
+     "gate": "merge",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "X13",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "X05",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X05",
+   "zone": "hell",
+   "title": "circular_dep",
+   "x": 992,
+   "y": 81,
+   "w": 26,
+   "h": 56,
+   "role": "puzzle",
+   "feats": [
+    "wrap"
+   ],
+   "brief": "وابستگی دایره‌ای: از ته اتاق بیفتی، از بالای همون اتاق می‌افتی (حلقه‌ی عمودی)، تا وقتی با کلید dedupe چرخه رو بشکنی؛ بعد درِ شرقی باز می‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "X04",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "X05",
+     "gate": "wrap",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 47,
+     "b": 50,
+     "to": "X06",
+     "gate": "break",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X06",
+   "zone": "hell",
+   "title": "node_modules/node_modules",
+   "x": 1018,
+   "y": 117,
+   "w": 108,
+   "h": 20,
+   "role": "path",
+   "feats": [],
+   "brief": "اتاق تودرتو: همون الگو سه بار کوچیک‌تر تکرار می‌شه. Mimicها و RANSOMWARE.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "X05",
+     "gate": "break",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "X07",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X07",
+   "zone": "hell",
+   "title": "package-lock.json",
+   "x": 1126,
+   "y": 124,
+   "w": 40,
+   "h": 20,
+   "role": "bench",
+   "feats": [
+    "bench"
+   ],
+   "brief": "نیمکت قبل از باس؛ کف‌های package-lock همه جا (هنوز نمی‌شکنی).",
+   "doors": [
+    {
+     "side": "W",
+     "a": 4,
+     "b": 7,
+     "to": "X06",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 11,
+     "b": 14,
+     "to": "X08",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X08",
+   "zone": "hell",
+   "title": "DEPENDENCY HELL",
+   "x": 1166,
+   "y": 128,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:DEPENDENCY HELL"
+   ],
+   "brief": "آرنای DEPENDENCY HELL: بسته پرت می‌کنه که باز می‌شه و دشمن یا بسته‌ی کوچیک‌تر ازش درمی‌آد؛ جعبه‌های خالی روی هم سکو می‌شن؛ اینکه کدوم «allocation» زنده بمونه حمله‌ی بعدی رو تعیین می‌کنه. جایزه: --force.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 7,
+     "b": 10,
+     "to": "X07",
+     "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 7,
+     "b": 10,
+     "to": "X09",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X09",
+   "zone": "hell",
+   "title": "--force",
+   "x": 1190,
+   "y": 124,
+   "w": 48,
+   "h": 20,
+   "role": "reward",
+   "feats": [
+    "ability:--force"
+   ],
+   "brief": "اتاق جایزه: آموزش slam (کف package-lock رو از دو کاشی بالاتر بشکن). یه دریچه‌ی سقفی (sudo، فقط از پایین) به vendor/. کفش یه قفل کرنل داره که تا مرگ MONOLITH باز نمی‌شه.",
+   "doors": [
+    {
+     "side": "W",
+     "a": 11,
+     "b": 14,
+     "to": "X08",
+     "gate": "boss",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 30,
+     "b": 33,
+     "to": "X12",
+     "gate": "sudo",
+     "note": "hatch",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 20,
+     "b": 23,
+     "to": "X11",
+     "gate": "force",
+     "note": "after THE MONOLITH",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X12",
+   "zone": "hell",
+   "title": "vendor/",
+   "x": 1126,
+   "y": 104,
+   "w": 144,
+   "h": 20,
+   "role": "shortcut",
+   "feats": [],
+   "brief": "راهروی «node_modules رو کامیت کردن!»: از DEPENDENCY HELL تا GIT (دیوار فایروال، ssh). از طرف GIT فقط تا بالای دریچه‌ی X09 می‌رسی؛ نور آرنا از لای توری پیداست.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 94,
+     "b": 97,
+     "to": "X09",
+     "gate": "sudo",
+     "note": "hatch",
+     "built": false
+    },
+    {
+     "side": "E",
+     "a": 9,
+     "b": 12,
+     "to": "G04",
+     "gate": "ssh",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "X11",
+   "zone": "kernel",
+   "title": "/boot",
+   "x": 1190,
+   "y": 144,
+   "w": 48,
+   "h": 16,
+   "role": "gate",
+   "feats": [
+    "sealed"
+   ],
+   "brief": "(فاز ۶) دروازه‌ی KERNEL: مُهر شده تا MONOLITH بمیره و --force داشته باشی.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 20,
+     "b": 23,
+     "to": "X09",
+     "gate": "force",
+     "note": "after THE MONOLITH",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R12",
+   "zone": "src",
+   "title": ".vscode/",
+   "x": 276,
+   "y": -16,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "بالای R02 (با sudo از بالای چاه R02): پلاگین --verbose (دیوارهای dead code نزدیک برق می‌زنن). یه راز اول بازی که بقیه‌ی رازها رو پیدا می‌کنه.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 14,
+     "b": 17,
+     "to": "R02",
+     "gate": "sudo",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R13",
+   "zone": "src",
+   "title": "tests/",
+   "x": 40,
+   "y": -14,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "frag"
+   ],
+   "brief": "بالای R01: کلید catch پشت شیشه که از همون صفحه‌ی اول بازی پیداست؛ یه EXCEPTION کنارشه. تکه‌ی حافظه.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 14,
+     "b": 17,
+     "to": "R01",
+     "gate": "catch",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R14",
+   "zone": "src",
+   "title": ".gitignore",
+   "x": 150,
+   "y": 16,
+   "w": 40,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "زیر R01 (کف package-lock نزدیک آخر R01، --force): «فایل‌هایی که نادیده گرفتی». پلاگین.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 18,
+     "b": 21,
+     "to": "R01",
+     "gate": "force",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R15",
+   "zone": "src",
+   "title": "docker-compose.yml",
+   "x": 460,
+   "y": -14,
+   "w": 40,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "بالای R03 (کلید شکاف agents): انبار. پلاگین.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 16,
+     "b": 19,
+     "to": "R03",
+     "gate": "agents",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R16",
+   "zone": "src",
+   "title": "cron.d/",
+   "x": 624,
+   "y": -14,
+   "w": 32,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "door:CRON"
+   ],
+   "brief": "بالای R07 (پیستون، breakpoint): لونه‌ی CRON (باس اختیاری فاز ۶)، درِ قفل.",
+   "doors": [
+    {
+     "side": "S",
+     "a": 12,
+     "b": 15,
+     "to": "R07",
+     "gate": "breakpoint",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R17",
+   "zone": "src",
+   "title": "pre-commit",
+   "x": 560,
+   "y": 16,
+   "w": 40,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "زیر R04 (کلید فشاری؛ با نشانگر revert باز می‌مونه). پلاگین.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 16,
+     "b": 19,
+     "to": "R04",
+     "gate": "revert",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "R18",
+   "zone": "src",
+   "title": "spaghetti.js",
+   "x": 420,
+   "y": 16,
+   "w": 40,
+   "h": 14,
+   "role": "secret",
+   "feats": [
+    "plugin"
+   ],
+   "brief": "زیر R03 (کابل اسپاگتی، opus). پلاگین.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 16,
+     "b": 19,
+     "to": "R03",
+     "gate": "opus",
+     "note": "",
+     "built": false
+    }
+   ]
+  }
+ ],
+ "links": [
+  {
+   "a": "R11",
+   "side": "E",
+   "b": "H01",
+   "lo": -11,
+   "hi": -8,
+   "gate": "catch",
+   "note": ""
+  },
+  {
+   "a": "H01",
+   "side": "E",
+   "b": "H02",
+   "lo": -11,
+   "hi": -8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "H02",
+   "side": "E",
+   "b": "H04",
+   "lo": -11,
+   "hi": -8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "H04",
+   "side": "E",
+   "b": "H03",
+   "lo": -11,
+   "hi": -8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "H03",
+   "side": "E",
+   "b": "H13",
+   "lo": -11,
+   "hi": -8,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "H03",
+   "side": "E",
+   "b": "H07",
+   "lo": 3,
+   "hi": 6,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "H03",
+   "side": "E",
+   "b": "H05",
+   "lo": 21,
+   "hi": 24,
+   "gate": "flood1",
+   "note": ""
+  },
+  {
+   "a": "H03",
+   "side": "E",
+   "b": "H15",
+   "lo": 38,
+   "hi": 41,
+   "gate": "flood0",
+   "note": ""
+  },
+  {
+   "a": "H03",
+   "side": "W",
+   "b": "D03",
+   "lo": 38,
+   "hi": 41,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "H03",
+   "side": "S",
+   "b": "D04",
+   "lo": 1130,
+   "hi": 1133,
+   "gate": "flood0",
+   "note": "drop"
+  },
+  {
+   "a": "H05",
+   "side": "E",
+   "b": "H06",
+   "lo": 21,
+   "hi": 24,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "H07",
+   "side": "E",
+   "b": "H06",
+   "lo": 3,
+   "hi": 6,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "H08",
+   "side": "E",
+   "b": "H06",
+   "lo": -27,
+   "hi": -24,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "H08",
+   "side": "W",
+   "b": "H09",
+   "lo": -27,
+   "hi": -24,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "H09",
+   "side": "W",
+   "b": "H10",
+   "lo": -27,
+   "hi": -24,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "H10",
+   "side": "S",
+   "b": "H04",
+   "lo": 1100,
+   "hi": 1103,
+   "gate": "drop",
+   "note": ""
+  },
+  {
+   "a": "H10",
+   "side": "N",
+   "b": "H11",
+   "lo": 1110,
+   "hi": 1113,
+   "gate": "sudo",
+   "note": "hatch"
+  },
+  {
+   "a": "H01",
+   "side": "N",
+   "b": "H14",
+   "lo": 784,
+   "hi": 787,
+   "gate": "curl",
+   "note": ""
+  },
+  {
+   "a": "H02",
+   "side": "N",
+   "b": "H12",
+   "lo": 930,
+   "hi": 933,
+   "gate": "bash",
+   "note": ""
+  },
+  {
+   "a": "H12",
+   "side": "E",
+   "b": "H16",
+   "lo": -27,
+   "hi": -24,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "H11",
+   "side": "E",
+   "b": "N01",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N01",
+   "side": "S",
+   "b": "N03",
+   "lo": 1294,
+   "hi": 1297,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N01",
+   "side": "E",
+   "b": "N04",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N05",
+   "side": "N",
+   "b": "N19",
+   "lo": 1410,
+   "hi": 1413,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "N04",
+   "side": "E",
+   "b": "N05",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N05",
+   "side": "S",
+   "b": "N20",
+   "lo": 1392,
+   "hi": 1395,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "N05",
+   "side": "E",
+   "b": "N08",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N09",
+   "side": "E",
+   "b": "N08",
+   "lo": -99,
+   "hi": -96,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "N10",
+   "side": "E",
+   "b": "N09",
+   "lo": -97,
+   "hi": -94,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "N10",
+   "side": "W",
+   "b": "N11",
+   "lo": -97,
+   "hi": -94,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N08",
+   "side": "E",
+   "b": "N18",
+   "lo": -60,
+   "hi": -57,
+   "gate": "curl",
+   "note": ""
+  },
+  {
+   "a": "N18",
+   "side": "S",
+   "b": "N14",
+   "lo": 1490,
+   "hi": 1493,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "N03",
+   "side": "W",
+   "b": "N06",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N06",
+   "side": "S",
+   "b": "N07",
+   "lo": 1264,
+   "hi": 1267,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N07",
+   "side": "S",
+   "b": "N02",
+   "lo": 1264,
+   "hi": 1267,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N02",
+   "side": "W",
+   "b": "D07",
+   "lo": 54,
+   "hi": 57,
+   "gate": "agents",
+   "note": "lever"
+  },
+  {
+   "a": "N03",
+   "side": "E",
+   "b": "N12",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N12",
+   "side": "E",
+   "b": "N13",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N13",
+   "side": "S",
+   "b": "N21",
+   "lo": 1420,
+   "hi": 1423,
+   "gate": "bash",
+   "note": ""
+  },
+  {
+   "a": "N13",
+   "side": "E",
+   "b": "N14",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N14",
+   "side": "E",
+   "b": "N15",
+   "lo": 5,
+   "hi": 8,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "N15",
+   "side": "E",
+   "b": "N16",
+   "lo": 5,
+   "hi": 8,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "N16",
+   "side": "E",
+   "b": "N17",
+   "lo": 1,
+   "hi": 4,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "N11",
+   "side": "W",
+   "b": "T01",
+   "lo": -63,
+   "hi": -60,
+   "gate": "curl",
+   "note": ""
+  },
+  {
+   "a": "T01",
+   "side": "W",
+   "b": "T02",
+   "lo": -63,
+   "hi": -60,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "T02",
+   "side": "S",
+   "b": "H11",
+   "lo": 1120,
+   "hi": 1123,
+   "gate": "lever",
+   "note": "trapdoor"
+  },
+  {
+   "a": "T02",
+   "side": "N",
+   "b": "TA1",
+   "lo": 1100,
+   "hi": 1103,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "T02",
+   "side": "N",
+   "b": "TB1",
+   "lo": 1148,
+   "hi": 1151,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "T01",
+   "side": "N",
+   "b": "TC1",
+   "lo": 1200,
+   "hi": 1203,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "TB1",
+   "side": "E",
+   "b": "T15",
+   "lo": -103,
+   "hi": -100,
+   "gate": "bash",
+   "note": ""
+  },
+  {
+   "a": "TA1",
+   "side": "N",
+   "b": "T04",
+   "lo": 1100,
+   "hi": 1103,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "TB1",
+   "side": "N",
+   "b": "T04",
+   "lo": 1148,
+   "hi": 1151,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "TC1",
+   "side": "N",
+   "b": "T04",
+   "lo": 1200,
+   "hi": 1203,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "T04",
+   "side": "N",
+   "b": "TA2",
+   "lo": 1100,
+   "hi": 1103,
+   "gate": "sudo",
+   "note": ""
+  },
+  {
+   "a": "T04",
+   "side": "N",
+   "b": "TB2",
+   "lo": 1148,
+   "hi": 1151,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "TB2",
+   "side": "E",
+   "b": "T06",
+   "lo": -143,
+   "hi": -140,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "T06",
+   "side": "E",
+   "b": "TC2",
+   "lo": -143,
+   "hi": -140,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "TA2",
+   "side": "W",
+   "b": "T14",
+   "lo": -163,
+   "hi": -160,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "TA2",
+   "side": "N",
+   "b": "T08",
+   "lo": 1100,
+   "hi": 1103,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "TB2",
+   "side": "N",
+   "b": "T08",
+   "lo": 1148,
+   "hi": 1151,
+   "gate": "mutex",
+   "note": ""
+  },
+  {
+   "a": "TC2",
+   "side": "N",
+   "b": "T09",
+   "lo": 1196,
+   "hi": 1199,
+   "gate": "breakpoint",
+   "note": ""
+  },
+  {
+   "a": "T08",
+   "side": "E",
+   "b": "T09",
+   "lo": -211,
+   "hi": -208,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "T09",
+   "side": "E",
+   "b": "T09",
+   "lo": -207,
+   "hi": -204,
+   "gate": "wrap",
+   "note": ""
+  },
+  {
+   "a": "T09",
+   "side": "E",
+   "b": "T10",
+   "lo": -207,
+   "hi": -204,
+   "gate": "break",
+   "note": ""
+  },
+  {
+   "a": "T10",
+   "side": "E",
+   "b": "T11",
+   "lo": -207,
+   "hi": -204,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "T11",
+   "side": "S",
+   "b": "T16",
+   "lo": 1278,
+   "hi": 1281,
+   "gate": "opus",
+   "note": ""
+  },
+  {
+   "a": "T16",
+   "side": "S",
+   "b": "N11",
+   "lo": 1280,
+   "hi": 1283,
+   "gate": "drop",
+   "note": ""
+  },
+  {
+   "a": "T11",
+   "side": "E",
+   "b": "P01",
+   "lo": -211,
+   "hi": -208,
+   "gate": "breakpoint",
+   "note": ""
+  },
+  {
+   "a": "P01",
+   "side": "E",
+   "b": "P02",
+   "lo": -205,
+   "hi": -202,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P02",
+   "side": "E",
+   "b": "P03",
+   "lo": -195,
+   "hi": -192,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P03",
+   "side": "E",
+   "b": "P04",
+   "lo": -181,
+   "hi": -178,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P04",
+   "side": "E",
+   "b": "P05",
+   "lo": -181,
+   "hi": -178,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P05",
+   "side": "W",
+   "b": "P16",
+   "lo": -143,
+   "hi": -140,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "P05",
+   "side": "E",
+   "b": "P06",
+   "lo": -97,
+   "hi": -94,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P06",
+   "side": "S",
+   "b": "P08",
+   "lo": 1658,
+   "hi": 1661,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P08",
+   "side": "E",
+   "b": "P17",
+   "lo": -23,
+   "hi": -20,
+   "gate": "breakpoint",
+   "note": ""
+  },
+  {
+   "a": "P15",
+   "side": "W",
+   "b": "N17",
+   "lo": 27,
+   "hi": 30,
+   "gate": "lever",
+   "note": ""
+  },
+  {
+   "a": "P15",
+   "side": "E",
+   "b": "P18",
+   "lo": 27,
+   "hi": 30,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P08",
+   "side": "S",
+   "b": "P18",
+   "lo": 1648,
+   "hi": 1651,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P07",
+   "side": "E",
+   "b": "P18",
+   "lo": 47,
+   "hi": 50,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P06",
+   "side": "E",
+   "b": "P09",
+   "lo": -87,
+   "hi": -84,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "P09",
+   "side": "E",
+   "b": "P10",
+   "lo": -87,
+   "hi": -84,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "P10",
+   "side": "E",
+   "b": "P11",
+   "lo": -87,
+   "hi": -84,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "P11",
+   "side": "E",
+   "b": "P12",
+   "lo": -89,
+   "hi": -86,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "P12",
+   "side": "E",
+   "b": "P13",
+   "lo": -89,
+   "hi": -86,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "N17",
+   "side": "S",
+   "b": "G01",
+   "lo": 1566,
+   "hi": 1569,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G01",
+   "side": "W",
+   "b": "G02",
+   "lo": 85,
+   "hi": 88,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G02",
+   "side": "S",
+   "b": "G16",
+   "lo": 1420,
+   "hi": 1423,
+   "gate": "bash",
+   "note": ""
+  },
+  {
+   "a": "G02",
+   "side": "W",
+   "b": "G03",
+   "lo": 99,
+   "hi": 102,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G03",
+   "side": "W",
+   "b": "G04",
+   "lo": 113,
+   "hi": 116,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G04",
+   "side": "N",
+   "b": "G05",
+   "lo": 1280,
+   "hi": 1283,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "G04",
+   "side": "S",
+   "b": "G09",
+   "lo": 1280,
+   "hi": 1283,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G03",
+   "side": "S",
+   "b": "G06",
+   "lo": 1376,
+   "hi": 1379,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G06",
+   "side": "E",
+   "b": "G07",
+   "lo": 145,
+   "hi": 148,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G09",
+   "side": "E",
+   "b": "G08",
+   "lo": 175,
+   "hi": 178,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G08",
+   "side": "E",
+   "b": "G10",
+   "lo": 181,
+   "hi": 184,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G07",
+   "side": "S",
+   "b": "G10",
+   "lo": 1480,
+   "hi": 1483,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G08",
+   "side": "S",
+   "b": "G11",
+   "lo": 1316,
+   "hi": 1319,
+   "gate": "merge",
+   "note": ""
+  },
+  {
+   "a": "G11",
+   "side": "E",
+   "b": "G12",
+   "lo": 203,
+   "hi": 206,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "G12",
+   "side": "E",
+   "b": "G13",
+   "lo": 203,
+   "hi": 206,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "G13",
+   "side": "E",
+   "b": "G14",
+   "lo": 199,
+   "hi": 202,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "G14",
+   "side": "S",
+   "b": "G15",
+   "lo": 1470,
+   "hi": 1473,
+   "gate": "force",
+   "note": ""
+  },
+  {
+   "a": "G14",
+   "side": "E",
+   "b": "P07",
+   "lo": 203,
+   "hi": 206,
+   "gate": "revert",
+   "note": ""
+  },
+  {
+   "a": "D02",
+   "side": "S",
+   "b": "X01",
+   "lo": 960,
+   "hi": 963,
+   "gate": "curl",
+   "note": ""
+  },
+  {
+   "a": "X02",
+   "side": "E",
+   "b": "X01",
+   "lo": 72,
+   "hi": 75,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "X01",
+   "side": "E",
+   "b": "X03",
+   "lo": 72,
+   "hi": 75,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "X01",
+   "side": "S",
+   "b": "X04",
+   "lo": 962,
+   "hi": 965,
+   "gate": "merge",
+   "note": ""
+  },
+  {
+   "a": "X13",
+   "side": "E",
+   "b": "X04",
+   "lo": 88,
+   "hi": 91,
+   "gate": "dead",
+   "note": ""
+  },
+  {
+   "a": "X04",
+   "side": "E",
+   "b": "X05",
+   "lo": 92,
+   "hi": 95,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "X05",
+   "side": "S",
+   "b": "X05",
+   "lo": 1002,
+   "hi": 1005,
+   "gate": "wrap",
+   "note": ""
+  },
+  {
+   "a": "X05",
+   "side": "E",
+   "b": "X06",
+   "lo": 128,
+   "hi": 131,
+   "gate": "break",
+   "note": ""
+  },
+  {
+   "a": "X06",
+   "side": "E",
+   "b": "X07",
+   "lo": 128,
+   "hi": 131,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "X07",
+   "side": "E",
+   "b": "X08",
+   "lo": 135,
+   "hi": 138,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "X08",
+   "side": "E",
+   "b": "X09",
+   "lo": 135,
+   "hi": 138,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "X09",
+   "side": "N",
+   "b": "X12",
+   "lo": 1220,
+   "hi": 1223,
+   "gate": "sudo",
+   "note": "hatch"
+  },
+  {
+   "a": "X12",
+   "side": "E",
+   "b": "G04",
+   "lo": 113,
+   "hi": 116,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "X09",
+   "side": "S",
+   "b": "X11",
+   "lo": 1210,
+   "hi": 1213,
+   "gate": "force",
+   "note": "after THE MONOLITH"
+  },
+  {
+   "a": "R02",
+   "side": "N",
+   "b": "R12",
+   "lo": 290,
+   "hi": 293,
+   "gate": "sudo",
+   "note": ""
+  },
+  {
+   "a": "R01",
+   "side": "N",
+   "b": "R13",
+   "lo": 54,
+   "hi": 57,
+   "gate": "catch",
+   "note": ""
+  },
+  {
+   "a": "R01",
+   "side": "S",
+   "b": "R14",
+   "lo": 168,
+   "hi": 171,
+   "gate": "force",
+   "note": ""
+  },
+  {
+   "a": "R03",
+   "side": "N",
+   "b": "R15",
+   "lo": 476,
+   "hi": 479,
+   "gate": "agents",
+   "note": ""
+  },
+  {
+   "a": "R07",
+   "side": "N",
+   "b": "R16",
+   "lo": 636,
+   "hi": 639,
+   "gate": "breakpoint",
+   "note": ""
+  },
+  {
+   "a": "R04",
+   "side": "S",
+   "b": "R17",
+   "lo": 576,
+   "hi": 579,
+   "gate": "revert",
+   "note": ""
+  },
+  {
+   "a": "R03",
+   "side": "S",
+   "b": "R18",
+   "lo": 436,
+   "hi": 439,
+   "gate": "opus",
+   "note": ""
+  }
+ ]
+}
