@@ -21,6 +21,8 @@ func new_room(room_id := "R01") -> Room:
 func run(name: String) -> bool:
 	if name.begins_with("tape:"):
 		return t_tape(name.substr(5))
+	if name.begins_with("etrace:"):
+		return t_etrace(name.substr(7))
 	match name:
 		"tiles": return t_tiles()
 		"jump": return t_jump()
@@ -51,6 +53,8 @@ func run(name: String) -> bool:
 		"reviewer": return t_reviewer()
 		"plugins": return t_plugins()
 		"crumble": return t_crumble()
+		"w2enemies": return t_w2enemies()
+		"fork": return t_fork()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -240,6 +244,40 @@ func t_tape(path: String) -> bool:
 		step_with(room, keys)
 		print("%d,%.6f,%.6f,%.6f,%.6f,%d" % [f, p.x, p.y, p.vx, p.vy, 1 if p.on_ground else 0])
 	Controls.script_input = null
+	return true
+
+# etrace:<class>:<x>:<y>:<px>:<py>:<frames>: one creature in the NULL arena (R05, boss beaten), the player standing still and unhurtable;
+# prints frame,x,y,vx,vy,on_ground like the JS tools/godot/parity/enemy-trace.js
+func t_etrace(arg: String) -> bool:
+	var a := arg.split(":")
+	Game.flags = {"boss:NULL": true}
+	var room := new_room("R05")
+	clear_ents(room)
+	var p = room.player
+	for i in range(60):
+		p.inv = 99999.0
+		step_with(room, {})
+	var px_ := float(a[1])
+	var py_ := float(a[2])
+	var e
+	match a[0]:
+		"Bug": e = Bug.new(room, px_, py_, false)
+		"Mimic": e = Mimic.new(room, px_, py_)
+		"Noodle": e = Noodle.new(room, px_, py_)
+		"Logger": e = LogEnemy.new(room, px_, py_)
+		"Flaky": e = Flaky.new(room, px_, py_)
+		_: return report("etrace", false, "unknown class " + a[0])
+	add_ent(room, e)
+	p.x = float(a[3])
+	p.y = float(a[4])
+	p.vx = 0.0
+	p.vy = 0.0
+	for f in range(int(a[5])):
+		p.inv = 99999.0
+		step_with(room, {})
+		print("%d,%.6f,%.6f,%.6f,%.6f,%d" % [f, e.x, e.y, e.vx, e.vy, 1 if e.on_ground else 0])
+	Controls.script_input = null
+	Game.flags = {}
 	return true
 
 # 3600 frames of seeded random input in R01 with its enemies: no script errors, the player stays inside the room
@@ -1305,6 +1343,149 @@ func t_crumble() -> bool:
 	info = "started=%s falls after %.2f s (want 0.42), back after %.2f s (want 2.6), solid again=%s, gap not solid=%s" % [started, t_fall, t_back - t_fall, solid_after, gap_ok]
 	Controls.script_input = null
 	return report("crumble", started and fall_ok and back_ok and solid_after and gap_ok, info)
+
+# MV3-09: the world 2 creatures behave as described
+func arena_room() -> Room:
+	Game.flags = {"boss:NULL": true}
+	var room := new_room("R05")
+	clear_ents(room)
+	var p = room.player
+	p.inv = 99999.0
+	p.hp = p.max_hp
+	for i in range(30):
+		step_with(room, {})
+	return room
+
+func t_w2enemies() -> bool:
+	Game.diff = "normal"
+	var info := ""
+	var ok := true
+	# Mimic: asleep at 52 px, awake at 40 px with DEPRECATED!
+	var room := arena_room()
+	var p = room.player
+	p.x = 100.0
+	p.y = 166.0
+	var mm := Mimic.new(room, 0, 0)
+	mm.x = 152.0
+	mm.y = 162.0
+	add_ent(room, mm)
+	for f in range(20):
+		p.inv = 99999.0
+		step_with(room, {})
+	var asleep: bool = not mm.awake
+	p.x = 112.0
+	for f in range(6):
+		step_with(room, {})
+	var woke: bool = mm.awake
+	info += "mimic asleep at 52 px=%s wakes at 40 px=%s" % [asleep, woke]
+	ok = ok and asleep and woke
+	room.queue_free()
+	# Noodle: revs 0.5 s then charges
+	room = arena_room()
+	p = room.player
+	p.x = 260.0
+	p.y = 166.0
+	var nd := Noodle.new(room, 0, 0)
+	nd.x = 200.0
+	nd.y = 167.0
+	add_ent(room, nd)
+	var rev_f := -1
+	var charge_f := -1
+	for f in range(200):
+		p.inv = 99999.0
+		step_with(room, {})
+		if nd.st == "rev" and rev_f < 0:
+			rev_f = f
+		if nd.st == "charge" and charge_f < 0:
+			charge_f = f
+	var nd_ok: bool = rev_f >= 0 and charge_f > rev_f and absf((charge_f - rev_f) - 30.0) <= 2.0
+	info += " | noodle rev %d -> charge %d (want 30 frames)" % [rev_f, charge_f]
+	ok = ok and nd_ok
+	room.queue_free()
+	# Logger: fires `log` projectiles
+	room = arena_room()
+	p = room.player
+	p.x = 260.0
+	p.y = 166.0
+	var lg := LogEnemy.new(room, 0, 0)
+	lg.x = 180.0
+	lg.y = 161.0
+	lg.cd = 0.1
+	add_ent(room, lg)
+	var logs := 0
+	for f in range(240):
+		p.inv = 99999.0
+		step_with(room, {})
+		for q in room.projs:
+			if q.kind == "log" and not q.get("seen", false):
+				q["seen"] = true
+				logs += 1
+	info += " | logger fired %d log shots" % logs
+	ok = ok and logs >= 2
+	room.queue_free()
+	# Flaky: hovers, then swoops at a player within 118 px
+	room = arena_room()
+	p = room.player
+	p.x = 200.0
+	p.y = 166.0
+	var fk := Flaky.new(room, 0, 0)
+	fk.x = 140.0
+	fk.y = 120.0
+	fk.hx = fk.x
+	fk.hy = fk.y
+	fk.cd = 0.1
+	add_ent(room, fk)
+	var seen := {}
+	for f in range(300):
+		p.inv = 99999.0
+		step_with(room, {})
+		seen[fk.st] = true
+	info += " | flaky states %s" % str(seen.keys())
+	ok = ok and seen.has("mad") and seen.has("swoop") and seen.has("back")
+	room.queue_free()
+	Controls.script_input = null
+	Game.flags = {}
+	return report("w2enemies", ok, info)
+
+func t_fork() -> bool:
+	Game.diff = "normal"
+	var room := arena_room()
+	var p = room.player
+	p.x = 260.0
+	p.y = 166.0
+	var fk := Fork.new(room, 0, 0)
+	fk.x = 120.0
+	fk.y = 164.0
+	fk.cool = 0.2
+	add_ent(room, fk)
+	var max_kids := 0
+	var spawned := 0
+	var seen_kids := {}
+	for f in range(1800):
+		p.inv = 99999.0
+		step_with(room, {})
+		max_kids = maxi(max_kids, fk.alive_kids())
+		for k in fk.kids:
+			seen_kids[k.get_instance_id()] = true
+		for e in room.ents:                              # (the kids walk about: keep them in the arena, never kill them)
+			if e is Bug:
+				e.hp = 99
+	spawned = seen_kids.size()
+	# destroyed: no more bugs
+	fk.hit(99, 1.0, 0.0, "swipe", fk)
+	var after0: int = room.ents.size()
+	for f in range(600):
+		p.inv = 99999.0
+		step_with(room, {})
+	var after1: int = room.ents.size()
+	var kid_loot: bool = true
+	for k in fk.kids:
+		if is_instance_valid(k) and k.loot != 0:
+			kid_loot = false
+	var ok: bool = max_kids == 4 and spawned >= 4 and fk.dead and after1 <= after0 and kid_loot
+	Controls.script_input = null
+	Game.flags = {}
+	return report("fork", ok, "max kids alive %d (want 4), spawned %d, dead=%s, entities after death %d -> %d, kids drop nothing=%s" % [max_kids, spawned, fk.dead, after0, after1, kid_loot])
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:

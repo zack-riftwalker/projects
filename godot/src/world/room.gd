@@ -274,6 +274,16 @@ func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> voi
 					break
 	plats.append({"x": float(x), "y": float(y + 2), "w": 48.0, "h": 6.0, "ax": ch == "M", "a": a, "b": b, "ph": fposmod(tx * 0.37 + ty * 0.61, 1.0), "dx": 0.0, "dy": 0.0, "speed": def.get("platSpeed", 44.0)})
 
+# a creature that comes into the room while it runs (FORK's children): numbered, scaled by the difficulty, drawn
+func add_entity(e) -> Node:
+	Game.scale_enemy(e)
+	e.nid = next_nid
+	next_nid += 1
+	ents.append(e)
+	if entity_root != null:
+		entity_root.add_child(e)
+	return e
+
 func spawn_enemy(ch: String, x: int, y: int):
 	if mode == "guest":
 		return null
@@ -284,6 +294,11 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"G": return Guard.new(self, x, y)
 		"Z": return Zombie.new(self, x, y)
 		"X": return ExceptionFoe.new(self, x, y)
+		"m": return Mimic.new(self, x, y)
+		"g": return LogEnemy.new(self, x, y)
+		"n": return Noodle.new(self, x, y)
+		"f": return Flaky.new(self, x, y)
+		"K": return Fork.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 
@@ -1382,6 +1397,10 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px - 2, py, 5, 1), col)
 			if not minus:
 				ci.draw_rect(Rect2(px, py - 2, 1, 5), col)
+		"log":
+			ci.draw_rect(Rect2(px - 5, py - 2, 10, 4), ink)
+			ci.draw_rect(Rect2(px - 4, py - 1, 5, 2), col)
+			ci.draw_rect(Rect2(px + 2, py - 1, 2, 2), Color.WHITE)
 		"comment":
 			PixelText.draw_text(ci, "//", px - 3, py - 3, q.col, {"outline": Game.COL.ink})
 		"err":

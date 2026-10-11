@@ -13,7 +13,7 @@ run smoke bash tools/godot/smoke.sh
 # a script that does not parse makes every scenario hang until its timeout: stop at once instead
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
 if timeout 60 "$GODOT" --headless --path godot --quit-after 3 2>&1 | grep -E "Parse Error|Compile Error|Failed to load script"; then echo "FAIL parse"; exit 1; fi
-for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble; do
+for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork; do
   timeout 180 "$GODOT" --headless --path godot -- --test=$t > "$TMP/$t.log" 2>&1
   if grep -q "^TEST $t PASS" "$TMP/$t.log" && ! grep -q "SCRIPT ERROR" "$TMP/$t.log"; then rec "test-$t" PASS; else rec "test-$t" FAIL; echo "---- $t ----"; tail -20 "$TMP/$t.log"; fi
 done
@@ -23,6 +23,7 @@ for tape in tools/godot/parity/tapes/*.json; do
   timeout 120 "$GODOT" --headless --path godot -- --test=tape:"$ROOT/$tape" > "$TMP/gd_$n.csv" 2>&1
   if python3 tools/godot/parity/compare.py "$TMP/js_$n.csv" "$TMP/gd_$n.csv" > "$TMP/cmp_$n.txt"; then rec "parity-$n" PASS; else rec "parity-$n" FAIL; cat "$TMP/cmp_$n.txt"; fi
 done
+run etrace bash tools/godot/parity/enemy-cases.sh
 run export bash tools/godot/export-web.sh
 run web-check node tools/godot/web-check.js
 cat "$TMP/web-check.log" 2>/dev/null | grep -E "^(PASS|FAIL)" | sed 's/^/    /'

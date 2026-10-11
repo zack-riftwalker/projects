@@ -2,13 +2,23 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork"]
 
 static func cls_of(e) -> int:
 	if e is NullBoss:
 		return 5
 	if e is Reviewer:
 		return 7
+	if e is Mimic:
+		return 8
+	if e is LogEnemy:
+		return 9
+	if e is Noodle:
+		return 10
+	if e is Flaky:
+		return 11
+	if e is Fork:
+		return 12
 	if e is ExceptionFoe:
 		return 6
 	if e is Guard:
@@ -32,6 +42,11 @@ static func make(cls: int, room: Room):
 		5: e = NullBoss.new(room, 0, 0)
 		6: e = ExceptionFoe.new(room, 0, 0)
 		7: e = Reviewer.new(room, 0, 0)
+		8: e = Mimic.new(room, 0, 0)
+		9: e = LogEnemy.new(room, 0, 0)
+		10: e = Noodle.new(room, 0, 0)
+		11: e = Flaky.new(room, 0, 0)
+		12: e = Fork.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

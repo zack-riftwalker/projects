@@ -74,7 +74,12 @@ func hit(d: int, dx: float, _dy: float, how: String, _b = null) -> String:
 		die(how)
 		return "kill"
 	Audio.sfx("squish" if how == "stomp" else "hit")
+	on_hurt(how)
 	return "hit"
+
+# a hit that did not kill (Mimic wakes up)
+func on_hurt(_how: String) -> void:
+	pass
 
 func die(how: String) -> void:
 	dead = true
