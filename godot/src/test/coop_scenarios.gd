@@ -1366,3 +1366,62 @@ func sc_co_deadcode() -> Array:
 	Controls.script_input = {}
 	await wait_secs(2.0)
 	return [moved and Game.flag("dead:H03"), "guest reached H13 %s, flag %s" % [moved, Game.flag("dead:H03")]]
+
+# MV4-03: the valve's flag lowers the guest's flood level and the water in H03 follows the host's; in H06 the rising flood reaches
+# the guest, and a guest that touches the water pushes the host's tide back
+func sc_co_flood() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var bench_pos := Vector2(3.0 * 16.0, 8.0 * 16.0 - 10.0)
+	var h6_pos := Vector2(10.0 * 16.0 + 2.0, 41.0 * 16.0 - 10.0)
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("H03", bench_pos)
+		await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "H03", 15.0)
+		await wait_secs(2.0)
+		Game.flags["gate:H07:catch"] = true
+		await wait_secs(14.0 * slow)
+		var l_after: float = mgr().room.liquid_y if mgr().room.liquid_y != null else -1.0
+		mgr().swap_to("H06", h6_pos)
+		var r: Room = mgr().room
+		for e in r.ents:
+			e.queue_free()
+		r.ents.clear()
+		r.player.inv = 99.0
+		var in6 := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "H06", 20.0)
+		var rose := await wait_until(func(): return r.rise_on, 5.0)
+		# watch for a push back (+60 or more in one frame) while the guest touches the water
+		var last: float = r.liquid_y
+		var push := 0.0
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 25000.0 * slow and push < 60.0:
+			await get_tree().physics_frame
+			r.player.inv = 99.0
+			r.player.y = h6_pos.y
+			r.player.vy = 0.0
+			if r.liquid_y != null:
+				push = maxf(push, r.liquid_y - last)
+				last = r.liquid_y
+		return [l_after > 700.0 and in6 and rose and push >= 60.0, "host: H03 water %.0f (want ~726), guest in H06 %s, rising %s, tide pushed back by %.0f" % [l_after, in6, rose, push]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(2.0)
+	mgr().swap_to("H03", bench_pos)
+	mgr().player.inv = 99.0
+	var lvl := await wait_until(func(): return Game.heap_flood() == 1, 30.0)
+	var moved := await wait_until(func(): return mgr().room.liquid_y != null and mgr().room.liquid_y > 600.0, 20.0)
+	await wait_secs(2.0)
+	var err_h3: float = absf(mgr().room.liquid_y - coop().last_lq / 4.0) if mgr().room.liquid_y != null else 999.0
+	await wait_secs(1.0)
+	mgr().swap_to("H06", h6_pos)
+	mgr().player.inv = 99.0
+	var rr: Room = mgr().room
+	var rose2 := await wait_until(func(): return rr.rise_on, 25.0)
+	var close := await wait_until(func(): return rr.liquid_y != null and coop().last_lq >= 0 and absf(rr.liquid_y - coop().last_lq / 4.0) < 20.0, 5.0)
+	await wait_secs(1.0)
+	# step into the water: the guest's own body gets the hazard and tells the host
+	mgr().player.inv = 0.0
+	mgr().player.x = 10.0 * 16.0
+	mgr().player.y = rr.liquid_y + 8.0
+	mgr().player.vy = 0.0
+	await wait_secs(4.0)
+	return [lvl and moved and err_h3 < 8.0 and rose2 and close, "guest: flood level 1 %s, H03 water followed %s (off by %.1f), H06 rising %s, water close to the host's %s" % [lvl, moved, err_h3, rose2, close]]

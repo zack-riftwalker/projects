@@ -114,6 +114,9 @@ func _guest(b: Dictionary) -> void:
 			if not coop.last_cr.has(ci) and not (cc.has("pred") and float(cc.pred) > mgr.room.time):
 				b["crumble_state"] = [1.0, "block %d,%d crumbles here but the host does not list it" % [ci % mgr.room.w, ci / mgr.room.w]]
 				break
+	# the water is where the host says it is (the guest never simulates it)
+	if mgr.room.id == coop.last_lq_room and mgr.room.liquid_y != null and coop.last_lq >= 0 and absf(mgr.room.liquid_y - coop.last_lq / 4.0) > 80.0:
+		b["liquid-desync"] = [2.0, "water at %.0f, the host says %.0f" % [mgr.room.liquid_y, coop.last_lq / 4.0]]
 	# a gate stands open exactly when the host's last snapshot listed its flag (switches and keys are state, not events)
 	if mgr.room.id == coop.last_gf_room:
 		var gid: String = mgr.room.id

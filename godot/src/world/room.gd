@@ -45,6 +45,8 @@ var view: RoomView
 var camera: Camera2D
 var layers := {}
 var liquid_y = null
+var rise_on := false            # H06: the flood is rising (it started when somebody climbed past the trigger row)
+var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the tide back (one push per 0.5 s)
 var blink_period := 1.5
 var entity_root: Node2D
 var fight_active := false
@@ -71,6 +73,7 @@ signal item_collected(item_id: String, kind: String)
 signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
 signal net_reveal
+signal net_lqhit
 signal plugin_got(plugin_id: String, by: String)
 signal net_agents
 signal net_buy(plugin_id: String)
@@ -244,7 +247,48 @@ func load_room(room_id: String, snap = null) -> void:
 		if not Game.flag(fid) and mode != "guest":
 			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
 	_group_dead()
+	liquid_y = flood_target()
 	rng.seed = 1
+
+# THE HEAP's water: the surface row of this room at the current flood level (null = dry). Pixel y = row * 16 + 6
+func flood_target():
+	if not def.has("flood"):
+		return null
+	var v = def.flood[2 - Game.heap_flood()]
+	return null if v == null else float(v) * T + 6.0
+
+# solo / host: the water follows the flood level (26 px/s) and, in a rising room, climbs after the players (MV4-03)
+func _step_flood(dt: float) -> void:
+	if not def.has("flood"):
+		return
+	if def.has("rise") and Game.heap_flood() > 0:
+		var ps := players()
+		if not rise_on and not ps.is_empty():
+			for q in ps:
+				if q.y < float(def.rise.trigger) * T:
+					rise_on = true
+					Audio.sfx("roar")
+					shake(0.5)
+					break
+		if rise_on and liquid_y != null and not ps.is_empty():
+			var low := -1e9
+			for q in ps:
+				low = maxf(low, q.y + q.h)
+			var gap: float = liquid_y - low                # from the lowest player: nobody is left behind
+			liquid_y -= (float(def.rise.speed) + maxf(0.0, gap - 130.0) * 1.2) * dt
+			liquid_y = maxf(liquid_y, float(def.rise.top) * T)
+	if rise_on:
+		return
+	var tgt = flood_target()
+	if tgt == null:
+		if liquid_y != null:
+			liquid_y += 26.0 * dt
+			if liquid_y > ph + 30:
+				liquid_y = null
+	else:
+		if liquid_y == null:
+			liquid_y = float(ph + 40)
+		liquid_y = move_toward(liquid_y, tgt, 26.0 * dt)
 
 # the 4-connected groups of dead code: where its moths fly and its reveal bursts
 func _group_dead() -> void:
@@ -886,6 +930,7 @@ func step(dt: float) -> void:
 	time += dt
 	var p = player                       # null in a room only the partner is in
 	var live := players()
+	_step_flood(dt)
 	if p != null and not p.dead:
 		clock += dt
 
@@ -1161,6 +1206,8 @@ func hazard_at(p) -> String:
 			elif t == TileGrid.LIQ:
 				if p.y + p.h > ty * T + 6:
 					hz = "liq"
+	if liquid_y != null and p.y + p.h > liquid_y + 5:
+		hz = "liq"
 	if p.y > ph + 24:
 		hz = "pit"
 	return hz
@@ -1298,6 +1345,11 @@ func interact_combat(p) -> void:
 	# spikes, liquid, pits
 	var hz := hazard_at(p)
 	if hz != "":
+		if hz == "liq" and def.has("rise") and rise_on and not p.get("is_remote"):
+			if mode == "guest":
+				net_lqhit.emit()
+			elif liquid_y != null:
+				liquid_y += 72.0                       # the tide backs off a little so one slip is not the end
 		p.hazard()
 	# springs
 	for s in springs:
@@ -1509,6 +1561,11 @@ func press_switch(i: int) -> void:
 		Game.flags["gate:%s:catch" % id] = true
 		Audio.sfx("gate")
 		shake(0.3)
+		if def.get("valve", false):
+			Audio.sfx("roar")
+			shake(0.8)
+			var vsw: Dictionary = switches[i]
+			pop(vsw.x + 5.0, vsw.y - 10.0, "free()  heap level 1", "#58f0c8", true)
 		update_doors()
 	Game.write_save()
 
@@ -1553,6 +1610,9 @@ func update_projs(dt: float) -> void:
 		q.x += q.vx * dt
 		q.y += q.vy * dt
 		if q.life <= 0.0 or q.y > ph + 60 or q.x < -60 or q.x > pw + 60:
+			q.dead = true
+			continue
+		if q.kind == "drip" and mode != "guest" and liquid_y != null and q.y > liquid_y + 3:
 			q.dead = true
 			continue
 		if q.tile and mode != "guest" and grid.solid_at(q.x, q.y):
@@ -1658,17 +1718,20 @@ func _draw_stall(ci: CanvasItem, sh: Dictionary) -> void:
 
 # liquid goes over everything (js: the "liquid goes over everything" loop of Level.draw + G.drawLiquid)
 func _draw_liquid(ci: CanvasItem) -> void:
-	if not grid.tiles.has(TileGrid.LIQ):
+	var has_tiles: bool = grid.tiles.has(TileGrid.LIQ)
+	if not has_tiles and liquid_y == null:
 		return
 	var th: Dictionary = Game.theme(world)
-	var liq := Color(th.liq)
-	var liq_hi := Color(th.liqHi)
-	var liq_lo := Color(th.liqLo)
-	var fill_a := Color(liq.r, liq.g, liq.b, 0.5)
-	var fill_b := Color(liq_lo.r, liq_lo.g, liq_lo.b, 0.45)
+	var cols := {"liq": Color(th.liq), "hi": Color(th.liqHi), "lo": Color(th.liqLo)}
 	var cx0: float = cam.x if camera == null else camera.position.x
 	var tx0 := maxi(0, floori(cx0 / T))
 	var tx1 := mini(w - 1, floori((cx0 + W) / T))
+	if liquid_y != null:                       # a flood: a body from the surface down, the same look as a liquid tile's top
+		var ytop := roundi(liquid_y)
+		for tx in range(tx0, tx1 + 1):
+			_liq_col(ci, tx * T, ytop, ph + 4, cols, true)
+	if not has_tiles:
+		return
 	for tx in range(tx0, tx1 + 1):
 		var top := -1
 		for ty in range(0, h + 1):
@@ -1677,22 +1740,29 @@ func _draw_liquid(ci: CanvasItem) -> void:
 				top = ty
 			if not is_l and top >= 0:
 				var surface: bool = top > 0 and grid.tiles[(top - 1) * w + tx] != TileGrid.LIQ
-				var px := tx * T
-				var y0 := top * T + (4 if surface else 0)
-				var y1 := ty * T
-				if surface:
-					ci.draw_rect(Rect2(px, y0 + 2, T, y1 - y0), fill_a)
-					ci.draw_rect(Rect2(px, y0 + 8, T, y1 - y0 - 6), fill_b)
-					for xx in range(px, px + T):
-						var o := roundi(sin(xx * 0.19 + time * 2.6) * 1.2 + sin(xx * 0.07 - time * 1.7) * 1.1)
-						ci.draw_rect(Rect2(xx, y0 + o, 1, 1), liq_hi)
-						ci.draw_rect(Rect2(xx, y0 + o + 1, 1, 2), liq)
-						if Game.hash3(xx >> 2, floori(time * 3.0 + xx * 0.01), 3) < 0.012:
-							ci.draw_rect(Rect2(xx, y0 + 5 + (xx * 7) % 23, 1, 1), liq_hi)
-				else:
-					ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_a)
-					ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_b)
+				_liq_col(ci, tx * T, top * T + (4 if surface else 0), ty * T, cols, surface)
 				top = -1
+
+# one 16-px column of liquid from y0 to y1 (js: G.drawLiquid); surface: the wobbling top line and the glints
+func _liq_col(ci: CanvasItem, px: int, y0: int, y1: int, cols: Dictionary, surface: bool) -> void:
+	var liq: Color = cols.liq
+	var liq_hi: Color = cols.hi
+	var liq_lo: Color = cols.lo
+	var fill_a := Color(liq.r, liq.g, liq.b, 0.5)
+	var fill_b := Color(liq_lo.r, liq_lo.g, liq_lo.b, 0.45)
+	if surface:
+		ci.draw_rect(Rect2(px, y0 + 2, T, y1 - y0), fill_a)
+		ci.draw_rect(Rect2(px, y0 + 8, T, y1 - y0 - 6), fill_b)
+		for xx in range(px, px + T):
+			var o := roundi(sin(xx * 0.19 + time * 2.6) * 1.2 + sin(xx * 0.07 - time * 1.7) * 1.1)
+			ci.draw_rect(Rect2(xx, y0 + o, 1, 1), liq_hi)
+			ci.draw_rect(Rect2(xx, y0 + o + 1, 1, 2), liq)
+			if Game.hash3(xx >> 2, floori(time * 3.0 + xx * 0.01), 3) < 0.012:
+				ci.draw_rect(Rect2(xx, y0 + 5 + (xx * 7) % 23, 1, 1), liq_hi)
+	else:
+		ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_a)
+		ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_b)
+
 # firewall bricks, bulkheads, dead code (dotted once revealed, moths while hidden), GET rings
 func _draw_bricks(ci: CanvasItem) -> void:
 	for c in fire_cells:
@@ -1830,8 +1900,16 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 			var sxp: float = sw.x + 5.0
 			var syp: float = sw.y + 5.0
 			Fx._disc(ci, sxp, syp, 6, Color(Game.COL.ink))
-			Fx._disc(ci, sxp, syp, 5, swc)
-			PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
+			if def.get("valve", false):
+				Fx._disc(ci, sxp, syp, 5, Color("#7fd08a") if on else Color("#3fbfae"))
+				var ink_c := Color(Game.COL.ink)
+				for ang in [0.0, PI / 4.0, PI / 2.0, 3.0 * PI / 4.0]:
+					var dv := Vector2(cos(ang), sin(ang)) * 4.0
+					ci.draw_line(Vector2(sxp, syp) - dv, Vector2(sxp, syp) + dv, ink_c, 1.0)
+				ci.draw_rect(Rect2(sxp - 1, syp - 1, 2, 2), ink_c)
+			else:
+				Fx._disc(ci, sxp, syp, 5, swc)
+				PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
 			ci.draw_texture(Gfx.tex("platform_48" if world == 1 else "platform_w%d" % world), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
 		for c in cps:

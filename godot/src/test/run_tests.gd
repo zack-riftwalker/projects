@@ -68,6 +68,8 @@ func run(name: String) -> bool:
 		"fork": return t_fork()
 		"nsdoors": return t_nsdoors()
 		"tiles4": return t_tiles4()
+		"flood": return t_flood()
+		"rise": return t_rise()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -2353,3 +2355,100 @@ func t_tiles4() -> bool:
 	r3b.queue_free()
 	Game.flags = {}
 	return report("tiles4", res.ok, res.info)
+
+func _dry_room(room_id: String) -> Room:
+	var r := new_room(room_id)
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	r.player.inv = 0.0
+	return r
+
+# MV4-03: the three flood levels, the water follows them, the valve
+func t_flood() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	chk.call("level 2", Game.heap_flood() == 2)
+	Game.flags["gate:H07:catch"] = true
+	chk.call("level 1", Game.heap_flood() == 1)
+	Game.flags["boss:LEAK"] = true
+	chk.call("level 0", Game.heap_flood() == 0)
+	Game.flags = {}
+	var r := _dry_room("H03")
+	chk.call("H03 water at level 2", r.liquid_y == 23 * 16 + 6.0)
+	var p = r.player
+	p.x = 20 * 16.0
+	p.y = 30 * 16.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var hp0: int = p.hp
+	step_with(r, {})
+	chk.call("the water hurts and the body comes back dry", p.hp == hp0 - 1 and p.y + 10 < r.liquid_y)
+	chk.call("E2 closed at level 2", r.grid.tile(32, 37) == TileGrid.SOLID)
+	Game.flags["gate:H07:catch"] = true
+	for f in range(120):
+		p.inv = 5.0
+		step_with(r, {})
+	chk.call("draining after 2 s", r.liquid_y > 374.0 and r.liquid_y < 726.0)
+	chk.call("E2 open at level 1", r.grid.tile(32, 37) == TileGrid.E)
+	for f in range(60 * 20):
+		p.inv = 5.0
+		step_with(r, {})
+	chk.call("level 1 water after 20 s", r.liquid_y == 45 * 16 + 6.0)
+	res.info += " liquid_y=%.0f" % r.liquid_y
+	r.queue_free()
+	Game.flags = {}
+	# the valve
+	var v := _dry_room("H07")
+	v.press_switch(0)
+	chk.call("valve sets the flag", Game.flag("gate:H07:catch") and Game.heap_flood() == 1)
+	v.queue_free()
+	Game.flags = {}
+	return report("flood", res.ok, res.info)
+
+# MV4-03: H06's water rises after the players
+func t_rise() -> bool:
+	Game.persist = false
+	Game.flags = {"gate:H07:catch": true}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var r := _dry_room("H06")
+	var p = r.player
+	chk.call("level 1 start", r.liquid_y == 59 * 16 + 6.0 and not r.rise_on)
+	p.x = 10 * 16.0
+	p.y = 40 * 16.0
+	p.vx = 0.0
+	p.vy = 0.0
+	step_with(r, {})
+	chk.call("rise starts above the trigger", r.rise_on)
+	for f in range(120):
+		p.inv = 5.0
+		p.y = 40 * 16.0
+		p.vy = 0.0
+		step_with(r, {})
+	chk.call("water climbs", r.liquid_y < 59 * 16 + 6.0 - 30.0)
+	var before: float = r.liquid_y
+	p.inv = 0.0
+	p.y = r.liquid_y + 2.0
+	p.x = 10 * 16.0
+	p.vy = 0.0
+	step_with(r, {})
+	chk.call("a slip pushes the tide back", r.liquid_y > before + 60.0)
+	res.info += " before %.0f after %.0f" % [before, r.liquid_y]
+	r.queue_free()
+	Game.flags = {"boss:LEAK": true, "gate:H07:catch": true}
+	var r0 := _dry_room("H06")
+	r0.player.y = 10 * 16.0
+	step_with(r0, {})
+	chk.call("level 0 is dry and does not rise", r0.liquid_y == null and not r0.rise_on)
+	r0.queue_free()
+	Game.flags = {}
+	return report("rise", res.ok, res.info)

@@ -554,6 +554,10 @@ func hazard() -> void:
 	Audio.sfx("hurt")
 	gone = true
 	gone_t = 0.8
+	if room.liquid_y != null and safe.y + h > room.liquid_y - 8:       # the last safe spot is under water now
+		var f = room.grid.find_safe(x, y, room.liquid_y)
+		if f != null:
+			set_safe(f.x, f.y)
 	x = safe.x
 	y = safe.y
 	vx = 0.0

@@ -42,6 +42,8 @@ var phase_seen := {}
 var fight_active_seen := {}
 var last_gf: Array = []                  # guest: the switch / key / gate flags of the room, as the last snapshot said
 var last_gf_room := ""
+var last_lq := -1                 # guest: the host's liquid_y x4 for the room of the last snapshot (-1 = dry)
+var last_lq_room := ""
 var last_cr := {}                       # guest: the crumbling blocks the host listed (tile index -> true)
 var abilities_sent := {}                # tool name -> true once the guest was told (boss rewards: bash, catch, ...)
 
@@ -174,6 +176,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
 		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
+		r.net_lqhit.connect(func(): Net.rel("lqhit", {"room": r.id}))
 
 func _on_room_changed(r: Room) -> void:
 	if role == "guest":
@@ -459,6 +462,11 @@ func _host_rel(k: String, d: Dictionary) -> void:
 			_host_door_sets(String(d.get("door", "")))
 			_host_remote_to_room(String(d.to))
 		"crack": _host_crack(d)
+		"lqhit":
+			var lr := _remote_room()
+			if lr != null and lr.id == String(d.room) and lr.rise_on and lr.liquid_y != null and Net.now() - lr.lq_last > 0.5:
+				lr.lq_last = Net.now()
+				lr.liquid_y += 72.0
 		"reveal":
 			var rid2 := String(d.room)
 			Game.flags["dead:" + rid2] = true
@@ -950,7 +958,8 @@ func _send_snapshot() -> void:
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn]
 	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
-		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0}
+		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
+		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
 	if r.stats_line != "" and r.stats_t > 0.0:
@@ -1202,6 +1211,16 @@ func _apply_snapshot(m: Dictionary) -> void:
 		if String(fk) == "dead:" + r.id and not Game.flag(String(fk)):
 			r.reveal_dead(false)
 		Game.flags[String(fk)] = true
+	Game.flood_net = int(m.get("fl", Game.flood_net))
+	last_lq = int(m.get("lq", -1))
+	last_lq_room = r.id
+	if last_lq < 0:
+		r.liquid_y = null
+	elif r.liquid_y == null or absf(r.liquid_y - last_lq / 4.0) > 60.0:
+		r.liquid_y = last_lq / 4.0
+	else:
+		r.liquid_y += (last_lq / 4.0 - r.liquid_y) * 0.5
+	r.rise_on = int(m.get("rs", 0)) == 1
 	r.update_doors()
 	# damage areas
 	for z in m.hz:
