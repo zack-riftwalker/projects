@@ -42,6 +42,7 @@ var phase_seen := {}
 var fight_active_seen := {}
 var last_gf: Array = []                  # guest: the switch / key / gate flags of the room, as the last snapshot said
 var last_gf_room := ""
+var last_cr := {}                       # guest: the crumbling blocks the host listed (tile index -> true)
 var abilities_sent := {}                # tool name -> true once the guest was told (boss rewards: bash, catch, ...)
 
 # ---- guest
@@ -163,6 +164,7 @@ func _on_room_built(r: Room) -> void:
 				mgr.player.inv += 0.4)          # a bad line: a little more mercy after each hit (as the JS game)
 		r.net_projhit.connect(func(pid): Net.rel("projhit", {"pid": pid}))
 		r.net_catch.connect(func(pid): Net.rel("catch", {"pid": pid}))
+		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
@@ -425,6 +427,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 					ids.append(String(id))
 			remote.loadout = ids
 			log_("host: guest loadout %s" % str(ids))
+		"crumble": _host_crumble(d)
 		"catch": _host_catch(d)
 		"parry": _host_parry(d)
 		"hurt":
@@ -575,6 +578,28 @@ func _host_parry(d: Dictionary) -> void:
 			else:
 				log_("P2 parry nid %d sid %d: that strike was not active" % [int(d.nid), sid])
 			return
+
+# the guest's body stepped on a crumbling block: start it here if the guest's recent reports really put it on that block
+func _host_crumble(d: Dictionary) -> void:
+	var r := _remote_room()
+	if r == null:
+		return
+	var tx := int(d.tx)
+	var ty := int(d.ty)
+	var i := ty * r.w + tx
+	if r.grid.tile(tx, ty) != TileGrid.CRUMBLE or r.grid.crumble.has(i):
+		return
+	var pts: Array = [[remote.x, remote.y]]
+	if d.has("px") and absf(float(d.px) - remote.x) + absf(float(d.py) - remote.y) < 240.0:
+		pts.append([float(d.px), float(d.py)])               # where the guest says it stood (its reports may be a moment behind)
+	for smp in remote.samples:
+		if hms() - float(smp[0]) <= Net.rtt / 2.0 + 0.35:
+			pts.append([smp[1], smp[2]])
+	for pt in pts:
+		if pt[0] + 10.0 > tx * 16 and pt[0] < tx * 16 + 16 and absf(pt[1] + 10.0 - ty * 16) <= 8.0:
+			r.grid.crumble[i] = {"s": 1, "t": 0.42}
+			return
+	log_("P2 crumble %d,%d refused (not standing on it)" % [tx, ty])
 
 func _host_crack(d: Dictionary) -> void:
 	var r := _remote_room()
@@ -860,12 +885,16 @@ func _send_snapshot() -> void:
 	for d in Game.PLUGINS:
 		if Game.owns_plugin(d.id):
 			pl.append(d.id)
+	var cr: Array = []                  # the crumbling blocks of the guest's room (the guest's grid follows this list)
+	for ci in r.grid.crumble:
+		var cc: Dictionary = r.grid.crumble[ci]
+		cr.append([ci % r.w, ci / r.w, cc.s, roundi(cc.t * 100.0)])
 	var hz: Array = []
 	for z in r.zones:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn]
-	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "p1": p1,
+	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0}
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
@@ -1096,6 +1125,10 @@ func _apply_snapshot(m: Dictionary) -> void:
 	r.projs = projs
 	for pid in m.get("pl", []):
 		Game.flags["plugin:" + String(pid)] = true
+	r.apply_crumbles(m.get("cr", []))
+	last_cr = {}
+	for rec in m.get("cr", []):
+		last_cr[int(rec[1]) * r.w + int(rec[0])] = true
 	last_gf = m.get("gf", [])
 	last_gf_room = r.id
 	for fk in last_gf:

@@ -1,0 +1,28 @@
+{
+ "name": "THE SOURCE TREE",
+ "path": "~/src",
+ "time": "02:51",
+ "music": "w1",
+ "ambient": "#aab2dc",
+ "base": "#2b2440",
+ "dark": "#1a152b",
+ "lite": "#3d3259",
+ "cap": "#5fb86f",
+ "capHi": "#a6e88f",
+ "capLo": "#2f7a52",
+ "code": [
+  "#4b3f6b",
+  "#5a4a82",
+  "#3f5a6b",
+  "#6b4a5f"
+ ],
+ "plat": "#8a5f3c",
+ "platHi": "#c9955c",
+ "platLo": "#553622",
+ "accent": "#ffd97a",
+ "fx": "#a6e88f",
+ "glow": "#ffe9a8",
+ "liq": "#58f0c8",
+ "liqHi": "#d2fff2",
+ "liqLo": "#167a78"
+}

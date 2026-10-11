@@ -7,8 +7,9 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const ROOT = path.resolve(__dirname, '../../..'), OUT = path.join(__dirname, 'out'), ASSETS = path.join(ROOT, 'godot/assets');
 const WHAT = process.argv.slice(2).length ? process.argv.slice(2) : ['all'];
 const want = (k) => WHAT.includes('all') || WHAT.includes(k);
+const WORLDS = (process.env.WORLDS || '1,2').split(',').map(Number);     // tiles, bg and theme are captured for these worlds
 const SFX = 'jump djump walljump land swipe swipeBig hit clang squish kill hurt die token spark heal dash spring crumble brk checkpoint shoot bossHit explode bigExplode uiMove uiOk uiBack text textLow textSys key gate agent agentHit warn charge laser drip splash thud roar glitch tick tock pause flap logo stamp'.split(' ');
-const COPY_MUSIC = new Set(['w1', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
+const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
 const LONG = new Set(['explode', 'bigExplode', 'roar', 'logo', 'die', 'gate', 'spark']);
 const mk = (...p) => { const d = path.join(...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(b64, 'base64')); return f; };
@@ -62,15 +63,18 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
   }
 
   if (want('tiles')) {
-    const d = await png(() => {
-      const c = G.makeCanvas(256, 112), g = c.g;
-      for (let v = 0; v < 4; v++) for (let m = 0; m < 16; m++) G.drawSolid(g, 1, m * 16, v * 16, 3 + v * 5, 7 + v * 3, { u: !!(m & 1), d: !!(m & 2), l: !!(m & 4), r: !!(m & 8) });
-      for (let k = 0; k < 8; k++) G.drawOneway(g, 1, k * 16, 64, k >> 2, { l: !!(k & 1), r: !!(k & 2) });
-      G.drawSpikes(g, 0, 80, false); G.drawSpikes(g, 16, 80, true); g.drawImage(G.SPR.cracked, 32, 80); g.drawImage(G.SPR.crumble, 48, 80);
-      for (let i = 0; i < 16; i++) G.drawDecor(g, 1, i * 16, 96, i, 40);
-      return c.toDataURL('image/png').split(',')[1];
-    });
-    put('tiles/w1_tiles.png', save('tiles/w1_tiles.png', d)); console.log('tiles');
+    for (const wo of WORLDS) {
+      const d = await png((wo) => {
+        const c = G.makeCanvas(256, 112), g = c.g;
+        for (let v = 0; v < 4; v++) for (let m = 0; m < 16; m++) G.drawSolid(g, wo, m * 16, v * 16, 3 + v * 5, 7 + v * 3, { u: !!(m & 1), d: !!(m & 2), l: !!(m & 4), r: !!(m & 8) });
+        for (let k = 0; k < 8; k++) G.drawOneway(g, wo, k * 16, 64, k >> 2, { l: !!(k & 1), r: !!(k & 2) });
+        G.drawSpikes(g, 0, 80, false); G.drawSpikes(g, 16, 80, true); g.drawImage(G.SPR.cracked, 32, 80); g.drawImage(G.SPR.crumble, 48, 80);
+        for (let i = 0; i < 16; i++) G.drawDecor(g, wo, i * 16, 96, i, 40);
+        return c.toDataURL('image/png').split(',')[1];
+      }, wo);
+      put('tiles/w' + wo + '_tiles.png', save('tiles/w' + wo + '_tiles.png', d));
+    }
+    console.log('tiles', WORLDS.join(','));
   }
 
   if (want('font')) {
@@ -94,16 +98,24 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
   }
 
   if (want('bg')) {
-    const d = await png(() => { const c = G.makeCanvas(384, 216); G.drawBG(1, c.g, 0, 0, 0, 0); return c.toDataURL('image/png').split(',')[1]; });
-    put('bg/w1.png', save('bg/w1.png', d)); console.log('bg');
+    for (const wo of WORLDS) {
+      const d = await png((wo) => { const c = G.makeCanvas(384, 216); G.drawBG(wo, c.g, 0, 0, 0, 0); return c.toDataURL('image/png').split(',')[1]; }, wo);
+      put('bg/w' + wo + '.png', save('bg/w' + wo + '.png', d));
+    }
+    console.log('bg', WORLDS.join(','));
   }
 
-  if (want('sfx')) {
-    for (const n of SFX) {
-      await page.evaluate(([n, s]) => G.audio.renderOffline('sfx:' + n, s), [n, LONG.has(n) ? 2.5 : 1.2]);
-      put('sfx/' + n + '.wav', save('sfx/' + n + '.wav', await wavOf({ mono: true, trim: true })));
+  if (want('theme')) {
+    for (const wo of WORLDS) {
+      const th = await page.evaluate((wo) => G.THEME[wo], wo);
+      fs.mkdirSync(path.join(ASSETS, 'theme'), { recursive: true });
+      fs.writeFileSync(path.join(ASSETS, 'theme/w' + wo + '.json'), JSON.stringify(th, null, 1));
+      if (wo > 1) {   // the moving platform of that world (world 1's is sprites/platform_48.png)
+        const d = await png((wo) => G.platformSprite(wo).toDataURL('image/png').split(',')[1], wo);
+        put('sprites/platform_w' + wo + '.png', save('sprites/platform_w' + wo + '.png', d));
+      }
     }
-    console.log('sfx', SFX.length);
+    console.log('theme', WORLDS.join(','));
   }
 
   if (want('music')) {

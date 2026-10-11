@@ -33,5 +33,10 @@
   "len": 10,
   "loop_start": 0,
   "once": false
+ },
+ "w2": {
+  "len": 55.714,
+  "loop_start": 4.286,
+  "once": false
  }
 }

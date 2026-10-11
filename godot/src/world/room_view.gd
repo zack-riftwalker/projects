@@ -8,11 +8,11 @@ var dynamic: TileMapLayer
 var decor: TileMapLayer
 var room: Room
 
-static func make_tileset() -> TileSet:
+static func make_tileset(world := 1) -> TileSet:
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(T, T)
 	var src := TileSetAtlasSource.new()
-	src.texture = load("res://assets/tiles/w1_tiles.png")
+	src.texture = load("res://assets/tiles/w%d_tiles.png" % world)
 	src.texture_region_size = Vector2i(T, T)
 	for r in range(7):
 		for c in range(16):
@@ -24,14 +24,15 @@ func build(rm: Room) -> void:
 	room = rm
 	for c in get_children():
 		c.queue_free()
-	var ts := make_tileset()
+	var world := int(room.def.get("world", 1))
+	var ts := make_tileset(world)
 	# background, scrolls with the camera at a fraction (set by the room each frame)
 	var bg := Parallax2D.new()
 	bg.name = "Background"
 	bg.scroll_scale = Vector2(0.25, 0.1)
 	bg.repeat_size = Vector2(384, 0)
 	var spr := Sprite2D.new()
-	spr.texture = load("res://assets/bg/w1.png")
+	spr.texture = load("res://assets/bg/w%d.png" % world)
 	spr.centered = false
 	bg.add_child(spr)
 	add_child(bg)

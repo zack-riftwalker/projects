@@ -35,6 +35,14 @@ func load_meta() -> void:
 				if px >= 0:
 					m["start_pos"] = [px * 16 + 3, ty * 16 + 6]
 
+var _themes := {}
+
+# G.THEME[w] captured as JSON (tools/godot/capture: theme): liquid, platform and accent colours of a world
+func theme(w: int) -> Dictionary:
+	if not _themes.has(w):
+		_themes[w] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/theme/w%d.json" % w))
+	return _themes[w]
+
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 

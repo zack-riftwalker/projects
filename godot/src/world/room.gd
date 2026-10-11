@@ -71,6 +71,7 @@ signal item_collected(item_id: String, kind: String)
 signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
 signal plugin_got(plugin_id: String, by: String)
+signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
 var boss_spawn = null
@@ -97,6 +98,7 @@ var death_t := -1.0
 var snapshot_in = null
 signal restart_requested(snap: Dictionary)
 var rows: PackedStringArray = PackedStringArray()
+var world := 1
 
 func _ready() -> void:
 	set_physics_process(true)
@@ -113,6 +115,7 @@ func load_room(room_id: String, snap = null) -> void:
 	Game.load_meta()
 	id = room_id
 	def = Game.rooms_meta.rooms[room_id]
+	world = int(def.get("world", 1))
 	var raw: PackedStringArray = FileAccess.get_file_as_string("res://src/world/rooms/" + def.file).split("\n")
 	w = int(def.size[0])
 	h = int(def.size[1])
@@ -595,6 +598,7 @@ func step_guest(dt: float) -> void:
 		zones = zones.filter(func(z): return z.until > 0.0)
 		if zones.is_empty():
 			zones_hit.clear()
+	_step_crumble(dt, players())
 	update_projs(dt)
 	for s2 in springs:
 		if s2.t > 0.0:
@@ -619,6 +623,64 @@ func step_guest(dt: float) -> void:
 		if ev == "death":
 			local_died.emit()
 	events.clear()
+
+# crumbling blocks (js: Level.update): stand -> 0.42 s shaking -> gone for 2.6 s (waits while somebody stands there) -> back
+func _step_crumble(dt: float, live: Array) -> void:
+	for i in grid.crumble.keys():
+		var c: Dictionary = grid.crumble[i]
+		c.t -= dt
+		if c.t > 0.0:
+			continue
+		var tx2: int = i % w
+		var ty2: int = i / w
+		if c.s == 1:
+			c.s = 2
+			c.t = 2.6
+			burst(tx2 * T + 8, ty2 * T + 4, 7, ["#cbb894", "#8a7a5c"], 50.0, 260.0)
+			Audio.sfx("crumble")
+			view.dynamic.erase_cell(Vector2i(tx2, ty2))
+		elif c.s == 2:
+			if grid.any_on(live, tx2, ty2):
+				c.t = 0.2
+			else:
+				grid.crumble.erase(i)
+				dust(tx2 * T + 8, ty2 * T + 8, 4)
+				view.dynamic.set_cell(Vector2i(tx2, ty2), 0, Vector2i(3, 5))
+	if mode == "guest":
+		# a crumble this body started is only a guess until the host lists it (its prediction expires after 1 s)
+		for i in grid.crumble.keys():
+			var c2: Dictionary = grid.crumble[i]
+			if not c2.has("pred") and not c2.has("host"):
+				c2["pred"] = time + 1.0
+				net_crumble.emit(i % w, i / w)
+
+# guest: the host's list [[tx, ty, s, t*100], ...] is the truth; a guess it does not list is dropped after its second
+func apply_crumbles(list: Array) -> void:
+	var listed := {}
+	for rec in list:
+		var i: int = int(rec[1]) * w + int(rec[0])
+		listed[i] = true
+		var c = grid.crumble.get(i)
+		if c == null:
+			c = {"s": int(rec[2]), "t": rec[3] / 100.0, "host": true}
+			grid.crumble[i] = c
+			if c.s == 2:
+				view.dynamic.erase_cell(Vector2i(int(rec[0]), int(rec[1])))
+		else:
+			c.erase("pred")
+			c["host"] = true
+			if int(rec[2]) == 2 and c.s != 2:
+				view.dynamic.erase_cell(Vector2i(int(rec[0]), int(rec[1])))
+			c.s = int(rec[2])
+			c.t = rec[3] / 100.0
+	for i in grid.crumble.keys():
+		if listed.has(i):
+			continue
+		var c3: Dictionary = grid.crumble[i]
+		if c3.has("pred") and float(c3.pred) > time:
+			continue
+		grid.crumble.erase(i)
+		view.dynamic.set_cell(Vector2i(i % w, i / w), 0, Vector2i(3, 5))
 
 # the host confirmed a broken tile (or the guest's own request came through)
 func apply_tile(tx: int, ty: int) -> void:
@@ -700,25 +762,7 @@ func step(dt: float) -> void:
 		for i in grid.blink_hold.keys():
 			if not grid.any_on(live, i % w, i / w):
 				grid.blink_hold.erase(i)
-	# crumbling blocks
-	for i in grid.crumble.keys():
-		var c: Dictionary = grid.crumble[i]
-		c.t -= dt
-		if c.t > 0.0:
-			continue
-		var tx2: int = i % w
-		var ty2: int = i / w
-		if c.s == 1:
-			c.s = 2
-			c.t = 2.6
-			burst(tx2 * T + 8, ty2 * T + 4, 7, ["#cbb894", "#8a7a5c"], 50.0, 260.0)
-			Audio.sfx("crumble")
-		elif c.s == 2:
-			if grid.any_on(live, tx2, ty2):
-				c.t = 0.2
-			else:
-				grid.crumble.erase(i)
-				dust(tx2 * T + 8, ty2 * T + 8, 4)
+	_step_crumble(dt, live)
 	if not break_q.is_empty():
 		for q in break_q:
 			q.t -= dt
@@ -1353,6 +1397,43 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 		Fx._disc(ci, px, py, maxf(1.0, q.r - 2), Color.WHITE)
 
 # ---------------------------------------------------------------- drawing of what is not an entity
+# liquid goes over everything (js: the "liquid goes over everything" loop of Level.draw + G.drawLiquid)
+func _draw_liquid(ci: CanvasItem) -> void:
+	if not grid.tiles.has(TileGrid.LIQ):
+		return
+	var th: Dictionary = Game.theme(world)
+	var liq := Color(th.liq)
+	var liq_hi := Color(th.liqHi)
+	var liq_lo := Color(th.liqLo)
+	var fill_a := Color(liq.r, liq.g, liq.b, 0.5)
+	var fill_b := Color(liq_lo.r, liq_lo.g, liq_lo.b, 0.45)
+	var cx0: float = cam.x if camera == null else camera.position.x
+	var tx0 := maxi(0, floori(cx0 / T))
+	var tx1 := mini(w - 1, floori((cx0 + W) / T))
+	for tx in range(tx0, tx1 + 1):
+		var top := -1
+		for ty in range(0, h + 1):
+			var is_l := ty < h and grid.tiles[ty * w + tx] == TileGrid.LIQ
+			if is_l and top < 0:
+				top = ty
+			if not is_l and top >= 0:
+				var surface: bool = top > 0 and grid.tiles[(top - 1) * w + tx] != TileGrid.LIQ
+				var px := tx * T
+				var y0 := top * T + (4 if surface else 0)
+				var y1 := ty * T
+				if surface:
+					ci.draw_rect(Rect2(px, y0 + 2, T, y1 - y0), fill_a)
+					ci.draw_rect(Rect2(px, y0 + 8, T, y1 - y0 - 6), fill_b)
+					for xx in range(px, px + T):
+						var o := roundi(sin(xx * 0.19 + time * 2.6) * 1.2 + sin(xx * 0.07 - time * 1.7) * 1.1)
+						ci.draw_rect(Rect2(xx, y0 + o, 1, 1), liq_hi)
+						ci.draw_rect(Rect2(xx, y0 + o + 1, 1, 2), liq)
+						if Game.hash3(xx >> 2, floori(time * 3.0 + xx * 0.01), 3) < 0.012:
+							ci.draw_rect(Rect2(xx, y0 + 5 + (xx * 7) % 23, 1, 1), liq_hi)
+				else:
+					ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_a)
+					ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_b)
+				top = -1
 func draw_layer(kind: String, ci: CanvasItem) -> void:
 	if kind == "furniture":
 		# closed doors: a gate column just inside the edge so the player sees why it is closed
@@ -1375,7 +1456,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 			Fx._disc(ci, sxp, syp, 5, swc)
 			PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
-			ci.draw_texture(Gfx.tex("platform_48"), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
+			ci.draw_texture(Gfx.tex("platform_48" if world == 1 else "platform_w%d" % world), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
 		for c in cps:
 			ci.draw_texture(Gfx.tex("checkpoint_%d" % (1 if c.on else 0)), Vector2(c.x - 8, c.y - 28))
 		for s in signs:
@@ -1406,6 +1487,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					if int(time * 3.0) % 2 == 0:
 						ci.draw_rect(Rect2(ix - 1, iy - 1, 2, 2), Color("#58f0c8"))
 	elif kind == "top":
+		_draw_liquid(ci)
 		for q in projs:
 			if not q.dead:
 				_draw_proj(ci, q)

@@ -1,0 +1,28 @@
+{
+ "name": "DEPENDENCY DEPTHS",
+ "path": "~/node_modules",
+ "time": "03:34",
+ "music": "w2",
+ "ambient": "#b3a0a6",
+ "base": "#b98349",
+ "dark": "#7a4f2e",
+ "lite": "#e2b475",
+ "cap": "#f0cd92",
+ "capHi": "#fff0cf",
+ "capLo": "#8f6238",
+ "code": [
+  "#a06f3c",
+  "#8f6238",
+  "#cf9d5f",
+  "#a06f3c"
+ ],
+ "plat": "#8f6238",
+ "platHi": "#e2b475",
+ "platLo": "#4e3220",
+ "accent": "#ff8fb0",
+ "fx": "#f0cd92",
+ "glow": "#ffd9a0",
+ "liq": "#c46ad8",
+ "liqHi": "#f6d0ff",
+ "liqLo": "#5a2470"
+}

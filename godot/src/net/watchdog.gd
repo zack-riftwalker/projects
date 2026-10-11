@@ -96,6 +96,13 @@ func _guest(b: Dictionary) -> void:
 		b["guest-one-room"] = [2.0, "the guest keeps %d rooms" % mgr.rooms.size()]
 	if mgr.player != null and mgr.player.dead:
 		b["guest-gets-up"] = [15.0, "dead (downed %s)" % mgr.player.downed]
+	# a crumble the host does not list is gone after a second (the guest's own guess expires then)
+	if mgr.room.id == coop.last_gf_room:
+		for ci in mgr.room.grid.crumble:
+			var cc: Dictionary = mgr.room.grid.crumble[ci]
+			if not coop.last_cr.has(ci) and not (cc.has("pred") and float(cc.pred) > mgr.room.time):
+				b["crumble_state"] = [1.0, "block %d,%d crumbles here but the host does not list it" % [ci % mgr.room.w, ci / mgr.room.w]]
+				break
 	# a gate stands open exactly when the host's last snapshot listed its flag (switches and keys are state, not events)
 	if mgr.room.id == coop.last_gf_room:
 		var gid: String = mgr.room.id

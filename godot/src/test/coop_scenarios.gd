@@ -1052,3 +1052,36 @@ func sc_co_plugins() -> Array:
 	Net.rel("hit", {"eid": bug.nid, "how": "swipe", "dmg": 3, "dx": 1.0, "dy": 0.0, "atk": 9999, "px": roundi(g.x), "py": roundi(g.y)})
 	await wait_secs(2.0)
 	return [owned and e1 and e2 and tok_seen, "owned %s, equipped %s %s, token counted on the guest %s" % [owned, e1, e2, tok_seen]]
+
+# MV3-08: the guest steps on a crumbling block (put in R01 on both pages): it shakes and falls on the host too, and the guest's grid follows
+# the host's list (no INVARIANT crumble_state).
+func sc_co_crumble() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var r: Room = mgr().room
+	var tx := 6
+	var ty := floori((floor_y(r, tx * 16.0 + 3.0, 9) + 10.0) / 16.0)
+	var i: int = ty * r.w + tx
+	if role == "host":
+		r.grid.tiles[i] = TileGrid.CRUMBLE
+		r.view.dynamic.set_cell(Vector2i(tx, ty), 0, Vector2i(3, 5))
+		var seen := await wait_until(func(): return r.grid.crumble.has(i), 12.0)
+		var fell := await wait_until(func(): return r.grid.crumble.has(i) and r.grid.crumble[i].s == 2, 4.0 * slow)
+		var back := await wait_until(func(): return not r.grid.crumble.has(i), 8.0 * slow)
+		await wait_secs(0.5)
+		return [seen and fell and back, "crumble started by the guest on the host=%s, fell=%s, came back=%s" % [seen, fell, back]]
+	await wait_secs(2.0)
+	r.grid.tiles[i] = TileGrid.CRUMBLE
+	r.view.dynamic.set_cell(Vector2i(tx, ty), 0, Vector2i(3, 5))
+	var p = mgr().player
+	p.x = tx * 16.0 + 3.0
+	p.y = ty * 16.0 - 10.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var predicted := await wait_until(func(): return r.grid.crumble.has(i), 3.0)
+	var confirmed := await wait_until(func(): return r.grid.crumble.has(i) and r.grid.crumble[i].has("host"), 4.0 * slow)
+	var fell2 := await wait_until(func(): return r.grid.crumble.has(i) and r.grid.crumble[i].s == 2, 4.0 * slow)
+	p.x = 60.0                                          # (this floor has more floor below it: step out of the gap so the block may come back)
+	p.y = floor_y(r, 60.0, 9)
+	var gone := await wait_until(func(): return not r.grid.crumble.has(i), 8.0 * slow)
+	return [predicted and confirmed and fell2 and gone, "predicted %s, confirmed by the host %s, fell %s, back %s" % [predicted, confirmed, fell2, gone]]

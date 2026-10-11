@@ -50,6 +50,7 @@ func run(name: String) -> bool:
 		"exception": return t_exception()
 		"reviewer": return t_reviewer()
 		"plugins": return t_plugins()
+		"crumble": return t_crumble()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -1260,6 +1261,50 @@ func t_plugins() -> bool:
 	Game.flags = {}
 	Game.tools.bash = false
 	return report("plugins", ok, info)
+
+# MV3-08: crumbling blocks (js: Level.update). Stand on it -> shakes 0.42 s -> gone (not solid) for 2.6 s while nobody stands there -> back.
+func t_crumble() -> bool:
+	var room := plug_room()
+	var p = room.player
+	var tx := floori((p.x + 5.0) / 16.0)
+	var ty := floori((p.y + p.h + 1.0) / 16.0)
+	var i: int = ty * room.w + tx
+	room.grid.tiles[i] = TileGrid.CRUMBLE
+	room.view.dynamic.set_cell(Vector2i(tx, ty), 0, Vector2i(3, 5))
+	var info := ""
+	for f in range(3):
+		step_with(room, {})
+	var started: bool = room.grid.crumble.has(i) and room.grid.crumble[i].s == 1
+	var t_fall := -1.0
+	var t_back := -1.0
+	var elapsed := 0.0
+	p.inv = 999.0
+	for f in range(600):
+		step_with(room, {})
+		elapsed += Game.STEP
+		var c = room.grid.crumble.get(i)
+		if c != null and c.s == 2 and t_fall < 0.0:
+			t_fall = elapsed
+			# the player falls out of the way (as in the game), so nobody waits on the block
+			p.x = 200.0
+			p.y = 40.0
+		if t_fall > 0.0 and c == null and t_back < 0.0:
+			t_back = elapsed
+			break
+	var solid_after: bool = room.grid.solid(tx, ty)
+	# the gap: not solid while state 2
+	var gap_ok := true
+	var room2 := plug_room()
+	var p2 = room2.player
+	var j: int = ty * room2.w + tx
+	room2.grid.tiles[j] = TileGrid.CRUMBLE
+	room2.grid.crumble[j] = {"s": 2, "t": 2.6}
+	gap_ok = not room2.grid.solid(tx, ty)
+	var fall_ok: bool = t_fall > 0.0 and absf(t_fall - 0.42) < 0.06
+	var back_ok: bool = t_back > 0.0 and absf((t_back - t_fall) - 2.6) < 0.1
+	info = "started=%s falls after %.2f s (want 0.42), back after %.2f s (want 2.6), solid again=%s, gap not solid=%s" % [started, t_fall, t_back - t_fall, solid_after, gap_ok]
+	Controls.script_input = null
+	return report("crumble", started and fall_ok and back_ok and solid_after and gap_ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:
