@@ -19,6 +19,7 @@ var room: Room
 var player: Player
 var trans := {"on": false, "t": 0.0, "door": null, "swapped": false}
 var fade := 0.0
+var last_door_id := ""           # the door the local player last crossed (a guest tells the host, for `sets` doors)
 
 func _init(h: Node2D, hd = null) -> void:
 	host = h
@@ -116,6 +117,7 @@ func respawn(count_death := true) -> void:
 	Game.load_meta()
 	if room != null:
 		room.record_loss()
+	last_door_id = ""
 	if player != null:
 		if player.get_parent() != null:
 			player.get_parent().remove_child(player)
@@ -154,6 +156,14 @@ func rest(r: Room, index: int) -> void:
 	Game.write_save()
 	rested.emit(r.id)
 
+# terminals only talk to terminals (D32): rested benches of rooms with "terminal": true, not the current room
+func travel_targets() -> Array:
+	var out: Array = []
+	for id in rested_benches():
+		if bool(Game.rooms_meta.rooms[id].get("terminal", false)) and (room == null or id != room.id):
+			out.append(id)
+	return out
+
 func rested_benches() -> Array:
 	var out: Array = []
 	for id in Game.rooms_meta.rooms:
@@ -170,6 +180,7 @@ func travel(room_id: String) -> void:
 	trans.t = 0.0
 	trans.door = null
 	trans.swapped = false
+	last_door_id = ""
 	trans.travel = room_id
 	Controls.locked = true
 
@@ -187,6 +198,12 @@ func _on_door_crossed(d: Dictionary, from_room: Room) -> void:
 	trans.face = player.face
 	trans.src_y = player.y
 	trans.src_b = d.b
+	trans.src_x = player.x
+	trans.src_room = from_room.id
+	last_door_id = String(d.id)
+	if String(d.get("sets", "")) != "":
+		Game.flags[String(d.sets)] = true
+		Game.write_save()
 	Controls.locked = true
 
 func tick(dt: float) -> void:
@@ -236,10 +253,26 @@ func _place_in_target() -> void:
 		if td.id == to_id:
 			t_door = td
 	var pw: int = int(tmeta.size[0]) * 16
-	var new_y: float = (int(t_door.b) + 1) * 16 - ((int(trans.src_b) + 1) * 16 - float(trans.src_y))
-	var new_x: float = 1.0 if t_door.side == "W" else pw - player.w - 1.0
 	player.vx = trans.vx
 	player.vy = trans.vy
+	if t_door.side == "N" or t_door.side == "S":
+		var src: Dictionary = Game.rooms_meta.rooms[trans.src_room]
+		var nx: float = float(trans.src_x) + (float(src.origin[0]) - float(tmeta.origin[0])) * 16.0      # columns line up in the world
+		nx = clampf(nx, int(t_door.a) * 16.0, (int(t_door.b) + 1) * 16.0 - player.w)
+		var ny: float
+		if d.side == "N":                      # going up: arrive at the bottom of the room above, pushed upward (D31)
+			ny = float(tmeta.size[1]) * 16.0 - player.h - 1.0
+			player.vy = minf(trans.vy, -Player.JUMP)
+		else:                                  # falling through a floor
+			ny = 1.0
+			player.vy = maxf(trans.vy, 60.0)
+		player.face = trans.face
+		player.dash_t = 0.0
+		player.atk_t = 0.0
+		swap_to(target_room, Vector2(nx, ny))
+		return
+	var new_y: float = (int(t_door.b) + 1) * 16 - ((int(trans.src_b) + 1) * 16 - float(trans.src_y))
+	var new_x: float = 1.0 if t_door.side == "W" else pw - player.w - 1.0
 	player.face = trans.face
 	player.dash_t = 0.0
 	player.atk_t = 0.0

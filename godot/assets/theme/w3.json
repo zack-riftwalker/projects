@@ -1,0 +1,28 @@
+{
+ "name": "THE HEAP",
+ "path": "/proc/heap",
+ "time": "04:20",
+ "music": "w3",
+ "ambient": "#5f6cb0",
+ "base": "#232a5c",
+ "dark": "#151a40",
+ "lite": "#33407f",
+ "cap": "#9cf7e0",
+ "capHi": "#eafff9",
+ "capLo": "#2b8f96",
+ "code": [
+  "#2e3976",
+  "#3a4a9a",
+  "#2b5f8a",
+  "#2e3976"
+ ],
+ "plat": "#3fbfae",
+ "platHi": "#d2fff2",
+ "platLo": "#1b5f6e",
+ "accent": "#58f0c8",
+ "fx": "#9cf7e0",
+ "glow": "#7cf5d4",
+ "liq": "#58f0c8",
+ "liqHi": "#e6fff8",
+ "liqLo": "#127a80"
+}

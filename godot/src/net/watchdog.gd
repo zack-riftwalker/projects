@@ -80,6 +80,10 @@ func _host(b: Dictionary) -> void:
 			if not is_instance_valid(o) or not (o == r.player or o in r.remote_players):
 				b["agent_owner"] = [1.0, "an agent in %s whose owner is gone" % r.id]
 				break
+	# a one-way hatch the guest crossed is open for good: its flag must be set on the host (MV4-01)
+	for f in coop.sets_pending:
+		if not Game.flag(f) and Net.now() - float(coop.sets_pending[f]) > 2.0:
+			b["door-sets"] = [0.0, "the guest crossed a door that sets %s, still not set" % f]
 	# a room is kept only while somebody is in it (a stale room comes back later with frozen creatures: G6)
 	for r in mgr.rooms.values():
 		if r != mgr.room and r.remote_players.is_empty():

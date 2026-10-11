@@ -33,7 +33,7 @@ func close() -> void:
 
 func main_options() -> Array:
 	var o := ["Rest"]
-	if manager.rested_benches().size() >= 2:
+	if not manager.travel_targets().is_empty() and bool(Game.rooms_meta.rooms[manager.room.id].get("terminal", false)):
 		o.append("Travel")
 	o.append("Plugins")
 	o.append("Leave")
@@ -108,10 +108,7 @@ func choose(i: int) -> void:
 			rest_chosen.emit()
 			close()
 		"Travel":
-			travel_list = []
-			for id in manager.rested_benches():
-				if id != manager.room.id:
-					travel_list.append(id)
+			travel_list = manager.travel_targets()
 			page = "travel"
 			sel = 0
 		"Plugins":

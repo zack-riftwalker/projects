@@ -26,18 +26,25 @@ var crumble := {}          # index -> {s, t}
 var blink_hold := {}       # index -> true
 var blink_phase := 0
 var gates_open := {"catch": false, "agents": false}        # the room sets them from its flags every step
-var doors: Array = []      # {side: "W"|"E", a, b, open}: rows a..b of the left/right edge are walkable while open
+var doors: Array = []      # {side: "W"|"E"|"N"|"S", a, b, open}: rows (W/E) or columns (N/S) a..b of the edge are walkable while open
 
 func tile(tx: int, ty: int) -> int:
 	if ty < 0:
+		for d in doors:
+			if d.side == "N" and tx >= d.a and tx <= d.b:
+				return E if d.open else SOLID
 		return SOLID
 	if tx < 0 or tx >= w:
 		if ty < h:
+			var want := "W" if tx < 0 else "E"
 			for d in doors:
-				if d.open and (d.side == "W") == (tx < 0) and ty >= d.a and ty <= d.b:
+				if d.side == want and d.open and ty >= d.a and ty <= d.b:
 					return E
 		return SOLID
 	if ty >= h:
+		for d in doors:
+			if d.side == "S" and tx >= d.a and tx <= d.b:
+				return E if d.open else SOLID
 		return E
 	return tiles[ty * w + tx]
 

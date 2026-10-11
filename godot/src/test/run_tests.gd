@@ -66,6 +66,7 @@ func run(name: String) -> bool:
 		"loadout": return t_loadout()
 		"mergeinterp": return t_mergeinterp()
 		"fork": return t_fork()
+		"nsdoors": return t_nsdoors()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -472,7 +473,7 @@ func t_end() -> bool:
 	Game.persist = false
 	Game.flags = {}
 	var m := new_manager()
-	m.swap_to("R11")
+	m.swap_to("H11")
 	var room := m.room
 	var p = m.player
 	var ev := [0]
@@ -1512,17 +1513,19 @@ func t_rooms3b() -> bool:
 		if not walk_door(m, chain[i + 1], "E"):          # back in the next room for the following step
 			ok = false
 			break
-	# bench travel into D03 (the way up is not walkable): both benches rested, then travel from D04
+	# terminal travel (D32): D03 is not a terminal, so D04 offers only R08
 	Game.flags["bench:D03"] = true
 	Game.flags["bench:D04"] = true
+	Game.flags["bench:R08"] = true
 	m.swap_to("D04")
-	m.travel("D03")
+	var offered: Array = m.travel_targets()
+	m.travel("R08")
 	for f in range(240):
 		m.tick(Game.STEP)
-		if m.room.id == "D03" and not m.trans.on:
+		if m.room.id == "R08" and not m.trans.on:
 			break
-	var bench_ok: bool = m.room.id == "D03" and m.player.y > 33 * 16 - 40 and m.player.y < 34 * 16
-	info += " | bench travel D04->D03 %s (y %.0f)" % [bench_ok, m.player.y]
+	var bench_ok: bool = offered == ["R08"] and m.room.id == "R08"
+	info += " | terminal travel D04->R08 %s (offered %s)" % [bench_ok, str(offered)]
 	Controls.script_input = null
 	Game.flags = {}
 	return report("rooms3b", ok and bench_ok, info)
@@ -2193,3 +2196,102 @@ func t_skipboss() -> bool:
 	Game.tools.bash = false
 	Game.flags = {}
 	return report("skipboss", ok, info)
+
+# MV4-01: N/S doors, `sets` doors, the east-wall trap, terminal travel
+func t_nsdoors() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var ok := true
+	var info := ""
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			ok = false
+			info += " BAD:" + label
+	# 1. the grid
+	var r10 := new_room("H10")
+	chk.call("H10 N open", r10.grid.tile(51, -1) == TileGrid.E)
+	chk.call("H10 N wall", r10.grid.tile(20, -1) == TileGrid.SOLID)
+	chk.call("H10 S door", r10.grid.tile(41, 16) == TileGrid.E)
+	chk.call("H10 pit", r10.grid.tile(20, 16) == TileGrid.E)
+	chk.call("H10 E door", r10.grid.tile(64, 10) == TileGrid.E)
+	chk.call("H10 E wall", r10.grid.tile(64, 5) == TileGrid.SOLID)
+	r10.queue_free()
+	var r3 := new_room("H03")
+	chk.call("H03 S door does not open the east wall", r3.grid.tile(32, 15) == TileGrid.SOLID)
+	r3.queue_free()
+	var r11 := new_room("H11")
+	chk.call("H11 hatch closed", r11.grid.tile(51, 16) == TileGrid.SOLID)
+	Game.flags["hatch:H10N"] = true
+	r11.update_doors()
+	chk.call("H11 hatch open", r11.grid.tile(51, 16) == TileGrid.E)
+	r11.queue_free()
+	Game.flags = {}
+	# 2. up through a hatch (sudo)
+	Game.tools.sudo = true
+	var m := new_manager()
+	m.swap_to("H10")
+	var p = m.player
+	p.x = 51 * 16 + 3.0
+	p.y = 6 * 16 - 10.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var up_ok := false
+	for f in range(120):
+		Controls.script_input = {"jump": f <= 12 or (f >= 20 and f <= 40)}
+		m.tick(Game.STEP)
+		if m.room.id == "H11" and not m.trans.on:
+			break
+	Controls.script_input = {}
+	chk.call("up: in H11", m.room.id == "H11")
+	chk.call("up: hatch flag", Game.flag("hatch:H10N"))
+	chk.call("up: x", m.player.x >= 50 * 16 - 10 and m.player.x <= 54 * 16)
+	for f in range(90):
+		m.tick(Game.STEP)
+	chk.call("up: lands", m.player.on_ground and m.player.y + m.player.h <= 16 * 16)
+	info += " up y=%.0f" % m.player.y
+	# 3. down through the hatch
+	m.player.x = 51 * 16 + 3.0
+	m.player.y = 14 * 16.0
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	var first_y := 999.0
+	for f in range(60):
+		m.tick(Game.STEP)
+		if m.room.id == "H10" and not m.trans.on:
+			first_y = m.player.y
+			break
+	chk.call("down: in H10", m.room.id == "H10")
+	chk.call("down: arrives at the top", first_y < 32.0)
+	# 4. the floor drop
+	Game.flags = {}
+	m.swap_to("H10")
+	m.player.x = 41 * 16 + 3.0
+	m.player.y = 13 * 16 - 10.0
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	for f in range(120):
+		Controls.script_input = {"down": f < 4, "jump": f == 1}
+		m.tick(Game.STEP)
+		if m.room.id == "H04" and not m.trans.on:
+			break
+	Controls.script_input = {}
+	chk.call("drop: in H04", m.room.id == "H04")
+	chk.call("drop: flag", Game.flag("hatch:H10S"))
+	m.room.update_doors()
+	var hn = m.room.grid.door_at("N", 41)
+	chk.call("drop: H04 N open", hn != null and hn.open)
+	# 5. travel
+	Game.flags = {"bench:R08": true, "bench:H03": true, "bench:D03": true}
+	m.swap_to("D03")
+	var bm := BenchMenu.new()
+	bm.manager = m
+	chk.call("D03 has no Travel", not ("Travel" in bm.main_options()))
+	m.swap_to("R08")
+	chk.call("R08 targets", m.travel_targets() == ["H03"])
+	chk.call("R08 has Travel", "Travel" in bm.main_options())
+	bm.free()
+	Game.flags = {}
+	Game.tools.sudo = false
+	m.queue_free()
+	Controls.script_input = null
+	return report("nsdoors", ok, info)

@@ -46,6 +46,17 @@ func theme(w: int) -> Dictionary:
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
+# THE HEAP's water level: 2 = flooded, 1 = after the valve (free.c), 0 = after THE LEAK. The guest reads the host's (snapshot `fl`).
+var flood_net := -1          # guest: the host's flood level from the last snapshot (-1 = none yet)
+func heap_flood() -> int:
+	if net_role == "guest" and flood_net >= 0:
+		return flood_net
+	if flag("boss:LEAK"):
+		return 0
+	if flag("gate:H07:catch"):
+		return 1
+	return 2
+
 # ---- difficulty (docs/metroidvania/05-difficulty-model.md, changes from 00-decisions.md §11) ----
 const DIFF := {
 	"easy":      {"catch_window": 0.14, "start_hp": 7, "big_hit": 1, "boss_hp_mult": 0.7, "enemy_hp_mult": 1.0, "enemy_hp_extra": 0, "meter_per_hit": 16, "telegraph_mult": 1.3, "punish_mult": 1.3, "inv_after_hit": 1.6, "dash_iframes": true},
@@ -195,6 +206,7 @@ var fights: Array = []
 
 func fresh() -> void:
 	flags = {}
+	flood_net = -1
 	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false}
 	equipped = []
 	bench = ""

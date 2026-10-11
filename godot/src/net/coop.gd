@@ -181,7 +181,7 @@ func _on_room_changed(r: Room) -> void:
 		host_body = null
 		zones_seen.clear()
 		if started:
-			Net.rel("room", {"to": r.id, "door": ""})
+			Net.rel("room", {"to": r.id, "door": mgr.last_door_id})
 
 const FX_NAMES := ["burst", "ring", "spark", "pop", "explode", "dust", "shake", "flash_screen"]
 const ECHO := ["hit", "clang", "squish", "bossHit", "token"]     # this screen already played them for its own actions
@@ -318,7 +318,7 @@ func _guest_joined() -> void:
 	if hr != null and hr.fight_active:
 		# a friend who joins during a fight is summoned into the arena the same way (boss hp does not change)
 		for d in hr.grid.doors:
-			if d.side == "W":
+			if d.lock == "fight":
 				arena_door = d
 		var prev_id := String(arena_door.to).get_slice(":", 0)
 		place_room = mgr.ensure_room(prev_id)
@@ -454,7 +454,9 @@ func _host_rel(k: String, d: Dictionary) -> void:
 			if r2 != null:
 				r2.on_player_hurt(remote, int(d.d))
 		"die": _guest_down()
-		"room": _host_remote_to_room(String(d.to))
+		"room":
+			_host_door_sets(String(d.get("door", "")))
+			_host_remote_to_room(String(d.to))
 		"crack": _host_crack(d)
 		"pickup": _host_pickup(d)
 		"bench":
@@ -493,6 +495,20 @@ func _hud(p) -> void:
 			h.me_text = "DOWN - BACK IN %d" % ceili(p.down_t)
 		elif p.downed:
 			h.me_text = "DOWN - REVIVING..."
+
+# a `sets` door the guest crossed sets its flag here too (state: the watchdog checks it is set 2 s later)
+var sets_pending := {}                    # flag -> when the guest crossed
+func _host_door_sets(door_id: String) -> void:
+	if door_id == "":
+		return
+	var rid := door_id.get_slice(":", 0)
+	if not Game.rooms_meta.rooms.has(rid):
+		return
+	for d in Game.rooms_meta.rooms[rid].doors:
+		if d.id == door_id and String(d.get("sets", "")) != "":
+			Game.flags[String(d.sets)] = true
+			sets_pending[String(d.sets)] = Net.now()
+			Game.write_save()
 
 func _host_remote_to_room(to_id: String) -> void:
 	var old := _remote_room()

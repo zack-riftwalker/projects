@@ -142,7 +142,7 @@ func load_room(room_id: String, snap = null) -> void:
 	grid.tiles.resize(w * h)
 	grid.doors = []
 	for d in def.get("doors", []):
-		grid.doors.append({"id": d.id, "side": d.side, "a": int(d.a), "b": int(d.b), "to": d.to, "lock": d.get("lock", ""), "open": true})
+		grid.doors.append({"id": d.id, "side": d.side, "a": int(d.a), "b": int(d.b), "to": d.to, "lock": d.get("lock", ""), "sets": d.get("sets", ""), "open": true})
 	update_doors()
 	var sign_n := 0
 	var item_id := 0
@@ -258,6 +258,8 @@ func update_doors() -> void:
 			open = not fight_active
 		elif lock.begins_with("until:"):
 			open = Game.flag(lock.substr(6))
+		elif lock.begins_with("flood:"):
+			open = Game.heap_flood() <= int(lock.substr(6))
 		if d.has("was") and d.was != open and time > 0.5:
 			Audio.sfx("gate" if open else "thud")
 		d.was = open
@@ -755,14 +757,22 @@ func _check_door() -> void:
 	if p == null or p.dead or crossing:
 		return
 	var mid_x: float = p.x + p.w / 2.0
-	var row := floori((p.y + p.h / 2.0) / T)
 	var side := ""
+	var idx := 0
 	if mid_x < 0.0:
 		side = "W"
+		idx = floori((p.y + p.h / 2.0) / T)
 	elif mid_x > pw:
 		side = "E"
+		idx = floori((p.y + p.h / 2.0) / T)
+	elif p.y < 0.0 and p.vy < 0.0:
+		side = "N"
+		idx = floori(mid_x / T)
+	elif p.y + p.h > ph and p.vy >= 0.0:
+		side = "S"
+		idx = floori(mid_x / T)
 	if side != "":
-		var d = grid.door_at(side, row)
+		var d = grid.door_at(side, idx)
 		if d != null and d.open:
 			crossing = true
 			door_crossed.emit(d)
@@ -1592,9 +1602,16 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 		for d in grid.doors:
 			if d.open:
 				continue
-			var gx := 0 if d.side == "W" else pw - T
-			for ty in range(d.a, d.b + 1):
-				ci.draw_texture_rect_region(gate, Rect2(gx, ty * T, T, T), Rect2(7, 12, 16, 16))
+			if d.side == "W" or d.side == "E":
+				var gx := 0 if d.side == "W" else pw - T
+				for ty in range(d.a, d.b + 1):
+					ci.draw_texture_rect_region(gate, Rect2(gx, ty * T, T, T), Rect2(7, 12, 16, 16))
+			else:
+				var hy := 0 if d.side == "N" else ph - 4
+				for tx in range(d.a, d.b + 1):
+					ci.draw_rect(Rect2(tx * T, hy, T, 4), Color(Game.COL.ink))
+					ci.draw_rect(Rect2(tx * T + 1, hy + 1, 14, 2), Color("#8d8798"))
+					ci.draw_rect(Rect2(tx * T + 7, hy + 1, 1, 1), Color("#c3bccd"))
 		for gc in gate_cells:
 			if not grid.gates_open[gc[2]]:
 				ci.draw_texture_rect_region(gate, Rect2(gc[0] * T, gc[1] * T, T, T), Rect2(7, 12, 16, 16))

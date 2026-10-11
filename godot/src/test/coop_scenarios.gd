@@ -1300,3 +1300,49 @@ func sc_co_menutick() -> Array:
 	var moved2: float = absf(mgr().player.x - gx)
 	main.shop_menu.close()
 	return [ran2 > 1.0 and moved2 < 1.0, "guest room ran %.2f s with the shop open (want > 1), body moved %.1f px (want 0)" % [ran2, moved2]]
+
+# MV4-01: the guest goes up a one-way hatch and back down the hole; the host follows through the guest's `room` events and takes the hatch flag
+func sc_co_nsdoor() -> Array:
+	Game.tools.sudo = true
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("H10", Vector2(10.0 * 16.0, 100.0))
+		var seen := {}
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 25000.0 * slow:
+			var rr = coop()._remote_room()
+			if rr != null:
+				seen[rr.id] = true
+			if seen.has("H11") and rr != null and rr.id == "H10" and seen.has("H10"):
+				break
+			await get_tree().physics_frame
+		var flag_ok: bool = Game.flag("hatch:H10N")
+		await wait_secs(1.0)
+		return [seen.has("H11") and seen.has("H10") and flag_ok, "host saw the guest in %s, hatch flag %s" % [str(seen.keys()), flag_ok]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(2.5)
+	mgr().swap_to("H10", Vector2(51.0 * 16.0 + 3.0, 6.0 * 16.0 - 10.0))
+	var p = mgr().player
+	p.tools.sudo = true
+	p.vx = 0.0
+	p.vy = 0.0
+	var miny := 9999.0
+	await wait_secs(0.6)                    # (let the body land on the ledge first)
+	for f in range(160):
+		miny = minf(miny, mgr().player.y)
+		Controls.script_input = {"jump": f <= 12 or (f >= 20 and f <= 40)}
+		await get_tree().physics_frame
+		if mgr().room.id == "H11" and not mgr().trans.on:
+			break
+	Controls.script_input = {}
+	var up: bool = mgr().room.id == "H11"
+	await wait_secs(1.5)
+	mgr().player.x = 51.0 * 16.0 + 3.0
+	mgr().player.y = 14.0 * 16.0
+	mgr().player.vx = 0.0
+	mgr().player.vy = 0.0
+	var down := await wait_until(func(): return mgr().room.id == "H10", 6.0)
+	await wait_secs(2.0)
+	return [up and down, "guest up %s (min y %.0f, room %s), back down %s" % [up, miny, mgr().room.id, down]]
