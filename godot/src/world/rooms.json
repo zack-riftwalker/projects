@@ -186,7 +186,7 @@
                  {"id": "H06:W2", "side": "W", "a": 32, "b": 35, "to": "H07:E"},
                  {"id": "H06:NW", "side": "W", "a": 2, "b": 5, "to": "H08:E"}
              ] },
-    "H08": { "file": "H08.txt", "title": "gc.log", "size": [64, 16], "origin": [1148, -36], "world": 3, "music": "w3",
+    "H08": { "file": "H08.txt", "title": "gc.log", "size": [64, 16], "origin": [1148, -36], "world": 3, "music": "w3", "terminal": true,
              "signs": ["gc: heap 98% full. Next collection: never.", "gc: cannot free 0x7ffd3a10: still referenced by THE LEAK", "gc: giving up. Whoever reads this: free it yourself."],
              "doors": [
                  {"id": "H08:E", "side": "E", "a": 9, "b": 12, "to": "H06:NW"},

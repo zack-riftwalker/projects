@@ -45,6 +45,7 @@ var view: RoomView
 var camera: Camera2D
 var layers := {}
 var liquid_y = null
+var rise_armed := false         # a player has been below the trigger row: only then does climbing past it start the flood (coming in from the top door must not)
 var rise_on := false            # H06: the flood is rising (it started when somebody climbed past the trigger row)
 var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the tide back (one push per 0.5 s)
 var blink_period := 1.5
@@ -269,7 +270,11 @@ func _step_flood(dt: float) -> void:
 		return
 	if def.has("rise") and Game.heap_flood() > 0:
 		var ps := players()
-		if not rise_on and not ps.is_empty():
+		if not rise_armed:
+			for q in ps:
+				if q.y >= float(def.rise.trigger) * T:
+					rise_armed = true
+		if not rise_on and rise_armed and not ps.is_empty():
 			for q in ps:
 				if q.y < float(def.rise.trigger) * T:
 					rise_on = true

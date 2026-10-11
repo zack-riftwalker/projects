@@ -1374,6 +1374,7 @@ func sc_co_flood() -> Array:
 		return [false, "nobody joined"]
 	var bench_pos := Vector2(3.0 * 16.0, 8.0 * 16.0 - 10.0)
 	var h6_pos := Vector2(10.0 * 16.0 + 2.0, 41.0 * 16.0 - 10.0)
+	var h6_low := Vector2(2.0 * 16.0, 49.0 * 16.0 - 10.0)          # (below the trigger row: arms the rising flood)
 	if role == "host":
 		await wait_secs(1.0)
 		mgr().swap_to("H03", bench_pos)
@@ -1382,13 +1383,16 @@ func sc_co_flood() -> Array:
 		Game.flags["gate:H07:catch"] = true
 		await wait_secs(14.0 * slow)
 		var l_after: float = mgr().room.liquid_y if mgr().room.liquid_y != null else -1.0
-		mgr().swap_to("H06", h6_pos)
+		mgr().swap_to("H06", h6_low)
 		var r: Room = mgr().room
 		for e in r.ents:
 			e.queue_free()
 		r.ents.clear()
 		r.player.inv = 99.0
 		var in6 := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "H06", 20.0)
+		await wait_secs(1.0)
+		r.player.x = h6_pos.x
+		r.player.y = h6_pos.y
 		var rose := await wait_until(func(): return r.rise_on, 5.0)
 		# watch for a push back (+60 or more in one frame) while the guest touches the water
 		var last: float = r.liquid_y
@@ -1412,7 +1416,7 @@ func sc_co_flood() -> Array:
 	await wait_secs(2.0)
 	var err_h3: float = absf(mgr().room.liquid_y - coop().last_lq / 4.0) if mgr().room.liquid_y != null else 999.0
 	await wait_secs(1.0)
-	mgr().swap_to("H06", h6_pos)
+	mgr().swap_to("H06", h6_low)
 	mgr().player.inv = 99.0
 	var rr: Room = mgr().room
 	var rose2 := await wait_until(func(): return rr.rise_on, 25.0)

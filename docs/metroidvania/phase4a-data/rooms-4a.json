@@ -406,6 +406,7 @@
   ],
   "world": 3,
   "music": "w3",
+  "terminal": true,
   "signs": [
    "gc: heap 98% full. Next collection: never.",
    "gc: cannot free 0x7ffd3a10: still referenced by THE LEAK",

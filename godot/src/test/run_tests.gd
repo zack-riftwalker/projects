@@ -2438,8 +2438,15 @@ func t_rise() -> bool:
 	var p = r.player
 	chk.call("level 1 start", r.liquid_y == 59 * 16 + 6.0 and not r.rise_on)
 	p.x = 10 * 16.0
-	p.y = 40 * 16.0
+	p.y = 4 * 16.0
 	p.vx = 0.0
+	p.vy = 0.0
+	step_with(r, {})
+	chk.call("coming in from the top door does not start it", not r.rise_on)
+	p.y = 50 * 16.0
+	step_with(r, {})
+	chk.call("below the trigger row arms it", not r.rise_on and r.rise_armed)
+	p.y = 40 * 16.0
 	p.vy = 0.0
 	step_with(r, {})
 	chk.call("rise starts above the trigger", r.rise_on)
