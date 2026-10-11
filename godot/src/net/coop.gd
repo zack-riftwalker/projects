@@ -999,6 +999,9 @@ func _guest_start(m: Dictionary) -> void:
 	_check_build(String(m.get("build", "?")))
 	Game.load_profile()                  # the guest's own loadout (user://profile.json); the host judges its pickups and hits with it
 	Game.save_profile()                  # (a plugin it does not own here is gone from its file too)
+	if main.shop_menu.pending != "":                 # a purchase asked on the old link gets no answer: ask again from scratch
+		main.shop_menu.pending = ""
+		main.shop_menu.msg = ""
 	Net.rel("ready", {"build": Game.build_text})
 	Net.rel("loadout", {"ids": Game.equipped})
 

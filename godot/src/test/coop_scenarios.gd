@@ -554,13 +554,15 @@ func sc_co_rejoin() -> Array:
 		var bodies: int = main.find_children("*", "RemotePlayer", true, false).size()
 		return [back and bodies == 1, "guest ready again %s, RemotePlayer nodes %d (want 1)" % [back, bodies]]
 	await wait_secs(2.0)
+	main.shop_menu.pending = "hot_reload"                 # a purchase asked on the old link
 	Net.ws.close(4000, "test")
 	Net.connect_as("guest", Game.net_code)          # what a reloaded page does: fresh reliable channel, no token
 	coop().started = false
 	var again := await wait_until(func(): return coop().started, 8.0)
+	var unstuck: bool = main.shop_menu.pending == ""
 	var snaps0: int = coop().snaps_applied
 	var flow := await wait_until(func(): return coop().snaps_applied > snaps0 + 5, 6.0)
-	return [again and flow, "restarted %s, snapshots flowing %s (+%d)" % [again, flow, coop().snaps_applied - snaps0]]
+	return [again and flow and unstuck, "restarted %s, snapshots flowing %s (+%d), stale purchase cleared %s" % [again, flow, coop().snaps_applied - snaps0, unstuck]]
 
 # both down in the same room: both respawn there and the link keeps working (G2)
 func sc_co_wipe() -> Array:
