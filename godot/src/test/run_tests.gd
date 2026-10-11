@@ -74,6 +74,7 @@ func run(name: String) -> bool:
 		"w3enemies": return t_w3enemies()
 		"segfault": return t_segfault()
 		"leak": return t_leak()
+		"rooms4": return t_rooms4()
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 	return report(name, false, "unknown test")
@@ -2813,3 +2814,230 @@ func t_leak() -> bool:
 	Game.tools.sudo = false
 	Game.flags = {}
 	return report("leak", res.ok, res.info)
+
+func _room_rows(meta: Dictionary) -> PackedStringArray:
+	return FileAccess.get_file_as_string("res://src/world/rooms/" + String(meta.file)).split("\n")
+
+# the edge cells of a door hold a firewall brick (the passage is shut until 4B)
+func _door_fired(rid: String, d: Dictionary) -> bool:
+	var meta: Dictionary = Game.rooms_meta.rooms[rid]
+	var rows := _room_rows(meta)
+	for i in range(int(d.a), int(d.b) + 1):
+		var ch := ""
+		match String(d.side):
+			"W": ch = rows[i][0] if rows[i].length() > 0 else " "
+			"E": ch = rows[i][int(meta.size[0]) - 1] if rows[i].length() >= int(meta.size[0]) else " "
+			"N": ch = rows[0][i] if rows[0].length() > i else " "
+			"S": ch = rows[int(meta.size[1]) - 1][i] if rows[int(meta.size[1]) - 1].length() > i else " "
+		if ch == "N":
+			return true
+	return false
+
+# MV4-09: the whole HEAP walks: every room is well-formed, every door pairs up and leads somewhere safe, the secrets open, the end door ends
+func t_rooms4() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	Game.load_meta()
+	var rooms: Dictionary = Game.rooms_meta.rooms
+	# 1. every room: size, door pairs, aligned spans
+	var skip_pairs := ["D02:D03", "D03:D02", "D03:D04", "D04:D03"]
+	var n_doors := 0
+	for rid in rooms:
+		var meta: Dictionary = rooms[rid]
+		var rows := _room_rows(meta)
+		chk.call("%s rows" % rid, rows.size() == int(meta.size[1]))
+		var wide_ok := true
+		for r in rows:
+			if r.length() > int(meta.size[0]):
+				wide_ok = false
+		chk.call("%s width" % rid, wide_ok)
+		for d in meta.doors:
+			var to_room := String(d.to).get_slice(":", 0)
+			if not rooms.has(to_room):
+				continue
+			n_doors += 1
+			var back: Dictionary = {}
+			for td in rooms[to_room].doors:
+				if td.id == d.to:
+					back = td
+			chk.call("%s partner exists" % d.id, not back.is_empty())
+			if back.is_empty():
+				continue
+			chk.call("%s points back" % d.id, String(back.to) == String(d.id))
+			if (rid + ":" + to_room) in skip_pairs:
+				continue
+			var o1: Array = meta.origin
+			var o2: Array = rooms[to_room].origin
+			if d.side == "W" or d.side == "E":
+				chk.call("%s rows align" % d.id, int(o1[1]) + int(d.a) == int(o2[1]) + int(back.a) and int(o1[1]) + int(d.b) == int(o2[1]) + int(back.b))
+			else:
+				chk.call("%s columns align" % d.id, int(o1[0]) + int(d.a) == int(o2[0]) + int(back.a) and int(o1[0]) + int(d.b) == int(o2[0]) + int(back.b))
+	res.info += " doors %d" % n_doors
+	# 2. every HEAP door that can open leads to safe ground
+	Game.flags = {"hatch:H10S": true, "hatch:H10N": true, "boss:LEAK": true, "gate:H07:catch": true, "crack:H02:130:0": true, "crack:H02:131:0": true, "crack:H02:132:0": true, "crack:H02:133:0": true}
+	var m := new_manager()
+	var crossed := 0
+	for rid in rooms:
+		if not String(rid).begins_with("H"):
+			continue
+		for d in rooms[rid].doors:
+			var to_room := String(d.to).get_slice(":", 0)
+			if not rooms.has(to_room) or _door_fired(rid, d) or _door_fired(to_room, _find_door(rooms[to_room], String(d.to))):
+				continue
+			var pw: float = int(rooms[rid].size[0]) * 16.0
+			var ph: float = int(rooms[rid].size[1]) * 16.0
+			var pos := Vector2.ZERO
+			var vel := Vector2.ZERO
+			var key := ""
+			match String(d.side):
+				"W":
+					pos = Vector2(2.0, (int(d.b) + 1) * 16 - 10.0)
+					vel = Vector2(-Player.RUN, 0.0)
+					key = "left"
+				"E":
+					pos = Vector2(pw - 12.0, (int(d.b) + 1) * 16 - 10.0)
+					vel = Vector2(Player.RUN, 0.0)
+					key = "right"
+				"N":
+					pos = Vector2((int(d.a) + int(d.b) + 1) * 8.0 - 5.0, 1.0)
+					vel = Vector2(0.0, -300.0)
+				"S":
+					pos = Vector2((int(d.a) + int(d.b) + 1) * 8.0 - 5.0, ph - 12.0)
+					vel = Vector2(0.0, 200.0)
+			m.swap_to(rid, pos, null, true)
+			m.room.update_doors()
+			m.player.x = pos.x
+			m.player.y = pos.y
+			m.player.vx = vel.x
+			m.player.vy = vel.y
+			var arrived := false
+			for f in range(60):
+				Controls.script_input = {key: true} if key != "" else {}
+				m.player.hp = m.player.max_hp
+				m.tick(Game.STEP)
+				if m.room.id == to_room:
+					arrived = true
+					break
+			Controls.script_input = {}
+			chk.call("%s leads to %s" % [d.id, to_room], arrived)
+			if arrived:
+				crossed += 1
+				var q = m.player
+				chk.call("%s arrival is free" % d.id, not m.room.grid.box_hits_solid(q.x, q.y, q.w, q.h))
+				chk.call("%s arrival is dry" % d.id, m.room.hazard_at(q) == "")
+	res.info += " crossed %d" % crossed
+	m.queue_free()
+	# 3. the secrets
+	Game.flags = {}
+	var m1 := new_manager()
+	m1.swap_to("R01")
+	chk.call("R01 without the flag", _spring_goes(m1, "R01", Vector2(54 * 16 + 3.0, 7 * 16 - 10.0), "R13", {}) == false)
+	m1.swap_to("R01", null, null, true)
+	m1.room.press_switch(0)
+	chk.call("R01 catch gate flag", Game.flag("gate:R01:catch"))
+	chk.call("R01 spring to R13", _spring_goes(m1, "R01", Vector2(54 * 16 + 3.0, 7 * 16 - 10.0), "R13", {}))
+	Game.flags = {}
+	m1.swap_to("R03", null, null, true)
+	m1.room.press_key(0)
+	chk.call("R03 agents gate flag", Game.flag("gate:R03:agents"))
+	chk.call("R03 spring to R15", _spring_goes(m1, "R03", Vector2(95 * 16 + 3.0, 7 * 16 - 10.0), "R15", {}))
+	# R02: the notch needs sudo and bash
+	Game.flags = {}
+	Game.tools.sudo = true
+	Game.tools.bash = true
+	var with_dj := _notch(m1, true)
+	var without_dj := _notch(m1, false)
+	chk.call("R02 notch with the double jump", with_dj == "R12")
+	chk.call("R02 notch without it stays", without_dj == "R02")
+	# R11: the gate reaches the ceiling
+	Game.flags = {}
+	m1.swap_to("R11", Vector2(22 * 16.0, 13 * 16 - 10.0), null, true)
+	var maxx := 0.0
+	for f in range(120):
+		Controls.script_input = {"right": true, "jump": f < 30, "up": f >= 14 and f < 30, "dash": f >= 14 and f < 17}
+		m1.tick(Game.STEP)
+		maxx = maxf(maxx, m1.player.x)
+	chk.call("R11 gate closed: nobody gets past x 25*16", maxx < 25 * 16.0 and m1.room.id == "R11")
+	Game.flags = {"gate:R11:catch": true}
+	m1.swap_to("R11", Vector2(22 * 16.0, 13 * 16 - 10.0), null, true)
+	for f in range(240):
+		Controls.script_input = {"right": true}
+		m1.tick(Game.STEP)
+		if m1.room.id == "H01":
+			break
+	chk.call("R11 with the gate open reaches H01", m1.room.id == "H01")
+	# H02: bash up under the crack
+	Game.flags = {}
+	m1.swap_to("H02", Vector2(131 * 16.0, 6 * 16 - 10.0), null, true)
+	m1.player.vx = 0.0
+	m1.player.vy = 0.0
+	for f in range(160):
+		Controls.script_input = {"jump": f < 30, "up": f >= 18 and f < 30, "dash": f >= 18 and f < 21}
+		m1.tick(Game.STEP)
+		if m1.room.id == "H12":
+			break
+	chk.call("H02 crack broken", Game.flag("crack:H02:131:0"))
+	chk.call("H02 bash up reaches H12", m1.room.id == "H12")
+	Controls.script_input = {}
+	Game.tools.sudo = false
+	Game.tools.bash = false
+	m1.queue_free()
+	# 4. the end of 4A
+	Game.flags = {}
+	var m2 := new_manager()
+	m2.swap_to("H11")
+	chk.call("H11 end text", String(m2.room.def.get("end", "")) == "to be continued in /net")
+	chk.call("H11 has the end door", m2.room.end_door != null)
+	Controls.script_input = null
+	Game.flags = {}
+	m2.queue_free()
+	return report("rooms4", res.ok, res.info)
+
+func _find_door(meta: Dictionary, door_id: String) -> Dictionary:
+	for d in meta.doors:
+		if d.id == door_id:
+			return d
+	return {}
+
+# put the player on a spring and see whether he ends up in `want` within 90 frames
+func _spring_goes(m: RoomManager, rid: String, pos: Vector2, want: String, _extra: Dictionary) -> bool:
+	if m.room.id != rid:
+		m.swap_to(rid, null, null, false)
+	m.room.update_doors()
+	m.player.x = pos.x
+	m.player.y = pos.y
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	var hit := false
+	for f in range(90):
+		Controls.script_input = {}
+		m.player.hp = m.player.max_hp
+		m.tick(Game.STEP)
+		if m.room.id == want:
+			hit = true
+			break
+	return hit
+
+# R02's secret: from the notch, jump, double jump (optional) and bash up. Returns the room the player is in afterwards
+func _notch(m: RoomManager, double: bool) -> String:
+	m.swap_to("R02", Vector2(89 * 16 + 3.0, 9 * 16 - 10.0), null, true)
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	for f in range(20):
+		m.tick(Game.STEP)
+	for f in range(120):
+		var inp := {"jump": f <= 12 or (double and f >= 20 and f <= 44)}
+		if f >= 40 and f < 46:
+			inp["up"] = true
+			inp["dash"] = true
+		Controls.script_input = inp
+		m.tick(Game.STEP)
+		if m.room.id != "R02":
+			break
+	Controls.script_input = {}
+	return m.room.id
