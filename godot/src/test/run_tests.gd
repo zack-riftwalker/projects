@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"strikeseen": return t_strikeseen()
 		"bossstats": return t_bossstats()
 		"loadout": return t_loadout()
 		"mergeinterp": return t_mergeinterp()
@@ -2094,3 +2095,19 @@ func t_bossstats() -> bool:
 	var info := "fight %s, hits %s (want [1, 0]), other %s (want [2, 0])" % [room.fight.state, str(room.stats.hits), str(room.stats.get("other"))]
 	m.queue_free()
 	return report("bossstats", ok, info)
+
+# MV3-FIX-7: a strike that ended a moment ago is still known when the ninth one starts (the guest's late parry is judged against it)
+func t_strikeseen() -> bool:
+	var m := reviewer_setup()
+	var room := m.room
+	var boss: Reviewer = room.boss
+	boss.active = true
+	for sid in range(1, 10):
+		boss.strike_sid = sid
+		boss.st = "lunge"
+		room.time += 0.05
+		room.record_hist()
+	var ok: bool = boss.strike_seen.has(8) and boss.strike_seen.has(9)
+	var info := "known strikes %s (want 8 and 9 among them)" % str(boss.strike_seen.keys())
+	m.queue_free()
+	return report("strikeseen", ok, info)

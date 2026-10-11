@@ -999,8 +999,10 @@ func record_hist() -> void:
 		for sb in e.harmboxes():
 			if sb is Dictionary and sb.has("sid"):
 				e.strike_seen[sb.sid] = time
-		if e.strike_seen.size() > 8:
-			e.strike_seen.clear()
+		if e.strike_seen.size() > 8:                     # keep the last second: a late parry from the guest is judged against it
+			for sk in e.strike_seen.keys():
+				if time - float(e.strike_seen[sk]) > 1.0:
+					e.strike_seen.erase(sk)
 
 # a short-lived damage area the guest checks against its own body: kind "c" circle (x, y, r), "r" rectangle (x, y, w, h)
 func harm_zone(kind: String, zx: float, zy: float, za: float, zb: float, dmg: int) -> void:
