@@ -1183,8 +1183,10 @@ func sc_co_agents() -> Array:
 		clear_creatures(r)
 		var agents_seen := await wait_until(func(): return r.agents.size() == 2 and r.agents[0].owner_p.get("is_remote") == true, 10.0 * slow)
 		var key := await wait_until(func(): return Game.flag("key:D06:0") and Game.flag("gate:D06:agents") and r.grid.gates_open.agents, 12.0 * slow)
+		var gone := await wait_until(func(): return r.agents.is_empty(), 15.0 * slow)          # the first two expire (11 s)
+		var again := await wait_until(func(): return r.agents.size() == 2 and r.agents[0].owner_p.get("is_remote") == true, 12.0 * slow)
 		await wait_secs(1.0)
-		return [there and agents_seen and key, "guest at the key room %s, the guest's two agents on the host %s, key pressed + gate open %s" % [there, agents_seen, key]]
+		return [there and agents_seen and key and gone and again, "guest at the key room %s, the guest's two agents on the host %s, key pressed + gate open %s, first cast gone %s, second cast on the host %s" % [there, agents_seen, key, gone, again]]
 	var has := await wait_until(func(): return Game.tools.get("agents", false), 10.0)
 	mgr().swap_to("D06", Vector2(320.0, 100.0))
 	var r2: Room = mgr().room
@@ -1203,7 +1205,15 @@ func sc_co_agents() -> Array:
 	var emptied := await wait_until(func(): return g.meter == 0.0, 2.0)
 	var view := await wait_until(func(): return r2.agent_view.size() == 2, 6.0 * slow)
 	var gate := await wait_until(func(): return r2.grid.gates_open.agents and Game.flag("key:D06:0"), 14.0 * slow)
-	return [has and emptied and view and gate, "has agents %s, meter emptied %s, the two agents drawn on the guest %s, gate open on the guest %s" % [has, emptied, view, gate]]
+	var view_gone := await wait_until(func(): return r2.agent_view.is_empty() and g.agents_t <= 0.0, 15.0 * slow)
+	g.meter = float(Game.METER_MAX)
+	Controls.script_input = {"special": true}
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	Controls.script_input = {}
+	var view2 := await wait_until(func(): return r2.agent_view.size() == 2, 6.0 * slow)
+	return [has and emptied and view and gate and view_gone and view2, "has agents %s, meter emptied %s, the two agents drawn on the guest %s, gate open on the guest %s, first cast gone %s, second cast drawn %s" % [has, emptied, view, gate, view_gone, view2]]
 
 # MV3-13: the guest buys from the npm stall with its own tokens (the host sets the flag, the guest pays when the host answers); when both buy the
 # same item the second buyer is told so and pays nothing.

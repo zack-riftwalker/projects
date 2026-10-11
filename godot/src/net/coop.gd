@@ -443,11 +443,12 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				if br != null:
 					_as_p2(br, func(): br.show_plugin_banner(pid))
 			Net.rel("plugin", {"id": pid, "by": by})
-		"agents":
+		"agents":                                # the guest spent a full meter (its own check): its two agents, replacing any it still has here
 			var ar := _remote_room()
-			if ar != null and remote.agents_t <= 0.0:
-				remote.agents_t = 11.0
+			if ar != null:
+				ar.agents = ar.agents.filter(func(a): return a.owner_p != remote)
 				ar.cast_agents(remote)
+				log_("host: guest agents cast in %s" % ar.id)
 		"crumble": _host_crumble(d)
 		"catch": _host_catch(d)
 		"parry": _host_parry(d)
