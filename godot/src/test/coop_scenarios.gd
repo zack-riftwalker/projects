@@ -1423,7 +1423,10 @@ func sc_co_flood() -> Array:
 	mgr().player.x = 10.0 * 16.0
 	mgr().player.y = rr.liquid_y + 8.0
 	mgr().player.vy = 0.0
-	await wait_secs(4.0)
+	var t2 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t2 < 4000.0 * slow:           # (the water must not kill the bot: that would restart the level for both)
+		await get_tree().physics_frame
+		mgr().player.hp = mgr().player.max_hp
 	return [lvl and moved and err_h3 < 8.0 and rose2 and close, "guest: flood level 1 %s, H03 water followed %s (off by %.1f), H06 rising %s, water close to the host's %s" % [lvl, moved, err_h3, rose2, close]]
 
 # MV4-07: both stand at H05's bulkhead; the host's SEGFAULT runs into it. The wall breaks on both screens and the guest takes the blast

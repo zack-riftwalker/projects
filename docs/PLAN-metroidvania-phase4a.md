@@ -77,16 +77,16 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MV4-01 | room data in; N/S doors; door `sets` flags and `flood:` locks; terminal-only travel | Sonnet | todo |
-| MV4-02 | tiles: dead code `;`, firewall brick `N`, bulkhead `0`; GET ring `@`; moths; `Room.blast` | Sonnet | todo |
-| MV4-03 | flood levels, the valve, rising flood; co-op | Sonnet | todo |
-| MV4-04 | plugins `--verbose`, `restart: always` | Sonnet | todo |
-| MV4-05 | world 3 look: tiles, backdrop, theme, music `w3`, THE LEAK sprite | Sonnet | todo |
-| MV4-06 | JS ports: Slime, Lint, Dripper, Pendulum, Drone (etrace parity) | Sonnet | todo |
-| MV4-07 | SEGFAULT and STACK OVERFLOW (new) | Sonnet | todo |
-| MV4-08 | THE LEAK v2 → sudo | Sonnet | todo |
-| MV4-09 | HEAP walk-through tests; retrofits' secrets; end door in `mmap.c` | Sonnet | todo |
-| MV4-10 | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MV4-01 | room data in; N/S doors; door `sets` flags and `flood:` locks; terminal-only travel | Sonnet | done |
+| MV4-02 | tiles: dead code `;`, firewall brick `N`, bulkhead `0`; GET ring `@`; moths; `Room.blast` | Sonnet | done |
+| MV4-03 | flood levels, the valve, rising flood; co-op | Sonnet | done |
+| MV4-04 | plugins `--verbose`, `restart: always` | Sonnet | done |
+| MV4-05 | world 3 look: tiles, backdrop, theme, music `w3`, THE LEAK sprite | Sonnet | done |
+| MV4-06 | JS ports: Slime, Lint, Dripper, Pendulum, Drone (etrace parity) | Sonnet | done |
+| MV4-07 | SEGFAULT and STACK OVERFLOW (new) | Sonnet | done |
+| MV4-08 | THE LEAK v2 → sudo | Sonnet | done |
+| MV4-09 | HEAP walk-through tests; retrofits' secrets; end door in `mmap.c` | Sonnet | done |
+| MV4-10 | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ---
 
