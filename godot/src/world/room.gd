@@ -1839,7 +1839,7 @@ func _draw_bricks(ci: CanvasItem) -> void:
 # the unrevealed dead code near the local player, shown by the --verbose plugin (MV4-04)
 func verbose_cells() -> Array:
 	var p = player
-	if p == null or dead_revealed() or not Game.equipped.has("verbose") or not Game.owns_plugin("verbose"):
+	if p == null or dead_revealed() or not Game.mod_dead_sight():
 		return []
 	var out: Array = []
 	var cx: float = p.x + p.w / 2.0

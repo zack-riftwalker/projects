@@ -69,6 +69,7 @@ func run(name: String) -> bool:
 		"nsdoors": return t_nsdoors()
 		"tiles4": return t_tiles4()
 		"flood": return t_flood()
+		"plugins4": return t_plugins4()
 		"rise": return t_rise()
 	return report(name, false, "unknown test")
 
@@ -2452,3 +2453,38 @@ func t_rise() -> bool:
 	r0.queue_free()
 	Game.flags = {}
 	return report("rise", res.ok, res.info)
+
+# MV4-04: --verbose shows the dead code near you; restart: always fills the meter after a bench respawn
+func t_plugins4() -> bool:
+	Game.persist = false
+	Game.flags = {"plugin:verbose": true, "plugin:restart_always": true}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	Game.equipped = ["restart_always"]
+	var m := new_manager()
+	m.respawn(false)
+	chk.call("meter full with restart: always", m.player.meter == 99.0)
+	Game.equipped = []
+	m.respawn(false)
+	chk.call("meter empty without it", m.player.meter == 0.0)
+	m.queue_free()
+	var r := new_room("H03")
+	r.player.x = 28 * 16.0
+	r.player.y = 8 * 16 - 10.0
+	Game.equipped = ["verbose"]
+	var cells: Array = r.verbose_cells()
+	var want := [[31, 4], [31, 5], [31, 6], [31, 7]]
+	chk.call("verbose lists the dead cells", cells == want)
+	res.info += " cells=" + str(cells)
+	Game.equipped = []
+	chk.call("nothing without it", r.verbose_cells().is_empty())
+	Game.equipped = ["verbose"]
+	Game.flags["dead:H03"] = true
+	chk.call("nothing once revealed", r.verbose_cells().is_empty())
+	r.queue_free()
+	Game.equipped = []
+	Game.flags = {}
+	return report("plugins4", res.ok, res.info)

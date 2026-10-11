@@ -1306,6 +1306,8 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				guest_down_t = -1.0
 				var rid := String(d.room)
 				mgr.swap_to(rid, Vector2(d.x4 / 4.0, d.y4 / 4.0), null, true)
+				if Game.mod_restart_meter() and mgr.player != null:
+					mgr.player.meter = float(Game.METER_MAX)              # restart: always
 				log_("guest: respawned in %s" % rid)
 		"summon":
 			guest_summon = {"room": String(d.room), "t": float(d.warn)}

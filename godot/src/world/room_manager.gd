@@ -133,6 +133,8 @@ func respawn(count_death := true) -> void:
 	if room != null:
 		room.player = null
 	swap_to(rid, spawn, null, true)
+	if Game.mod_restart_meter() and player != null:
+		player.meter = float(Game.METER_MAX)               # restart: always
 	Controls.locked = false
 	trans.on = false
 	fade = 0.0

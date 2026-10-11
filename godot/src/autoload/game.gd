@@ -89,6 +89,8 @@ const PLUGINS := [
 	{"id": "eslint_fix", "name": "eslint --fix", "cost": 1, "price": 60},
 	{"id": "try_finally", "name": "try/finally", "cost": 1, "price": 80},
 	{"id": "rubber_duck", "name": "rubber duck", "cost": 2, "price": 140},
+	{"id": "verbose", "name": "--verbose", "cost": 1, "price": 0},
+	{"id": "restart_always", "name": "restart: always", "cost": 1, "price": 0},
 ]
 var equipped: Array = []              # plugin ids (saved; the guest keeps its own in user://profile.json)
 signal loadout_changed
@@ -148,6 +150,14 @@ func mod_inv_bonus(list = null) -> float:
 
 func mod_claw_mult(hp: int, list = null) -> int:
 	return 2 if hp == 1 and (equipped if list == null else list).has("rubber_duck") else 1
+
+# --verbose: dead code near you blinks (MV4-04)
+func mod_dead_sight(list = null) -> bool:
+	return (equipped if list == null else list).has("verbose")
+
+# restart: always: you come back from a bench with a full meter
+func mod_restart_meter(list = null) -> bool:
+	return (equipped if list == null else list).has("restart_always")
 
 func mod_pickup_radius(list = null) -> float:
 	return 2.5 if (equipped if list == null else list).has("cache") else 1.0
