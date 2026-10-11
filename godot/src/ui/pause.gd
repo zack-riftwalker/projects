@@ -104,6 +104,11 @@ func _draw() -> void:
 	if page == "fights":
 		_draw_fights()
 		return
+	if not Game.equipped.is_empty():                       # the plugins on (read only; they change at a bench)
+		var names: Array = []
+		for id in Game.equipped:
+			names.append(Game.plugin_def(String(id)).name)
+		PixelText.draw_text(self, "plugins: " + ", ".join(names), 6, H - 9, "#58f0c8", {"tiny": true})
 	PixelText.draw_text(self, "PAUSED", W / 2.0, 30, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
 	var opts := options()
 	for i in range(opts.size()):

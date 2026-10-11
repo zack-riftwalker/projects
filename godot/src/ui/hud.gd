@@ -75,6 +75,9 @@ func _draw() -> void:
 	if room.banner.text != "":
 		PixelText.draw_text(self, room.banner.text, W / 2.0, 70, Game.COL.paper, {"align": "c", "scale": 3, "outline": Game.COL.ink, "shadow": Game.COL.ink})
 		PixelText.draw_text(self, room.banner.sub, W / 2.0, 100, Game.COL.hazardHi, {"align": "c", "outline": Game.COL.ink})
+	if room.pick_banner.t > 0.0:
+		PixelText.draw_text(self, room.pick_banner.text, W / 2.0, 60, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
+		PixelText.draw_text(self, room.pick_banner.sub, W / 2.0, 80, "#58f0c8", {"align": "c", "outline": Game.COL.ink})
 	if room.stats_t > 0.0 and room.stats_line != "":
 		PixelText.draw_text(self, room.stats_line, W / 2.0, H - 34, Game.COL.paper, {"align": "c", "outline": Game.COL.ink})
 	if notice != "":

@@ -70,6 +70,7 @@ signal fight_intro
 signal item_collected(item_id: String, kind: String)
 signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
+signal plugin_got(plugin_id: String, by: String)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
 var boss_spawn = null
@@ -83,6 +84,7 @@ var banner := {"text": "", "sub": "", "t": 0.0}
 var stats_line := ""
 var stats_t := 0.0
 var end_door = null
+var pick_banner := {"text": "", "sub": "", "t": 0.0}      # "<plugin>" / "plugin - equip it at a bench" for 2 s
 var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
 var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
 signal door_crossed(door: Dictionary)
@@ -134,6 +136,7 @@ func load_room(room_id: String, snap = null) -> void:
 	var sign_n := 0
 	var item_id := 0
 	var switch_n := 0
+	var plugin_n := 0
 	var spark_spots: Array = []
 	for ty in range(h):
 		var row := rows[ty]
@@ -156,6 +159,13 @@ func load_room(room_id: String, snap = null) -> void:
 					start = {"x": float(x + 3), "y": float(y + 6)}
 				"C":
 					cps.append({"x": x + 8, "y": y + T, "on": Game.flag("bench:" + id), "tx": tx})
+				"U":
+					var plist: Array = def.get("plugins", [])
+					if plugin_n < plist.size():
+						var pid := String(plist[plugin_n])
+						if not Game.owns_plugin(pid) and mode != "guest":
+							items.append({"kind": "plugin", "x": float(x + 8), "y": float(y + 8), "id": "plugin:" + pid, "ph": float(plugin_n)})
+					plugin_n += 1
 				"Y":
 					switches.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": switch_n})
 					switch_n += 1
@@ -540,6 +550,7 @@ func _process(_dt: float) -> void:
 func step_guest(dt: float) -> void:
 	update_doors()
 	fx.decay(dt)
+	pick_banner.t -= dt
 	if hitstop > 0.0:
 		hitstop -= dt
 		return
@@ -573,7 +584,7 @@ func step_guest(dt: float) -> void:
 			for it in items:                # (asked again after 0.6 s: a refused request must not lose the item for good)
 				if time - float(it.get("asked", -10.0)) < 0.6 or it.get("dead", false):
 					continue
-				var rr := 11.0 if it.kind == "spark" else 9.0
+				var rr := (11.0 if it.kind == "spark" else 9.0) * Game.mod_pickup_radius()
 				if absf(pcx - it.x) < rr + 3 and absf(pcy - it.y) < rr and (not it.get("loose", false) or it.get("t", 1.0) > 0.2):
 					it.asked = time
 					net_pickup.emit(it.id)
@@ -665,6 +676,7 @@ func step(dt: float) -> void:
 		return
 	update_doors()
 	fx.decay(dt)
+	pick_banner.t -= dt
 	if hitstop > 0.0:
 		hitstop -= dt
 		return
@@ -1115,6 +1127,15 @@ func update_items(dt: float) -> void:
 	for it in items:
 		if it.get("dead", false):
 			continue
+		if it.kind == "token" and not it.get("loose", false):         # cache: a token within 64 px of a player who has it flies to that player
+			for q in live:
+				var ql: Array = Game.equipped if not q.get("is_remote") else q.loadout
+				if ql.has("cache") and Vector2(q.x + 5.0 - it.x, q.y + 5.0 - it.y).length() < 64.0:
+					it["loose"] = true
+					it["t"] = 0.4
+					it["vx"] = 0.0
+					it["vy"] = 0.0
+					break
 		if it.get("loose", false):
 			it.t += dt
 			if it.t > 0.35 and not live.is_empty():       # drawn to the nearest living Clawd
@@ -1138,7 +1159,7 @@ func update_items(dt: float) -> void:
 			it.y += it.vy * dt
 			if it.t > 8.0:
 				it.dead = true
-		var r := 11.0 if it.kind == "spark" else 9.0
+		var r := (11.0 if it.kind == "spark" else 9.0) * Game.mod_pickup_radius()
 		if p != null and not p.dead and not p.gone:
 			var pcx: float = p.x + p.w / 2.0
 			var pcy: float = p.y + p.h / 2.0
@@ -1178,6 +1199,8 @@ func collect(it: Dictionary) -> void:
 				pop(it.x, it.y - 26, "+1 max hp", Game.COL.okHi, true)
 			Game.write_save()
 			events.append("spark")
+		"plugin":
+			plugin_collected(String(it.id).trim_prefix("plugin:"))
 		"coffee":
 			if Game.diff == "easy" and p.hp < p.max_hp:
 				heal(p, 1)
@@ -1225,6 +1248,17 @@ func press_switch(i: int) -> void:
 		shake(0.3)
 		update_doors()
 	Game.write_save()
+
+# a plugin chip was picked up by anybody (host / solo here; the guest gets the same through Coop's `plugin` event)
+func plugin_collected(pid: String, by := "p1") -> void:
+	Game.flags["plugin:" + pid] = true
+	show_plugin_banner(pid)
+	plugin_got.emit(pid, by)
+	Game.write_save()
+
+func show_plugin_banner(pid: String) -> void:
+	Audio.sfx("gate")
+	pick_banner = {"text": String(Game.plugin_def(pid).get("name", pid)), "sub": "plugin - equip it at a bench", "t": 2.0}
 
 # hostile projectile. kinds: orb, shard
 func shoot(px: float, py: float, pvx: float, pvy: float, o = null) -> Dictionary:
@@ -1362,6 +1396,15 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					ci.draw_texture(Gfx.tex(("sparkGhost_%d" if it.ghost else "spark_%d") % f), Vector2(ix - 7, iy - 7))
 				"coffee":
 					ci.draw_texture(Gfx.tex("coffee"), Vector2(ix - 6, iy - 7))
+				"plugin":
+					ci.draw_rect(Rect2(ix - 6, iy - 6, 12, 12), Color(Game.COL.ink))
+					ci.draw_rect(Rect2(ix - 5, iy - 5, 10, 10), Color("#231d2e"))
+					for pin in range(3):
+						ci.draw_rect(Rect2(ix - 7, iy - 4 + pin * 3, 2, 1), Color("#58f0c8"))
+						ci.draw_rect(Rect2(ix + 5, iy - 4 + pin * 3, 2, 1), Color("#58f0c8"))
+					ci.draw_rect(Rect2(ix - 3, iy - 3, 6, 6), Color("#3a3346"))
+					if int(time * 3.0) % 2 == 0:
+						ci.draw_rect(Rect2(ix - 1, iy - 1, 2, 2), Color("#58f0c8"))
 	elif kind == "top":
 		for q in projs:
 			if not q.dead:

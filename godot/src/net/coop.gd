@@ -8,7 +8,7 @@ const SNAP_HZ := 15.0
 const ST_HZ := 30.0
 const REVIVE_T := 6.0
 const FIGHT_STATES := ["none", "intro", "active", "reward", "done"]
-const ITEM_KINDS := ["token", "spark", "coffee"]
+const ITEM_KINDS := ["token", "spark", "coffee", "plugin"]
 
 var main
 var mgr: RoomManager
@@ -79,6 +79,7 @@ func setup(m) -> void:
 	mgr.local_died.connect(_on_local_died)
 	mgr.room_built.connect(_on_room_built)
 	mgr.room_changed.connect(_on_room_changed)
+	Game.loadout_changed.connect(func(): if role == "guest" and started: Net.rel("loadout", {"ids": Game.equipped}))
 	mgr.rested.connect(func(id): if role == "guest": Net.rel("bench", {"room": id}))      # the host respawns the guest there after a wipe
 	Net.connect_as(role, Game.net_code)
 
@@ -152,6 +153,7 @@ func _on_room_built(r: Room) -> void:
 		r.tile_broken.connect(func(tx, ty): _host_tile(r, tx, ty))
 		r.item_collected.connect(func(id, kind): _host_item(r, id, kind))
 		r.fight_intro.connect(func(): _host_fight_intro(r))
+		r.plugin_got.connect(func(pid, by): if guest_here: Net.rel("plugin", {"id": pid, "by": by}))
 	elif role == "guest":
 		r.net_hit.connect(func(nid, how, dmg, dx, dy, atk): Net.rel("hit", {"eid": nid, "how": how, "dmg": dmg, "dx": dx, "dy": dy, "atk": atk,
 			"px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
@@ -416,6 +418,13 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				for q in r.projs:
 					if int(q.id) == int(d.pid):
 						q.dead = true
+		"loadout":
+			var ids: Array = []
+			for id in d.get("ids", []):
+				if Game.plugin_def(String(id)).size() > 0 and Game.notches_used(ids) + int(Game.plugin_def(String(id)).cost) <= Game.NOTCHES:
+					ids.append(String(id))
+			remote.loadout = ids
+			log_("host: guest loadout %s" % str(ids))
 		"catch": _host_catch(d)
 		"parry": _host_parry(d)
 		"hurt":
@@ -529,7 +538,9 @@ func _host_hit(d: Dictionary) -> void:
 				verdict = "TOO FAR"
 			else:
 				e.marks[key] = int(d.atk)
-				var dmg := clampi(int(d.dmg), 1, 2) if how == "swipe" else (1 if how == "dash" else maxi(1, e.hp))
+				# the most a claw may do: opus doubles it, a rubber duck doubles it again at the guest's last hit point
+				var allowed: int = (2 if Game.tools.get("opus", false) else 1) * Game.mod_claw_mult(remote.hp, remote.loadout)
+				var dmg := clampi(int(d.dmg), 1, allowed) if how == "swipe" else (1 if how == "dash" else maxi(1, e.hp))
 				r.attacker = remote
 				var boxes: Array = e.hurtboxes()
 				_as_p2(r, func(): e.hit(dmg, float(d.dx), float(d.dy), how, boxes[0] if boxes.size() > 0 else e))
@@ -597,9 +608,10 @@ func _host_pickup(d: Dictionary) -> void:
 		if it.get("dead", false) or String(it.id) != String(d.id):
 			continue
 		# the body seen here is late (running or jumping it can be 30 px behind): its recent reports count too
-		var near := absf(remote.x + 5 - it.x) <= 28.0 and absf(remote.y + 5 - it.y) <= 28.0
+		var reach: float = 28.0 * Game.mod_pickup_radius(remote.loadout)      # (cache: its pickup radius is 2.5 times larger)
+		var near := absf(remote.x + 5 - it.x) <= reach and absf(remote.y + 5 - it.y) <= reach
 		for smp in remote.samples:
-			if hms() - float(smp[0]) <= Net.rtt / 2.0 + 0.35 and absf(smp[1] + 5 - it.x) <= 28.0 and absf(smp[2] + 5 - it.y) <= 28.0:
+			if hms() - float(smp[0]) <= Net.rtt / 2.0 + 0.35 and absf(smp[1] + 5 - it.x) <= reach and absf(smp[2] + 5 - it.y) <= reach:
 				near = true
 		if not near:
 			log_("host: P2 pickup %s refused (too far)" % it.id)
@@ -609,6 +621,8 @@ func _host_pickup(d: Dictionary) -> void:
 			r.got[it.id] = true
 			Game.flags[it.id] = true
 		_as_p2(r, func(): r.spark(it.x, it.y, Game.COL.goldHi, 4))
+		if it.kind == "plugin":
+			_as_p2(r, func(): r.plugin_collected(String(it.id).trim_prefix("plugin:"), "p2"))
 		if it.kind == "spark":
 			Game.fragments += 1
 			if Game.fragments % 4 == 0 and mgr.player != null:
@@ -842,12 +856,16 @@ func _send_snapshot() -> void:
 		var fks := String(fk)
 		if (fks.begins_with("switch:") or fks.begins_with("key:") or fks.begins_with("gate:")) and fks.get_slice(":", 1) == r.id:
 			gf.append(fks)
+	var pl: Array = []                  # owned plugins: state (the guest's pickup request or the `plugin` event may be lost)
+	for d in Game.PLUGINS:
+		if Game.owns_plugin(d.id):
+			pl.append(d.id)
 	var hz: Array = []
 	for z in r.zones:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn]
-	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "p1": p1,
+	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0}
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
@@ -920,7 +938,9 @@ func _guest_start(m: Dictionary) -> void:
 	p.hp = int(you.hp)
 	notice_set("", 0.1)
 	_check_build(String(m.get("build", "?")))
+	Game.load_profile()                  # the guest's own loadout (user://profile.json); the host judges its pickups and hits with it
 	Net.rel("ready", {"build": Game.build_text})
+	Net.rel("loadout", {"ids": Game.equipped})
 
 func _guest_tick(dt: float) -> void:
 	if not started:
@@ -1044,7 +1064,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 	for rec in m.it:
 		var iid := String(rec[0])
 		var old = old_items.get(iid)
-		var d := {"kind": ITEM_KINDS[clampi(int(rec[1]), 0, 2)], "id": iid, "x": rec[2] / 4.0, "y": rec[3] / 4.0, "loose": iid.begins_with("L"), "t": 1.0, "ph": float(hash(iid) % 100) / 10.0, "ghost": false, "idx": 0, "vx": 0.0, "vy": 0.0}
+		var d := {"kind": ITEM_KINDS[clampi(int(rec[1]), 0, 3)], "id": iid, "x": rec[2] / 4.0, "y": rec[3] / 4.0, "loose": iid.begins_with("L"), "t": 1.0, "ph": float(hash(iid) % 100) / 10.0, "ghost": false, "idx": 0, "vx": 0.0, "vy": 0.0}
 		if old != null:
 			d["asked"] = old.get("asked", -10.0)
 		items.append(d)
@@ -1074,6 +1094,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 		q.dmg = int(rec[8])
 		projs.append(q)
 	r.projs = projs
+	for pid in m.get("pl", []):
+		Game.flags["plugin:" + String(pid)] = true
 	last_gf = m.get("gf", [])
 	last_gf_room = r.id
 	for fk in last_gf:
@@ -1212,6 +1234,10 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				if Game.fragments % 4 == 0 and p != null:
 					p.max_hp = Game.max_hp
 					p.hp = p.max_hp
+		"plugin":
+			Game.flags["plugin:" + String(d.id)] = true
+			if r != null:
+				r.show_plugin_banner(String(d.id))
 		"pause":
 			main.set_paused(bool(d.on), true)
 

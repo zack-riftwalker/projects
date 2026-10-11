@@ -21,7 +21,6 @@ const WJ_Y := 285.0
 const WJ_LOCK := 0.15
 const DASH_SPEED := 320.0
 const DASH_T := 0.15
-const DASH_CD := 0.2
 const DJUMP := 272.0
 const POGO := 262.0
 const QUIPS := ["You're absolutely right!", "Good catch!", "Let me fix that.", "Ah, I see the issue."]
@@ -123,7 +122,7 @@ func set_safe(sx_: float, sy_: float) -> void:
 
 # the context meter (0-99): every landed claw hit and stomp fills it, focus spends it
 func gain_meter() -> void:
-	meter = minf(float(Game.METER_MAX), meter + float(Game.dv("meter_per_hit")))
+	meter = minf(float(Game.METER_MAX), meter + float(Game.dv("meter_per_hit")) + float(Game.mod_meter_bonus()))
 
 func update(dt: float) -> void:
 	var grid := room.grid
@@ -177,7 +176,7 @@ func update(dt: float) -> void:
 			if focus_ring >= 0.3:
 				focus_ring = 0.0
 				room.ring(x + 5, y + 5, 14, 3, Game.COL.okHi, 0.3)
-			if focus_t >= Game.FOCUS_TIME:
+			if focus_t >= Game.mod_focus_time():
 				hp = mini(max_hp, hp + 1)
 				meter -= Game.FOCUS_COST
 				Audio.sfx("heal")
@@ -217,7 +216,7 @@ func update(dt: float) -> void:
 		dash_dx = ddx / n
 		dash_dy = ddy / n
 		dash_t = DASH_T
-		dash_cd = DASH_T + DASH_CD
+		dash_cd = DASH_T + Game.mod_dash_cd()
 		can_dash = false
 		dash_id += 1
 		dash_buf = 0.0
@@ -243,7 +242,7 @@ func update(dt: float) -> void:
 		atk_live = true
 		atk_dir = "u" if down.get("up", false) else ("d" if (down.get("down", false) and not on_ground) else "f")
 		atk_face = face
-		atk_dmg = 2 if tools.opus else 1
+		atk_dmg = (2 if tools.opus else 1) * Game.mod_claw_mult(hp)
 		Audio.sfx("swipeBig" if tools.opus else "swipe")
 		if atk_dir == "f":
 			sx = 1.15
@@ -493,7 +492,7 @@ func hurt(d: int, src_x: float) -> bool:
 	hp -= d
 	room.hits += 1
 	room.on_player_hurt(self, d)
-	inv = float(Game.dv("inv_after_hit"))
+	inv = float(Game.dv("inv_after_hit")) + Game.mod_inv_bonus()
 	hurt_t = 0.22
 	jumping = false
 	vx = (-1.0 if x + 5 < src_x else 1.0) * 150.0

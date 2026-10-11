@@ -56,6 +56,92 @@ const METER_MAX := 99
 func boss_hp(b: Dictionary) -> int:
 	return maxi(1, roundi(float(b.T) * R_PLAYER * float(b.u) * float(dv("boss_hp_mult"))))
 
+# ---- plugins (MV3-06): like the charms of Hollow Knight. Owned = flag plugin:<id> (shared by both players); equipped = this player's own list ----
+const NOTCHES := 3                    # the "context window"
+const PLUGINS := [
+	{"id": "async_await", "name": "async/await", "cost": 2, "price": 0},
+	{"id": "cache", "name": "cache", "cost": 1, "price": 0},
+	{"id": "hot_reload", "name": "hot-reload", "cost": 2, "price": 90},
+	{"id": "eslint_fix", "name": "eslint --fix", "cost": 1, "price": 60},
+	{"id": "try_finally", "name": "try/finally", "cost": 1, "price": 80},
+	{"id": "rubber_duck", "name": "rubber duck", "cost": 2, "price": 140},
+]
+var equipped: Array = []              # plugin ids (saved; the guest keeps its own in user://profile.json)
+signal loadout_changed
+
+func plugin_def(id: String) -> Dictionary:
+	for d in PLUGINS:
+		if d.id == id:
+			return d
+	return {}
+
+func owns_plugin(id: String) -> bool:
+	return flag("plugin:" + id)
+
+func notches_used(list = null) -> int:
+	var n := 0
+	for id in (equipped if list == null else list):
+		n += int(plugin_def(String(id)).get("cost", 0))
+	return n
+
+# at a bench: put a plugin on or take it off; false when it is not owned or the context window is full
+func toggle_plugin(id: String) -> bool:
+	if equipped.has(id):
+		equipped.erase(id)
+	else:
+		var d := plugin_def(id)
+		if d.is_empty() or not owns_plugin(id) or notches_used() + int(d.cost) > NOTCHES:
+			return false
+		equipped.append(id)
+	loadout_changed.emit()
+	if net_role == "guest":
+		save_profile()
+	else:
+		write_save()
+	return true
+
+# the numbers a plugin changes; nothing else in the game checks plugin ids. `list` = another player's loadout (the host judging the guest)
+func mod_dash_cd(list = null) -> float:
+	return 0.1 if (equipped if list == null else list).has("async_await") else 0.2
+
+func mod_focus_time(list = null) -> float:
+	return 0.6 if (equipped if list == null else list).has("hot_reload") else FOCUS_TIME
+
+func mod_meter_bonus(list = null) -> int:
+	return 5 if (equipped if list == null else list).has("eslint_fix") else 0
+
+func mod_inv_bonus(list = null) -> float:
+	return 0.4 if (equipped if list == null else list).has("try_finally") else 0.0
+
+func mod_claw_mult(hp: int, list = null) -> int:
+	return 2 if hp == 1 and (equipped if list == null else list).has("rubber_duck") else 1
+
+func mod_pickup_radius(list = null) -> float:
+	return 2.5 if (equipped if list == null else list).has("cache") else 1.0
+
+# the guest has no save: its loadout lives in its own small file
+var profile_path := "user://profile.json"
+
+func save_profile() -> void:
+	if not persist_profile():
+		return
+	var f := FileAccess.open(profile_path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"equipped": equipped}))
+
+func load_profile() -> void:
+	if not persist_profile() or not FileAccess.file_exists(profile_path):
+		return
+	var d = JSON.parse_string(FileAccess.get_file_as_string(profile_path))
+	if typeof(d) == TYPE_DICTIONARY and typeof(d.get("equipped")) == TYPE_ARRAY:
+		equipped = []
+		for id in d.equipped:
+			if plugin_def(String(id)).size() > 0 and notches_used() + int(plugin_def(String(id)).cost) <= NOTCHES:
+				equipped.append(String(id))
+
+func persist_profile() -> bool:
+	return test_name == "" and not selftest and shot_path == "" and not demo and scenario == ""
+
 func dv(key: String):
 	return DIFF.get(diff, DIFF.normal)[key]
 
@@ -89,6 +175,7 @@ var fights: Array = []
 func fresh() -> void:
 	flags = {}
 	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false}
+	equipped = []
 	bench = ""
 	tokens = 0
 	fragments = 0
@@ -142,7 +229,7 @@ func write_save() -> void:
 	if not persist:
 		return
 	var d := {"version": 1, "flags": flags, "tools": tools, "bench": bench, "tokens": tokens, "max_hp": max_hp, "fragments": fragments,
-		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights}
+		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights, "equipped": equipped}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
@@ -167,6 +254,10 @@ func load_save() -> bool:
 	play_time = float(d.get("time", 0.0))
 	deaths = int(d.get("deaths", 0))
 	fights = d.get("fights", [])
+	equipped = []
+	for id in d.get("equipped", []):
+		if plugin_def(String(id)).size() > 0 and owns_plugin(String(id)) and notches_used() + int(plugin_def(String(id)).cost) <= NOTCHES:
+			equipped.append(String(id))
 	return true
 
 # the player's top-left when standing on the bench of a room

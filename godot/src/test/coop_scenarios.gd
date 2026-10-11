@@ -987,3 +987,59 @@ func sc_co_reviewer() -> Array:
 		await get_tree().physics_frame
 	Controls.script_input = {}
 	return [has_catch and g.parried.size() >= 1, "catch %s, swings %d, parried %d, hurt %d times" % [has_catch, swings, g.parried.size(), hurts]]
+
+# MV3-06: the guest's own loadout counts on the host: with cache a token 40 px away flies to it and the host accepts the pickup; with a
+# rubber duck at 1 hp a claw hit of 2 is accepted and a hit of 3 is cut down to 2.
+func sc_co_plugins() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.flags["plugin:cache"] = true
+		Game.flags["plugin:rubber_duck"] = true
+		var ok_load := await wait_until(func(): return coop().remote != null and coop().remote.loadout.has("cache") and coop().remote.loadout.has("rubber_duck"), 15.0)
+		if not ok_load:
+			return [false, "the guest's loadout never arrived"]
+		var r: Room = coop()._remote_room()
+		clear_creatures(r)
+		await wait_secs(1.0)
+		var gx: float = coop().remote.x
+		var gy: float = coop().remote.y
+		var tok := {"kind": "token", "x": gx + 5.0 + 40.0, "y": gy + 5.0, "id": "item:test:cache", "ph": 0.0}
+		r.items.append(tok)
+		var got_tok := await wait_until(func(): return tok.get("dead", false), 6.0)
+		var b := spawn_bug(r, gx + 22.0, floor_y(r, gx, 9) + 1.0)
+		b.hp = 9
+		b.speed = 0.0
+		b.stun = 999.0
+		# (the guest swings once with 1 hp, then sends a hit of 3)
+		var first := await wait_until(func(): return b.hp <= 7, 8.0)
+		var hp_after_first: int = b.hp
+		var second := await wait_until(func(): return b.hp < hp_after_first, 8.0)
+		await wait_secs(0.5)
+		return [got_tok and first and hp_after_first == 7 and second and b.hp == 5, "token picked (accepted) %s, bug hp 9 -> %d after the swing of 2 -> %d after the hit of 3 (want 5)" % [got_tok, hp_after_first, b.hp]]
+	Game.flags["plugin:cache"] = true
+	var owned := await wait_until(func(): return Game.owns_plugin("cache") and Game.owns_plugin("rubber_duck"), 10.0)
+	var e1 := Game.toggle_plugin("cache")
+	var e2 := Game.toggle_plugin("rubber_duck")
+	var r2: Room = mgr().room
+	var tok_seen := await wait_until(func(): return Game.tokens >= 1, 10.0)
+	var seen := await wait_until(func(): return r2.ents.size() > 0, 10.0)
+	if not seen:
+		return [false, "never saw the creature (owned %s, equipped %s %s)" % [owned, e1, e2]]
+	await wait_secs(0.8)
+	var g = mgr().player
+	var bug = r2.ents[0]
+	g.x = bug.x - 18.0
+	g.y = bug.y - 1.0
+	g.face = 1.0
+	g.hp = 1
+	g.inv = 999.0
+	await wait_secs(0.5)
+	Controls.script_input = {"attack": true}
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	Controls.script_input = {}
+	await wait_secs(1.0)
+	Net.rel("hit", {"eid": bug.nid, "how": "swipe", "dmg": 3, "dx": 1.0, "dy": 0.0, "atk": 9999, "px": roundi(g.x), "py": roundi(g.y)})
+	await wait_secs(2.0)
+	return [owned and e1 and e2 and tok_seen, "owned %s, equipped %s %s, token counted on the guest %s" % [owned, e1, e2, tok_seen]]

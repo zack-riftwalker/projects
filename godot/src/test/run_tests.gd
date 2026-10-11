@@ -49,6 +49,7 @@ func run(name: String) -> bool:
 		"catch": return t_catch()
 		"exception": return t_exception()
 		"reviewer": return t_reviewer()
+		"plugins": return t_plugins()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -1125,6 +1126,140 @@ func t_reviewer() -> bool:
 	Game.flags = {}
 	Game.fights = []
 	return report("reviewer", a_ok and parried_ok and hurt_sid and c_ok and shoved and e_ok, info)
+
+# MV3-06: plugins. Equipping refuses a 4th notch; each plugin changes exactly its number.
+func plug_room() -> Room:
+	var room := new_room("R01")
+	clear_ents(room)
+	var p = room.player
+	for i in range(30):
+		step_with(room, {})
+	return room
+
+func t_plugins() -> bool:
+	for d in Game.PLUGINS:
+		Game.flags["plugin:" + d.id] = true
+	Game.equipped = []
+	var info := ""
+	# the context window: async/await (2) + cache (1) = 3; nothing else fits; taking one off makes room
+	var a1 := Game.toggle_plugin("async_await")
+	var a2 := Game.toggle_plugin("cache")
+	var a3 := Game.toggle_plugin("eslint_fix")
+	var a4 := Game.toggle_plugin("hot_reload")
+	var used3: bool = Game.notches_used() == 3
+	var off := Game.toggle_plugin("async_await")
+	var a5 := Game.toggle_plugin("eslint_fix")
+	var notches_ok: bool = a1 and a2 and not a3 and not a4 and used3 and off and a5 and Game.equipped == ["cache", "eslint_fix"]
+	info += "notches %s" % notches_ok
+	Game.equipped = []
+	Game.tools.bash = true
+	Game.diff = "normal"
+	var res := {}
+	for combo in [[], ["async_await"], ["hot_reload"], ["eslint_fix"], ["try_finally"], ["rubber_duck"], ["cache"]]:
+		Game.equipped = combo.duplicate()
+		var key: String = combo[0] if not combo.is_empty() else "none"
+		var room := plug_room()
+		var p = room.player
+		p.hp = p.max_hp
+		match key:
+			"none", "async_await":
+				step_with(room, {"dash": true, "right": true})
+				res[key] = p.dash_cd
+			"hot_reload":
+				p.hp = p.max_hp - 1
+				p.meter = 99.0
+				var fr := 0
+				while p.hp < p.max_hp and fr < 200:
+					step_with(room, {"special": true})
+					fr += 1
+				res[key] = fr
+			"eslint_fix":
+				p.meter = 0.0
+				p.gain_meter()
+				res[key] = p.meter
+			"try_finally":
+				p.inv = 0.0
+				p.hurt(1, p.x + 50.0)
+				res[key] = p.inv
+			"rubber_duck":
+				p.hp = 1
+				step_with(room, {"attack": true})
+				var d1: int = p.atk_dmg
+				res[key] = d1
+			"cache":
+				var it := {"kind": "token", "x": p.x + 5.0 + 20.0, "y": p.y + 5.0, "id": "item:test:1", "ph": 0.0}
+				room.items.append(it)
+				var tk0: int = Game.tokens
+				for f in range(20):
+					step_with(room, {})
+				res[key] = it.get("dead", false)
+		room.queue_free()
+	# the base numbers without a plugin, for the comparison
+	Game.equipped = []
+	var room0 := plug_room()
+	var p0 = room0.player
+	p0.hp = p0.max_hp - 1
+	p0.meter = 99.0
+	var fr0 := 0
+	while p0.hp < p0.max_hp and fr0 < 200:
+		step_with(room0, {"special": true})
+		fr0 += 1
+	p0.meter = 0.0
+	p0.gain_meter()
+	var meter0: float = p0.meter
+	p0.inv = 0.0
+	p0.hp = p0.max_hp
+	p0.hurt(1, p0.x + 50.0)
+	var inv0: float = p0.inv
+	p0.hp = 1
+	p0.atk_cd = 0.0
+	p0.atk_t = 0.0
+	step_with(room0, {"attack": true})
+	var dmg0: int = p0.atk_dmg
+	p0.hp = 2
+	p0.atk_cd = 0.0
+	p0.atk_t = 0.0
+	step_with(room0, {})
+	step_with(room0, {"attack": true})
+	var dmg_hp2: int = p0.atk_dmg
+	var tok0 := {"kind": "token", "x": p0.x + 5.0 + 20.0, "y": p0.y + 5.0, "id": "item:test:2", "ph": 0.0}
+	room0.items.append(tok0)
+	for f in range(20):
+		step_with(room0, {})
+	var cache_base_no: bool = not tok0.get("dead", false)
+	room0.queue_free()
+	var dash_diff: float = float(res["none"]) - float(res["async_await"])
+	var checks := {
+		"dash cd -0.1": absf(dash_diff - 0.1) < 0.011,
+		"focus faster (%d vs %d frames)" % [res["hot_reload"], fr0]: absi((fr0 - int(res["hot_reload"])) - 18) <= 2,
+		"meter +5 (%.0f vs %.0f)" % [res["eslint_fix"], meter0]: absf(float(res["eslint_fix"]) - meter0 - 5.0) < 0.01,
+		"inv +0.4 (%.2f vs %.2f)" % [res["try_finally"], inv0]: absf(float(res["try_finally"]) - inv0 - 0.4) < 0.01,
+		"duck x2 at hp 1 only (%d, base %d, hp2 %d)" % [res["rubber_duck"], dmg0, dmg_hp2]: int(res["rubber_duck"]) == 2 and dmg0 == 1 and dmg_hp2 == 1,
+		"cache picks a token from 20 px, base does not": bool(res["cache"]) and cache_base_no,
+	}
+	# the chip in R11: an item `plugin:async_await`; collecting it sets the flag and shows the banner
+	Game.flags = {}
+	var r11 := new_room("R11")
+	var chip = null
+	for it in r11.items:
+		if it.kind == "plugin":
+			chip = it
+	var chip_ok: bool = chip != null and chip.id == "plugin:async_await"
+	if chip_ok:
+		r11.player.inv = 999.0
+		r11.collect(chip)
+	chip_ok = chip_ok and Game.owns_plugin("async_await") and r11.pick_banner.text == "async/await" and r11.pick_banner.t > 1.9
+	info += " | R11 chip collected=%s" % chip_ok
+	r11.queue_free()
+	var ok: bool = notches_ok and chip_ok
+	for k in checks:
+		info += " | %s=%s" % [k, checks[k]]
+		ok = ok and checks[k]
+	Controls.script_input = null
+	Game.equipped = []
+	Game.flags = {}
+	Game.tools.bash = false
+	return report("plugins", ok, info)
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:
