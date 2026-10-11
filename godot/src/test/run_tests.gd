@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"loadout": return t_loadout()
 		"mergeinterp": return t_mergeinterp()
 		"fork": return t_fork()
 	return report(name, false, "unknown test")
@@ -2060,3 +2061,14 @@ func t_mergeinterp() -> bool:
 	host.free()
 	pup.free()
 	return report("mergeinterp", ok, "between %.1f (want 120), 0.05 s ahead %.1f (want 160), capped %.1f (want 180)" % [mid, ahead, capped])
+
+# MV3-FIX-4: only owned plugins that fit the context window stay on (guest profile, save, the host judging the guest)
+func t_loadout() -> bool:
+	Game.flags = {"plugin:async_await": true}
+	var a: Array = Game.filter_loadout(["async_await", "cache", "bogus"])
+	Game.flags = {"plugin:async_await": true, "plugin:cache": true, "plugin:hot_reload": true}
+	var b: Array = Game.filter_loadout(["async_await", "hot_reload", "cache", "cache"])
+	Game.flags = {}
+	var c: Array = Game.filter_loadout(["async_await"])
+	var ok: bool = a == ["async_await"] and b == ["async_await", "cache"] and c.is_empty()
+	return report("loadout", ok, "owned only %s, notches + no duplicates %s, nothing owned %s" % [str(a), str(b), str(c)])

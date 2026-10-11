@@ -92,6 +92,15 @@ func notches_used(list = null) -> int:
 		n += int(plugin_def(String(id)).get("cost", 0))
 	return n
 
+# the loadout that may really be on: known, owned (flag plugin:<id>, shared by both players) and within the context window, in order
+func filter_loadout(ids: Array) -> Array:
+	var out: Array = []
+	for id in ids:
+		var d := plugin_def(String(id))
+		if d.size() > 0 and owns_plugin(String(id)) and not out.has(String(id)) and notches_used(out) + int(d.cost) <= NOTCHES:
+			out.append(String(id))
+	return out
+
 # at a bench: put a plugin on or take it off; false when it is not owned or the context window is full
 func toggle_plugin(id: String) -> bool:
 	if equipped.has(id):
@@ -144,10 +153,7 @@ func load_profile() -> void:
 	if typeof(d) == TYPE_DICTIONARY:
 		tokens = int(d.get("tokens", 0))                  # the guest's wallet is its own
 	if typeof(d) == TYPE_DICTIONARY and typeof(d.get("equipped")) == TYPE_ARRAY:
-		equipped = []
-		for id in d.equipped:
-			if plugin_def(String(id)).size() > 0 and notches_used() + int(plugin_def(String(id)).cost) <= NOTCHES:
-				equipped.append(String(id))
+		equipped = filter_loadout(d.equipped)
 
 func persist_profile() -> bool:
 	return test_name == "" and not selftest and shot_path == "" and not demo and scenario == ""
@@ -264,10 +270,7 @@ func load_save() -> bool:
 	play_time = float(d.get("time", 0.0))
 	deaths = int(d.get("deaths", 0))
 	fights = d.get("fights", [])
-	equipped = []
-	for id in d.get("equipped", []):
-		if plugin_def(String(id)).size() > 0 and owns_plugin(String(id)) and notches_used() + int(plugin_def(String(id)).cost) <= NOTCHES:
-			equipped.append(String(id))
+	equipped = filter_loadout(d.get("equipped", []))
 	return true
 
 # the player's top-left when standing on the bench of a room

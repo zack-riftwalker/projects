@@ -426,10 +426,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 					if int(q.id) == int(d.pid):
 						q.dead = true
 		"loadout":
-			var ids: Array = []
-			for id in d.get("ids", []):
-				if Game.plugin_def(String(id)).size() > 0 and Game.notches_used(ids) + int(Game.plugin_def(String(id)).cost) <= Game.NOTCHES:
-					ids.append(String(id))
+			var ids: Array = Game.filter_loadout(d.get("ids", []))
 			remote.loadout = ids
 			log_("host: guest loadout %s" % str(ids))
 		"buy":                                   # the guest wants a plugin from the stall: the first buyer gets it, a second one pays nothing
@@ -1001,6 +998,7 @@ func _guest_start(m: Dictionary) -> void:
 	notice_set("", 0.1)
 	_check_build(String(m.get("build", "?")))
 	Game.load_profile()                  # the guest's own loadout (user://profile.json); the host judges its pickups and hits with it
+	Game.save_profile()                  # (a plugin it does not own here is gone from its file too)
 	Net.rel("ready", {"build": Game.build_text})
 	Net.rel("loadout", {"ids": Game.equipped})
 
