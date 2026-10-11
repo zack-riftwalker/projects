@@ -135,12 +135,14 @@ func save_profile() -> void:
 		return
 	var f := FileAccess.open(profile_path, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"equipped": equipped}))
+		f.store_string(JSON.stringify({"equipped": equipped, "tokens": tokens}))
 
 func load_profile() -> void:
 	if not persist_profile() or not FileAccess.file_exists(profile_path):
 		return
 	var d = JSON.parse_string(FileAccess.get_file_as_string(profile_path))
+	if typeof(d) == TYPE_DICTIONARY:
+		tokens = int(d.get("tokens", 0))                  # the guest's wallet is its own
 	if typeof(d) == TYPE_DICTIONARY and typeof(d.get("equipped")) == TYPE_ARRAY:
 		equipped = []
 		for id in d.equipped:

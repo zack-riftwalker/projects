@@ -72,6 +72,8 @@ signal tile_broken(tx: int, ty: int)
 signal net_crack(tx: int, ty: int)
 signal plugin_got(plugin_id: String, by: String)
 signal net_agents
+signal net_buy(plugin_id: String)
+signal shop_requested
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
@@ -90,6 +92,7 @@ var pick_banner := {"text": "", "sub": "", "t": 0.0}      # "<plugin>" / "plugin
 var agents: Array = []         # the helpers of every player in this room (host / solo simulate them all)
 var agent_view: Array = []     # guest: [{owner, x, y, t}] as the host's snapshot lists them
 var keys: Array = []           # slot keys (letter k): {x, y, w, h, i}; only agents can press them
+var shops: Array = []          # npm registry stalls (letter $): {x (centre), y (bottom)}
 var stations: Array = []       # cache stations (letter R): {x, y, w, h}
 var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
 var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
@@ -178,6 +181,8 @@ func load_room(room_id: String, snap = null) -> void:
 				"k":
 					keys.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": key_n})
 					key_n += 1
+				"$":
+					shops.append({"x": float(x + 8), "y": float(y + T)})
 				"R":
 					stations.append({"x": float(x + 2), "y": float(y), "w": 12.0, "h": 16.0})
 				"Y":
@@ -1188,6 +1193,11 @@ func interact_goals(p) -> void:
 	if end_door != null and Controls.pressed.get("up", false) and p.on_ground:
 		if absf(p.x + p.w / 2.0 - end_door.x) < 14 and absf(p.y + p.h - end_door.y) < 20:
 			end_requested.emit()
+	if Controls.pressed.get("up", false) and p.on_ground and not crossing:
+		for sh in shops:
+			if absf(p.x + p.w / 2.0 - sh.x) < 20.0 and absf(p.y + p.h - sh.y) < 20.0:
+				shop_requested.emit()
+				break
 	if p.cache_cool <= 0.0 and not stations.is_empty():
 		var hb2: Dictionary = p.hurtbox()
 		for st in stations:
@@ -1380,6 +1390,15 @@ func plugin_collected(pid: String, by := "p1") -> void:
 	plugin_got.emit(pid, by)
 	Game.write_save()
 
+# a plugin bought at the stall (the money has been taken by the ShopMenu): the host tells the guest like any other plugin
+func plugin_bought(pid: String, by: String) -> void:
+	Game.flags["plugin:" + pid] = true
+	pop(player.x + 5.0 if player != null else sx_default(), (player.y - 14.0) if player != null else 40.0, "npm install " + String(Game.plugin_def(pid).get("name", pid)), "#58f0c8", true)
+	plugin_got.emit(pid, by)
+
+func sx_default() -> float:
+	return pw / 2.0
+
 func show_plugin_banner(pid: String) -> void:
 	Audio.sfx("gate")
 	pick_banner = {"text": String(Game.plugin_def(pid).get("name", pid)), "sub": "plugin - equip it at a bench", "t": 2.0}
@@ -1487,6 +1506,27 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 		Fx._disc(ci, px, py, maxf(1.0, q.r - 2), Color.WHITE)
 
 # ---------------------------------------------------------------- drawing of what is not an entity
+# the npm registry booth: 24 x 24, wood, a pale top, a red `npm` sign and a vendor
+func _draw_stall(ci: CanvasItem, sh: Dictionary) -> void:
+	var bx: float = sh.x - 12.0
+	var by: float = sh.y - 24.0
+	var ink := Color(Game.COL.ink)
+	ci.draw_rect(Rect2(bx - 1, by - 1, 26, 26), ink)
+	ci.draw_rect(Rect2(bx, by + 8, 24, 16), Color("#8f6238"))
+	ci.draw_rect(Rect2(bx, by + 8, 24, 2), Color("#e2b475"))
+	ci.draw_rect(Rect2(bx, by + 22, 24, 2), Color("#4e3220"))
+	ci.draw_rect(Rect2(bx, by + 4, 24, 4), Color("#e2b475"))                # the top
+	for st_ in range(0, 24, 6):
+		ci.draw_rect(Rect2(bx + st_, by + 4, 3, 4), Color("#ff4f6d"))
+	ci.draw_rect(Rect2(bx + 2, by - 3, 20, 7), Color("#ff4f6d"))           # the sign
+	ci.draw_rect(Rect2(bx + 2, by - 3, 20, 1), Color("#ff9aab"))
+	PixelText.draw_text(ci, "npm", bx + 12.0, by - 1.0, "#ffffff", {"align": "c", "tiny": true})
+	var vx := bx + 9.0                                                       # the vendor: a face behind the counter
+	ci.draw_rect(Rect2(vx, by + 10, 7, 7), Color("#f4ede0"))
+	ci.draw_rect(Rect2(vx + 1, by + 12, 2, 2), ink)
+	ci.draw_rect(Rect2(vx + 4, by + 12, 2, 2), ink)
+	ci.draw_rect(Rect2(vx + 2, by + 15, 3, 1), ink)
+
 # liquid goes over everything (js: the "liquid goes over everything" loop of Level.draw + G.drawLiquid)
 func _draw_liquid(ci: CanvasItem) -> void:
 	if not grid.tiles.has(TileGrid.LIQ):
@@ -1537,6 +1577,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 		for gc in gate_cells:
 			if not grid.gates_open[gc[2]]:
 				ci.draw_texture_rect_region(gate, Rect2(gc[0] * T, gc[1] * T, T, T), Rect2(7, 12, 16, 16))
+		for sh in shops:
+			_draw_stall(ci, sh)
 		for k in keys:
 			var lit := Game.flag("key:%s:%d" % [id, k.i])
 			ci.draw_rect(Rect2(k.x - 3, k.y - 3, 16, 16), Color("#17131f"))

@@ -1204,3 +1204,46 @@ func sc_co_agents() -> Array:
 	var view := await wait_until(func(): return r2.agent_view.size() == 2, 6.0 * slow)
 	var gate := await wait_until(func(): return r2.grid.gates_open.agents and Game.flag("key:D06:0"), 14.0 * slow)
 	return [has and emptied and view and gate, "has agents %s, meter emptied %s, the two agents drawn on the guest %s, gate open on the guest %s" % [has, emptied, view, gate]]
+
+# MV3-13: the guest buys from the npm stall with its own tokens (the host sets the flag, the guest pays when the host answers); when both buy the
+# same item the second buyer is told so and pays nothing.
+func sc_co_shop() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tokens = 200
+		await wait_secs(1.0)
+		mgr().swap_to("D04", Vector2(60.0, 100.0))
+		var p = mgr().player
+		p.x = 60.0
+		p.y = floor_y(mgr().room, 60.0, 8)
+		var r: Room = mgr().room
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "D04", 15.0)
+		var flag1 := await wait_until(func(): return Game.owns_plugin("hot_reload"), 10.0 * slow)
+		# the double buy: the host buys try_finally now (80); the guest's request comes a moment later
+		await wait_secs(3.0)
+		main.shop_menu.open(r)
+		var host_bought: bool = main.shop_menu.buy("try_finally")
+		main.shop_menu.close()
+		await wait_secs(4.0)
+		return [there and flag1 and host_bought and Game.tokens == 120 and Game.owns_plugin("try_finally"), "guest reached the stall %s, guest's purchase set the host's flag %s, host bought try_finally %s, host tokens %d (want 120: only the host paid)" % [there, flag1, host_bought, Game.tokens]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	Game.tokens = 200
+	mgr().swap_to("D04", Vector2(200.0, 100.0))
+	var r2: Room = mgr().room
+	var g = mgr().player
+	g.x = 200.0
+	g.y = floor_y(r2, 200.0, 8)
+	await wait_secs(3.0)
+	main.shop_menu.open(r2)
+	var asked: bool = main.shop_menu.buy("hot_reload")
+	var paid := await wait_until(func(): return Game.tokens == 110 and main.shop_menu.pending == "", 10.0 * slow)
+	var owned: bool = Game.owns_plugin("hot_reload")
+	# the second buyer: the host bought try_finally first; a late `buy` gets by "" and costs nothing
+	await wait_secs(3.0)
+	main.shop_menu.pending = "try_finally"
+	Net.rel("buy", {"id": "try_finally"})
+	var answered := await wait_until(func(): return main.shop_menu.pending == "", 8.0 * slow)
+	await wait_secs(0.5)
+	main.shop_menu.close()
+	return [asked and paid and owned and answered and Game.tokens == 110 and Game.owns_plugin("try_finally"), "asked %s, paid %s (tokens %d, want 110), owns it %s, late buyer answered %s and still has %d tokens, owns try_finally %s" % [asked, paid, Game.tokens, owned, answered, Game.tokens, Game.owns_plugin("try_finally")]]

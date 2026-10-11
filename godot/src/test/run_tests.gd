@@ -57,6 +57,7 @@ func run(name: String) -> bool:
 		"rooms3b": return t_rooms3b()
 		"merge": return t_merge()
 		"agents": return t_agents()
+		"shop": return t_shop()
 		"fork": return t_fork()
 	return report(name, false, "unknown test")
 
@@ -1755,6 +1756,49 @@ func t_agents() -> bool:
 	Game.tools.agents = false
 	Game.flags = {}
 	return report("agents", tap_ok and hold_ok and killed and filled and not early and again and gate_closed and opened and gate_open, info)
+
+# MV3-13: the stall in D04. Not enough tokens -> refused; a bought item leaves the list and is owned; saved.
+func t_shop() -> bool:
+	Game.persist = true
+	Game.save_path = "user://test_shop_save.json"
+	Game.flags = {}
+	Game.tokens = 50
+	Game.equipped = []
+	var m := new_manager()
+	m.swap_to("D04")
+	var room := m.room
+	var p = m.player
+	var stall = room.shops[0]
+	p.x = stall.x - 5.0
+	p.y = floor_y(room, stall.x, 8)
+	var asked := [0]
+	room.shop_requested.connect(func(): asked[0] += 1)
+	for f in range(12):
+		Controls.script_input = {"up": f == 5}
+		m.tick(Game.STEP)
+	Controls.script_input = null
+	var shop := ShopMenu.new()
+	main.add_child(shop)
+	shop.open(room)
+	var listed: Array = shop.ids.duplicate()
+	var refused: bool = not shop.buy("rubber_duck") and Game.tokens == 50 and not Game.owns_plugin("rubber_duck")
+	Game.tokens = 100
+	var bought: bool = shop.buy("eslint_fix")
+	var paid: bool = Game.tokens == 40 and Game.owns_plugin("eslint_fix")
+	shop.ids = shop.stock()
+	var gone: bool = not shop.ids.has("eslint_fix") and shop.ids.size() == listed.size() - 1
+	var again: bool = not shop.buy("eslint_fix") and Game.tokens == 40
+	var saved := false
+	if FileAccess.file_exists(Game.save_path):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(Game.save_path))
+		saved = typeof(d) == TYPE_DICTIONARY and d.flags.get("plugin:eslint_fix", false) and int(d.tokens) == 40
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
+	shop.queue_free()
+	Game.persist = false
+	Game.save_path = "user://save.json"
+	Game.flags = {}
+	Game.tokens = 0
+	return report("shop", asked[0] == 1 and listed.size() == 4 and refused and bought and paid and gone and again and saved, "up at the stall opens it=%d, stock %s, too poor refused=%s, bought=%s tokens 100 -> %d, left the list=%s, no second purchase=%s, saved=%s" % [asked[0], str(listed), refused, bought, Game.tokens, gone, again, saved])
 
 # a new reliable event must not push back the retransmit of an older unacknowledged one (G14)
 func t_relpend() -> bool:

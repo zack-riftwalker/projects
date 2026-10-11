@@ -16,6 +16,7 @@ var hud: Hud
 var hud_layer: CanvasLayer
 var pause_menu: PauseMenu
 var bench_menu: BenchMenu
+var shop_menu: ShopMenu
 var touch: TouchControls
 var debug_overlay: DebugOverlay
 var coop: Coop
@@ -76,6 +77,8 @@ func _ready() -> void:
 	hud_layer.add_child(pause_menu)
 	bench_menu = BenchMenu.new()
 	hud_layer.add_child(bench_menu)
+	shop_menu = ShopMenu.new()
+	hud_layer.add_child(shop_menu)
 	touch = TouchControls.new()
 	touch.name = "Touch"
 	touch.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -88,6 +91,7 @@ func _ready() -> void:
 	add_child(manager)
 	manager.restart_requested.connect(func(): manager.respawn(true))
 	manager.bench_requested.connect(func(r, i): open_bench(r, i))
+	manager.shop_requested.connect(func(r): if not shop_menu.active and not bench_menu.active: shop_menu.open(r))
 	bench_menu.manager = manager
 	bench_menu.rest_chosen.connect(func():
 		manager.rest(bench_room, bench_idx))
@@ -191,6 +195,13 @@ func _ready() -> void:
 			rb.face = -1.0
 			var kinds := {"lunge": "lunge_tel", "comments": "comments_tel", "review": "review", "nitpick": "nitpick_tel", "shove": "shove_tel", "phase": "phase"}
 			rb.set_state(kinds.get(Game.scene.substr(9), "idle"), 5.0)
+		elif Game.scene == "shop":                      # screenshot helper: the npm registry stall and its menu
+			Game.tokens = 95
+			manager.swap_to("D04")
+			var p4 = manager.player
+			p4.x = 26.0 * 16 - 5.0
+			p4.y = 166.0
+			shop_menu.open(manager.room)
 		elif Game.scene.begins_with("merge:"):          # screenshot helper: MERGE CONFLICT in an attack (merge:<markers|lunge|revert>)
 			manager.swap_to("D05")
 			var p3 = manager.player
@@ -386,7 +397,7 @@ func _input(event: InputEvent) -> void:
 				title.tap(tg)
 		return
 	# a tap on a pause option
-	if paused or bench_menu.active:
+	if paused or bench_menu.active or shop_menu.active:
 		var pos := Vector2.ZERO
 		var hit := false
 		if event is InputEventScreenTouch and event.pressed:
@@ -399,6 +410,8 @@ func _input(event: InputEvent) -> void:
 			var gp := to_game(pos)
 			if paused:
 				pause_menu.tap(gp)
+			elif shop_menu.active:
+				shop_menu.tap(gp)
 			else:
 				bench_menu.tap(gp)
 
@@ -503,6 +516,10 @@ func _physics_process(_d: float) -> void:
 	if bench_menu.active:
 		Controls.poll()
 		bench_menu.update()
+		return
+	if shop_menu.active:
+		Controls.poll()
+		shop_menu.update()
 		return
 	manager.tick(Game.STEP)
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):

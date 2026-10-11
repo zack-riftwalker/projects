@@ -81,7 +81,10 @@ func setup(m) -> void:
 	mgr.room_built.connect(_on_room_built)
 	mgr.room_changed.connect(_on_room_changed)
 	Game.loadout_changed.connect(func(): if role == "guest" and started: Net.rel("loadout", {"ids": Game.equipped}))
-	mgr.rested.connect(func(id): if role == "guest": Net.rel("bench", {"room": id}))      # the host respawns the guest there after a wipe
+	mgr.rested.connect(func(id):
+		if role == "guest":
+			Net.rel("bench", {"room": id})
+			Game.save_profile())               # (the guest's tokens and loadout live in its own file)      # the host respawns the guest there after a wipe
 	Net.connect_as(role, Game.net_code)
 
 # the two pages must run the same build (a phone can keep an old copy): say so loudly, on both
@@ -165,6 +168,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_projhit.connect(func(pid): Net.rel("projhit", {"pid": pid}))
 		r.net_catch.connect(func(pid): Net.rel("catch", {"pid": pid}))
 		r.net_agents.connect(func(): Net.rel("agents", {}))
+		r.net_buy.connect(func(pid): Net.rel("buy", {"id": pid}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
@@ -428,6 +432,17 @@ func _host_rel(k: String, d: Dictionary) -> void:
 					ids.append(String(id))
 			remote.loadout = ids
 			log_("host: guest loadout %s" % str(ids))
+		"buy":                                   # the guest wants a plugin from the stall: the first buyer gets it, a second one pays nothing
+			var pid := String(d.id)
+			var br := _remote_room()
+			var by := ""
+			if Game.plugin_def(pid).size() > 0 and int(Game.plugin_def(pid).price) > 0 and not Game.owns_plugin(pid):
+				Game.flags["plugin:" + pid] = true
+				Game.write_save()
+				by = "p2"
+				if br != null:
+					_as_p2(br, func(): br.show_plugin_banner(pid))
+			Net.rel("plugin", {"id": pid, "by": by})
 		"agents":
 			var ar := _remote_room()
 			if ar != null and remote.agents_t <= 0.0:
@@ -1289,7 +1304,9 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 					p.hp = p.max_hp
 		"plugin":
 			Game.flags["plugin:" + String(d.id)] = true
-			if r != null:
+			if main.shop_menu.pending == String(d.id):             # the answer to this player's `buy`: pays now (by "p2") or not at all (by "")
+				main.shop_menu.answered(String(d.id), String(d.by))
+			elif r != null:
 				r.show_plugin_banner(String(d.id))
 		"pause":
 			main.set_paused(bool(d.on), true)

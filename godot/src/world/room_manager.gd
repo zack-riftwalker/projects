@@ -8,6 +8,7 @@ const FADE := 0.12
 signal room_changed(room: Room)
 signal restart_requested
 signal bench_requested(room: Room, index: int)
+signal shop_requested(room: Room)
 signal end_requested
 signal rested(room_id: String)          # the local player rested at a bench (a guest tells the host)
 
@@ -41,6 +42,7 @@ func make_room(room_id: String, spawn = null, local := true) -> Room:
 	r.door_crossed.connect(_on_door_crossed.bind(r))
 	r.restart_requested.connect(func(_s): restart_requested.emit())
 	r.bench_requested.connect(func(i): bench_requested.emit(r, i))
+	r.shop_requested.connect(func(): shop_requested.emit(r))
 	r.end_requested.connect(func(): end_requested.emit())
 	r.bench_touched.connect(func(i): rest(r, i))
 	r.local_died.connect(func(): local_died.emit(r))
