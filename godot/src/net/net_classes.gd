@@ -2,7 +2,7 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone"]
 
 static func cls_of(e) -> int:
 	if e is NullBoss:
@@ -21,6 +21,16 @@ static func cls_of(e) -> int:
 		return 12
 	if e is MergeBoss:
 		return 13
+	if e is Slime:
+		return 15 if e.small else 14
+	if e is Lint:
+		return 17 if e.vertical else 16
+	if e is Dripper:
+		return 18
+	if e is Pendulum:
+		return 19
+	if e is Drone:
+		return 20
 	if e is ExceptionFoe:
 		return 6
 	if e is Guard:
@@ -50,6 +60,13 @@ static func make(cls: int, room: Room):
 		11: e = Flaky.new(room, 0, 0)
 		12: e = Fork.new(room, 0, 0)
 		13: e = MergeBoss.new(room, 0, 0)
+		14: e = Slime.new(room, 0, 0, false)
+		15: e = Slime.new(room, 0, 0, true)
+		16: e = Lint.new(room, 0, 0, false)
+		17: e = Lint.new(room, 0, 0, true)
+		18: e = Dripper.new(room, 0, 0)
+		19: e = Pendulum.new(room, 0, 0)
+		20: e = Drone.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

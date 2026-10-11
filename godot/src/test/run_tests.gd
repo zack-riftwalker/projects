@@ -71,6 +71,7 @@ func run(name: String) -> bool:
 		"flood": return t_flood()
 		"plugins4": return t_plugins4()
 		"w3assets": return t_w3assets()
+		"w3enemies": return t_w3enemies()
 		"rise": return t_rise()
 	return report(name, false, "unknown test")
 
@@ -266,7 +267,11 @@ func t_tape(path: String) -> bool:
 # etrace:<class>:<x>:<y>:<px>:<py>:<frames>: one creature in the NULL arena (R05, boss beaten), the player standing still and unhurtable;
 # prints frame,x,y,vx,vy,on_ground like the JS tools/godot/parity/enemy-trace.js
 func t_etrace(arg: String) -> bool:
-	var a := arg.split(":")
+	var a := Array(arg.split(":"))
+	var variant := ""                       # "v" (Lint vertical) or "s" (Slime small): the 4th constructor argument
+	if a.size() > 1 and (a[1] == "v" or a[1] == "s"):
+		variant = String(a[1])
+		a.remove_at(1)
 	Game.flags = {"boss:NULL": true}
 	var room := new_room("R05")
 	clear_ents(room)
@@ -283,6 +288,9 @@ func t_etrace(arg: String) -> bool:
 		"Noodle": e = Noodle.new(room, px_, py_)
 		"Logger": e = LogEnemy.new(room, px_, py_)
 		"Flaky": e = Flaky.new(room, px_, py_)
+		"Slime": e = Slime.new(room, px_, py_, variant == "s")
+		"Lint": e = Lint.new(room, px_, py_, variant == "v")
+		"Drone": e = Drone.new(room, px_, py_)
 		_: return report("etrace", false, "unknown class " + a[0])
 	add_ent(room, e)
 	p.x = float(a[3])
@@ -2507,3 +2515,90 @@ func t_w3assets() -> bool:
 	chk.call("H01 plays w3", main.song_for(r) == "w3")
 	r.queue_free()
 	return report("w3assets", res.ok, res.info)
+
+# MV4-06: the JS creatures of world 3 behave like their ports
+func t_w3enemies() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	Game.diff = "normal"
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var room := new_room("R05")
+	clear_ents(room)
+	var p = room.player
+	for i in range(30):
+		p.inv = 99999.0
+		step_with(room, {})
+	# 1. a big slime leaves two small ones with ids
+	var sl := Slime.new(room, 200, 160, false)
+	add_ent(room, sl)
+	sl.hit(9, 1.0, 0.0, "swipe")
+	var smalls := 0
+	var ids_ok := true
+	for e in room.ents:
+		if e is Slime and e.small:
+			smalls += 1
+			ids_ok = ids_ok and e.nid > 0
+	chk.call("slime splits in two", sl.dead and smalls == 2 and ids_ok)
+	clear_ents(room)
+	# 2. a vertical lint keeps its x
+	var li := Lint.new(room, 120, 112, true)
+	add_ent(room, li)
+	p.x = 60.0
+	p.y = 150.0
+	var x0: float = li.x
+	var moved := false
+	for f in range(120):
+		p.inv = 99999.0
+		step_with(room, {})
+		if li.x != x0:
+			moved = true
+	chk.call("vertical lint x constant", not moved)
+	clear_ents(room)
+	# 3. a pendulum hangs straight down when the sine is zero
+	var pe := Pendulum.new(room, 160, 32)
+	add_ent(room, pe)
+	room.time = (PI * 3.0 - pe.ph) / 1.8
+	pe.place()
+	chk.call("pendulum bob below the anchor", absf(pe.bx - 168.0) < 0.01 and absf(pe.by - 86.0) < 0.01 and absf(pe.x - 162.0) < 0.01)
+	clear_ents(room)
+	# 4. a dripper makes a drip within 3 s
+	var dr := Dripper.new(room, 160, 32)
+	add_ent(room, dr)
+	room.projs.clear()
+	p.x = 150.0
+	p.y = 150.0
+	var dripped := false
+	for f in range(180):
+		p.inv = 99999.0
+		step_with(room, {})
+		for q in room.projs:
+			if q.kind == "drip":
+				dripped = true
+		if dripped:
+			break
+	chk.call("dripper drips", dripped)
+	clear_ents(room)
+	room.projs.clear()
+	# 5. a drone 150 px away fires an orb within 4 s
+	var dn := Drone.new(room, 160, 96)
+	add_ent(room, dn)
+	p.x = dn.x - 150.0
+	p.y = 150.0
+	var fired := false
+	for f in range(240):
+		p.inv = 99999.0
+		p.x = clampf(p.x, 20.0, 380.0)
+		step_with(room, {})
+		for q in room.projs:
+			if q.kind == "orb":
+				fired = true
+		if fired:
+			break
+	chk.call("drone fires", fired)
+	Controls.script_input = null
+	Game.flags = {}
+	return report("w3enemies", res.ok, res.info)

@@ -3,7 +3,8 @@
 'use strict';
 const path = require('path');
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
-const [cls, x, y, px, py, frames] = [process.argv[2], ...process.argv.slice(3).map(Number)];
+const [clsArg, x, y, px, py, frames] = [process.argv[2], ...process.argv.slice(3).map(Number)];
+const [cls, variant] = clsArg.split(':');          // Lint:v = vertical, Slime:s = small (the 4th constructor argument)
 const ROOT = path.resolve(__dirname, '../../..');
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
@@ -11,7 +12,7 @@ const ROOT = path.resolve(__dirname, '../../..');
   page.on('pageerror', (e) => { console.error('page error:', e.message); process.exitCode = 1; });
   await page.goto('file://' + path.join(ROOT, 'public/index.html') + '?mute&manual');
   await page.waitForFunction(() => window.G && G.scene);
-  const rows = await page.evaluate(([cls, x, y, px, py, frames]) => {
+  const rows = await page.evaluate(([cls, variant, x, y, px, py, frames]) => {
     for (const k of Object.keys(G.LEVELS)) G.save.data.seen['b' + k] = true;
     G.go(() => G.Scenes.play('1-B', null));
     for (let i = 0; i < 600 && !(G.scene.L && !G.transitioning()); i++) G.step(1, true);
@@ -22,7 +23,7 @@ const ROOT = path.resolve(__dirname, '../../..');
     G.input.script = {};
     for (let i = 0; i < 60; i++) { pl.inv = 99999; G.step(1, true); }
     // (the creature is created after the player has settled, as the Godot side does; both then stand at the same frame)
-    const e = cls === 'Bug' ? new G.Enemies.Bug(L, x, y, false) : new G.Enemies[cls](L, x, y);
+    const e = cls === 'Bug' ? new G.Enemies.Bug(L, x, y, false) : new G.Enemies[cls](L, x, y, !!variant);
     L.ents.push(e);
     pl.x = px; pl.y = py; pl.vx = pl.vy = 0;
     const out = [];
@@ -32,7 +33,7 @@ const ROOT = path.resolve(__dirname, '../../..');
       out.push([f, e.x, e.y, e.vx, e.vy, e.onGround ? 1 : 0].map((v, i) => (i === 0 || i === 5 ? v : v.toFixed(6))).join(','));
     }
     return out;
-  }, [cls, x, y, px, py, frames]);
+  }, [cls, variant, x, y, px, py, frames]);
   console.log(rows.join('\n'));
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

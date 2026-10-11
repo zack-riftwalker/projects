@@ -403,6 +403,12 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"n": return Noodle.new(self, x, y)
 		"f": return Flaky.new(self, x, y)
 		"K": return Fork.new(self, x, y)
+		"s": return Slime.new(self, x, y, false)
+		"l": return Lint.new(self, x, y, false)
+		"L": return Lint.new(self, x, y, true)
+		"i": return Dripper.new(self, x, y)
+		"p": return Pendulum.new(self, x, y)
+		"d": return Drone.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 
@@ -1617,7 +1623,13 @@ func update_projs(dt: float) -> void:
 			continue
 		if q.tile and mode != "guest" and grid.solid_at(q.x, q.y):
 			q.dead = true
-			spark(q.x, q.y, q.col, 4)
+			if q.kind == "drip":                    # a drip splashes (js: onLand); a memory leak, so always in world 3's colours
+				var th3: Dictionary = Game.theme(3)
+				burst(q.x, q.y - 2.0, 4, [th3.liq, th3.liqHi], 50.0, 300.0)
+				if player != null and absf(q.x - player.x) < 200.0:
+					Audio.sfx("drip", {"vol": 0.6})
+			else:
+				spark(q.x, q.y, q.col, 4)
 			continue
 		if q.get("friendly", false):
 			if mode != "guest":
