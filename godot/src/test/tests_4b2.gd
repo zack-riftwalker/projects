@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets", "curl"]
+const NAMES := ["rooms4b", "w6assets", "curl", "ssh"]
 
 func _init(m) -> void:
 	main = m
@@ -18,6 +18,7 @@ func run(name: String):
 		"rooms4b": return await t_rooms4b()
 		"w6assets": return await t_w6assets()
 		"curl": return t_curl()
+		"ssh": return t_ssh()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -285,3 +286,97 @@ func t_curl() -> bool:
 		fail(res, "H01: curl then a dash up did not reach the top")
 	Game.fresh()
 	return report("curl", res.ok, res.info)
+
+# walk (key `dir`) from a spawn point until the manager is in `to` (a jump now and then); returns the frames it took, or -1
+func walk_to(m: RoomManager, from_room: String, spawn: Vector2, key: String, to: String, frames_max := 800) -> int:
+	m.swap_to(from_room, spawn, null, true)
+	m.room.ents.clear()
+	m.room.update_doors()
+	m.player.x = spawn.x
+	m.player.y = spawn.y
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	for f in range(frames_max):
+		var keys := {key: true}
+		if f % 40 < 14:
+			keys["jump"] = true
+		Controls.script_input = keys
+		m.player.hp = m.player.max_hp
+		m.tick(Game.STEP)
+		if m.room.id == to and not m.trans.on:
+			Controls.script_input = null
+			return f
+	Controls.script_input = null
+	return -1
+
+# MVB2-04: ssh. N16's thin and thick walls and its east firewall door, the hold time, a wall that is too thick, the HEAP and DEPTHS firewall doors
+func t_ssh() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	Game.tools.bash = true
+	Game.tools.catch = true
+	Game.flags["boss:FIREWALL"] = true
+	# without ssh the thin wall stops the player
+	var m := new_manager()
+	var n := walk_to(m, "N16", Vector2(24.0, 15.0 * 16.0 - 10.0), "right", "N17", 200)
+	if n >= 0 or m.player.x > 12.0 * 16.0:
+		fail(res, "without ssh: reached %.0f (%d)" % [m.player.x, n])
+	# with ssh: thin wall (col 12), thick wall (cols 22-23), then the stairs and the east door to N17
+	Game.tools.ssh = true
+	n = walk_to(m, "N16", Vector2(24.0, 15.0 * 16.0 - 10.0), "right", "N17", 900)
+	if n < 0:
+		fail(res, "with ssh: N16 -> N17 did not work (x %.0f in %s)" % [m.player.x, m.room.id])
+	# and back
+	n = walk_to(m, "N17", Vector2(6.0 * 16.0, 11.0 * 16.0 - 10.0), "left", "N16", 900)
+	if n < 0:
+		fail(res, "with ssh: N17 -> N16 did not work (x %.0f in %s)" % [m.player.x, m.room.id])
+	m.queue_free()
+	# the hold: 0.25 s does nothing, 0.35 s tunnels
+	var r := new_room("N16")
+	r.ents.clear()
+	var p = r.player
+	p.x = 11.0 * 16.0 + 4.0
+	p.y = 15.0 * 16.0 - 10.0
+	for f in range(15):
+		step_keys(r, {"right": true})
+	if p.ssh_t > 0.0 or p.x > 12.0 * 16.0:
+		fail(res, "a 0.25 s push tunnelled")
+	for f in range(14):
+		step_keys(r, {"right": true})
+	var tunnelled: bool = p.x > 13.0 * 16.0 or p.ssh_t > 0.0
+	if not tunnelled:
+		fail(res, "a 0.4 s push did not tunnel (x %.0f)" % p.x)
+	Controls.script_input = null
+	r.queue_free()
+	# a three-brick wall does not open and says so
+	var r3 := new_room("N16")
+	r3.ents.clear()
+	for ty in range(1, 15):
+		for tx in [22, 23, 24]:
+			r3.grid.tiles[ty * r3.w + tx] = TileGrid.FIRE
+	var p3 = r3.player
+	p3.x = 21.0 * 16.0 + 2.0
+	p3.y = 15.0 * 16.0 - 10.0
+	for f in range(40):
+		step_keys(r3, {"right": true})
+	if p3.ssh_t > 0.0 or p3.x > 22.0 * 16.0 or not p3.push_warned:
+		fail(res, "three bricks: x %.0f warned %s" % [p3.x, p3.push_warned])
+	Controls.script_input = null
+	r3.queue_free()
+	# the HEAP and DEPTHS firewall doors, both ways
+	Game.flags["boss:LEAK"] = true
+	var m2 := new_manager()
+	if walk_to(m2, "H12", Vector2(18.0 * 16.0, 11.0 * 16.0 - 10.0), "right", "H16", 600) < 0:
+		fail(res, "H12 -> H16")
+	if walk_to(m2, "H16", Vector2(20.0, 11.0 * 16.0 - 10.0), "left", "H12", 600) < 0:
+		fail(res, "H16 -> H12")
+	if walk_to(m2, "H03", Vector2(4.0 * 16.0, 57.0 * 16.0 - 10.0), "left", "D03", 900) < 0:
+		fail(res, "H03 -> D03 (x %.0f y %.0f in %s)" % [m2.player.x, m2.player.y, m2.room.id])
+	if walk_to(m2, "D03", Vector2(23.0 * 16.0, 34.0 * 16.0 - 10.0), "right", "H03", 900) < 0:
+		fail(res, "D03 -> H03 (x %.0f y %.0f in %s)" % [m2.player.x, m2.player.y, m2.room.id])
+	m2.queue_free()
+	Game.fresh()
+	return report("ssh", res.ok, res.info)

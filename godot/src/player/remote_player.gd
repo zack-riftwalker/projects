@@ -133,6 +133,10 @@ func _draw() -> void:
 	if dash_t > 0.0:
 		o.eyes = "shut"
 		o.col = "#bfdcff"
+	if ss:
+		o.eyes = "shut"
+		o.col = "#58f0c8"
+		o.alpha = 0.7
 	if inv > 0.0 and int(inv * 20.0) % 2 == 1:
 		return
 	ClawdDraw.draw_clawd(self, px, py, o)

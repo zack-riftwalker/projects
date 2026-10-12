@@ -97,6 +97,12 @@ func box_hits_solid(x: float, y: float, bw: float, bh: float) -> bool:
 	return false
 
 # returns 0, 1 (blocked going right) or -1 (blocked going left)
+# a body in an ssh tunnel (`phase_fire`) passes firewall bricks; nobody else does (e.get is null for a body without the property)
+func solid_e(e, tx: int, ty: int) -> bool:
+	if e.get("phase_fire") == true and tile(tx, ty) == FIRE:
+		return false
+	return solid(tx, ty)
+
 func move_x(e, dx: float) -> int:
 	e.x += dx
 	if dx == 0.0:
@@ -106,13 +112,13 @@ func move_x(e, dx: float) -> int:
 	if dx > 0.0:
 		var tx := floori((e.x + e.w - 0.001) / T)
 		for ty in range(y0, y1 + 1):
-			if solid(tx, ty):
+			if solid_e(e, tx, ty):
 				e.x = tx * T - e.w
 				return 1
 	else:
 		var tx2 := floori(e.x / T)
 		for ty in range(y0, y1 + 1):
-			if solid(tx2, ty):
+			if solid_e(e, tx2, ty):
 				e.x = (tx2 + 1) * T
 				return -1
 	return 0
@@ -128,13 +134,13 @@ func move_y(e, dy: float, no_oneway := false) -> int:
 	if dy > 0.0:
 		var ty := floori((e.y + e.h - 0.001) / T)
 		for tx in range(x0, x1 + 1):
-			if solid(tx, ty) or ((not no_oneway) and tile(tx, ty) == ONEWAY and prev_bottom <= ty * T + 0.01):
+			if solid_e(e, tx, ty) or ((not no_oneway) and tile(tx, ty) == ONEWAY and prev_bottom <= ty * T + 0.01):
 				e.y = ty * T - e.h
 				return 1
 	else:
 		var ty2 := floori(e.y / T)
 		for tx in range(x0, x1 + 1):
-			if solid(tx, ty2):
+			if solid_e(e, tx, ty2):
 				e.y = (ty2 + 1) * T
 				return -1
 	return 0

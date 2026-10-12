@@ -1894,6 +1894,16 @@ func _draw_curl(ci: CanvasItem) -> void:
 	var p = player
 	if p == null or p.dead:
 		return
+	if p.push_t > 0.0 and p.ssh_t <= 0.0:                      # pushing into a firewall: the bricks ahead glow (ssh, MVB2-04)
+		var gdir := 1.0 if p.face > 0.0 else -1.0
+		var gcol := floori((p.x + p.w + 0.5) / T) if gdir > 0.0 else floori((p.x - 0.5) / T)
+		var glow := Color("#ff9ad8")
+		glow.a = 0.5 + 0.5 * sin(time * 20.0)
+		for gty in range(floori((p.y + 1.0) / T), floori((p.y + p.h - 1.0) / T) + 1):
+			for k in range(Game.SSH_BRICKS + 1):
+				var gx := gcol + k * int(gdir)
+				if grid.tile(gx, gty) == TileGrid.FIRE:
+					ci.draw_rect(Rect2(gx * T, gty * T, T, T), glow, false, 1.0)
 	if p.zip >= 0 and p.zip < list.size():
 		cable.call(Vector2(p.x + 5.0, p.y + 5.0), list[p.zip])
 		return

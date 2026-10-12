@@ -243,6 +243,7 @@ func _on_door_crossed(d: Dictionary, from_room: Room) -> void:
 	trans.src_b = d.b
 	trans.src_x = player.x
 	trans.src_room = from_room.id
+	trans.ssh = [player.ssh_t, player.ssh_dir, player.phase_fire]         # a tunnel through a firewall door goes on in the next room
 	last_door_id = String(d.id)
 	if String(d.get("sets", "")) != "":
 		Game.flags[String(d.sets)] = true
@@ -321,3 +322,8 @@ func _place_in_target() -> void:
 	player.dash_t = 0.0
 	player.atk_t = 0.0
 	swap_to(target_room, Vector2(new_x, new_y))
+	if trans.has("ssh") and float(trans.ssh[0]) > 0.0:
+		player.ssh_t = float(trans.ssh[0])
+		player.ssh_dir = float(trans.ssh[1])
+		player.phase_fire = bool(trans.ssh[2])
+		player.vx = player.ssh_dir * Game.SSH_SPEED

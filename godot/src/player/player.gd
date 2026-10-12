@@ -97,6 +97,8 @@ var zip := -1                    # curl (MVB2-03): the anchor Clawd is zipping t
 var zip_dx := 0.0                # the horizontal direction of the zip (for the exit speed)
 var zip_blocked := 0
 var curl_last := -1              # the anchor used last: not again before landing
+var push_warned := false
+var ssh_x0 := 0.0
 var ssh_t := 0.0                 # ssh (MVB2-04): seconds of tunnelling left
 var ssh_dir := 0.0
 var push_t := 0.0
@@ -253,6 +255,28 @@ func update(dt: float) -> void:
 	var my := (1.0 if down.get("down", false) else 0.0) - (1.0 if down.get("up", false) else 0.0)
 	if hurt_t > 0.0:
 		mx = 0.0
+	# --- ssh: push into a thin red firewall for 0.3 s and tunnel through (MVB2-04) ---
+	if ssh_t > 0.0:
+		if _ssh_step(dt):
+			return
+	elif tools.get("ssh", false) and mx != 0.0 and dash_t <= 0.0 and zip < 0 and hurt_t <= 0.0 and not frozen and not in_menu:
+		var open_n := ssh_probe(mx)
+		if open_n == 0:
+			push_t = 0.0
+			push_warned = false
+		elif open_n < 0:
+			push_t += dt
+			if push_t >= Game.SSH_HOLD and not push_warned:
+				push_warned = true
+				room.pop(x + 5.0, y - 12.0, "too thick for ssh", "#ff9ad8", true)
+				Audio.sfx("thud")
+		else:
+			push_t += dt
+			if push_t >= Game.SSH_HOLD:
+				ssh_start(mx)
+	else:
+		push_t = 0.0
+		push_warned = false
 	if mx != 0.0 and dash_t <= 0.0:
 		face = mx
 	look_t = look_t + dt if (my != 0.0 and on_ground and mx == 0.0) else 0.0
@@ -480,6 +504,87 @@ func update(dt: float) -> void:
 			wall_dir = 1
 		elif grid.box_hits_solid(x - 2, y + 2, 2, h - 4):
 			wall_dir = -1
+
+# the firewall bricks right ahead in direction dir: 0 = none; n >= 1 = n bricks in a row and a free spot beyond them (ssh can open it);
+# -1 = a wall that does not open (too thick, another kind of solid, or no free spot past it)
+func ssh_probe(dir: float) -> int:
+	var grid := room.grid
+	var y0 := floori((y + 1.0) / T)
+	var y1 := floori((y + h - 1.0) / T)
+	var col := floori((x + w + 0.5) / T) if dir > 0.0 else floori((x - 0.5) / T)
+	var n := 0
+	var any_fire := false
+	for ty in range(y0, y1 + 1):
+		if grid.tile(col, ty) == TileGrid.FIRE:
+			any_fire = true
+	if not any_fire:
+		return 0
+	while n <= Game.SSH_BRICKS:
+		var fire := false
+		var other := false
+		for ty in range(y0, y1 + 1):
+			var t := grid.tile(col, ty)
+			if t == TileGrid.FIRE:
+				fire = true
+			elif grid.solid(col, ty):
+				other = true
+		if other:
+			return -1
+		if not fire:
+			break
+		n += 1
+		col += int(dir)
+	if n > Game.SSH_BRICKS:
+		return -1
+	# the first spot past the bricks must be free for the body (or be a W/E edge whose door is open)
+	var nx := float(col) * T + (1.0 if dir > 0.0 else T - w - 1.0)
+	if nx < 0.0 or nx + w > float(room.pw):
+		return n if grid.tile(col, y0) == TileGrid.E else -1
+	if grid.box_hits_solid(nx, y + 1.0, w, h - 2.0):
+		return -1
+	return n
+
+func ssh_start(dir: float) -> void:
+	ssh_t = 0.4
+	ssh_dir = dir
+	ssh_x0 = x
+	phase_fire = true
+	vx = dir * Game.SSH_SPEED
+	vy = 0.0
+	inv = maxf(inv, 0.45)
+	push_t = 0.0
+	Audio.sfx("dash")
+	room.ring(x + 5.0, y + 5.0, 3, 14, "#ff9ad8", 0.25)
+
+# the tunnel: no gravity, no input; it ends when the body overlaps no firewall brick any more. true = this step is the tunnel's
+func _ssh_step(dt: float) -> bool:
+	ssh_t -= dt
+	vx = ssh_dir * Game.SSH_SPEED
+	vy = 0.0
+	prev_bottom = y + h
+	ghost_t -= dt
+	if ghost_t <= 0.0:
+		ghost_t = 0.03
+		ghosts.append({"x": x, "y": y, "life": 0.18, "face": face, "sx": 1.0, "sy": 1.0})
+	room.grid.move_x(self, vx * dt)
+	if ssh_dir > 0.0 and x + w > float(room.pw) + 2.0 or ssh_dir < 0.0 and x < -2.0:
+		return true                                          # (past the edge: the room's door check carries the tunnel into the next room)
+	var in_fire := false
+	for ty in range(floori((y + 1.0) / T), floori((y + h - 1.0) / T) + 1):
+		for tx in range(floori(x / T), floori((x + w - 0.001) / T) + 1):
+			if room.grid.tile(tx, ty) == TileGrid.FIRE:
+				in_fire = true
+	if not in_fire:
+		ssh_t = 0.0
+		phase_fire = false
+		vx = ssh_dir * RUN
+		return true
+	if ssh_t <= 0.0:                                           # it must never happen with the room data: put the body back
+		Game.dlog("ssh: the tunnel did not end in %s, body put back" % room.id)
+		x = ssh_x0
+		phase_fire = false
+		vx = 0.0
+	return true
 
 # the zip to a GET ring (curl): CURL_SPEED toward its centre, collisions apply; true when this step is the zip's (the normal physics is skipped)
 func _zip_step(dt: float, pressed: Dictionary) -> bool:
@@ -745,6 +850,11 @@ func draw_body() -> void:
 		o.armL = -4
 		o.armR = -4
 		o.eyeY = -1
+	if ssh_t > 0.0:                                       # tunnelling: a short streak with tiny `ssh` text
+		o.col = "#58f0c8"
+		o.alpha = 0.75
+		o.eyes = "shut"
+		PixelText.draw_text(self, "ssh", px, py - 17, "#ff9ad8", {"align": "c", "tiny": true, "outline": Game.COL.ink})
 	ClawdDraw.draw_clawd(self, px, py, o)
 	if atk_t > 0.0:
 		var set_name := "slashBig" if tools.opus else "slash"
