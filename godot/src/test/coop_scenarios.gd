@@ -2093,12 +2093,13 @@ func sc_co_crawler() -> Array:
 		return [started and seen.size() >= 5 and tg.p1 >= 1 and tg.p2 >= 1 and caught_hits >= 1, "host: started %s, %d plans (p1 %d, p2 %d), packets caught back into the core %d (2 hp each)" % [started, seen.size(), tg.p1, tg.p2, caught_hits]]
 	var has := await wait_until(func(): return Game.tools.get("catch", false), 10.0)
 	var r2 := boss_arena("N09", 230.0, 270.0)
-	var pup: CrawlerBoss = null
+	var found := {"b": null}
 	await wait_until(func():
 		for e in mgr().room.ents:
 			if e is CrawlerBoss:
-				pup = e
-		return pup != null, 15.0)
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: CrawlerBoss = found.b
 	if pup == null:
 		return [false, "no crawler puppet"]
 	var st := {"f": 0, "swings": 0}
@@ -2168,12 +2169,13 @@ func sc_co_firewall() -> Array:
 		return [started and seen.size() >= 5 and tg.p1 >= 1 and tg.p2 >= 1 and turned >= 1 and wrong == 0, "host: started %s, %d plans (p1 %d, p2 %d), shield turned to the guest %d times, wrong %d" % [started, seen.size(), tg.p1, tg.p2, turned, wrong]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("N15", 150.0, 330.0)
-	var pup: FirewallBoss = null
+	var found := {"b": null}
 	await wait_until(func():
 		for e in mgr().room.ents:
 			if e is FirewallBoss:
-				pup = e
-		return pup != null, 15.0)
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: FirewallBoss = found.b
 	if pup == null:
 		return [false, "no firewall puppet"]
 	var st := {"f": 0, "swings": 0}
@@ -2234,19 +2236,21 @@ func sc_co_reviewer2() -> Array:
 		g.x = 11.0 * 16.0 + 3.0
 		g.y = 176.0 - g.h
 		g.vx = 0.0
-		Controls.script_input = {"up": true}
-		await get_tree().physics_frame
+		for q in range(4):
+			Controls.script_input = {"up": q < 2}
+			await get_tree().physics_frame
 		Controls.script_input = {}
 		await wait_secs(0.4)
 		if mgr().room.fight.state != "none":
 			break
 	var intro := await wait_until(func(): return mgr().room.fight.state == "intro" or mgr().room.fight.state == "active", 15.0)
-	var pup: Reviewer2 = null
+	var found := {"b": null}
 	await wait_until(func():
 		for e in mgr().room.ents:
 			if e is Reviewer2:
-				pup = e
-		return pup != null, 10.0)
+				found.b = e
+		return found.b != null, 10.0)
+	var pup: Reviewer2 = found.b
 	var seen2 := {}
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < 22000.0 * slow:

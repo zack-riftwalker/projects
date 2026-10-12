@@ -502,6 +502,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				Net.rel("flag", {"k": lrm.lever_flag(int(d.n)), "v": true})
 		"pad":                                   # the guest pressed [up] on the chair: the host checks where it stands
 			var prm := _remote_room()
+			log_("host: P2 pressed [up] on the chair (room %s, on the pad %s)" % [String(d.room), str(prm != null and not prm.remote_players.is_empty() and prm.pad_on(prm.remote_players[0]))])
 			if prm != null and prm.id == String(d.room) and not prm.remote_players.is_empty() and prm.pad_on(prm.remote_players[0]) and prm.pad_ready():
 				prm.pad_start()
 		"pin": Game.apply_pin_request(String(d.op), d)

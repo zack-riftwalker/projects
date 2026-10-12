@@ -1073,6 +1073,7 @@ func step_guest(dt: float) -> void:
 			interact_goals(p)
 			_check_jars(p)
 			_check_levers(p)
+			_step_pad()
 			# damage areas the host announced (blasts, the slam): checked on this body, once each
 			var hb: Dictionary = p.hurtbox()
 			for z in zones:
