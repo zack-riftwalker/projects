@@ -527,6 +527,15 @@
      "gate": "lever",
      "note": "trapdoor",
      "built": false
+    },
+    {
+     "side": "N",
+     "a": 190,
+     "b": 198,
+     "to": "N11",
+     "gate": "drop",
+     "note": "airgap",
+     "built": false
     }
    ]
   },
@@ -636,15 +645,6 @@
      "built": false
     },
     {
-     "side": "S",
-     "a": 34,
-     "b": 37,
-     "to": "N03",
-     "gate": "",
-     "note": "",
-     "built": false
-    },
-    {
      "side": "E",
      "a": 9,
      "b": 12,
@@ -654,9 +654,18 @@
      "built": false
     },
     {
+     "side": "S",
+     "a": 34,
+     "b": 37,
+     "to": "N03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
      "side": "N",
-     "a": 4,
-     "b": 27,
+     "a": 1,
+     "b": 46,
      "to": "N11",
      "gate": "drop",
      "note": "airgap",
@@ -694,6 +703,15 @@
      "to": "N05",
      "gate": "",
      "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 1,
+     "b": 30,
+     "to": "N11",
+     "gate": "drop",
+     "note": "airgap",
      "built": false
     }
    ]
@@ -738,15 +756,6 @@
    "brief": "اتاق تارهای WEB CRAWLER: خط‌های نور مثل تار عنکبوت. SCRAPERها از قلاب‌هایی شبیه حلقه‌ی GET آویزونن. سقفش یه جا dead code ـه (/backup) و کفش یه جا (404). از اینجا خط CI در آسمان پیداست. بعد از مرگ خزنده تارها خاموش می‌شن و SCRAPERها برنمی‌گردن (W3).",
    "doors": [
     {
-     "side": "N",
-     "a": 70,
-     "b": 73,
-     "to": "N19",
-     "gate": "dead",
-     "note": "",
-     "built": false
-    },
-    {
      "side": "W",
      "a": 15,
      "b": 18,
@@ -756,20 +765,29 @@
      "built": false
     },
     {
-     "side": "S",
-     "a": 52,
-     "b": 55,
-     "to": "N20",
-     "gate": "dead",
-     "note": "",
-     "built": false
-    },
-    {
      "side": "E",
      "a": 15,
      "b": 18,
      "to": "N08",
      "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 70,
+     "b": 73,
+     "to": "N19",
+     "gate": "dead",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 52,
+     "b": 55,
+     "to": "N20",
+     "gate": "dead",
      "note": "",
      "built": false
     }
@@ -956,9 +974,27 @@
     },
     {
      "side": "S",
-     "a": 24,
-     "b": 47,
+     "a": 10,
+     "b": 18,
+     "to": "H11",
+     "gate": "drop",
+     "note": "airgap",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 21,
+     "b": 66,
      "to": "N01",
+     "gate": "drop",
+     "note": "airgap",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 69,
+     "b": 98,
+     "to": "N04",
      "gate": "drop",
      "note": "airgap",
      "built": false
@@ -971,12 +1007,11 @@
    "title": "core_router",
    "x": 1290,
    "y": -36,
-   "w": 32,
-   "h": 48,
+   "w": 24,
+   "h": 34,
    "role": "hub",
    "feats": [
-    "terminal",
-    "boss:THE REVIEWER #2"
+    "terminal"
    ],
    "brief": "هاب و ترمینال NETWORK: روتر مرکزی. بالای اتاق سکوهایی تا eth0، پایینش آرنا. وقتی با اولین توانایی NETWORK (curl یا ssh) برگردی، THE REVIEWER #2 منتظره («second review»). اگه هیچ‌وقت با توانایی به کف هاب نیای، می‌شه ازش رد شد. از اولین بار یه صندلی خالی و تابلوی `2nd review: pending` کف هاب هست (B7). نیمکت بالا امنه، با صدای فن (W7).",
    "doors": [
@@ -990,9 +1025,43 @@
      "built": false
     },
     {
+     "side": "S",
+     "a": 10,
+     "b": 13,
+     "to": "N22",
+     "gate": "",
+     "note": "",
+     "built": false
+    }
+   ]
+  },
+  {
+   "id": "N22",
+   "zone": "net",
+   "title": "review_queue",
+   "x": 1290,
+   "y": -2,
+   "w": 24,
+   "h": 14,
+   "role": "boss",
+   "feats": [
+    "boss:THE REVIEWER #2"
+   ],
+   "brief": "کف هاب، زیر core_router: آرنای اختیاری THE REVIEWER #2. یه صندلی خالی و تابلوی `2nd review: pending`. وقتی با curl یا ssh برگردی و روی صندلی بشینی (بالا)، بازبینی دوم شروع می‌شه. درهای غرب (traceroute) و شرق (port_scan) و سقف (هاب) فقط وسط مبارزه قفلن.",
+   "doors": [
+    {
+     "side": "N",
+     "a": 10,
+     "b": 13,
+     "to": "N03",
+     "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
      "side": "W",
-     "a": 41,
-     "b": 44,
+     "a": 7,
+     "b": 10,
      "to": "N06",
      "gate": "",
      "note": "",
@@ -1000,8 +1069,8 @@
     },
     {
      "side": "E",
-     "a": 41,
-     "b": 44,
+     "a": 7,
+     "b": 10,
      "to": "N12",
      "gate": "",
      "note": "",
@@ -1027,7 +1096,7 @@
      "side": "E",
      "a": 8,
      "b": 11,
-     "to": "N03",
+     "to": "N22",
      "gate": "",
      "note": "",
      "built": false
@@ -1113,9 +1182,9 @@
    "id": "N12",
    "zone": "net",
    "title": "port_scan",
-   "x": 1322,
+   "x": 1314,
    "y": -2,
-   "w": 64,
+   "w": 72,
    "h": 16,
    "role": "path",
    "feats": [
@@ -1127,7 +1196,7 @@
      "side": "W",
      "a": 7,
      "b": 10,
-     "to": "N03",
+     "to": "N22",
      "gate": "",
      "note": "",
      "built": false
@@ -1167,20 +1236,20 @@
      "built": false
     },
     {
-     "side": "S",
-     "a": 34,
-     "b": 37,
-     "to": "N21",
-     "gate": "bash",
-     "note": "",
-     "built": false
-    },
-    {
      "side": "E",
      "a": 17,
      "b": 20,
      "to": "N14",
      "gate": "",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "S",
+     "a": 34,
+     "b": 37,
+     "to": "N21",
+     "gate": "bash",
      "note": "",
      "built": false
     }
@@ -1228,15 +1297,6 @@
    "brief": "نیمکت قبل از FIREWALL. سقفش آجر فایروال token_ring ـه. روی یه صفحه یه پیام فرستاده‌نشده: `unsent: I could use a hand` (L2).",
    "doors": [
     {
-     "side": "N",
-     "a": 24,
-     "b": 27,
-     "to": "N18",
-     "gate": "ssh",
-     "note": "",
-     "built": false
-    },
-    {
      "side": "W",
      "a": 9,
      "b": 12,
@@ -1251,6 +1311,15 @@
      "b": 12,
      "to": "N15",
      "gate": "fight",
+     "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 24,
+     "b": 27,
+     "to": "N18",
+     "gate": "ssh",
      "note": "",
      "built": false
     }
@@ -4120,231 +4189,6 @@
    "layer": 0
   },
   {
-   "a": "H11",
-   "side": "E",
-   "b": "N01",
-   "lo": -43,
-   "hi": -40,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N01",
-   "side": "S",
-   "b": "N03",
-   "lo": 1294,
-   "hi": 1297,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N01",
-   "side": "E",
-   "b": "N04",
-   "lo": -43,
-   "hi": -40,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N05",
-   "side": "N",
-   "b": "N19",
-   "lo": 1410,
-   "hi": 1413,
-   "gate": "dead",
-   "note": "",
-   "clue": "فقط تابلوی robots.txt: «Disallow: /backup» (بی‌پروانه)",
-   "reward": "تکه‌ی حافظه + برگ دفترچه (K3)",
-   "layer": 2
-  },
-  {
-   "a": "N04",
-   "side": "E",
-   "b": "N05",
-   "lo": -43,
-   "hi": -40,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N05",
-   "side": "S",
-   "b": "N20",
-   "lo": 1392,
-   "hi": 1395,
-   "gate": "dead",
-   "note": "",
-   "clue": "یه پروانه زیر سکو؛ این اتاق روی نقشه «404» می‌شه",
-   "reward": "lore + توکن + ایجنت (K2)",
-   "layer": 2
-  },
-  {
-   "a": "N05",
-   "side": "E",
-   "b": "N08",
-   "lo": -43,
-   "hi": -40,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N09",
-   "side": "E",
-   "b": "N08",
-   "lo": -97,
-   "hi": -94,
-   "gate": "fight",
-   "note": ""
-  },
-  {
-   "a": "N10",
-   "side": "E",
-   "b": "N09",
-   "lo": -97,
-   "hi": -94,
-   "gate": "boss",
-   "note": ""
-  },
-  {
-   "a": "N10",
-   "side": "W",
-   "b": "N11",
-   "lo": -97,
-   "hi": -94,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N08",
-   "side": "E",
-   "b": "N18",
-   "lo": -60,
-   "hi": -57,
-   "gate": "curl",
-   "note": ""
-  },
-  {
-   "a": "N18",
-   "side": "S",
-   "b": "N14",
-   "lo": 1490,
-   "hi": 1493,
-   "gate": "ssh",
-   "note": ""
-  },
-  {
-   "a": "N03",
-   "side": "W",
-   "b": "N06",
-   "lo": 5,
-   "hi": 8,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N06",
-   "side": "S",
-   "b": "N07",
-   "lo": 1264,
-   "hi": 1267,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N07",
-   "side": "S",
-   "b": "N02",
-   "lo": 1264,
-   "hi": 1267,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N02",
-   "side": "W",
-   "b": "D07",
-   "lo": 54,
-   "hi": 57,
-   "gate": "agents",
-   "note": "lever"
-  },
-  {
-   "a": "N03",
-   "side": "E",
-   "b": "N12",
-   "lo": 5,
-   "hi": 8,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N12",
-   "side": "E",
-   "b": "N13",
-   "lo": 5,
-   "hi": 8,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N13",
-   "side": "S",
-   "b": "N21",
-   "lo": 1420,
-   "hi": 1423,
-   "gate": "bash",
-   "note": "",
-   "clue": "گنج پشت شیشه، کف ترک‌دار (طعمه، عمداً پیدا)",
-   "reward": "چالش DDOS، بعد پلاگین rate_limit",
-   "layer": 0
-  },
-  {
-   "a": "N13",
-   "side": "E",
-   "b": "N14",
-   "lo": 5,
-   "hi": 8,
-   "gate": "",
-   "note": ""
-  },
-  {
-   "a": "N14",
-   "side": "E",
-   "b": "N15",
-   "lo": 5,
-   "hi": 8,
-   "gate": "fight",
-   "note": ""
-  },
-  {
-   "a": "N15",
-   "side": "E",
-   "b": "N16",
-   "lo": 5,
-   "hi": 8,
-   "gate": "boss",
-   "note": ""
-  },
-  {
-   "a": "N16",
-   "side": "E",
-   "b": "N17",
-   "lo": 1,
-   "hi": 4,
-   "gate": "ssh",
-   "note": ""
-  },
-  {
-   "a": "N11",
-   "side": "W",
-   "b": "T01",
-   "lo": -63,
-   "hi": -60,
-   "gate": "curl",
-   "note": ""
-  },
-  {
    "a": "T01",
    "side": "W",
    "b": "T02",
@@ -4567,15 +4411,6 @@
    "note": ""
   },
   {
-   "a": "T16",
-   "side": "S",
-   "b": "N11",
-   "lo": 1280,
-   "hi": 1283,
-   "gate": "drop",
-   "note": ""
-  },
-  {
    "a": "T11",
    "side": "E",
    "b": "P01",
@@ -4664,15 +4499,6 @@
   },
   {
    "a": "P15",
-   "side": "W",
-   "b": "N17",
-   "lo": 27,
-   "hi": 30,
-   "gate": "lever",
-   "note": ""
-  },
-  {
-   "a": "P15",
    "side": "E",
    "b": "P18",
    "lo": 27,
@@ -4741,15 +4567,6 @@
    "lo": -89,
    "hi": -86,
    "gate": "boss",
-   "note": ""
-  },
-  {
-   "a": "N17",
-   "side": "S",
-   "b": "G01",
-   "lo": 1566,
-   "hi": 1569,
-   "gate": "",
    "note": ""
   },
   {
@@ -5128,15 +4945,6 @@
    "layer": 0
   },
   {
-   "a": "N11",
-   "side": "S",
-   "b": "N01",
-   "lo": 1264,
-   "hi": 1287,
-   "gate": "drop",
-   "note": "airgap"
-  },
-  {
    "a": "G16",
    "side": "E",
    "b": "R06",
@@ -5147,6 +4955,294 @@
    "b_hi": 12,
    "gate": "symlink",
    "note": "symlink"
+  },
+  {
+   "a": "N01",
+   "side": "W",
+   "b": "H11",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N01",
+   "side": "E",
+   "b": "N04",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N01",
+   "side": "S",
+   "b": "N03",
+   "lo": 1294,
+   "hi": 1297,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N01",
+   "side": "N",
+   "b": "N11",
+   "lo": 1261,
+   "hi": 1306,
+   "gate": "drop",
+   "note": "airgap"
+  },
+  {
+   "a": "N04",
+   "side": "E",
+   "b": "N05",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N04",
+   "side": "N",
+   "b": "N11",
+   "lo": 1309,
+   "hi": 1338,
+   "gate": "drop",
+   "note": "airgap"
+  },
+  {
+   "a": "N05",
+   "side": "E",
+   "b": "N08",
+   "lo": -43,
+   "hi": -40,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N05",
+   "side": "N",
+   "b": "N19",
+   "lo": 1410,
+   "hi": 1413,
+   "gate": "dead",
+   "note": "",
+   "clue": "فقط تابلوی robots.txt: «Disallow: /backup» (بی‌پروانه)",
+   "reward": "تکه‌ی حافظه + برگ دفترچه (K3)",
+   "layer": 2
+  },
+  {
+   "a": "N05",
+   "side": "S",
+   "b": "N20",
+   "lo": 1392,
+   "hi": 1395,
+   "gate": "dead",
+   "note": "",
+   "clue": "یه پروانه زیر سکو؛ این اتاق روی نقشه «404» می‌شه",
+   "reward": "lore + توکن + ایجنت (K2)",
+   "layer": 2
+  },
+  {
+   "a": "N08",
+   "side": "W",
+   "b": "N09",
+   "lo": -97,
+   "hi": -94,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "N08",
+   "side": "E",
+   "b": "N18",
+   "lo": -60,
+   "hi": -57,
+   "gate": "curl",
+   "note": ""
+  },
+  {
+   "a": "N09",
+   "side": "W",
+   "b": "N10",
+   "lo": -97,
+   "hi": -94,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "N10",
+   "side": "W",
+   "b": "N11",
+   "lo": -97,
+   "hi": -94,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N11",
+   "side": "W",
+   "b": "T01",
+   "lo": -63,
+   "hi": -60,
+   "gate": "curl",
+   "note": ""
+  },
+  {
+   "a": "N11",
+   "side": "N",
+   "b": "T16",
+   "lo": 1280,
+   "hi": 1283,
+   "gate": "drop",
+   "note": ""
+  },
+  {
+   "a": "N11",
+   "side": "S",
+   "b": "H11",
+   "lo": 1250,
+   "hi": 1258,
+   "gate": "drop",
+   "note": "airgap"
+  },
+  {
+   "a": "N03",
+   "side": "S",
+   "b": "N22",
+   "lo": 1300,
+   "hi": 1303,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N22",
+   "side": "W",
+   "b": "N06",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N22",
+   "side": "E",
+   "b": "N12",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N06",
+   "side": "S",
+   "b": "N07",
+   "lo": 1264,
+   "hi": 1267,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N07",
+   "side": "S",
+   "b": "N02",
+   "lo": 1264,
+   "hi": 1267,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N02",
+   "side": "W",
+   "b": "D07",
+   "lo": 54,
+   "hi": 57,
+   "gate": "agents",
+   "note": "lever"
+  },
+  {
+   "a": "N12",
+   "side": "E",
+   "b": "N13",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N13",
+   "side": "E",
+   "b": "N14",
+   "lo": 5,
+   "hi": 8,
+   "gate": "",
+   "note": ""
+  },
+  {
+   "a": "N13",
+   "side": "S",
+   "b": "N21",
+   "lo": 1420,
+   "hi": 1423,
+   "gate": "bash",
+   "note": "",
+   "clue": "گنج پشت شیشه، کف ترک‌دار (طعمه، عمداً پیدا)",
+   "reward": "چالش DDOS، بعد پلاگین rate_limit",
+   "layer": 0
+  },
+  {
+   "a": "N14",
+   "side": "E",
+   "b": "N15",
+   "lo": 5,
+   "hi": 8,
+   "gate": "fight",
+   "note": ""
+  },
+  {
+   "a": "N14",
+   "side": "N",
+   "b": "N18",
+   "lo": 1490,
+   "hi": 1493,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "N15",
+   "side": "E",
+   "b": "N16",
+   "lo": 5,
+   "hi": 8,
+   "gate": "boss",
+   "note": ""
+  },
+  {
+   "a": "N16",
+   "side": "E",
+   "b": "N17",
+   "lo": 1,
+   "hi": 4,
+   "gate": "ssh",
+   "note": ""
+  },
+  {
+   "a": "N17",
+   "side": "E",
+   "b": "P15",
+   "lo": 27,
+   "hi": 30,
+   "gate": "lever",
+   "note": ""
+  },
+  {
+   "a": "N17",
+   "side": "S",
+   "b": "G01",
+   "lo": 1566,
+   "hi": 1569,
+   "gate": "",
+   "note": ""
   }
  ],
  "aftermath": [

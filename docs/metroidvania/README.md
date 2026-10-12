@@ -13,6 +13,7 @@
 | [`../PLAN-metroidvania-phase4a.md`](../PLAN-metroidvania-phase4a.md) | فاز ۴A: منطقه‌ی THE HEAP (۱۶ اتاق، درهای بالا و پایین، سیل سه‌مرحله‌ای، dead code، THE LEAK → sudo، سفر فقط از ترمینال، سه راز تازه در SOURCE TREE). داده‌ی اتاق‌ها: [`phase4a-data/`](phase4a-data/). گزارش: [`../reports/metroidvania-phase4a.md`](../reports/metroidvania-phase4a.md) | انجام شد (۴A) |
 | [`../PLAN-metroidvania-phase4b0.md`](../PLAN-metroidvania-phase4b0.md) | فاز ۴B-0 (گام ۱ و ۲ پلن کلی): زیرساخت موتور (فلگ‌های دنیا در co-op، قفل «k از n»، تابلو و کاشی وابسته به فلگ، درِ symlink، بسته و پورت) و کیت باس‌ها با یه باس تمرینی؛ شش اتاق آزمایشگاه. داده: [`phase4b0-data/`](phase4b0-data/) | انجام شد (۴B-0). گزارش: [`../reports/metroidvania-phase4b0.md`](../reports/metroidvania-phase4b0.md) |
 | [`../PLAN-metroidvania-phase4b1.md`](../PLAN-metroidvania-phase4b1.md) | فاز ۴B-1 (گام ۳ و ۴ پلن کلی): نقشهٔ جدید (نقشه‌کش `tree`، صفحهٔ نقشه، نقشهٔ روی بازی، پین و پینگ، خط سفر به P2)، وضعیت دنیا با digest، صفحهٔ Logs، agentهای گمشده، صفحه‌های logbook، دکور و تغییرات اتاق‌های ساخته‌شده، ترمینال‌ها و نشانه‌ها | بعد از 4B-0، در صف Sonnet |
+| [`../PLAN-metroidvania-phase4b2.md`](../PLAN-metroidvania-phase4b2.md) | فاز ۴B-2 (گام ۵ پلن کلی): منطقه‌ی THE NETWORK: ۲۲ اتاق (نقشه‌ها کشیده و با شبیه‌ساز چک‌شده)، curl و ssh، باس‌های WEB CRAWLER و THE FIREWALL و THE REVIEWER #2 (اختیاری)، دشمن‌های SCRAPER، WORM، DDOS و SPYWARE، سواری روی بسته، airgap، honeypot، رازها. داده: [`phase4b2-data/`](phase4b2-data/) | بعد از 4B-1، در صف Sonnet |
 
 ## سندها
 
