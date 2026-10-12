@@ -4,7 +4,7 @@
 >
 > **چی عوض می‌شه:** NETWORK همون ۲۲ اتاق می‌مونه (درها، اندازه‌ها، نقشه‌ی دنیا بی‌تغییر)، ولی:
 > - **۸ دشمن بومی:** چهار تازه (SNIFFER که کابل curl رو می‌بُره، MITM که حمله‌ات رو آینه‌ای تکرار می‌کنه، BOTNET که گله‌ی DDOS می‌سازه، PINGER با توپ کمونه‌ای) و چهار قوی‌تر (SCRAPER، WORM، DDOS، SPYWARE). Drone و Lint از NETWORK می‌رن.
-> - **۱۵ اتاق دوباره کشیده شدن** و هر کدوم یه کار دارن: پیچ‌وخم تار و خار، دودکش‌های تاردار، بسته‌ای که وسط راه غیب می‌شه، فرار از خط RST تو 22/tcp و غیره. همه با شبیه‌ساز چک شدن: مسیر اصلی هنوز فقط با bash و catch رد می‌شه.
+> - **۱۴ اتاق دوباره کشیده شدن** و هر کدوم یه کار دارن: پیچ‌وخم تار و خار، دودکش‌های تاردار، بسته‌ای که وسط راه غیب می‌شه، فرار از خط RST تو 22/tcp و غیره. همه با شبیه‌ساز چک شدن: مسیر اصلی هنوز فقط با bash و catch رد می‌شه.
 > - **سه باس از نو:** WEB CRAWLER (تارهایی که آرنا رو پر می‌کنن، دویدن روی زمین، تاب خوردن تو فاز ۳)، THE FIREWALL (دیوارهای deny که آرنا رو کوچیک می‌کنن، «DROP ALL» تو فاز ۳)، THE REVIEWER #2 (کامنت‌هایی که کف رو پر می‌کنن). ضربه‌ی بزرگ ۲ آسیب، استراحت کوتاه‌تر، از فاز ۲ دو خطر با هم.
 > - انصاف co-op سر جاشه: هر حمله قبل از ضربه برای دوستت هم دیده می‌شه.
 >
@@ -38,7 +38,7 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MVB3-01 | room data in (15 rooms redrawn, N21 waves, N12 packet loss, N17 chase); letters `j u r y`; checker | Sonnet | todo |
+| MVB3-01 | room data in (14 rooms redrawn, N21 waves, N12 packet loss, N17 chase); letters `j u r y`; checker | Sonnet | todo |
 | MVB3-02 | engine: kit `rec`, arena hazards + watchdog `arena-tell`, bouncing shots, body effects (slow, jam), tags | Sonnet | todo |
 | MVB3-03 | new enemies: SNIFFER, MITM, BOTNET, PINGER | Sonnet | todo |
 | MVB3-04 | reworked enemies: SCRAPER, WORM, DDOS, SPYWARE | Sonnet | todo |
@@ -69,9 +69,9 @@
 
 | file | what |
 |---|---|
-| `rooms/N*.txt` | the 15 redrawn rooms: N01 N02 N04 N05 N06 N07 N08 N10 N11 N12 N13 N16 N17 N18 (+ N21 unchanged file, new waves) |
-| `rooms-4b3.json` | their `rooms.json` entries (only `wave`, `packets.lossy` and `chase` are new; every door and size is unchanged) |
-| `apply.py` | copies the files and replaces the entries (idempotent; takes a repo root argument) |
+| `rooms/N*.txt` | all 22 NETWORK rooms; the 14 redrawn ones are N01 N02 N04 N05 N06 N07 N08 N10 N11 N12 N13 N16 N17 N18 (the others are as built) |
+| `rooms-4b3.json` | the entries as Claude checked them; `apply.py` takes only N12 `packets` (with `lossy`), N17 `chase` and N21 `wave` from it (doors and sizes are unchanged) |
+| `apply.py` | copies the 14 redrawn files and merges those three keys; stops if a room's size or doors differ (idempotent; takes a repo root argument) |
 | `sim.py`, `reach.py`, `check4b3.py`, `rooms.py`, `canvas.py` | the simulator (`j` counts as a ring), the checker, the generator |
 
 ### 3.2 New letters
@@ -108,7 +108,7 @@
 
 ## MVB3-01 · Room data, letters, checker
 
-1. `python3 -I docs/metroidvania/phase4b3-data/apply.py`: copies the 15 room files and replaces those rooms' `rooms.json` entries (keeping the same doors, sizes and every 4B-1/4B-2 field).
+1. `python3 -I docs/metroidvania/phase4b3-data/apply.py`: copies the 14 redrawn room files and merges N12 `packets`, N17 `chase`, N21 `wave` into `rooms.json` (every other key stays).
 2. Copy `sim.py`, `reach.py` and `check4b3.py` to `tools/godot/roomcheck/` (the new `sim.py` only adds `j` to the rings; `check4a.py` and `check4b2.py` still pass). Add `run check4b3 python3 -I tools/godot/roomcheck/check4b3.py` to `test-all.sh` next to `worldcheck` (it must end `0 problems`; it takes a few minutes).
 3. Until MVB3-03, `j` loads as a ring, and `u`, `r`, `y` print the "not ported yet" warning.
 4. `world.py` → `errors 0` (nothing about doors changed).
