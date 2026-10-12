@@ -30,6 +30,9 @@ var plan_snaps: Array = []             # host: [nid, plan seq, snapshot number] 
 var guest_staged := {}                  # host: the rooms the guest walked and nobody has rested since (committed with the next rest, MVB1-03)
 var pins_sent := -1                     # host: Game.pins_rev of the last list sent in a snapshot
 var guest_wh := -1                      # host: the world digest the guest last reported (MVB1-01)
+var wh_sent := -1                       # host: the digest the last snapshot carried
+var st_wh_sent := -1                    # guest: the digest its last `st` carried
+var st_n := 0
 var wf_t := -10.0                       # host: when the last full `wf` went out (at most one per second)
 var wf_count := 0                       # host: how many full `wf` lists were sent (the tests count them)
 var wf_bytes := 0
@@ -1052,7 +1055,9 @@ func _send_snapshot() -> void:
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
 	# world flags are state: every snapshot carries the digest, the full list goes out only while the guest's digest differs (a lost one corrects itself)
 	var wh := Game.world_digest()
-	s["wh"] = wh
+	if wh != wh_sent or snap_n % 5 == 0:         # (3 times a second is enough: the host acts on the guest's number, this one is only for the record)
+		s["wh"] = wh
+		wh_sent = wh
 	if wh != guest_wh and hms() - wf_t >= 1.0:
 		var wf: Array = Game.world_flags()
 		s["wf"] = wf
@@ -1177,7 +1182,12 @@ func _guest_tick(dt: float) -> void:
 		st_acc = 0.0
 		var d := {"room": r.id, "x4": NetClasses.x4(p.x), "y4": NetClasses.x4(p.y), "vx": roundi(p.vx), "vy": roundi(p.vy), "face": int(p.face), "pose": 0, "hp": p.hp, "maxhp": p.max_hp,
 			"dead": 1 if p.dead else 0, "dn": guest_dn, "atk": [p.atk_id, p.atk_dir, p.atk_t > 0.0 and p.atk_live], "dash": [p.dash_id, roundi(p.dash_dx * 100.0), roundi(p.dash_dy * 100.0), roundi(maxf(p.dash_t, 0.0) * 100.0)],
-			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0, "wh": Game.world_digest(), "mn": 1 if _map_open() else 0}
+			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0, "mn": 1 if _map_open() else 0}
+		st_n += 1
+		var gwh := Game.world_digest()
+		if gwh != st_wh_sent or st_n % 10 == 1:       # the digest rides on every 10th report, at once when it changes
+			d["wh"] = gwh
+			st_wh_sent = gwh
 		Net.send_msg("st", d, true)
 	# downed countdown (the host decides when to bring it back)
 	if p.dead and p.downed and guest_down_t >= 0.0:
