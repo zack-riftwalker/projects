@@ -2177,8 +2177,11 @@ func hazard_probe(g, pup, st: Dictionary) -> void:
 
 # the host's scripted fight: attacks forced at set times, the phase raised twice; returns the plans seen, per target
 func boss_phase_script(b, el: float, st: Dictionary, forced: Array, hp_marks: Array) -> void:
-	if b == null or not b.active or b.dying:
+	if b == null or not is_instance_valid(b) or not b.active or b.dying:
 		return
+	if b.hpf < float(b.max_hp) * 0.12:                         # (the bot's claws must not finish it: the fight is the test, 100 s long on a bad line)
+		b.hpf = float(b.max_hp) * 0.2
+		b.hp = ceili(b.hpf)
 	for k in range(hp_marks.size()):
 		var m: Array = hp_marks[k]
 		if el > float(m[0]) and not st.get("hp%d" % k, false):
@@ -2255,6 +2258,8 @@ func sc_co_crawler() -> Array:
 	while Time.get_ticks_msec() - t1 < secs * 1000.0:
 		var g = mgr().player
 		st2.f += 1
+		if not is_instance_valid(pup):
+			break
 		plan_stats(pup, seen2)
 		Controls.script_input = boss_guest_keys(g, pup, false, st2)
 		hazard_probe(g, pup, st2)
@@ -2338,6 +2343,8 @@ func sc_co_firewall() -> Array:
 	while Time.get_ticks_msec() - t1 < secs * 1000.0:
 		var g = mgr().player
 		st2.f += 1
+		if not is_instance_valid(pup):
+			break
 		plan_stats(pup, seen2)
 		Controls.script_input = boss_guest_keys(g, pup, true, st2)
 		hazard_probe(g, pup, st2)
