@@ -362,6 +362,7 @@ func pin_del_near(room_id: String, x: float, y: float, reach: float) -> bool:
 		return true
 	pins.remove_at(best)
 	pins_rev += 1
+	write_save()
 	return true
 
 func apply_pin_add(pn: Dictionary) -> void:
@@ -372,6 +373,7 @@ func apply_pin_add(pn: Dictionary) -> void:
 	while pins.size() > PIN_MAX:
 		pins.pop_front()
 	pins_rev += 1
+	write_save()
 
 # the host applies a guest's request (the same checks as for its own)
 func apply_pin_request(op: String, pn: Dictionary) -> void:
@@ -384,6 +386,7 @@ func apply_pin_request(op: String, pn: Dictionary) -> void:
 			if q.room == pn.room and int(q.x) == int(pn.x) and int(q.y) == int(pn.y) and q.kind == pn.kind:
 				pins.remove_at(i)
 				pins_rev += 1
+				write_save()
 				break
 
 # the guest takes the host's list as it is
@@ -392,6 +395,59 @@ func set_pins(list: Array) -> void:
 	for q in list:
 		pins.append({"id": int(q[0]), "room": String(q[1]), "x": int(q[2]), "y": int(q[3]), "kind": String(q[4]), "by": String(q[5])})
 	pins_rev += 1
+
+# ---- pings (MVB1-08): short-lived, shown to both players, never saved, never pause anything ----
+const PING_KINDS := ["go here", "wait", "help", "look"]
+const PING_LIFE := 6.0
+var pings: Array = []                   # [{id, room, x, y, kind, by, until, ack}]
+var ping_seq := 0
+signal ping_made(p: Dictionary)         # Coop sends it to the partner
+signal ping_acked(id: String)           # Coop tells the sender
+
+func _now_s() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+func pings_purge() -> void:
+	var t := _now_s()
+	pings = pings.filter(func(q): return q.until > t)
+
+# a ping from this page: a room, a point in it (pixels) and one of the four words
+func ping_add(kind: String, room_id: String, x: float, y: float) -> bool:
+	if not rooms_meta.rooms.has(room_id) or is_offmap(room_id) or not PING_KINDS.has(kind):
+		return false
+	ping_seq += 1
+	var q := {"id": "%s-%d" % [pin_label_by(), ping_seq], "room": room_id, "x": int(roundf(x)), "y": int(roundf(y)), "kind": kind, "by": pin_label_by(), "until": _now_s() + PING_LIFE, "ack": false}
+	pings = pings.filter(func(o): return o.by != q.by)          # one active ping per player
+	pings.append(q)
+	ping_made.emit(q)
+	return true
+
+# the partner's ping arrived
+func ping_receive(d: Dictionary) -> void:
+	if not rooms_meta.rooms.has(String(d.room)) or is_offmap(String(d.room)) or not PING_KINDS.has(String(d.kind)):
+		return
+	var by := String(d.get("by", "P1" if net_role == "guest" else "P2"))
+	pings = pings.filter(func(o): return o.by != by)
+	pings.append({"id": String(d.id), "room": String(d.room), "x": int(d.x), "y": int(d.y), "kind": String(d.kind), "by": by, "until": _now_s() + PING_LIFE, "ack": false})
+
+# this player saw the partner's ping (tapped its arrow, or opened the map): the sender gets a tick
+func ping_ack_all_incoming() -> void:
+	for q in pings:
+		if q.by != pin_label_by() and not q.ack:
+			q.ack = true
+			ping_acked.emit(String(q.id))
+
+func ping_ack_one(id: String) -> void:
+	for q in pings:
+		if q.id == id and q.by != pin_label_by() and not q.ack:
+			q.ack = true
+			ping_acked.emit(id)
+
+# the partner acknowledged a ping of ours
+func ping_ack_received(id: String) -> void:
+	for q in pings:
+		if q.id == id:
+			q.ack = true
 
 func pins_wire() -> Array:
 	var out: Array = []
@@ -582,6 +638,7 @@ func fresh() -> void:
 	pin_seq = 0
 	pins_rev += 1
 	partner = {}
+	pings = []
 	changelog_lines = []
 
 # settings live in their own file so the guest (who has no save) keeps them too

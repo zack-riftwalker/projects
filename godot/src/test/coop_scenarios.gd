@@ -1822,3 +1822,30 @@ func sc_co_map() -> Array:
 	var off2 := await wait_until(func(): return coop().host_body != null and not coop().host_body.mapping, 10.0)
 	await wait_secs(1.0)
 	return [opened and unpaused and saw2 and off2, "guest: overlay opened %s, not paused and clock ran %s, saw the host's map %s then not %s" % [opened, unpaused, saw2, off2]]
+
+# MVB1-08: pins are the host's list (a guest asks, snapshots carry it) and pings go both ways with a tick back.
+func sc_co_pins() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var got := await wait_until(func(): return Game.pins.size() == 1 and Game.pins[0].by == "P2" and Game.pins[0].kind == "HELP", 12.0)
+		await wait_secs(1.5)
+		var pn: Dictionary = Game.pins[0] if Game.pins.size() > 0 else {}
+		var removed: bool = not pn.is_empty() and Game.pin_del_near(String(pn.room), float(pn.x), float(pn.y), 1.0)
+		await wait_secs(2.5)
+		var pinged := Game.ping_add("look", "R01", 200.0, 120.0)
+		var ticked := await wait_until(func(): return Game.pings.size() > 0 and Game.pings[0].ack, 8.0)
+		await wait_secs(1.0)
+		return [got and removed and pinged and ticked, "host: the guest's pin listed %s, removed %s, my ping sent %s and ticked %s" % [got, removed, pinged, ticked]]
+	await wait_secs(2.0)
+	var t0 := Time.get_ticks_msec()
+	Game.pin_add("HELP", "R01", 120.0, 100.0)
+	var listed := await wait_until(func(): return Game.pins.size() == 1 and Game.pins[0].kind == "HELP", 3.0)
+	var took := (Time.get_ticks_msec() - t0) / 1000.0
+	var gone := await wait_until(func(): return Game.pins.is_empty(), 10.0)
+	var arrow := await wait_until(func(): return main.hud.ping_arrows().size() > 0 and main.hud.ping_arrows()[0].by == "P1", 12.0)
+	await wait_secs(0.5)
+	if arrow:
+		Game.ping_ack_one(String(main.hud.ping_arrows()[0].id))
+	await wait_secs(2.5)
+	return [listed and gone and arrow, "guest: my pin came back in the list after %.2f s %s, the host's removal reached me %s, the host's ping arrow %s" % [took, listed, gone, arrow]]

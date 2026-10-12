@@ -28,6 +28,7 @@ var guest_bench := ""
 var snap_n := 0
 var plan_snaps: Array = []             # host: [nid, plan seq, snapshot number] of the first snapshot that carried each boss-kit plan
 var guest_staged := {}                  # host: the rooms the guest walked and nobody has rested since (committed with the next rest, MVB1-03)
+var pins_sent := -1                     # host: Game.pins_rev of the last list sent in a snapshot
 var guest_wh := -1                      # host: the world digest the guest last reported (MVB1-01)
 var wf_t := -10.0                       # host: when the last full `wf` went out (at most one per second)
 var wf_count := 0                       # host: how many full `wf` lists were sent (the tests count them)
@@ -91,6 +92,9 @@ func setup(m) -> void:
 	Game.loadout_changed.connect(func(): if role == "guest" and started: Net.rel("loadout", {"ids": Game.equipped}))
 	mgr.commit_extra = func(): return guest_staged.keys()
 	Game.world_flag_set.connect(func(k): if role == "guest" and started: Net.rel("wflag", {"k": k}))
+	Game.pin_requested.connect(func(op, pn): if role == "guest" and started: Net.rel("pin", {"op": op, "room": pn.room, "x": pn.x, "y": pn.y, "kind": pn.kind}))
+	Game.ping_made.connect(func(q): if (role == "host" and guest_here) or (role == "guest" and started): Net.rel("ping", {"id": q.id, "room": q.room, "x": q.x, "y": q.y, "kind": q.kind, "by": q.by}))
+	Game.ping_acked.connect(func(id): if (role == "host" and guest_here) or (role == "guest" and started): Net.rel("pingok", {"id": id}))
 	mgr.rested.connect(func(id):
 		if role == "host":
 			guest_staged.clear()                # (the rest just committed them)
@@ -329,6 +333,7 @@ func _guest_joined() -> void:
 	Net.epoch += 1
 	snap_n = 0
 	guest_wh = -1
+	pins_sent = -1
 	wf_t = -10.0
 	plan_snaps.clear()
 	snap_sent.clear()
@@ -481,6 +486,9 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				if br != null:
 					_as_p2(br, func(): br.show_plugin_banner(pid))
 			Net.rel("plugin", {"id": pid, "by": by})
+		"pin": Game.apply_pin_request(String(d.op), d)
+		"ping": Game.ping_receive(d)
+		"pingok": Game.ping_ack_received(String(d.id))
 		"wflag":                                 # a world flag only the guest's page could set (a sign it read, a changelog line it was shown)
 			var wk := String(d.k)
 			if wk.begins_with("changelog:") or wk.begins_with("log:"):
@@ -1028,6 +1036,10 @@ func _send_snapshot() -> void:
 		wf_t = hms()
 		wf_count += 1
 		wf_bytes += JSON.stringify(wf).length()
+		pins_sent = -1                          # (the pins are part of the digest: a list that differs goes out with it)
+	if pins_sent != Game.pins_rev:
+		s["pn"] = Game.pins_wire()
+		pins_sent = Game.pins_rev
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
 	if r.stats_line != "" and r.stats_t > 0.0:
@@ -1287,6 +1299,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 		Game.flags[String(fk)] = true
 	for fk in m.get("wf", []):
 		Game.flags[String(fk)] = true   # (never clears one)
+	if m.has("pn"):
+		Game.set_pins(m.pn)
 	Game.flood_net = int(m.get("fl", Game.flood_net))
 	last_lq =int(m.get("lq", -1))
 	last_lq_room = r.id
@@ -1442,6 +1456,8 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				r.show_plugin_banner(String(d.id))
 		"pause":
 			main.set_paused(bool(d.on), true)
+		"ping": Game.ping_receive(d)
+		"pingok": Game.ping_ack_received(String(d.id))
 		"mapbought":
 			main.index_menu.answered(String(d.zone), String(d.by))
 		"committed":

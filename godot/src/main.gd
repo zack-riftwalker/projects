@@ -423,6 +423,17 @@ func _input(event: InputEvent) -> void:
 				title.tap(tg)
 		return
 	_map_drag(event)
+	if not paused and active_overlay() == null and hud != null and manager != null:         # a tap on a ping arrow says "seen"
+		var tp2 := Vector2.ZERO
+		var th2 := false
+		if event is InputEventScreenTouch and event.pressed:
+			tp2 = event.position
+			th2 = true
+		elif event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:
+			tp2 = event.position
+			th2 = true
+		if th2 and not (touch.visible and touch.claims(tp2)):
+			hud.ping_tap(to_game(tp2))
 	# a tap on a pause option
 	if paused or active_overlay() != null:
 		var pos := Vector2.ZERO

@@ -340,6 +340,41 @@ func t_mappage() -> bool:
 	Game.flags["mapped:R06"] = true
 	if not MapView.door_visible("R01", Game.rooms_meta.rooms.R01.doors[0]):
 		fail(res, "a door into a committed secret room")
+	# pins and pings (MVB1-08): the crosshair is the middle of the map area
+	mv.open("heap")
+	var h1: Dictionary = Game.rooms_meta.rooms.H01
+	mv.center = Vector2(float(h1.origin[0]) + 10.0, float(h1.origin[1]) + 8.0)
+	if mv.crosshair_room().is_empty() or mv.crosshair_room().id != "H01":
+		fail(res, "crosshair room " + str(mv.crosshair_room()))
+	Game.pins = []
+	mv.press_pin()
+	if not mv.armed or Game.pins.size() != 0:
+		fail(res, "the first press arms")
+	mv.press_pin()
+	if Game.pins.size() != 1 or Game.pins[0].kind != "TODO" or Game.pins[0].room != "H01" or Game.pins[0].by != "P1":
+		fail(res, "the second press places: " + str(Game.pins))
+	mv.press_pin()
+	if Game.pins.size() != 0:
+		fail(res, "a press on a pin takes it away")
+	for i in range(30):
+		Game.pin_add("?", "H01", 10.0 + i, 10.0)
+	if Game.pins.size() != Game.PIN_MAX or int(Game.pins[0].x) != 16:
+		fail(res, "the 25th removes the oldest: %d, first x %s" % [Game.pins.size(), str(Game.pins[0].x)])
+	Game.pins = []
+	if Game.pin_add("TODO", "Z01", 10.0, 10.0) and Game.pins.size() > 0 and Game.pins[0].room == "Z01":
+		pass                                              # (a lab room is not offmap: allowed)
+	Game.pins = []
+	Game.rooms_meta.rooms.H01["offmap"] = true
+	if Game.pin_add("TODO", "H01", 10.0, 10.0) or Game.ping_add("help", "H01", 10.0, 10.0):
+		fail(res, "pin or ping in an offmap room")
+	Game.rooms_meta.rooms.H01.erase("offmap")
+	mv.press_ping()
+	if not mv.ping_choosing:
+		fail(res, "ping chooser")
+	mv.send_ping(2)
+	if Game.pings.size() != 1 or Game.pings[0].kind != "help" or mv.ping_choosing:
+		fail(res, "the ping: " + str(Game.pings))
+	Game.pings = []
 	mv.queue_free()
 	Game.fresh()
 	return report("mappage", res.ok, res.info)

@@ -13,6 +13,7 @@ var partner_max := 0
 var partner_dot := ""            # line quality, as in the JS game: green good, yellow slow, red bad, grey the partner is not answering
 var partner_text := ""           # "down", "back in 4"
 var me_text := ""                # my own body is down: "DOWN - BACK IN 4", "BOTH DOWN"
+var ping_hits: Array = []        # [{id, rect}] the ping arrows of the last draw (a tap on one acknowledges it)
 var toasts: Array = []           # small panels at the bottom for a few seconds (the terminal's changelog line): [{text, t}]
 
 func toast(text: String, secs: float) -> void:
@@ -118,6 +119,7 @@ func _draw() -> void:
 		Gfx.panel(self, px, 30, pw, 15, "#17131f", "#3a3346")
 		draw_rect(Rect2(px + 2, 31, 2, 13), Color("#5b9bd5") if false else Color(Game.COL.ok))
 		PixelText.draw_text(self, label, px + 9, 34, Game.COL.paper)
+	_draw_pings()
 	# toasts: one small panel per line, under the middle of the screen
 	var ty := H - 40 - toasts.size() * 16
 	for tq in toasts:
@@ -144,6 +146,69 @@ func _draw() -> void:
 		draw_rect(Rect2(floori(clampf(s.x - room.cam.x, bx + 4, bx + bw - 6)), by + bh, 3, 2), Color(Game.COL.paper))
 		for i in range(lines.size()):
 			PixelText.draw_text(self, lines[i], bx + 6, by + 6 + i * 13, Game.COL.paper)
+
+# the partner's (and our own) pings as arrows at the screen edge: [{id, pos, dir, word, secs, by, ack, on_screen}]
+func ping_arrows() -> Array:
+	var out: Array = []
+	if room == null or room.player == null:
+		return out
+	Game.pings_purge()
+	var p = room.player
+	var rm: Dictionary = Game.rooms_meta.rooms[room.id]
+	var origin := Vector2(float(rm.origin[0]), float(rm.origin[1])) * 16.0
+	var tnow := Game._now_s()
+	var c := Vector2(W / 2.0, H / 2.0)
+	for q in Game.pings:
+		if not Game.rooms_meta.rooms.has(String(q.room)):
+			continue
+		var qm: Dictionary = Game.rooms_meta.rooms[q.room]
+		var target := Vector2(float(qm.origin[0]), float(qm.origin[1])) * 16.0 + Vector2(float(q.x), float(q.y))
+		var from := origin + Vector2(p.x + 5.0, p.y + 5.0)
+		if q.room != room.id:
+			from = origin + Vector2(float(rm.size[0]), float(rm.size[1])) * 8.0        # another room: from the middle of this one
+		var d := target - from
+		var pos := Vector2.ZERO
+		var on_screen := false
+		if q.room == room.id:
+			pos = Vector2(float(q.x) - room.cam.x, float(q.y) - room.cam.y)
+			on_screen = pos.x > 10.0 and pos.x < W - 10.0 and pos.y > 28.0 and pos.y < H - 10.0
+		if not on_screen:
+			if d.length() < 1.0:
+				d = Vector2(1, 0)
+			var k := minf(absf((W / 2.0 - 16.0) / d.x) if d.x != 0.0 else 1e9, absf((H / 2.0 - 16.0) / d.y) if d.y != 0.0 else 1e9)
+			pos = c + d * k
+		out.append({"id": String(q.id), "pos": pos, "dir": d.normalized(), "word": String(q.kind), "secs": ceili(float(q.until) - tnow), "by": String(q.by), "ack": bool(q.ack), "on_screen": on_screen})
+	return out
+
+func _draw_pings() -> void:
+	ping_hits = []
+	for a in ping_arrows():
+		var col := MapView.owner_color(String(a.by))
+		var pos: Vector2 = a.pos
+		var d: Vector2 = a.dir
+		if a.on_screen:
+			# the ping is in view: a ring on the spot, the word above it
+			var pulse := 0.5 + 0.5 * sin(Game._now_s() * 7.0)
+			draw_arc(pos, 6.0 + 3.0 * pulse, 0.0, TAU, 20, col, 1.0)
+		else:
+			var tip := pos + d * 7.0
+			var side := Vector2(-d.y, d.x) * 4.0
+			draw_colored_polygon(PackedVector2Array([tip + Vector2(1, 1), pos - d * 4.0 + side + Vector2(1, 1), pos - d * 4.0 - side + Vector2(1, 1)]), Color(Game.COL.ink))
+			draw_colored_polygon(PackedVector2Array([tip, pos - d * 4.0 + side, pos - d * 4.0 - side]), col)
+		var label := "%s %d%s" % [a.word, a.secs, " ✓" if a.ack else ""]
+		var tw := PixelText.text_width(label, {"tiny": true})
+		var lx := clampf(pos.x - tw / 2.0 - d.x * 12.0 * (0.0 if a.on_screen else 1.0), 2.0, W - tw - 2.0)
+		var ly := clampf(pos.y - 14.0 * (1.0 if a.on_screen else 0.0) - d.y * 12.0 * (0.0 if a.on_screen else 1.0) - 2.0, 28.0, H - 10.0)
+		PixelText.draw_text(self, label, lx, ly, col, {"tiny": true, "outline": Game.COL.ink})
+		ping_hits.append({"id": a.id, "rect": Rect2(minf(pos.x, lx) - 6.0, minf(pos.y, ly) - 8.0, absf(pos.x - lx) + tw + 12.0, 22.0)})
+
+# a tap on a ping arrow says "seen" (the sender gets a tick)
+func ping_tap(p: Vector2) -> bool:
+	for h in ping_hits:
+		if h.rect.has_point(p):
+			Game.ping_ack_one(String(h.id))
+			return true
+	return false
 
 static func _ease_out(u: float) -> float:
 	return 1.0 - pow(1.0 - u, 3.0)

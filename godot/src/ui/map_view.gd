@@ -32,6 +32,11 @@ var buttons: Array = []         # [{id, rect, label}] (rebuilt by _layout_button
 var msg := ""
 var msg_t := 0.0
 var t := 0.0
+var armed := false              # pin mode: the kind is shown at the crosshair, the next press of `pin` places it
+var armed_t := 0.0
+var pin_kind := -1              # index into Game.PIN_KINDS; arming moves to the next one
+var ping_choosing := false      # the four words are on screen
+var ping_sel := 0
 
 static var _rows_cache := {}
 
@@ -56,6 +61,9 @@ func open(start_zone := "") -> void:
 	drag_active = false
 	_keys_prev = {}
 	msg = ""
+	armed = false
+	ping_choosing = false
+	Game.ping_ack_all_incoming()               # opening the map while a partner's ping lives acknowledges it
 	fit()
 	queue_redraw()
 	if canvas != null:
@@ -173,11 +181,33 @@ func update() -> void:
 		if msg_t <= 0.0:
 			msg = ""
 	var c := Controls.pressed
+	if armed:
+		armed_t -= Game.STEP
+		if armed_t <= 0.0:
+			armed = false
+	if ping_choosing:                                  # the four words: left / right choose, special or start sends, dash cancels
+		if c.get("dash", false) or c.get("pause", false):
+			ping_choosing = false
+			Audio.sfx("uiBack")
+		elif c.get("left", false):
+			ping_sel = (ping_sel + 3) % 4
+			Audio.sfx("uiMove")
+		elif c.get("right", false):
+			ping_sel = (ping_sel + 1) % 4
+			Audio.sfx("uiMove")
+		elif c.get("special", false) or c.get("start", false) or c.get("jump", false) or c.get("attack", false):
+			send_ping(ping_sel)
+		_redraw()
+		return
 	if c.get("dash", false) or c.get("pause", false) or c.get("map", false):
 		Audio.sfx("uiBack")
 		back_requested.emit()
 		_redraw()
 		return
+	if c.get("special", false):
+		press_pin()
+	if c.get("start", false):
+		press_ping()
 	if c.get("jump", false):
 		set_world(not world)
 		Audio.sfx("uiMove")
@@ -189,6 +219,13 @@ func update() -> void:
 		zoom(1.0 / 1.5)
 	# the arrows pan: once per press, then repeating while held
 	var d := Vector2(float(Controls.down.get("right", false)) - float(Controls.down.get("left", false)), float(Controls.down.get("down", false)) - float(Controls.down.get("up", false)))
+	if armed and (c.get("up", false) or c.get("down", false)):         # while a pin is armed up and down choose its kind
+		pin_kind = (pin_kind + (1 if c.get("down", false) else 3)) % 4
+		armed_t = 4.0
+		Audio.sfx("uiMove")
+		d.y = 0.0
+	elif armed:
+		d.y = 0.0
 	if d != Vector2.ZERO and not drag_active:
 		var fresh: bool = c.get("left", false) or c.get("right", false) or c.get("up", false) or c.get("down", false)
 		repeat_t -= Game.STEP
@@ -241,6 +278,17 @@ func button_label(b: Dictionary) -> String:
 func tap(p: Vector2) -> void:
 	if not active:
 		return
+	if ping_choosing:
+		for i in range(4):
+			if ping_word_rect(i).grow(2.0).has_point(p):
+				ping_sel = i
+				send_ping(i)
+				return
+	if armed and kind_label_rect().grow(3.0).has_point(p):         # a tap on the kind next to the crosshair chooses the next one
+		pin_kind = (pin_kind + 1) % 4
+		armed_t = 4.0
+		_redraw()
+		return
 	for b in buttons:
 		if b.rect.grow(2.0).has_point(p):
 			press_button(String(b.id))
@@ -254,10 +302,93 @@ func press_button(id: String) -> void:
 		"minus": zoom(1.0 / 1.5)
 		"plus": zoom(1.5)
 		"partner": centre_on_partner()
+		"pin": press_pin()
+		"ping": press_ping()
 		"back":
-			Audio.sfx("uiBack")
-			back_requested.emit()
+			if ping_choosing:
+				ping_choosing = false
+			else:
+				Audio.sfx("uiBack")
+				back_requested.emit()
 	_redraw()
+
+# ---- pins and pings
+func cross_screen() -> Vector2:
+	return AREA.position + AREA.size / 2.0
+
+# the room under the crosshair, and the point in it in room pixels ({} when the crosshair is over nothing)
+func crosshair_room() -> Dictionary:
+	var best := {}
+	for id in rooms_in_view():
+		if not Game.rooms_meta.rooms.has(id):
+			continue
+		var r := rect_of(id)
+		if r.has_point(cross_screen()):
+			var rel := (cross_screen() - r.position) / scale_px * 16.0
+			best = {"id": id, "px": rel.x, "py": rel.y}
+	return best
+
+func screen_of(room_id: String, px: float, py: float) -> Vector2:
+	var m: Dictionary = Game.rooms_meta.rooms[room_id]
+	return AREA.position + to_canvas(Vector2(float(m.origin[0]) + px / 16.0, float(m.origin[1]) + py / 16.0))
+
+func press_pin() -> void:
+	ping_choosing = false
+	var hit := crosshair_room()
+	if hit.is_empty():
+		say("no room here")
+		return
+	for pn in Game.pins:                               # a press on a pin takes it away
+		if pn.room == hit.id and screen_of(pn.room, float(pn.x), float(pn.y)).distance_to(cross_screen()) <= 6.0:
+			if Game.pin_del_near(pn.room, float(pn.x), float(pn.y), 1.0):
+				say("pin removed")
+				Audio.sfx("uiBack")
+			armed = false
+			return
+	if not armed:
+		armed = true
+		armed_t = 4.0
+		pin_kind = (pin_kind + 1) % 4              # the first press shows the next kind ...
+		Audio.sfx("uiMove")
+	elif Game.pin_add(String(Game.PIN_KINDS[pin_kind]), String(hit.id), float(hit.px), float(hit.py)):
+		armed = false                              # ... the second places it
+		say("pinned")
+		Audio.sfx("uiOk")
+	else:
+		say("no pins here")
+		armed = false
+	_redraw()
+
+func press_ping() -> void:
+	armed = false
+	if crosshair_room().is_empty():
+		say("no room here")
+		return
+	ping_choosing = true
+	ping_sel = 0
+	Audio.sfx("uiMove")
+	_redraw()
+
+func send_ping(i: int) -> void:
+	ping_choosing = false
+	var hit := crosshair_room()
+	if hit.is_empty() or not Game.ping_add(String(Game.PING_KINDS[i]), String(hit.id), float(hit.px), float(hit.py)):
+		say("no pings here")
+		return
+	say("ping: %s" % Game.PING_KINDS[i])
+	Audio.sfx("uiOk")
+	_redraw()
+
+func say(text: String) -> void:
+	msg = text
+	msg_t = 1.5
+
+func ping_word_rect(i: int) -> Rect2:
+	return Rect2(AREA.position.x + AREA.size.x / 2.0 - 110.0 + i * 56.0, AREA.end.y - 18.0, 52.0, 14.0)
+
+func kind_label_rect() -> Rect2:
+	var c := cross_screen()
+	return Rect2(c.x + 8.0, c.y - 14.0, 40.0, 10.0)
 
 # a finger or the mouse dragging the map (screen px of the 384 x 216 picture)
 func press_at(p: Vector2) -> void:
@@ -307,9 +438,6 @@ func _draw() -> void:
 		Gfx.panel(self, b.rect.position.x, b.rect.position.y, b.rect.size.x, b.rect.size.y, "#17131f", "#3a3346")
 		PixelText.draw_text(self, button_label(b), b.rect.position.x + b.rect.size.x / 2.0, b.rect.position.y + 3, Game.COL.paper, {"align": "c", "tiny": true})
 	_draw_extra_hud()
-
-func _draw_extra_hud() -> void:
-	pass
 
 func _draw_area() -> void:
 	if not active:
@@ -489,8 +617,10 @@ static func door_visible(id: String, d: Dictionary) -> bool:
 
 # an unnamed `?` on every obstacle the player has not passed yet (zone view only; the map never says which ability it wants)
 func _draw_marks(ids: Array) -> void:
+	_draw_pings(ids)
 	if world:
 		return
+	_draw_pins(ids)
 	for id in ids:
 		if not is_filled(id):
 			continue
@@ -498,6 +628,59 @@ func _draw_marks(ids: Array) -> void:
 		for mk in Game.obstacle_marks(id):
 			var p := to_canvas(Vector2(float(m.origin[0]) + float(mk.x) + 0.5, float(m.origin[1]) + float(mk.y) + 0.5))
 			PixelText.draw_text(canvas, "?", floorf(p.x) - 1, floorf(p.y) - 2, Game.COL.gold, {"tiny": true, "outline": Game.COL.ink})
+
+static func owner_color(by: String) -> Color:
+	return Color(COL_P1) if by == "P1" else Color(COL_P2)
+
+func _draw_pins(ids: Array) -> void:
+	for pn in Game.pins:
+		if not ids.has(String(pn.room)):
+			continue
+		var sp := screen_of(String(pn.room), float(pn.x), float(pn.y)) - AREA.position
+		sp = Vector2(floorf(sp.x), floorf(sp.y))
+		var col := owner_color(String(pn.by))
+		canvas.draw_circle(sp, 4.5, Color(Game.COL.ink))
+		canvas.draw_circle(sp, 3.5, col)
+		match String(pn.kind):
+			"TODO": PixelText.draw_text(canvas, "T", sp.x - 1, sp.y - 2, Game.COL.ink, {"tiny": true})
+			"?": PixelText.draw_text(canvas, "?", sp.x - 1, sp.y - 2, Game.COL.ink, {"tiny": true})
+			"HELP": PixelText.draw_text(canvas, "!", sp.x - 0, sp.y - 2, Game.COL.ink, {"tiny": true})
+			"ability": canvas.draw_colored_polygon(PackedVector2Array([sp + Vector2(0, -2), sp + Vector2(2, 0), sp + Vector2(0, 2), sp + Vector2(-2, 0)]), Color(Game.COL.ink))
+
+# a ping: a pulsing ring with the word, the seconds left and a tick once the partner has seen it
+func _draw_pings(ids: Array) -> void:
+	Game.pings_purge()
+	var tnow := Game._now_s()
+	for q in Game.pings:
+		if not ids.has(String(q.room)):
+			continue
+		var sp := screen_of(String(q.room), float(q.x), float(q.y)) - AREA.position
+		var col := owner_color(String(q.by))
+		var pulse := 0.5 + 0.5 * sin(tnow * 7.0)
+		canvas.draw_arc(sp, 5.0 + 4.0 * pulse, 0.0, TAU, 20, col, 1.0)
+		canvas.draw_circle(sp, 2.0, col)
+		var label := "%s %d%s" % [q.kind, ceili(float(q.until) - tnow), " ✓" if q.ack else ""]
+		PixelText.draw_text(canvas, label, sp.x, sp.y + 8, col, {"align": "c", "tiny": true, "outline": Game.COL.ink})
+
+# the crosshair, the armed kind, the four words of a ping, the message
+func _draw_extra_hud() -> void:
+	var c := cross_screen()
+	var cc := Color(Game.COL.paper)
+	cc.a = 0.8 if (armed or ping_choosing) else 0.35
+	draw_rect(Rect2(c.x - 5, c.y, 4, 1), cc)
+	draw_rect(Rect2(c.x + 2, c.y, 4, 1), cc)
+	draw_rect(Rect2(c.x, c.y - 5, 1, 4), cc)
+	draw_rect(Rect2(c.x, c.y + 2, 1, 4), cc)
+	if armed:
+		var kr := kind_label_rect()
+		Gfx.panel(self, kr.position.x, kr.position.y, kr.size.x, kr.size.y, "#17131f", Game.COL.gold)
+		PixelText.draw_text(self, String(Game.PIN_KINDS[pin_kind]), kr.position.x + kr.size.x / 2.0, kr.position.y + 3, Game.COL.paper, {"align": "c", "tiny": true})
+		PixelText.draw_text(self, "up/down: kind - pin again: place", c.x, c.y + 10, Game.COL.dim, {"align": "c", "tiny": true, "outline": Game.COL.ink})
+	if ping_choosing:
+		for i in range(4):
+			var wr := ping_word_rect(i)
+			Gfx.panel(self, wr.position.x, wr.position.y, wr.size.x, wr.size.y, "#2a2236" if i == ping_sel else "#17131f", Game.COL.clawd if i == ping_sel else "#3a3346")
+			PixelText.draw_text(self, String(Game.PING_KINDS[i]), wr.position.x + wr.size.x / 2.0, wr.position.y + 4, Game.COL.paper if i == ping_sel else Game.COL.dim, {"align": "c", "tiny": true})
 
 # the players: P1 a circle with `1`, P2 a diamond with `2`, 7 px, steady. Only in a room that is on the map; otherwise the partner line says where it is.
 func _draw_players() -> void:
