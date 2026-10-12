@@ -263,11 +263,11 @@ func _pm_rec(rec: float) -> float:
 func _plan_rec(f: Array) -> float:
 	return _pm(f[2]) if float(plan.get("rec", -1.0)) < 0.0 else _pm_rec(float(plan.rec))
 
-# a new attack; the target is fixed for the whole attack. cue < 0: the family's own cue; rec >= 0: this recover instead of the family's
-func plan_start(id: String, fam: String, tgt: String, fp: Array, lock := 0.0, cue := -1.0, rec := -1.0) -> void:
+# a new attack; the target is fixed for the whole attack. cue < 0: the family's own cue; rec >= 0: this recover instead of the family's; act >= 0: this active time
+func plan_start(id: String, fam: String, tgt: String, fp: Array, lock := 0.0, cue := -1.0, rec := -1.0, act := -1.0) -> void:
 	plan_seq += 1
 	var f: Array = FAMILY[fam]
-	plan = {"seq": plan_seq, "id": id, "fam": fam, "tgt": tgt, "ph": "cue", "t": (f[0] if cue < 0.0 else cue) * _tm(), "fp": fp.duplicate(), "lock": lock, "rec": rec}
+	plan = {"seq": plan_seq, "id": id, "fam": fam, "tgt": tgt, "ph": "cue", "t": (f[0] if cue < 0.0 else cue) * _tm(), "fp": fp.duplicate(), "lock": lock, "rec": rec, "act": act}
 	hold_t = 0.0
 	if not _guest_waits():
 		seen_seq = plan_seq
@@ -303,7 +303,7 @@ func plan_step(dt: float) -> String:
 					return "recover"
 				return ""
 			plan.ph = "active"
-			plan.t = f[1]
+			plan.t = f[1] if float(plan.get("act", -1.0)) < 0.0 else float(plan.act)
 			return "active"
 		"active":
 			plan.ph = "recover"

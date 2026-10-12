@@ -120,21 +120,6 @@ func _guest(b: Dictionary) -> void:
 		if e.puppet and av != null and av != "":
 			b["arena-tell"] = [0.0, av + " s"]
 			break
-	# the FIREWALL's scan leaves exactly the lane its fields name open (MVB2-13): the boxes the guest builds are the host's
-	for e in mgr.room.ents:
-		if e.puppet and e is FirewallBoss and e.plan_active() and String(e.plan.id) == "scan":
-			var free: Array = []
-			for i in range(3):
-				var l: Array = FirewallBoss.LANES[i]
-				var covered := false
-				for hb in e.harmboxes():
-					if hb.x < l[1] and hb.x + hb.w > l[0]:
-						covered = true
-				if not covered:
-					free.append(i)
-			if free != [e.open_lane]:
-				b["scan-lane"] = [0.3, "scan burns so that lanes %s stay open, the host says lane %d" % [str(free), e.open_lane]]
-			break
 	if _bodies() > 1:
 		b["one-host-body"] = [1.0, "%d host bodies" % _bodies()]
 	if mgr.rooms.size() > 1:

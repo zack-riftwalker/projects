@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "fightsim"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "firewall2", "fightsim"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -24,6 +24,7 @@ func run(name: String):
 		"w6enemies": return t_w6enemies()
 		"net4b3": return t_net4b3()
 		"crawler2": return t_crawler2()
+		"firewall2": return t_firewall2()
 		"fightsim": return t_fightsim()
 	return await super.run(name)
 
@@ -1140,3 +1141,324 @@ func t_fightsim() -> bool:
 	print("FIGHTSIM %s %.0f s: attacks %s, hp %.1f/%d, hits taken %d" % [rid, secs, str(counts), b.hpf if b != null else -1.0, b.max_hp if b != null else 0, hits])
 	Game.fresh()
 	return report("fightsim", true, "")
+
+# MVB3-07: THE FIREWALL v2
+func t_firewall2() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var r := new_room("N15")
+	var fw: FirewallBoss = null
+	for e in r.ents:
+		if e is FirewallBoss:
+			fw = e
+	if fw == null or r.boss != fw:
+		fail(res, "N15 has no FirewallBoss")
+		r.queue_free()
+		return report("firewall2", false, res.info)
+	if fw.max_hp != 82:
+		fail(res, "hp %d, want 82" % fw.max_hp)
+	r.player.x = 100.0
+	r.player.y = 150.0
+	var n := 0
+	while r.fight.state != "active" and n < 400:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never started")
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.x = 280.0
+	fw.y = Boss.FLOOR - fw.h
+	fw.face = -1.0
+	r.attacker = r.player
+	# the shield: a swipe from the front is blocked, from behind it lands, from above (dx 0) it lands
+	var hp0 := fw.hpf
+	if fw.hit(1, 1.0, 0.0, "swipe", fw) != "block" or fw.hpf != hp0:
+		fail(res, "a front swipe was not blocked")
+	if fw.hit(1, -1.0, 0.0, "swipe", fw) == "block" or fw.hpf >= hp0:
+		fail(res, "a back swipe did not land")
+	hp0 = fw.hpf
+	fw.hit(1, 0.0, 1.0, "swipe", fw)
+	if fw.hpf >= hp0:
+		fail(res, "a pogo from above did not land")
+	# rule 8: hit from the right while facing left -> after the recovery it faces right
+	r.player.x = 340.0
+	r.player.y = 146.0
+	fw.read.update(0.2)
+	fw.face = -1.0
+	fw.turn_t = 0.0
+	fw.hit(1, -1.0, 0.0, "swipe", fw)
+	fw._turn()
+	if fw.face != 1.0 or fw.turn_t <= 0.0:
+		fail(res, "rule 8: face %s turn %.2f" % [str(fw.face), fw.turn_t])
+	fw.turn_t = 0.0
+	# throw -> return: out along the low band (jump it), back along the high band (stay low); the shield is away from the throw's active to the return's end
+	fw.face = -1.0
+	fw.x = 280.0
+	fw.read.last_key = ""
+	fw.hpf = float(fw.max_hp)
+	var stand := {"x": 100.0, "y": Boss.FLOOR - 10.0, "w": 8.0, "h": 9.0}                 # a standing player
+	var jump_ := {"x": 100.0, "y": Boss.FLOOR - 40.0, "w": 8.0, "h": 9.0}                 # one in the air
+	r.player.x = 40.0
+	r.player.y = 146.0
+	fw._start("throw", "p1")
+	if absf(float(fw.plan.t) - 0.75) > 0.001:
+		fail(res, "throw cue %.2f" % fw.plan.t)
+	var out_stand := false
+	var out_jump := false
+	var back_stand := false
+	var back_jump := false
+	var dmg_out := 0
+	var chained := false
+	var pos := Vector2(40.0, 146.0)
+	for f in range(600):
+		r.player.inv = 99.0
+		r.player.x = pos.x
+		r.player.y = pos.y
+		r.step(Game.STEP)
+		fw.idle_t = 999.0
+		if fw.plan.is_empty():
+			continue
+		fw.plan_seen(int(fw.plan.seq))
+		if fw.plan_active():
+			if OS.get_environment("FWDBG") != "":
+				print("fw ", fw.plan.id, " t=", fw.plan.t, " boxes ", fw.harmboxes().map(func(b): return [roundi(b.x), roundi(b.y), roundi(b.w), roundi(b.h)]))
+			for hb in fw.harmboxes():
+				if String(fw.plan.id) == "throw":
+					out_stand = out_stand or Game.overlap(stand, hb)
+					out_jump = out_jump or Game.overlap(jump_, hb)
+					dmg_out = maxi(dmg_out, int(hb.get("dmg", 1)))
+				elif String(fw.plan.id) == "return":
+					back_stand = back_stand or Game.overlap(stand, hb)
+					back_jump = back_jump or Game.overlap(jump_, hb)
+			if fw.shield_on or fw.blocks(1.0, 0.0, "swipe"):
+				fail(res, "the shield is on while thrown")
+		if String(fw.plan.id) == "return":
+			chained = true
+		if chained and fw.plan.is_empty():
+			break
+	if not (out_stand and not out_jump and back_jump and not back_stand) or dmg_out != 2:
+		fail(res, "throw/return: out hits stand %s jump %s, back hits stand %s jump %s, throw damage %d" % [str(out_stand), str(out_jump), str(back_stand), str(back_jump), dmg_out])
+	if not chained:
+		fail(res, "the throw was not followed by a return")
+	for f in range(200):
+		r.step(Game.STEP)
+		fw.idle_t = 999.0
+		r.player.inv = 99.0
+		if fw.plan.is_empty():
+			break
+	if not fw.shield_on:
+		fail(res, "the shield did not come back after the return")
+	# scan: the three lanes burn in order, away from the boss, 0.6 s apart in phase 1 and 0.35 s in phase 2
+	for cfg in [[1, 0.6, 330.0], [2, 0.35, 330.0], [2, 0.35, 40.0]]:
+		fw.plan = {}
+		fw.hpf = float(fw.max_hp) * (1.0 if cfg[0] == 1 else 0.5)
+		fw.on_damage()
+		fw.x = float(cfg[2]) - fw.w / 2.0
+		fw.y = Boss.FLOOR - fw.h
+		fw._start("scan", "p1")
+		var want: Array = [0, 1, 2] if cfg[2] < 100.0 else [2, 1, 0]
+		if fw.scan_order != want or absf(fw.scan_gap - float(cfg[1])) > 0.001:
+			fail(res, "scan order %s gap %.2f at boss x %.0f (want %s, %.2f)" % [str(fw.scan_order), fw.scan_gap, cfg[2], str(want), cfg[1]])
+		fw.plan.t = 0.001
+		fw.plan_step(Game.STEP * 2.0)
+		if not fw.plan_active():
+			fail(res, "scan did not turn active")
+			continue
+		var burn_times := {}
+		var guard := 0
+		while fw.plan_active() and guard < 400:
+			var el := fw._scan_elapsed()
+			for i in range(3):
+				var l: Array = FirewallBoss.LANES[i]
+				for hb in fw.harmboxes():
+					if hb.x < l[1] and hb.x + hb.w > l[0] and hb.h > 100.0 and not burn_times.has(i):
+						burn_times[i] = el
+			fw.plan_step(Game.STEP)
+			guard += 1
+		var order_seen: Array = []
+		for i in want:
+			order_seen.append(burn_times.get(i, -1.0))
+		if burn_times.size() != 3 or not (order_seen[0] < order_seen[1] and order_seen[1] < order_seen[2]) or absf((order_seen[1] - order_seen[0]) - float(cfg[1])) > 0.05:
+			fail(res, "scan burn starts %s (want gap %.2f)" % [str(order_seen), cfg[1]])
+	fw.plan = {}
+	# a caught packet: 2 damage, the shield is off for 2 s
+	fw.hpf = float(fw.max_hp)
+	fw.on_damage()
+	fw.x = 280.0
+	fw.face = -1.0
+	fw.shield_on = true
+	fw.shield_t = 0.0
+	fw.turn_t = 0.0
+	hp0 = fw.hpf
+	fw.hit(2, 1.0, 0.0, "catch", fw)
+	if fw.hpf > hp0 - 2.0 + 0.01 or fw.shield_t < 1.99 or fw.blocks(1.0, 0.0, "swipe"):
+		fail(res, "caught packet: hp %.1f -> %.1f shield_t %.2f" % [hp0, fw.hpf, fw.shield_t])
+	fw.shield_t = 0.0
+	# deny: one catchable orb in phase 1, two later
+	for ph in [1, 2]:
+		fw.plan = {}
+		fw.hpf = float(fw.max_hp) * (1.0 if ph == 1 else 0.5)
+		fw.on_damage()
+		for q in r.projs:
+			q.dead = true
+		fw._start("deny", "p1")
+		fw.plan.t = 0.01
+		if not fw_until(r, fw, "deny", "active", Vector2(60.0, 146.0)):
+			fail(res, "deny never active")
+		var orbs := 0
+		for q in r.projs:
+			if q.get("catchable", false) and not q.dead:
+				orbs += 1
+		if orbs != ph:
+			fail(res, "deny in phase %d made %d orbs" % [ph, orbs])
+	fw.plan = {}
+	for q in r.projs:
+		q.dead = true
+	# phase 2: the deny walls stop at 96 and 288 and push inward; the boxes are the same on a guest
+	fw.hz.clear()
+	fw.walls_on = false
+	for i in range(30):
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		fw.idle_t = 999.0
+	if not fw.walls_on or fw.hz.size() < 2:
+		fail(res, "no deny walls in phase 2 (%d hazards)" % fw.hz.size())
+	var t_end: float = r.time + 8.5
+	var left_front := -1.0
+	var right_front := -1.0
+	for hb in fw.hz_all_boxes(t_end):
+		if hb.x + hb.w <= 200.0:
+			left_front = hb.x + hb.w
+		else:
+			right_front = hb.x
+	if absf(left_front - 96.0) > 0.5 or absf(right_front - 288.0) > 0.5:
+		fail(res, "the deny walls end at %.1f and %.1f" % [left_front, right_front])
+	r.player.inv = 0.0
+	r.player.hp = r.player.max_hp
+	r.player.x = 100.0
+	r.player.y = 150.0
+	r.player.hurt(1, 88.0)                                # the left wall's middle is at x 88: the player on its inner side is pushed inward
+	if r.player.vx <= 0.0:
+		fail(res, "the wall pushes the wrong way (vx %.0f)" % r.player.vx)
+	r.player.inv = 99.0
+	# DROP ALL: the port is announced 0.9 s before, everything but the port burns for 0.4 s
+	fw.hpf = float(fw.max_hp) * 0.2
+	fw.on_damage()
+	fw.hz = fw.hz.filter(func(h): return h.k == "deny")
+	var tn := r.time
+	if OS.get_environment("FWDBG") != "":
+		print("DROPDBG phase ", fw._phase_now(), " walls ", fw.walls_on, " active ", fw.active, " dying ", fw.dying, " hpf ", fw.hpf)
+	fw.drop_cd = 0.0
+	fw.plan = {}
+	fw.idle_t = 999.0
+	var drop: Dictionary = {}
+	for f in range(30):
+		r.step(Game.STEP)
+		fw.idle_t = 999.0
+		for h in fw.hz:
+			if h.k == "drop":
+				drop = h
+		if not drop.is_empty():
+			break
+	if drop.is_empty() or absf(float(drop.warn) - 0.9) > 0.001:
+		fail(res, "no DROP ALL announced (%s)" % str(drop))
+	else:
+		var tt: float = float(drop.t0)
+		if not fw.hz_all_boxes(tt + 0.89).filter(func(b): return b.y > Boss.FLOOR - 8.0).is_empty():
+			fail(res, "DROP ALL burns before the 0.9 s are over")
+		var bn := fw.bounds(tt + 1.0)
+		var px: float = FirewallBoss.PORT_X[int(drop.v[0])]
+		var covered := 0.0
+		var port_hit := false
+		for b in fw.hz_all_boxes(tt + 1.0):
+			if b.y > Boss.FLOOR - 8.0:
+				covered += b.w
+				if b.x < px + 32.0 and b.x + b.w > px - 32.0:
+					port_hit = true
+		if port_hit or absf(covered - ((bn.y - bn.x) - 64.0)) > 1.0:
+			fail(res, "DROP ALL covers %.0f px (want %.0f), port hit %s" % [covered, (bn.y - bn.x) - 64.0, str(port_hit)])
+		if not fw.hz_all_boxes(tt + 1.5).filter(func(b): return b.y > Boss.FLOOR - 8.0).is_empty():
+			fail(res, "DROP ALL still burns after 0.4 s")
+	# phase 3: the shield turns on its own every 1.5 s
+	fw.plan = {}
+	fw.shield_on = true
+	fw.face = -1.0
+	fw.auto_t = 1.5
+	fw.hz = fw.hz.filter(func(h): return h.k == "deny")
+	var turns := 0
+	var last_face: float = fw.face
+	for f in range(int(5.0 / Game.STEP)):
+		r.player.inv = 99.0
+		fw.drop_cd = 99.0
+		fw.idle_t = 999.0
+		fw.plan = {}
+		r.step(Game.STEP)
+		if fw.face != last_face:
+			turns += 1
+			last_face = fw.face
+	if turns != 3:
+		fail(res, "the shield turned %d times in 5 s" % turns)
+	fw.plan = {}
+	# rule: a 16x32 block slides at 200 px/s from the boss's side; two of them, 0.5 s apart, in phase 2+
+	fw.hz.clear()
+	fw.walls_on = true
+	fw.x = 300.0
+	fw.hpf = float(fw.max_hp) * 0.5
+	fw.on_damage()
+	fw._start("rule", "p1")
+	var blocks: Array = fw.hz.filter(func(h): return h.k == "block")
+	if blocks.size() != 2 or absf((float(blocks[1].warn) - float(blocks[0].warn)) - 0.5) > 0.001 or float(blocks[0].warn) < 0.69:
+		fail(res, "rule made %d blocks" % blocks.size())
+	else:
+		var tb: float = float(blocks[0].t0) + float(blocks[0].warn)
+		var b0: float = fw.block_x(blocks[0], tb + 0.5)
+		var b1: float = fw.block_x(blocks[0], tb + 1.5)
+		if absf(absf(b1 - b0) - 200.0) > 1.0 or fw.hz_all_boxes(tb - 0.01).size() != 0:
+			fail(res, "block speed %.1f" % absf(b1 - b0))
+		var bx: Array = fw.hz_boxes(blocks[0], tb + 0.5)
+		if bx.size() != 1 or bx[0].w != 16.0 or bx[0].h != 32.0:
+			fail(res, "block box %s" % str(bx))
+	fw.hz.clear()
+	fw.plan = {}
+	# phase (P2): the boss ends up on the other side of a membrane, with a 2 damage slash at the exit
+	fw.x = 180.0
+	fw.y = Boss.FLOOR - fw.h
+	fw.face = 1.0
+	var side0 := fw.cx
+	fw._start("phase", "p1")
+	if absf(float(fw.plan.t) - 0.75) > 0.001:
+		fail(res, "phase cue %.2f" % fw.plan.t)
+	if not fw_until(r, fw, "phase", "active", Vector2(300.0, 146.0), 900):
+		fail(res, "phase never active")
+	var mid_boxes: Array = fw.harmboxes().filter(func(b): return b.has("sid"))
+	if not fw_until(r, fw, "phase", "recover", Vector2(300.0, 146.0), 200):
+		fail(res, "phase never recovered")
+	var crossed: bool = (side0 < 112.0 and fw.cx > 128.0) or (side0 > 128.0 and side0 < 256.0 and (fw.cx > 272.0 or fw.cx < 112.0)) or (side0 > 272.0 and fw.cx < 256.0)
+	if not crossed or mid_boxes.size() != 1 or int(mid_boxes[0].dmg) != 2:
+		fail(res, "phase: cx %.0f -> %.0f, %d slash boxes" % [side0, fw.cx, mid_boxes.size()])
+	fw.plan = {}
+	# the kill: ssh, boss:FIREWALL, N15:E opens
+	Game.flags = {}
+	Game.tools = {}
+	if not r.skip_boss():
+		fail(res, "skip boss refused")
+	n = 0
+	while r.fight.state != "done" and n < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if not Game.flag("ability:ssh") or not Game.flag("boss:FIREWALL") or not Game.tools.get("ssh", false):
+		fail(res, "reward missing (state %s)" % r.fight.state)
+	r.update_doors()
+	for d in r.grid.doors:
+		if String(d.to).begins_with("N16") and not d.open:
+			fail(res, "N15:E stayed shut")
+	r.queue_free()
+	Game.fresh()
+	return report("firewall2", res.ok, res.info)
