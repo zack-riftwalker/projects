@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog"]
 
 func _init(m) -> void:
 	main = m
@@ -20,6 +20,7 @@ func run(name: String) -> bool:
 		"tree": return t_tree()
 		"mappage": return await t_mappage()
 		"mapoverlay": return t_mapoverlay()
+		"changelog": return t_changelog()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -416,3 +417,57 @@ func t_mapoverlay() -> bool:
 	Game.play_now = false
 	Game.fresh()
 	return report("mapoverlay", res.ok, res.info)
+
+# MVB1-07: `?` marks on obstacles that are not passed, and the terminal's changelog line
+func t_changelog() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	Game.flags["map:heap"] = true
+	Game.flags["mapped:H02"] = true
+	var marks: Array = Game.obstacle_marks("H02")
+	if marks.size() != 1 or marks[0].ability != "bash" or marks[0].y != 0 or marks[0].x < 130 or marks[0].x > 133:
+		fail(res, "H02 ceiling crack: " + str(marks))
+	Game.flags["crack:H02:131:0"] = true
+	if not Game.obstacle_marks("H02").is_empty():
+		fail(res, "a broken crack stays marked")
+	# H03: the firewall is marked, nothing next to the dead code (31, 4..7)
+	var h3: Array = Game.obstacle_marks("H03")
+	if h3.size() != 1 or h3[0].ability != "ssh":
+		fail(res, "H03 marks " + str(h3))
+	for mk in Game.obstacle_marks("H03"):
+		if absi(int(mk.x) - 31) <= 2 and int(mk.y) >= 2 and int(mk.y) <= 9:
+			fail(res, "a mark next to the dead code")
+	# a lever of another kind: H01's ring (curl); the marks are not drawn for a room that is not committed (the map decides), but they exist
+	var h1: Array = Game.obstacle_marks("H01")
+	if h1.size() != 1 or h1[0].ability != "curl":
+		fail(res, "H01 ring " + str(h1))
+	# the line: curl is gained, H01 is committed, rest at H03 (a terminal)
+	Game.flags["mapped:H01"] = true
+	Game.tools["curl"] = true
+	var mgr := new_manager()
+	mgr.swap_to("H03")
+	mgr.rest(mgr.room, 0)
+	if mgr.changelog_shown != ["changelog: something in /proc/heap answers to curl"]:
+		fail(res, "the line: " + str(mgr.changelog_shown))
+	if not Game.flag("changelog:curl"):
+		fail(res, "flag")
+	mgr.rest(mgr.room, 0)
+	if not mgr.changelog_shown.is_empty():
+		fail(res, "told twice " + str(mgr.changelog_shown))
+	# an ability that nothing waits for: no line, the flag is still set
+	Game.tools["opus"] = true
+	mgr.rest(mgr.room, 0)
+	if not mgr.changelog_shown.is_empty() or not Game.flag("changelog:opus"):
+		fail(res, "an ability with no obstacle")
+	# a bench that is not a terminal says nothing
+	Game.tools["bash"] = true
+	mgr.swap_to("R03")
+	mgr.rest(mgr.room, 0)
+	if Game.flag("changelog:bash") or not mgr.changelog_shown.is_empty():
+		fail(res, "only a terminal says it")
+	mgr.queue_free()
+	Game.fresh()
+	return report("changelog", res.ok, res.info)

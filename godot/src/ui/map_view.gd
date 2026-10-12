@@ -487,8 +487,17 @@ static func door_visible(id: String, d: Dictionary) -> bool:
 				return false
 	return true
 
-func _draw_marks(_ids: Array) -> void:
-	pass
+# an unnamed `?` on every obstacle the player has not passed yet (zone view only; the map never says which ability it wants)
+func _draw_marks(ids: Array) -> void:
+	if world:
+		return
+	for id in ids:
+		if not is_filled(id):
+			continue
+		var m: Dictionary = Game.rooms_meta.rooms[id]
+		for mk in Game.obstacle_marks(id):
+			var p := to_canvas(Vector2(float(m.origin[0]) + float(mk.x) + 0.5, float(m.origin[1]) + float(mk.y) + 0.5))
+			PixelText.draw_text(canvas, "?", floorf(p.x) - 1, floorf(p.y) - 2, Game.COL.gold, {"tiny": true, "outline": Game.COL.ink})
 
 # the players: P1 a circle with `1`, P2 a diamond with `2`, 7 px, steady. Only in a room that is on the map; otherwise the partner line says where it is.
 func _draw_players() -> void:

@@ -90,6 +90,7 @@ func setup(m) -> void:
 	mgr.room_changed.connect(_on_room_changed)
 	Game.loadout_changed.connect(func(): if role == "guest" and started: Net.rel("loadout", {"ids": Game.equipped}))
 	mgr.commit_extra = func(): return guest_staged.keys()
+	Game.world_flag_set.connect(func(k): if role == "guest" and started: Net.rel("wflag", {"k": k}))
 	mgr.rested.connect(func(id):
 		if role == "host":
 			guest_staged.clear()                # (the rest just committed them)
@@ -480,6 +481,12 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				if br != null:
 					_as_p2(br, func(): br.show_plugin_banner(pid))
 			Net.rel("plugin", {"id": pid, "by": by})
+		"wflag":                                 # a world flag only the guest's page could set (a sign it read, a changelog line it was shown)
+			var wk := String(d.k)
+			if wk.begins_with("changelog:") or wk.begins_with("log:"):
+				if not Game.flag(wk):
+					Game.flags[wk] = true
+					Game.write_save()
 		"buymap":                                # the guest buys a zone's index: the first buyer pays, the answer says who it was
 			var zid := String(d.zone)
 			var by := ""

@@ -145,6 +145,131 @@ func zone_counts(zone_id: String) -> Array:
 			n += 1
 	return [n, v.outline.size()]
 
+# ---- obstacles (MVB1-07): what the map marks with an unnamed `?` until the player has passed it ----
+const OBSTACLES := {"%": "bash", "!": "catch", "&": "agents", "k": "agents", "@": "curl", "N": "ssh"}
+const CHANGELOG_WORDS := {"bash": "gives way to bash", "catch": "answers to catch", "agents": "waits for agents", "curl": "answers to curl", "ssh": "lets ssh through"}
+var _obst_cache := {}
+
+# the groups of obstacle cells of a room, from its file (one group = 4-connected cells of one letter): {letter, ability, cells, mid, keys}
+func obstacle_groups(room_id: String) -> Array:
+	if _obst_cache.has(room_id):
+		return _obst_cache[room_id]
+	var out: Array = []
+	var rows := FileAccess.get_file_as_string("res://src/world/rooms/" + String(rooms_meta.rooms[room_id].file)).split("\n")
+	var seen := {}
+	var key_n := 0
+	var key_index := {}
+	for ty in range(rows.size()):
+		for tx in range(rows[ty].length()):
+			if rows[ty][tx] == "k":
+				key_index[Vector2i(tx, ty)] = key_n
+				key_n += 1
+	for ty in range(rows.size()):
+		for tx in range(rows[ty].length()):
+			var ch: String = rows[ty][tx]
+			if not OBSTACLES.has(ch) or seen.has(Vector2i(tx, ty)):
+				continue
+			var cells: Array = []
+			var stack := [Vector2i(tx, ty)]
+			seen[Vector2i(tx, ty)] = true
+			while not stack.is_empty():
+				var c: Vector2i = stack.pop_back()
+				cells.append([c.x, c.y])
+				for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var n: Vector2i = c + o
+					if n.y >= 0 and n.y < rows.size() and n.x >= 0 and n.x < rows[n.y].length() and rows[n.y][n.x] == ch and not seen.has(n):
+						seen[n] = true
+						stack.append(n)
+			var mean := Vector2.ZERO
+			for c in cells:
+				mean += Vector2(c[0], c[1])
+			mean /= float(cells.size())
+			var mid: Array = cells[0]
+			for c in cells:
+				if Vector2(c[0], c[1]).distance_to(mean) < Vector2(mid[0], mid[1]).distance_to(mean):
+					mid = c
+			var keys: Array = []
+			if ch == "k":
+				for c in cells:
+					keys.append(key_index[Vector2i(c[0], c[1])])
+			out.append({"letter": ch, "ability": OBSTACLES[ch], "cells": cells, "mid": mid, "keys": keys})
+	_obst_cache[room_id] = out
+	return out
+
+# a crack broken, a gate opened, a slot key pressed
+func obstacle_passed(room_id: String, g: Dictionary) -> bool:
+	match String(g.letter):
+		"%":
+			for c in g.cells:
+				if flag("crack:%s:%d:%d" % [room_id, c[0], c[1]]):
+					return true
+			return false
+		"!": return flag("gate:%s:catch" % room_id)
+		"&": return flag("gate:%s:agents" % room_id)
+		"k":
+			for i in g.keys:
+				if not flag("key:%s:%d" % [room_id, i]):
+					return false
+			return true
+	return false
+
+# the dead code of a room that nobody has found: the map never points at it
+func _near_hidden_dead(room_id: String, g: Dictionary) -> bool:
+	if flag("dead:" + room_id):
+		return false
+	var rows := FileAccess.get_file_as_string("res://src/world/rooms/" + String(rooms_meta.rooms[room_id].file)).split("\n")
+	for c in g.cells:
+		for dy in range(-2, 3):
+			for dx in range(-2, 3):
+				var y: int = c[1] + dy
+				var x: int = c[0] + dx
+				if y >= 0 and y < rows.size() and x >= 0 and x < rows[y].length() and rows[y][x] == ";":
+					return true
+	return false
+
+# the `?` marks of a room (tile cells): one per unpassed group, none next to dead code that has not been revealed
+func obstacle_marks(room_id: String) -> Array:
+	var out: Array = []
+	for g in obstacle_groups(room_id):
+		if obstacle_passed(room_id, g) or _near_hidden_dead(room_id, g):
+			continue
+		out.append({"x": g.mid[0], "y": g.mid[1], "ability": g.ability})
+	return out
+
+# the changelog (option A): an ability gained since the last time a terminal said so. Returns the lines to show and sets `changelog:<ability>`.
+var changelog_lines: Array = []         # everything that was said (the Logs page lists it)
+func changelog_pending() -> Array:
+	var out: Array = []
+	for a in tools:
+		if tools[a] and not flag("changelog:" + String(a)):
+			out.append(String(a))
+	return out
+
+func changelog_commit() -> Array:
+	var lines: Array = []
+	for a in changelog_pending():
+		if CHANGELOG_WORDS.has(a):
+			for z in ZONES:
+				var hit := false
+				for id in map_view(z.id).filled:
+					for g in obstacle_groups(id):
+						if g.ability == a and not obstacle_passed(id, g) and not _near_hidden_dead(id, g):
+							hit = true
+				if hit:
+					lines.append("changelog: something in %s %s" % [z.path, CHANGELOG_WORDS[a]])
+		set_world_flag("changelog:" + a)
+	changelog_lines.append_array(lines)
+	return lines
+
+signal world_flag_set(key: String)      # a guest's own world flag: Coop tells the host (the host's digest must have it too)
+
+func set_world_flag(key: String) -> void:
+	if flag(key):
+		return
+	flags[key] = true
+	if net_role == "guest":
+		world_flag_set.emit(key)
+
 # an old save (before the map had to be bought): what it had walked is committed and its zones are indexed, once
 func migrate_map() -> void:
 	if flag("map:migrated"):
@@ -153,6 +278,9 @@ func migrate_map() -> void:
 		if flag("room:%s:visited" % id) and _mappable(id):
 			flags["mapped:" + id] = true
 			flags["map:" + zone_of(id)] = true
+	for a in tools:
+		if tools[a]:
+			flags["changelog:" + String(a)] = true       # (a save that already owns abilities is not told about them now)
 	flags["map:migrated"] = true
 
 func flag(key: String) -> bool:
@@ -454,6 +582,7 @@ func fresh() -> void:
 	pin_seq = 0
 	pins_rev += 1
 	partner = {}
+	changelog_lines = []
 
 # settings live in their own file so the guest (who has no save) keeps them too
 func load_settings() -> void:
@@ -502,7 +631,7 @@ func write_save() -> void:
 		return
 	flags["map:migrated"] = true                # (a save written by this build never needs migrating)
 	var d := {"version": 1, "flags": flags, "tools": tools, "bench": bench, "tokens": tokens, "max_hp": max_hp, "fragments": fragments,
-		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights, "equipped": equipped, "pins": pins_wire()}
+		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights, "equipped": equipped, "pins": pins_wire(), "changelog_lines": changelog_lines}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
@@ -515,10 +644,10 @@ func load_save() -> bool:
 		return false
 	fresh()
 	flags = d.get("flags", {})
-	load_meta()
-	migrate_map()
 	for k in d.get("tools", {}):
 		tools[k] = d.tools[k]
+	load_meta()
+	migrate_map()
 	bench = String(d.get("bench", ""))
 	tokens = int(d.get("tokens", 0))
 	fragments = int(d.get("fragments", 0))
@@ -530,6 +659,7 @@ func load_save() -> bool:
 	deaths = int(d.get("deaths", 0))
 	fights = d.get("fights", [])
 	equipped = filter_loadout(d.get("equipped", []))
+	changelog_lines = d.get("changelog_lines", [])
 	set_pins(d.get("pins", []))
 	pin_seq = 0
 	for pn in pins:

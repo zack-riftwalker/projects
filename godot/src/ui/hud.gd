@@ -13,6 +13,12 @@ var partner_max := 0
 var partner_dot := ""            # line quality, as in the JS game: green good, yellow slow, red bad, grey the partner is not answering
 var partner_text := ""           # "down", "back in 4"
 var me_text := ""                # my own body is down: "DOWN - BACK IN 4", "BOTH DOWN"
+var toasts: Array = []           # small panels at the bottom for a few seconds (the terminal's changelog line): [{text, t}]
+
+func toast(text: String, secs: float) -> void:
+	toasts.append({"text": text, "t": secs})
+	if toasts.size() > 4:
+		toasts.pop_front()
 
 func set_room(r: Room) -> void:
 	room = r
@@ -20,6 +26,9 @@ func set_room(r: Room) -> void:
 
 func _process(dt: float) -> void:
 	age += dt
+	for tq in toasts:
+		tq.t -= dt
+	toasts = toasts.filter(func(q): return q.t > 0.0)
 	queue_redraw()
 
 func _draw() -> void:
@@ -109,6 +118,17 @@ func _draw() -> void:
 		Gfx.panel(self, px, 30, pw, 15, "#17131f", "#3a3346")
 		draw_rect(Rect2(px + 2, 31, 2, 13), Color("#5b9bd5") if false else Color(Game.COL.ok))
 		PixelText.draw_text(self, label, px + 9, 34, Game.COL.paper)
+	# toasts: one small panel per line, under the middle of the screen
+	var ty := H - 40 - toasts.size() * 16
+	for tq in toasts:
+		var tlines := PixelText.wrap(String(tq.text), 300)
+		var tw2 := 0
+		for l in tlines:
+			tw2 = maxi(tw2, PixelText.text_width(l))
+		Gfx.panel(self, floori((W - tw2 - 12) / 2.0), ty, tw2 + 12, tlines.size() * 11 + 5, "#17131f", "#58f0c8", "#0d0a12")
+		for li in range(tlines.size()):
+			PixelText.draw_text(self, tlines[li], W / 2.0, ty + 4 + li * 11, "#d6fff4", {"align": "c"})
+		ty += 16 + (tlines.size() - 1) * 11
 	# sign bubble
 	if room.sign_now != null:
 		var s: Dictionary = room.sign_now

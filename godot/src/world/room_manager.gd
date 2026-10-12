@@ -146,6 +146,7 @@ func respawn(count_death := true) -> void:
 		hud.fade = 0.0
 
 # Rest at a bench: heal, make it the respawn point, save
+var changelog_shown: Array = []          # the changelog lines the last rest at a terminal showed (the tests read them)
 var commit_extra: Callable = Callable()   # co-op host: the rooms the guest walked (they are committed by the same rest)
 
 func rest(r: Room, index: int) -> void:
@@ -167,6 +168,11 @@ func rest(r: Room, index: int) -> void:
 		r.ring(c.x, c.y - 22, 3, 26, Game.COL.ok, 0.4)
 		r.burst(c.x, c.y - 22, 14, [Game.COL.ok, Game.COL.okHi, "#ffffff"], 100.0, 100.0, {"glow": 1})
 	Audio.sfx("checkpoint")
+	if bool(Game.rooms_meta.rooms[r.id].get("terminal", false)):          # a terminal says what the new abilities now open (MVB1-07)
+		changelog_shown = Game.changelog_commit()
+		for line in changelog_shown:
+			if hud != null:
+				hud.toast(String(line), 6.0)
 	Game.write_save()
 	rested.emit(r.id)
 
