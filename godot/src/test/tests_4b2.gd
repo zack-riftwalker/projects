@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler", "firewall", "reviewer2"]
+const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler", "firewall", "reviewer2", "plugins4b"]
 
 func _init(m) -> void:
 	main = m
@@ -24,6 +24,7 @@ func run(name: String):
 		"crawler": return t_crawler()
 		"firewall": return t_firewall()
 		"reviewer2": return t_reviewer2()
+		"plugins4b": return t_plugins4b()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -1182,3 +1183,124 @@ func fw_until2(r: Room, b, id: String, ph: String, keep: Vector2, max_f := 600) 
 		if not b.plan.is_empty() and String(b.plan.id) == id and String(b.plan.ph) == ph:
 			return true
 	return false
+
+# MVB2-10: gzip, sourcemap, rate_limit, review cache
+func t_plugins4b() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	for id in ["gzip", "sourcemap", "rate_limit", "review_cache"]:
+		if Game.plugin_def(id).is_empty():
+			fail(res, "no plugin " + id)
+	var rj: Dictionary = Game.rooms_meta.rooms
+	for pr in [["H16", "gzip"], ["H14", "sourcemap"], ["N21", "rate_limit"]]:
+		if not (rj[pr[0]].get("plugins", []) as Array).has(pr[1]):
+			fail(res, "%s does not hold %s" % pr)
+	# rate_limit: a second hurt at 2.9 s is ignored, one at 3.1 s lands
+	Game.equipped = ["rate_limit"]
+	var r := bare_room("R01", 100.0, 150.0)
+	var p = r.player
+	p.hp = p.max_hp
+	p.inv = 0.0
+	if not p.hurt(1, p.x - 10.0):
+		fail(res, "the first hurt did not land")
+	var hp1: int = p.hp
+	for f in range(int(2.9 / Game.STEP)):
+		p.update(Game.STEP)
+		p.inv = 0.0
+	if p.hurt(1, p.x - 10.0) or p.hp != hp1:
+		fail(res, "a hurt at 2.9 s landed")
+	for f in range(int(0.3 / Game.STEP)):
+		p.update(Game.STEP)
+		p.inv = 0.0
+	if not p.hurt(1, p.x - 10.0) or p.hp != hp1 - 1:
+		fail(res, "a hurt at 3.2 s was ignored")
+	Game.equipped = []
+	p.rate_cd = 0.0
+	p.inv = 0.0
+	p.hurt(1, p.x - 10.0)
+	p.inv = 0.0
+	var hp2: int = p.hp
+	p.hurt(1, p.x - 10.0)
+	if p.hp != hp2 - 1:
+		fail(res, "without rate_limit two hits in a row should both land")
+	# review cache: a catch arms +1 for exactly one hit
+	Game.equipped = ["review_cache"]
+	p.cache_bonus = false
+	var q := {"id": 9001, "x": 120.0, "y": 150.0, "vx": -60.0, "vy": 0.0, "r": 3.0, "kind": "diamond", "col": "#ffd23f", "life": 2.0, "g": 0.0, "dmg": 1, "tile": true, "cut": true, "t": 0.0, "dead": false, "friendly": false, "catchable": true}
+	r.catch_proj(q, p)
+	if not p.cache_bonus:
+		fail(res, "a catch did not arm the review cache")
+	p.atk_cd = 0.0
+	p.atk_buf = 1.0
+	p.atk_t = 0.0
+	p.dash_t = 0.0
+	p.hurt_t = 0.0
+	p.update(Game.STEP)
+	if p.atk_dmg != 2:
+		fail(res, "the armed swing deals %d" % p.atk_dmg)
+	p.on_hit(null, "hit", {"x": 100.0, "y": 150.0, "w": 10.0, "h": 10.0})
+	if p.cache_bonus or p.atk_dmg != 1:
+		fail(res, "the bonus was not spent (bonus %s, dmg %d)" % [str(p.cache_bonus), p.atk_dmg])
+	p.atk_cd = 0.0
+	p.atk_buf = 1.0
+	p.atk_t = 0.0
+	p.update(Game.STEP)
+	if p.atk_dmg != 1:
+		fail(res, "the next swing still deals %d" % p.atk_dmg)
+	Game.equipped = []
+	p.cache_bonus = false
+	r.catch_proj(q.duplicate(), p)
+	if p.cache_bonus:
+		fail(res, "a catch armed the cache without the plugin")
+	r.queue_free()
+	# gzip: two pickups give 3
+	Game.equipped = ["gzip"]
+	Game.gz_n = 0
+	Game.tokens = 0
+	var rg := bare_room("R01", 100.0, 150.0)
+	rg.collect({"kind": "token", "x": 100.0, "y": 150.0, "id": "item:R01:901", "dead": false})
+	rg.collect({"kind": "token", "x": 100.0, "y": 150.0, "id": "item:R01:902", "dead": false})
+	if Game.tokens != 3:
+		fail(res, "two pickups gave %d" % Game.tokens)
+	Game.equipped = []
+	Game.tokens = 0
+	rg.collect({"kind": "token", "x": 100.0, "y": 150.0, "id": "item:R01:903", "dead": false})
+	rg.collect({"kind": "token", "x": 100.0, "y": 150.0, "id": "item:R01:904", "dead": false})
+	if Game.tokens != 2:
+		fail(res, "without gzip two pickups gave %d" % Game.tokens)
+	rg.queue_free()
+	# the host counts a guest's gzip: every second one is worth two
+	if Game.gz_bonus(0) or not Game.gz_bonus(1) or Game.gz_bonus(2) or not Game.gz_bonus(3):
+		fail(res, "gz_bonus pattern")
+	# sourcemap: dots in a mapped room, none in an unmapped one, none off-map
+	Game.flags = {}
+	Game.equipped = ["sourcemap"]
+	var mv := MapView.new()
+	Game.flags["map:" + Game.zone_of("H16")] = true
+	Game.flags["map:" + Game.zone_of("N20")] = true
+	var before := mv.sourcemap_list(["H16", "N20"])
+	if not before.is_empty():
+		fail(res, "dots in an unmapped room")
+	Game.flags["mapped:H16"] = true
+	Game.flags["mapped:N20"] = true
+	var lst := mv.sourcemap_list(["H16", "N20"])
+	var kinds := {}
+	for mk in lst:
+		kinds[mk.kind] = true
+		if mk.id == "N20":
+			fail(res, "a dot in an off-map room")
+	if not kinds.has("plugin"):
+		fail(res, "H16 shows no plugin dot (%s)" % str(lst))
+	Game.flags["plugin:gzip"] = true
+	for mk in mv.sourcemap_list(["H16"]):
+		if mk.kind == "plugin":
+			fail(res, "a collected plugin still shows")
+	Game.equipped = []
+	if not mv.sourcemap_list(["H16"]).is_empty():
+		fail(res, "dots without the plugin")
+	mv.free()
+	Game.fresh()
+	return report("plugins4b", res.ok, res.info)

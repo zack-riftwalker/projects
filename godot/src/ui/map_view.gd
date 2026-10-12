@@ -621,6 +621,7 @@ func _draw_marks(ids: Array) -> void:
 	if world:
 		return
 	_draw_pins(ids)
+	_draw_sourcemap(ids)
 	for id in ids:
 		if not is_filled(id):
 			continue
@@ -628,6 +629,25 @@ func _draw_marks(ids: Array) -> void:
 		for mk in Game.obstacle_marks(id):
 			var p := to_canvas(Vector2(float(m.origin[0]) + float(mk.x) + 0.5, float(m.origin[1]) + float(mk.y) + 0.5))
 			PixelText.draw_text(canvas, "?", floorf(p.x) - 1, floorf(p.y) - 2, Game.COL.gold, {"tiny": true, "outline": Game.COL.ink})
+
+# sourcemap: a 2-px dot for each thing still lying in a mapped room (never in a room that was not committed, never in an off-map room)
+func sourcemap_list(ids: Array) -> Array:
+	var out: Array = []
+	if not Game.mod_sourcemap():
+		return out
+	for id in ids:
+		if not is_filled(id) or Game.is_offmap(id):
+			continue
+		for mk in Game.item_marks(id):
+			out.append({"id": id, "kind": mk.kind, "x": mk.x, "y": mk.y})
+	return out
+
+func _draw_sourcemap(ids: Array) -> void:
+	var cols := {"token": Game.COL.gold, "spark": "#ff9fbf", "plugin": "#58f0c8", "agent": "#ffb86b", "page": "#f4ede0"}
+	for mk in sourcemap_list(ids):
+		var m: Dictionary = Game.rooms_meta.rooms[mk.id]
+		var p := to_canvas(Vector2(float(m.origin[0]) + float(mk.x) + 0.5, float(m.origin[1]) + float(mk.y) + 0.5))
+		canvas.draw_rect(Rect2(floorf(p.x) - 1, floorf(p.y) - 1, 2, 2), Color(cols[mk.kind]))
 
 static func owner_color(by: String) -> Color:
 	return Color(COL_P1) if by == "P1" else Color(COL_P2)

@@ -194,7 +194,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_freejar.connect(func(ji): Net.rel("freejar", {"room": r.id, "jar": ji, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
-		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
+		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id, "gz": 1 if Game.mod_gzip() else 0}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
 		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
 		r.net_lqhit.connect(func(): Net.rel("lqhit", {"room": r.id}))
@@ -674,7 +674,7 @@ func _host_hit(d: Dictionary) -> void:
 			else:
 				e.marks[key] = int(d.atk)
 				# the most a claw may do: opus doubles it, a rubber duck doubles it again at the guest's last hit point
-				var allowed: int = (2 if Game.tools.get("opus", false) else 1) * Game.mod_claw_mult(remote.hp, remote.loadout)
+				var allowed: int = (2 if Game.tools.get("opus", false) else 1) * Game.mod_claw_mult(remote.hp, remote.loadout) + (1 if Game.mod_review_cache(remote.loadout) else 0)
 				var dmg := clampi(int(d.dmg), 1, allowed) if how == "swipe" else (1 if how == "dash" else maxi(1, e.hp))
 				r.attacker = remote
 				var boxes: Array = e.hurtboxes()
@@ -786,6 +786,8 @@ func _as_p2(r: Room, f: Callable) -> void:
 	r.ctx = c0
 	Audio.room_ctx = a0
 
+var gz_guest_n := 0                  # host: how many tokens the guest picked up with gzip on
+
 func _host_pickup(d: Dictionary) -> void:
 	var r := _remote_room()
 	if r == null or r.id != String(d.room):
@@ -817,7 +819,12 @@ func _host_pickup(d: Dictionary) -> void:
 			Game.write_save()
 		if it.kind == "coffee" and Game.diff == "easy" and remote.hp < remote.max_hp:      # (coffee only heals on easy, as in Room.collect)
 			Net.rel("heal", {"n": 1})
-		Net.rel("pick", {"room": r.id, "id": it.id, "by": "p2", "kind": it.kind})
+		var bonus := 0
+		if it.kind == "token" and int(d.get("gz", 0)) == 1:         # the guest's gzip: the host counts its pickups
+			if Game.gz_bonus(gz_guest_n):
+				bonus = 1
+			gz_guest_n += 1
+		Net.rel("pick", {"room": r.id, "id": it.id, "by": "p2", "kind": it.kind, "bonus": bonus})
 		return
 
 # ---- down, revive, both down
@@ -1489,7 +1496,7 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 			if String(d.kind) == "coffee":
 				Audio.sfx("heal")
 			if String(d.kind) == "token" and String(d.by) == "p2":
-				Game.tokens += 1
+				Game.tokens += 1 + int(d.get("bonus", 0))
 				Audio.sfx("token")
 			if String(d.kind) == "spark":
 				Game.fragments += 1

@@ -63,6 +63,8 @@ var atk_dir := "f"
 var atk_face := 1.0
 var atk_live := false
 var atk_dmg := 1
+var cache_bonus := false           # review cache: set by a catch, spent by the next claw hit (+1)
+var rate_cd := 0.0                  # rate_limit: seconds until the next hit may hurt
 var parried := {}                # strike ids this player parried (catch): that strike can no longer hurt it
 var inv := 0.0
 var hurt_t := 0.0
@@ -164,6 +166,7 @@ func update(dt: float) -> void:
 			room.ring(x + 5, y + 5, 2, 18, Game.COL.clawdHi, 0.3)
 		return
 	if inv > 0.0: inv -= dt
+	if rate_cd > 0.0: rate_cd -= dt
 	if hurt_t > 0.0: hurt_t -= dt
 	if atk_cd > 0.0: atk_cd -= dt
 	if dash_cd > 0.0: dash_cd -= dt
@@ -323,7 +326,7 @@ func update(dt: float) -> void:
 		atk_live = true
 		atk_dir = "u" if down.get("up", false) else ("d" if (down.get("down", false) and not on_ground) else "f")
 		atk_face = face
-		atk_dmg = (2 if tools.opus else 1) * Game.mod_claw_mult(hp)
+		atk_dmg = (2 if tools.opus else 1) * Game.mod_claw_mult(hp) + (1 if cache_bonus and Game.mod_review_cache() else 0)
 		Audio.sfx("swipeBig" if tools.opus else "swipe")
 		if atk_dir == "f":
 			sx = 1.15
@@ -658,6 +661,9 @@ func on_hit(e, res: String, b) -> void:
 		if atk_dir == "f":
 			vx = -atk_face * 90.0
 	else:
+		if cache_bonus:
+			cache_bonus = false                              # (the +1 is spent on this hit: the rest of the swing hits for the plain claw)
+			atk_dmg = maxi(1, atk_dmg - 1)
 		room.stop(0.075 if res == "kill" else 0.05)
 		room.shake(0.3 if res == "kill" else 0.16)
 		room.spark(hx, hy, "#fff3e4", 6)
@@ -703,6 +709,11 @@ func scatter(vx0: float, vy0: float) -> void:
 func hurt(d: int, src_x: float) -> bool:
 	if inv > 0.0 or (dash_t > 0.0 and Game.dv("dash_iframes")) or dead or gone:
 		return false
+	if rate_cd > 0.0 and Game.mod_rate_limit():
+		room.pop(x + 5, y - 12, "429", Game.COL.dim, true)
+		return false                                         # rate_limit: at most one hit every 3 s (no damage, no knockback)
+	if Game.mod_rate_limit():
+		rate_cd = 3.0
 	hp -= d
 	room.hits += 1
 	room.on_player_hurt(self, d)
@@ -856,6 +867,8 @@ func draw_body() -> void:
 		o.eyes = "shut"
 		PixelText.draw_text(self, "ssh", px, py - 17, "#ff9ad8", {"align": "c", "tiny": true, "outline": Game.COL.ink})
 	ClawdDraw.draw_clawd(self, px, py, o)
+	if cache_bonus:
+		PixelText.draw_text(self, "+1", px, py - 22, "#ffd23f", {"align": "c", "tiny": true, "outline": Game.COL.ink})
 	if atk_t > 0.0:
 		var set_name := "slashBig" if tools.opus else "slash"
 		var f2 := 0 if atk_t > 0.115 else (1 if atk_t > 0.05 else 2)

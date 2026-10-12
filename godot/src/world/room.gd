@@ -1850,6 +1850,11 @@ func collect(it: Dictionary) -> void:
 	match it.kind:
 		"token":
 			tokens += 1
+			if Game.mod_gzip():
+				if Game.gz_bonus(Game.gz_n):
+					tokens += 1
+					pop(it.x, it.y - 12, "+1 gzip", Game.COL.gold)
+				Game.gz_n += 1
 			spark(it.x, it.y, Game.COL.goldHi, 4)
 			Audio.sfx("token")
 		"spark":                            # a memory fragment: 4 of them give +1 max hp
@@ -1941,6 +1946,8 @@ func catch_proj(q: Dictionary, by) -> void:
 	ring(q.x, q.y, 2, 16, "#ffd23f", 0.25)
 	if by.has_method("gain_meter"):
 		by.gain_meter()
+	if by == player and Game.mod_review_cache():
+		by.cache_bonus = true                              # review cache: the next claw hit of this player deals +1
 	if mode != "guest" and fight.state == "active" and stats.has("caught"):
 		stats.caught += 1
 

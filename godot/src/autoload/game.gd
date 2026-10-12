@@ -576,6 +576,10 @@ const PLUGINS := [
 	{"id": "rubber_duck", "name": "rubber duck", "cost": 2, "price": 140, "desc": "at 1 hp your claw hits twice as hard"},
 	{"id": "verbose", "name": "--verbose", "cost": 1, "price": 0, "desc": "dead code near you blinks green"},
 	{"id": "restart_always", "name": "restart: always", "cost": 1, "price": 0, "desc": "come back from a bench with a full meter"},
+	{"id": "gzip", "name": "gzip", "cost": 1, "price": 0, "desc": "every second token you pick up counts twice"},
+	{"id": "sourcemap", "name": "sourcemap", "cost": 1, "price": 0, "desc": "the map marks what you left behind in rooms you have mapped"},
+	{"id": "rate_limit", "name": "rate_limit", "cost": 2, "price": 0, "desc": "429: you take at most one hit every 3 s"},
+	{"id": "review_cache", "name": "review cache", "cost": 1, "price": 0, "desc": "after a catch, your next claw hit deals +1"},
 ]
 var equipped: Array = []              # plugin ids (saved; the guest keeps its own in user://profile.json)
 signal loadout_changed
@@ -656,6 +660,82 @@ func mod_dead_sight(list = null) -> bool:
 func mod_restart_meter(list = null) -> bool:
 	return (equipped if list == null else list).has("restart_always")
 
+# MVB2-10
+func mod_gzip(list = null) -> bool:
+	return (equipped if list == null else list).has("gzip")
+
+func mod_sourcemap(list = null) -> bool:
+	return (equipped if list == null else list).has("sourcemap")
+
+func mod_rate_limit(list = null) -> bool:
+	return (equipped if list == null else list).has("rate_limit")
+
+func mod_review_cache(list = null) -> bool:
+	return (equipped if list == null else list).has("review_cache")
+
+var gz_n := 0                                 # tokens this player picked up since gzip (every second one counts twice)
+
+# gzip: one more token for every second pickup (the counter is this player's own; the host counts a guest's)
+func gz_bonus(n_before: int) -> bool:
+	return (n_before + 1) % 2 == 0
+
+# sourcemap: what is still lying in a room, from its file and the world flags: [{kind, x, y}] in tiles (a token cluster is one mark)
+func item_marks(room_id: String) -> Array:
+	var out: Array = []
+	if not rooms_meta.rooms.has(room_id):
+		return out
+	var m: Dictionary = rooms_meta.rooms[room_id]
+	var rows := FileAccess.get_file_as_string("res://src/world/rooms/" + String(m.file)).split("\n")
+	var item_id := 0
+	var plugin_n := 0
+	var tok: Array = []
+	var sparks: Array = []
+	for ty in range(rows.size()):
+		for tx in range(rows[ty].length()):
+			match rows[ty][tx]:
+				"o":
+					if not flag("item:%s:%d" % [room_id, item_id]):
+						tok.append(Vector2i(tx, ty))
+					item_id += 1
+				"H":
+					item_id += 1
+				"*":
+					sparks.append(Vector2i(tx, ty))
+				"U":
+					var plist: Array = m.get("plugins", [])
+					if plugin_n < plist.size() and not owns_plugin(String(plist[plugin_n])):
+						out.append({"kind": "plugin", "x": tx, "y": ty})
+					plugin_n += 1
+	var seen := {}
+	for c in tok:
+		if seen.has(c):
+			continue
+		var stack := [c]
+		seen[c] = true
+		var sum := Vector2.ZERO
+		var cnt := 0
+		while not stack.is_empty():
+			var q: Vector2i = stack.pop_back()
+			sum += Vector2(q.x, q.y)
+			cnt += 1
+			for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var nq: Vector2i = q + o
+				if tok.has(nq) and not seen.has(nq):
+					seen[nq] = true
+					stack.append(nq)
+		out.append({"kind": "token", "x": roundi(sum.x / cnt), "y": roundi(sum.y / cnt)})
+	sparks.sort_custom(func(a, b): return a.x < b.x or (a.x == b.x and a.y < b.y))
+	for i in range(mini(3, sparks.size())):
+		if not flag("item:%s:f%d" % [room_id, i]):
+			out.append({"kind": "spark", "x": sparks[i].x, "y": sparks[i].y})
+	for pg in m.get("pages", []):
+		if not flag("page:%d" % int(pg[2])):
+			out.append({"kind": "page", "x": int(pg[0]), "y": int(pg[1])})
+	for jc in m.get("agents", []):
+		if not flag("agent:" + room_id):
+			out.append({"kind": "agent", "x": int(jc[0]), "y": int(jc[1])})
+	return out
+
 func mod_pickup_radius(list = null) -> float:
 	return 2.5 if (equipped if list == null else list).has("cache") else 1.0
 
@@ -718,6 +798,7 @@ func fresh() -> void:
 	equipped = []
 	bench = ""
 	tokens = 0
+	gz_n = 0
 	fragments = 0
 	play_time = 0.0
 	deaths = 0
