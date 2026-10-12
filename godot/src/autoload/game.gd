@@ -86,6 +86,13 @@ func is_offmap(room_id: String) -> bool:
 func cond(s: String) -> bool:
 	if s.begins_with("!"):
 		return not cond(s.substr(1))
+	var of_at := s.find("of:")                 # "<k>of:<f1>,<f2>,...": at least k of the flags are set (the same form the `until:` lock parses)
+	if of_at > 0 and s.substr(0, of_at).is_valid_int():
+		var n := 0
+		for f in s.substr(of_at + 3).split(",", false):
+			if flag(String(f)):
+				n += 1
+		return n >= int(s.substr(0, of_at))
 	if s == "flood>0":
 		return heap_flood() > 0
 	if s == "flood==0":
@@ -346,8 +353,8 @@ func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
 # world state: flags that every player's world needs (a hatch the host opened must open for the guest too); they travel in snapshots
-const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:", "map:", "mapped:", "changelog:", "log:", "agent:", "page:"]
-const _WORLD_HEADS := ["boss", "hatch", "link", "thread", "lever", "lab", "map", "mapped", "changelog", "log", "agent", "page"]
+const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:", "map:", "mapped:", "changelog:", "log:", "agent:", "page:", "wave:"]
+const _WORLD_HEADS := ["boss", "hatch", "link", "thread", "lever", "lab", "map", "mapped", "changelog", "log", "agent", "page", "wave"]
 
 func is_world_flag(ks: String) -> bool:
 	var c := ks.find(":")

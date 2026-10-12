@@ -18,10 +18,11 @@ const GATE_A := 11         # `&`: solid until the room's slot keys are all press
 const DEAD := 12           # `;`: dead code: looks like wall, walked through; revealed for good once touched
 const FIRE := 13           # `N`: firewall brick: solid (ssh passes it in 4B)
 const THICK := 14          # `0`: bulkhead: solid; only Room.blast breaks it
+const WEB := 16            # `h`: a web strand (MVB2-05): not solid, hurts like a spike until boss:CRAWLER (a room variant turns it into air)
 const PORT := 15           # `3`: solid while closed, empty while open (the room computes `port_open` from its packets)
 const T := 16
 
-const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT}
+const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT, "h": WEB}
 
 var w := 0
 var h := 0
@@ -64,7 +65,7 @@ func solid(tx: int, ty: int) -> bool:
 	var t := tile(tx, ty)
 	if t == SOLID or t == CRACK or t == FIRE or t == THICK:
 		return true
-	if t == DEAD:
+	if t == DEAD or t == WEB:
 		return false
 	if t == GATE_C:
 		return not gates_open.catch

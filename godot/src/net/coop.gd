@@ -189,6 +189,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_agents.connect(func(): Net.rel("agents", {}))
 		r.net_buy.connect(func(pid): Net.rel("buy", {"id": pid}))
 		r.net_buymap.connect(func(zid): Net.rel("buymap", {"zone": zid}))
+		r.net_lever.connect(func(li): Net.rel("lever", {"room": r.id, "n": li}))
 		r.net_freejar.connect(func(ji): Net.rel("freejar", {"room": r.id, "jar": ji, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
@@ -493,6 +494,11 @@ func _host_rel(k: String, d: Dictionary) -> void:
 					_as_p2(br, func(): br.show_plugin_banner(pid))
 			Net.rel("plugin", {"id": pid, "by": by})
 		"freejar": _host_freejar(d)
+		"lever":
+			var lrm := _remote_room()
+			if lrm != null and lrm.id == String(d.room):
+				lrm.pull_lever(int(d.n))
+				Net.rel("flag", {"k": lrm.lever_flag(int(d.n)), "v": true})
 		"pin": Game.apply_pin_request(String(d.op), d)
 		"ping": Game.ping_receive(d)
 		"pingok": Game.ping_ack_received(String(d.id))
@@ -780,7 +786,7 @@ func _host_pickup(d: Dictionary) -> void:
 	if r == null or r.id != String(d.room):
 		return
 	for it in r.items:
-		if it.get("dead", false) or String(it.id) != String(d.id):
+		if it.get("dead", false) or String(it.id) != String(d.id) or r.item_locked(it):
 			continue
 		# the body seen here is late (running or jumping it can be 30 px behind): its recent reports count too
 		var reach: float = 28.0 * Game.mod_pickup_radius(remote.loadout)      # (cache: its pickup radius is 2.5 times larger)

@@ -2,13 +2,21 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware"]
 
 static func cls_of(e) -> int:
 	if e is NullBoss:
 		return 5
 	if e is KitDummy:
 		return 25
+	if e is Scraper:
+		return 26
+	if e is Worm:
+		return 27
+	if e is DdosBit:
+		return 28
+	if e is Spyware:
+		return 29
 	if e is Reviewer:
 		return 7
 	if e is Mimic:
@@ -82,6 +90,10 @@ static func make(cls: int, room: Room):
 		23: e = LeakBoss.new(room, 0, 0)
 		24: e = GcDrone.new(room, 0, 0)
 		25: e = KitDummy.new(room, 0, 0)
+		26: e = Scraper.new(room, 0, 0)
+		27: e = Worm.new(room, 0, 0)
+		28: e = DdosBit.new(room, 0, 0)
+		29: e = Spyware.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

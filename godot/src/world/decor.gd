@@ -236,6 +236,32 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 				ci.draw_rect(Rect2(x + 2 + sp * 2.0, fall_y - 2 - sp * 2.0, 1, 1), Color("#7fe08a"))
 				ci.draw_rect(Rect2(x - 1, fall_y - 3 - sp * 3.0, 2, 1), Color("#d6ffd0"))
 			ci.draw_rect(Rect2(x - 1, top - 2, 2, 2), Color("#3fa46a"))                  # the drop forming at the edge
+		"fiber":
+			# a fibre line along the floor's top edge with light dots running east
+			var fx0: float = float(d.cx) * 16.0
+			var fw: float = float(d.get("w", 1)) * 16.0
+			var fy: float = float(d.cy) * 16.0
+			ci.draw_rect(Rect2(fx0, fy, fw, 1), Color("#5ad1ff"))
+			for k in range(int(fw / 48.0) + 1):
+				var dx := fposmod(t * 80.0 + float(k) * 48.0, fw)
+				ci.draw_rect(Rect2(fx0 + dx, fy - 1, 2, 2), Color("#d6f6ff"))
+		"window":
+			var wx: float = float(d.cx) * 16.0
+			var wy: float = float(d.cy) * 16.0
+			var ww: float = float(d.get("w", 1)) * 16.0
+			var wh: float = float(d.get("h", 1)) * 16.0
+			ci.draw_rect(Rect2(wx, wy, ww, wh), Color("#0b0f24"))
+			if String(d.get("shadow", "")) == "firewall":
+				if not Game.flag("boss:FIREWALL"):
+					var sx: float = sin(t * 0.7) * 12.0
+					ci.draw_rect(Rect2(wx + ww / 2.0 - 11.0 + sx, wy + 4, 22, wh - 8), Color(0.35, 0.08, 0.15, 0.55))
+					ci.draw_rect(Rect2(wx + ww / 2.0 + 4.0 + sx, wy + 6, 4, wh - 12), Color(0.6, 0.15, 0.25, 0.6))
+				else:
+					PixelText.draw_text(ci, "200", wx + ww / 2.0, wy + wh / 2.0 - 4.0, "#2f6a3c", {"align": "c"})
+			ci.draw_rect(Rect2(wx, wy, ww, 1), Color("#3a4a9a"))
+			ci.draw_rect(Rect2(wx, wy + wh - 1, ww, 1), Color("#3a4a9a"))
+			ci.draw_rect(Rect2(wx, wy, 1, wh), Color("#3a4a9a"))
+			ci.draw_rect(Rect2(wx + ww - 1, wy, 1, wh), Color("#3a4a9a"))
 		"contributors":
 			var n := Game.agents_freed()
 			if n >= 1:
@@ -250,8 +276,64 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 					var ay := by - 10.0 - float(int(step) % 2) * 5.0 + sin(t * 2.0 + float(i)) * 1.5
 					Agent._draw_at(ci, ax, ay, t * 2.0 + float(i), 9.0, [])
 
+# ---------------------------------------------------------------- THE NETWORK (MVB2-05)
+# a web strand: a 1-px line through the cell, joined to its neighbours, with a light dot running along it
+static func draw_webs(r: Room, ci: CanvasItem) -> void:
+	if r.webs.is_empty():
+		return
+	var cam_x: float = r.cam.x
+	var cam_y: float = r.cam.y
+	var lc := Color(0.49, 0.77, 1.0, 0.8)
+	for wc in r.webs:
+		var tx: int = wc[0]
+		var ty: int = wc[1]
+		if tx * 16 < cam_x - 16 or tx * 16 > cam_x + 400 or ty * 16 < cam_y - 16 or ty * 16 > cam_y + 232:
+			continue
+		if r.grid.tile(tx, ty) != TileGrid.WEB:
+			continue                                              # (turned into air by boss:CRAWLER)
+		var cxp := tx * 16 + 8
+		var cyp := ty * 16 + 8
+		var horiz: bool = r.grid.tile(tx - 1, ty) == TileGrid.WEB or r.grid.tile(tx + 1, ty) == TileGrid.WEB
+		var vert: bool = r.grid.tile(tx, ty - 1) == TileGrid.WEB or r.grid.tile(tx, ty + 1) == TileGrid.WEB
+		if horiz or not vert:
+			ci.draw_rect(Rect2(tx * 16, cyp, 16, 1), lc)
+		if vert or not horiz:
+			ci.draw_rect(Rect2(cxp, ty * 16, 1, 16), lc)
+		var u := fposmod(r.time * 1.3 + float(tx * 3 + ty), 1.0)
+		ci.draw_rect(Rect2(tx * 16 + floorf(u * 15.0) if horiz or not vert else cxp - 1, cyp - 1 if horiz or not vert else ty * 16 + floorf(u * 15.0), 2, 2), Color("#d6f6ff"))
+
+# a lever: a stick on a base, tilted left when off and right when on
+static func draw_levers(r: Room, ci: CanvasItem) -> void:
+	for lv in r.levers:
+		var on := Game.flag(r.lever_flag(int(lv.i)))
+		var bx: int = int(lv.x) + 8
+		var by: int = int(lv.y) + 16
+		ci.draw_rect(Rect2(bx - 6, by - 3, 12, 3), Color(Game.COL.ink))
+		ci.draw_rect(Rect2(bx - 5, by - 3, 10, 2), Color("#6b6478"))
+		var tip := Vector2(bx + (6 if on else -6), by - 12)
+		ci.draw_line(Vector2(bx, by - 3), tip, Color(Game.COL.ink), 3.0)
+		ci.draw_line(Vector2(bx, by - 3), tip, Color("#c3bccd"), 1.0)
+		ci.draw_circle(tip, 2.5, Color(Game.COL.ink))
+		ci.draw_circle(tip, 1.5, Color("#7fd08a") if on else Color("#ff4f6d"))
+
+# a dark spider silhouette (the crawler passing in N08, 60 % alpha, no collision)
+static func draw_spider(ci: CanvasItem, x: float, y: float, a: float, t: float) -> void:
+	var col := Color(0.04, 0.05, 0.12, a)
+	ci.draw_rect(Rect2(x - 12, y - 8, 24, 16), col)
+	for i in range(4):
+		var ph := sin(t * 14.0 + float(i) * 1.6) * 3.0
+		ci.draw_line(Vector2(x - 10 + i * 4, y + 4), Vector2(x - 18 + i * 8 - 4, y + 14 + ph), col, 2.0)
+		ci.draw_line(Vector2(x + 10 - i * 4, y + 4), Vector2(x + 18 - i * 8 + 4, y + 14 - ph), col, 2.0)
+	ci.draw_rect(Rect2(x - 3, y - 4, 2, 2), Color(0.35, 0.82, 1.0, a))
+	ci.draw_rect(Rect2(x + 2, y - 4, 2, 2), Color(0.35, 0.82, 1.0, a))
+
 # ---------------------------------------------------------------- the furniture layer
 static func draw(r: Room, ci: CanvasItem) -> void:
+	draw_webs(r, ci)
+	draw_levers(r, ci)
+	if r.sight_t >= 0.0:
+		var u: float = r.sight_t / 3.0
+		draw_spider(ci, -40.0 + (float(r.pw) + 80.0) * u, 24.0, 0.6, r.time)
 	for d in r.decor_items:
 		draw_decor(ci, r, d)
 	for n in r.npcs:

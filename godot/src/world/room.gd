@@ -85,6 +85,7 @@ signal net_buy(plugin_id: String)
 signal net_buymap(zone_id: String)
 signal shop_requested
 signal index_requested(npc_index: int)
+signal net_lever(lever_index: int)
 signal net_freejar(jar_index: int)
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
@@ -115,6 +116,12 @@ var dead_cells: Array = []     # [tx, ty] of the dead code (`;`): wall to look a
 var dead_groups: Array = []    # the pixel centres of its 4-connected groups (moths, the reveal burst)
 var fire_cells: Array = []     # firewall bricks (`N`) and bulkheads (`0`), drawn by the furniture layer
 var thick_cells: Array = []
+var webs: Array = []           # [tx, ty] of every `h` (drawn while the tile is still a web)
+var levers: Array = []         # `I`: {x, y, i}; lever i sets def.levers[i].flag (MVB2-05)
+var wave_i := -1               # the honeypot (rooms.json `wave`): which wave is running (-1: none yet), host and solo only
+var wave_t := 1.0
+var wave_ents: Array = []
+var sight_t := -1.0            # N08: the crawler's silhouette passes (seconds into its walk; -1 = not now)
 var hooks: Array = []          # `c`: {x, y} centres; a SCRAPER hangs from each until boss:CRAWLER, then it is a GET ring (MVB2-05)
 var rings: Array = []          # GET rings (`@`): decoration in 4A
 var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
@@ -183,6 +190,8 @@ func load_room(room_id: String, snap = null) -> void:
 				if (t == TileGrid.CRACK or t == TileGrid.THICK) and Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
 					t = TileGrid.E
 				grid.tiles[ty * w + tx] = t
+				if t == TileGrid.WEB:
+					webs.append([tx, ty])
 				if t == TileGrid.DEAD:
 					dead_cells.append([tx, ty])
 				elif t == TileGrid.FIRE:
@@ -218,6 +227,27 @@ func load_room(room_id: String, snap = null) -> void:
 					switch_n += 1
 				"@":
 					rings.append({"x": x + 8, "y": y + 8})
+				"c":
+					hooks.append({"x": x + 8, "y": y + 8})
+					var sce = spawn_enemy("c", x, y)
+					if sce != null and not Game.flag("boss:CRAWLER"):
+						Game.scale_enemy(sce)
+						sce.nid = next_nid
+						next_nid += 1
+						ents.append(sce)
+				"I":
+					levers.append({"x": x, "y": y, "i": levers.size()})
+				"z":
+					spawn_ddos(float(x), float(y))
+				"W":
+					grid.tiles[ty * w + tx] = TileGrid.FIRE                # a worm lives in a brick
+					fire_cells.append([tx, ty])
+					var we = spawn_enemy("W", x, y)
+					if we != null:
+						Game.scale_enemy(we)
+						we.nid = next_nid
+						next_nid += 1
+						ents.append(we)
 				"S":
 					springs.append({"x": x + 2, "y": y + 9, "w": 12, "h": 7, "t": 0.0})
 				"o":
@@ -284,6 +314,8 @@ func load_room(room_id: String, snap = null) -> void:
 		var di: Dictionary = dd.duplicate()
 		var dtx := int(dd.x)
 		var dty := int(dd.y)
+		di["cx"] = dtx
+		di["cy"] = dty
 		di["x"] = float(dtx * T + 8)
 		di["y"] = float(dty * T + T)
 		var fy := dty + 1
@@ -410,17 +442,21 @@ func _group_dead() -> void:
 		var sx := 0.0
 		var sy := 0.0
 		var n := 0
+		var quiet := false
 		while not stack.is_empty():
 			var q: Array = stack.pop_back()
-			sx += q[0] * T + 8.0
-			sy += q[1] * T + 8.0
-			n += 1
-			for o in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
-				var k: int = (q[1] + o[1]) * w + q[0] + o[0]
-				if q[0] + o[0] >= 0 and q[0] + o[0] < w and left.has(k):
-					left.erase(k)
-					stack.append([q[0] + o[0], q[1] + o[1]])
-		dead_groups.append({"x": sx / n, "y": sy / n})
+			for qc in def.get("dead_quiet", []):
+				if int(qc[0]) == q[0] and int(qc[1]) == q[1]:
+					quiet = true
+				sx += q[0] * T + 8.0
+				sy += q[1] * T + 8.0
+				n += 1
+				for o in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
+					var k: int = (q[1] + o[1]) * w + q[0] + o[0]
+					if q[0] + o[0] >= 0 and q[0] + o[0] < w and left.has(k):
+						left.erase(k)
+						stack.append([q[0] + o[0], q[1] + o[1]])
+		dead_groups.append({"x": sx / n, "y": sy / n, "quiet": quiet})
 
 # the boss class named by rooms.json (a match, no reflection)
 func make_boss(bd: Dictionary, bx: float, by: float):
@@ -505,7 +541,7 @@ func pick_anchor(q, mx: float) -> int:
 
 func update_doors() -> void:
 	grid.gates_open.catch = Game.flag("gate:%s:catch" % id)
-	grid.gates_open.agents = Game.flag("gate:%s:agents" % id)
+	grid.gates_open.agents = Game.flag("gate:%s:agents" % id) or (def.has("gate_lever") and Game.flag(String(def.gate_lever)))
 	for d in grid.doors:
 		var lock: String = d.lock
 		var open: bool = Game.rooms_meta.rooms.has(String(d.to).get_slice(":", 0))      # a door to a room that does not exist (yet) never opens
@@ -671,8 +707,22 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"d": return Drone.new(self, x, y)
 		"x": return Segfault.new(self, x, y)
 		"q": return StackOverflow.new(self, x, y)
+		"c": return Scraper.new(self, x, y)
+		"W": return Worm.new(self, x, y)
+		"e": return Spyware.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
+
+# the five bits of a DDOS swarm at a cell (px); returns them (MVB2-06 gives the class)
+func spawn_ddos(px: float, py: float) -> Array:
+	var out: Array = []
+	if mode == "guest":
+		return out
+	for i in range(5):
+		var b = DdosBit.new(self, px + 4.0 + float(i) * 5.0, py + 4.0 + float((i * 7) % 3) * 4.0, i)
+		add_entity(b)
+		out.append(b)
+	return out
 
 # the nodes that draw the room; called once after load_room. local = false: a room only the partner is in
 func build_nodes(p = null, spawn = null, local := true) -> void:
@@ -1004,6 +1054,7 @@ func step_guest(dt: float) -> void:
 		return
 	time += dt
 	Decor.step(self, dt)
+	_step_sighting(dt)
 	_step_variants()
 	_move_platforms()
 	var p = player
@@ -1017,6 +1068,7 @@ func step_guest(dt: float) -> void:
 			interact_combat(p)
 			interact_goals(p)
 			_check_jars(p)
+			_check_levers(p)
 			# damage areas the host announced (blasts, the slam): checked on this body, once each
 			var hb: Dictionary = p.hurtbox()
 			for z in zones:
@@ -1036,7 +1088,7 @@ func step_guest(dt: float) -> void:
 			var pcx: float = p.x + p.w / 2.0
 			var pcy: float = p.y + p.h / 2.0
 			for it in items:                # (asked again after 0.6 s: a refused request must not lose the item for good)
-				if time - float(it.get("asked", -10.0)) < 0.6 or it.get("dead", false):
+				if time - float(it.get("asked", -10.0)) < 0.6 or it.get("dead", false) or item_locked(it):
 					continue
 				var rr := (11.0 if it.kind == "spark" else 9.0) * Game.mod_pickup_radius()
 				if absf(pcx - it.x) < rr + 3 and absf(pcy - it.y) < rr and (not it.get("loose", false) or it.get("t", 1.0) > 0.2):
@@ -1261,6 +1313,9 @@ func step(dt: float) -> void:
 	interact()
 	if p != null and not p.dead:
 		_check_jars(p)
+		_check_levers(p)
+	_step_wave(dt)
+	_step_sighting(dt)
 	update_items(dt)
 	update_projs(dt)
 	for s in springs:
@@ -1491,6 +1546,11 @@ func hazard_at(p) -> String:
 			elif t == TileGrid.LIQ:
 				if p.y + p.h > ty * T + 6:
 					hz = "liq"
+	if hz == "":                                             # a web strand hurts like a spike (inset 3 px, MVB2-05)
+		for ty in range(y0, y1 + 1):
+			for tx in range(x0, x1 + 1):
+				if grid.tile(tx, ty) == TileGrid.WEB and p.x + p.w > tx * T + 3 and p.x < tx * T + T - 3 and p.y + p.h > ty * T + 3 and p.y < ty * T + T - 3:
+					hz = "web"
 	if liquid_y != null and p.y + p.h > liquid_y + 5:
 		hz = "liq"
 	if p.y > ph + 24:
@@ -1625,7 +1685,8 @@ func interact_combat(p) -> void:
 				if res3 != "":
 					stop(0.05)
 			elif p.grace <= 0.0 and not (lenient and e.get_meta("ex", false)):
-				p.hurt(e.dmg, b.x + b.w / 2.0)
+				if p.hurt(e.dmg, b.x + b.w / 2.0) and e.has_method("on_contact"):
+					e.on_contact()
 			break
 	# spikes, liquid, pits
 	var hz := hazard_at(p)
@@ -1689,6 +1750,8 @@ func update_items(dt: float) -> void:
 	var live := players()
 	for it in items:
 		if it.get("dead", false):
+			continue
+		if item_locked(it):
 			continue
 		if it.kind == "token" and not it.get("loose", false):         # cache: a token within 64 px of a player who has it flies to that player
 			for q in live:
@@ -1921,6 +1984,87 @@ func _draw_curl(ci: CanvasItem) -> void:
 			for c in [[0, 0, 1, 1], [18, 0, -1, 1], [0, 18, 1, -1], [18, 18, -1, -1]]:
 				ci.draw_rect(Rect2(bx + c[0], by + c[1], 1, 4) if c[2] > 0 else Rect2(bx + c[0], by + c[1], 1, 4), bc)
 				ci.draw_rect(Rect2(bx + c[0] + (0 if c[2] > 0 else -3), by + c[1] + (0 if c[3] > 0 else 3), 4, 1), bc)
+
+# ---- levers (MVB2-05): a swipe or a dash on the box sets the lever's world flag; a guest asks the host
+func lever_flag(i: int) -> String:
+	var l: Array = def.get("levers", [])
+	return String(l[i].flag) if i < l.size() else ""
+
+func _check_levers(p) -> void:
+	if levers.is_empty() or p.dead:
+		return
+	var swipe: bool = p.atk_t > 0.0 and p.atk_live
+	var dash: bool = p.dash_t > 0.0
+	if not swipe and not dash:
+		return
+	for lv in levers:
+		var box := {"x": float(lv.x) + 2.0, "y": float(lv.y) + 2.0, "w": 12.0, "h": 14.0}
+		if (swipe and Game.overlap(p.atk_box(), box)) or (dash and Game.overlap(p.hurtbox(), box)):
+			if Game.flag(lever_flag(int(lv.i))):
+				continue
+			if mode == "guest":
+				net_lever.emit(int(lv.i))
+			else:
+				pull_lever(int(lv.i))
+
+func pull_lever(i: int) -> void:
+	var f := lever_flag(i)
+	if f == "" or Game.flag(f):
+		return
+	Game.flags[f] = true
+	Game.write_save()
+	Audio.sfx("uiOk")
+	update_doors()
+	if i < levers.size():
+		pop(float(levers[i].x) + 8.0, float(levers[i].y) - 6.0, "lever", Game.COL.paper, true)
+
+# ---- the honeypot (N21): waves of DDOS bits; the room is shut until the last is dead and wave:N21 is set (host and solo; the flag travels)
+func _step_wave(dt: float) -> void:
+	if not def.has("wave") or mode == "guest":
+		return
+	var wv: Dictionary = def.wave
+	if Game.flag(String(wv.flag)) or players().is_empty():
+		return
+	wave_ents = wave_ents.filter(func(e): return is_instance_valid(e) and not e.dead)
+	if wave_i >= 0 and not wave_ents.is_empty():
+		wave_t = 1.0
+		return
+	wave_t -= dt
+	if wave_t > 0.0:
+		return
+	wave_i += 1
+	wave_t = 1.0
+	if wave_i >= wv.waves.size():
+		Game.flags[String(wv.flag)] = true
+		Game.write_save()
+		Audio.sfx("kill")
+		update_doors()
+		for q in players():
+			pop(q.x + 5.0, q.y - 14.0, "honeypot drained", "#58f0c8", true)
+			break
+		return
+	for cell in wv.waves[wave_i]:
+		for e in spawn_ddos(float(int(cell[0]) * T), float(int(cell[1]) * T)):
+			wave_ents.append(e)
+
+# ---- the crawler's silhouette (N08, once per player): local, cosmetic
+func _step_sighting(dt: float) -> void:
+	if not def.has("sighting") or player == null or Game.flag("boss:CRAWLER"):
+		return
+	if sight_t < 0.0:
+		if not Game.flag("seen:crawler") and player.y < float(def.sighting.row) * T:
+			Game.flags["seen:crawler"] = true
+			sight_t = 0.0
+		return
+	sight_t += dt
+	if int(sight_t * 9.0) != int((sight_t - dt) * 9.0):
+		Audio.local_sfx("tick", 0.12)
+	if sight_t > 3.0:
+		sight_t = -1.0
+
+# the honeypot's chip sits in a glass case until the waves are drained
+func item_locked(it: Dictionary) -> bool:
+	return String(it.kind) == "plugin" and def.has("wave") and not Game.flag(String(def.wave.flag))
 
 func jar_rect(j: Dictionary) -> Dictionary:
 	return Decor.jar_rect(j)
@@ -2237,6 +2381,8 @@ func _draw_bricks(ci: CanvasItem) -> void:
 					ci.draw_rect(Rect2(vx, vy, 1, T), vc)
 					ci.draw_rect(Rect2(vx + 15, vy, 1, T), vc)
 			for g in dead_groups:
+				if g.get("quiet", false):
+					continue                                     # (this group has no moths: its clue is a sign, MVB2-05)
 				var near_verbose := false
 				for c in vb:
 					if absf(c[0] * T + 8.0 - g.x) < 48.0 and absf(c[1] * T + 8.0 - g.y) < 48.0:
@@ -2253,6 +2399,14 @@ func _draw_bricks(ci: CanvasItem) -> void:
 		ci.draw_arc(Vector2(rg.x, ry), 6.0, 0.0, TAU, 24, Color(Game.COL.ink), 4.0)
 		ci.draw_arc(Vector2(rg.x, ry), 6.0, 0.0, TAU, 24, Color("#7cc4ff"), 2.0)
 		PixelText.draw_text(ci, "GET", int(rg.x) - 5, int(ry) + 9, "#7cc4ff", {"tiny": true})
+	for hk in hooks:
+		var hy: float = hk.y + floori(sin(time * 2.0) * 1.5)
+		if Game.flag("boss:CRAWLER"):                            # the crawler is gone: its hooks are GET rings now
+			ci.draw_arc(Vector2(hk.x, hy), 6.0, 0.0, TAU, 24, Color(Game.COL.ink), 4.0)
+			ci.draw_arc(Vector2(hk.x, hy), 6.0, 0.0, TAU, 24, Color("#7cc4ff"), 2.0)
+			PixelText.draw_text(ci, "GET", int(hk.x) - 5, int(hy) + 9, "#7cc4ff", {"tiny": true})
+		else:                                                    # a hook: a ring with a gap at the bottom
+			ci.draw_arc(Vector2(hk.x, hk.y), 4.0, PI * 0.65, PI * 2.35, 16, Color("#8d8798"), 2.0)
 
 # the unrevealed dead code near the local player, shown by the --verbose plugin (MV4-04)
 func verbose_cells() -> Array:
@@ -2367,6 +2521,12 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					ci.draw_rect(Rect2(ix - 3, iy - 3, 6, 6), Color("#3a3346"))
 					if int(time * 3.0) % 2 == 0:
 						ci.draw_rect(Rect2(ix - 1, iy - 1, 2, 2), Color("#58f0c8"))
+					if item_locked(it):                                                       # (the honeypot's glass case)
+						ci.draw_rect(Rect2(ix - 9, iy - 9, 18, 18), Color(0.75, 0.91, 1.0, 0.22))
+						ci.draw_rect(Rect2(ix - 9, iy - 9, 18, 1), Color(0.75, 0.91, 1.0, 0.8))
+						ci.draw_rect(Rect2(ix - 9, iy + 8, 18, 1), Color(0.75, 0.91, 1.0, 0.8))
+						ci.draw_rect(Rect2(ix - 9, iy - 9, 1, 18), Color(0.75, 0.91, 1.0, 0.8))
+						ci.draw_rect(Rect2(ix + 8, iy - 9, 1, 18), Color(0.75, 0.91, 1.0, 0.8))
 	elif kind == "top":
 		_draw_curl(ci)
 		for a in agents:

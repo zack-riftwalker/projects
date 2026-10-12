@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets", "curl", "ssh"]
+const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies"]
 
 func _init(m) -> void:
 	main = m
@@ -19,6 +19,8 @@ func run(name: String):
 		"w6assets": return await t_w6assets()
 		"curl": return t_curl()
 		"ssh": return t_ssh()
+		"net4b": return t_net4b()
+		"w6enemies": return t_w6enemies()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -380,3 +382,259 @@ func t_ssh() -> bool:
 	m2.queue_free()
 	Game.fresh()
 	return report("ssh", res.ok, res.info)
+
+func count_class(r: Room, cls: String) -> int:
+	var n := 0
+	for e in r.ents:
+		if e.get_class() == cls or (e.get_script() != null and String(e.get_script().get_global_name()) == cls):
+			n += 1
+	return n
+
+# MVB2-05: webs, hooks and scrapers, the loopback lever, quiet dead code, the honeypot, the crawler's passing
+func t_net4b() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	# N05: a web hurts; after boss:CRAWLER (a rebuilt room) it is air; 4 scrapers hang from the hooks until then
+	var n05 := new_room("N05")
+	var web: Array = n05.webs[0]
+	var p = n05.player
+	p.x = float(web[0]) * 16.0 + 3.0
+	p.y = float(web[1]) * 16.0 + 3.0
+	if n05.hazard_at(p) != "web":
+		fail(res, "a web does not hurt (%s)" % n05.hazard_at(p))
+	if count_class(n05, "Scraper") != 4 or n05.hooks.size() != 4:
+		fail(res, "N05 scrapers %d hooks %d" % [count_class(n05, "Scraper"), n05.hooks.size()])
+	if n05.anchors().size() != n05.rings.size():
+		fail(res, "hooks are anchors before the crawler")
+	# quiet dead code: the /backup ceiling (70,0) has no moths, the 404 floor group has
+	var quiet := 0
+	var loud := 0
+	for g in n05.dead_groups:
+		if g.get("quiet", false):
+			quiet += 1
+		else:
+			loud += 1
+	if quiet != 1 or loud != 1:
+		fail(res, "dead groups quiet %d loud %d" % [quiet, loud])
+	n05.queue_free()
+	Game.flags["boss:CRAWLER"] = true
+	var n05b := new_room("N05")
+	var pb = n05b.player
+	pb.x = float(web[0]) * 16.0 + 3.0
+	pb.y = float(web[1]) * 16.0 + 3.0
+	if n05b.hazard_at(pb) != "":
+		fail(res, "the web is still there after the crawler")
+	if count_class(n05b, "Scraper") != 0 or n05b.anchors().size() != n05b.rings.size() + 4:
+		fail(res, "after the crawler: scrapers %d anchors %d" % [count_class(n05b, "Scraper"), n05b.anchors().size()])
+	n05b.queue_free()
+	Game.flags.erase("boss:CRAWLER")
+	# the lever in N02 sets lever:D06 from a swipe and D06's slot gate opens with it
+	var n02 := new_room("N02")
+	n02.ents.clear()
+	var lp = n02.player
+	var lv: Dictionary = n02.levers[0]
+	lp.x = float(lv.x) - 14.0
+	lp.y = float(lv.y) + 16.0 - 10.0
+	lp.face = 1.0
+	for f in range(14):
+		step_keys(n02, {"attack": f < 2})
+	Controls.script_input = null
+	if not Game.flag("lever:D06"):
+		fail(res, "the swipe did not pull the lever")
+	n02.queue_free()
+	var d06 := new_room("D06")
+	d06.update_doors()
+	if not d06.grid.gates_open.agents:
+		fail(res, "D06's slot gate is shut with the lever pulled")
+	d06.queue_free()
+	Game.flags.erase("lever:D06")
+	var d06b := new_room("D06")
+	if d06b.grid.gates_open.agents:
+		fail(res, "D06's gate is open without the lever")
+	d06b.queue_free()
+	# N21: wave 0 within 2 s; the chip is in its case until the flag; killing every bit of all three waves sets it
+	var n21 := new_room("N21")
+	var chip = null
+	for it in n21.items:
+		if it.kind == "plugin":
+			chip = it
+	if chip == null or not n21.item_locked(chip):
+		fail(res, "the chip is not locked")
+	for f in range(130):
+		step_keys(n21, {})
+	var bits := count_class(n21, "DdosBit")
+	if bits != 2 * 5:
+		fail(res, "wave 0 has %d bits (want 10)" % bits)
+	for wv in range(3):
+		for e in n21.ents.duplicate():
+			if e is DdosBit:
+				e.hp = 0
+				e.die("swipe")
+		for f in range(130):
+			step_keys(n21, {})
+			if Game.flag("wave:N21"):
+				break
+	if not Game.flag("wave:N21"):
+		fail(res, "the waves did not end (wave %d)" % n21.wave_i)
+	if n21.item_locked(chip):
+		fail(res, "the chip stays locked")
+	n21.queue_free()
+	# N08's sighting runs once
+	Game.flags.erase("seen:crawler")
+	var n08 := new_room("N08")
+	n08.ents.clear()
+	var sp = n08.player
+	sp.x = 100.0
+	sp.y = 31.0 * 16.0
+	step_keys(n08, {})
+	if n08.sight_t >= 0.0 or Game.flag("seen:crawler"):
+		fail(res, "the sighting ran below its row")
+	sp.y = 20.0 * 16.0
+	step_keys(n08, {})
+	if n08.sight_t < 0.0 or not Game.flag("seen:crawler"):
+		fail(res, "the sighting did not start")
+	for f in range(200):
+		step_keys(n08, {})
+	if n08.sight_t >= 0.0:
+		fail(res, "the sighting never ends")
+	step_keys(n08, {})
+	if n08.sight_t >= 0.0:
+		fail(res, "the sighting ran twice")
+	Controls.script_input = null
+	n08.queue_free()
+	Game.fresh()
+	return report("net4b", res.ok, res.info)
+
+# a clean copy of a room with nothing alive in it and the player standing at (px, py) (top-left)
+func bare_room(room_id: String, px: float, py: float) -> Room:
+	var r := new_room(room_id)
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	r.player.x = px
+	r.player.y = py
+	r.player.vx = 0.0
+	r.player.vy = 0.0
+	return r
+
+func run_room(r: Room, frames_n: int, keys := {}) -> void:
+	for f in range(frames_n):
+		step_keys(r, keys)
+
+# MVB2-06: SCRAPER, WORM, DDOS, SPYWARE
+func t_w6enemies() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	# SCRAPER: hangs, drops on a player under it, climbs back; no harm while it hangs
+	var r := bare_room("R01", 100.0, 192.0)
+	var sc := Scraper.new(r, 96, 112)
+	r.add_entity(sc)
+	if sc.harmboxes().size() != 0:
+		fail(res, "a hanging scraper hurts")
+	var dropped := false
+	var min_len := 1e9
+	var max_len := 0.0
+	for f in range(240):
+		step_keys(r, {})
+		r.player.x = 100.0
+		r.player.y = 192.0
+		r.player.vy = 0.0
+		r.player.inv = 99.0
+		if sc.state == "drop" or sc.state == "wait":
+			dropped = true
+		max_len = maxf(max_len, sc.len)
+		if sc.state == "tell" and sc.harmboxes().size() != 1:
+			fail(res, "a shivering scraper has no harmbox")
+	if not dropped or max_len < 40.0:
+		fail(res, "the scraper did not drop (max len %.0f)" % max_len)
+	r.player.x = 180.0
+	run_room(r, 300)
+	if sc.state != "hang" or sc.len > 9.0:
+		fail(res, "the scraper did not climb back (%s %.0f)" % [sc.state, sc.len])
+	r.queue_free()
+	# WORM: not hittable in crawl, hittable out; it bites a player next to its membrane
+	var rw := bare_room("N13", 0.0, 0.0)
+	var wm: Worm = null
+	for e in rw.ents:
+		pass
+	rw.queue_free()
+	rw = new_room("N13")
+	for e in rw.ents:
+		if e is Worm:
+			wm = e
+	if wm == null:
+		fail(res, "N13 has no worm")
+	else:
+		rw.player.inv = 99.0
+		rw.player.x = wm.x - 40.0
+		rw.player.y = wm.y + 6.0
+		step_keys(rw, {})
+		if wm.state != "crawl" or wm.hurtboxes().size() != 0:
+			fail(res, "a crawling worm can be hit")
+		var bitten := false
+		var was_hit_box := false
+		for f in range(180):
+			rw.player.x = wm.face_x(-1.0) - 14.0
+			rw.player.y = wm.y + 6.0
+			rw.player.hp = rw.player.max_hp
+			rw.player.inv = 0.0
+			step_keys(rw, {})
+			if wm.state == "out" and wm.hurtboxes().size() == 1:
+				was_hit_box = true
+			if rw.player.hp < rw.player.max_hp:
+				bitten = true
+				break
+		if not was_hit_box and not bitten:
+			fail(res, "the worm never put its head out")
+	rw.queue_free()
+	# DDOS: a letter makes five bits; a bit that touches the player hurts it and is gone
+	var rd := bare_room("R01", 200.0, 192.0)
+	var bits := rd.spawn_ddos(120.0, 176.0)
+	if bits.size() != 5:
+		fail(res, "a DDOS makes %d bits" % bits.size())
+	var hp0: int = rd.player.hp
+	run_room(rd, 200)
+	var left := 0
+	for b in bits:
+		if is_instance_valid(b) and not b.dead:
+			left += 1
+	if rd.player.hp >= hp0 or left >= 5:
+		fail(res, "the swarm did not reach the player (hp %d/%d, %d left)" % [rd.player.hp, hp0, left])
+	rd.queue_free()
+	# SPYWARE: the beam angle is fixed from lock to the end of fire; a player who leaves the line is not hurt
+	var rs := bare_room("R01", 160.0, 192.0)
+	var sw := Spyware.new(rs, 96, 176)
+	rs.add_entity(sw)
+	rs.player.inv = 0.0
+	var angles: Array = []
+	var saw_fire := false
+	for f in range(240):
+		if sw.state == "lock" or sw.state == "fire":
+			angles.append(snappedf(sw.angle, 0.0001))
+			if sw.state == "lock":
+				rs.player.x = 300.0                                  # (steps off the locked line)
+				rs.player.y = 40.0
+		else:
+			rs.player.x = 160.0
+			rs.player.y = 192.0
+		if sw.state == "fire":
+			saw_fire = true
+		rs.player.hp = rs.player.max_hp if sw.state != "fire" else rs.player.hp
+		step_keys(rs, {})
+	if not saw_fire:
+		fail(res, "the spyware never fired")
+	for a in angles:
+		if a != angles[0]:
+			fail(res, "the beam angle moved while locked: %s" % str(angles.slice(0, 6)))
+			break
+	if rs.player.hp < rs.player.max_hp:
+		fail(res, "a player off the locked line was hurt")
+	rs.queue_free()
+	Game.fresh()
+	return report("w6enemies", res.ok, res.info)
