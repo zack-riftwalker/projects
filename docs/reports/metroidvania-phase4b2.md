@@ -33,7 +33,7 @@
 ## نتیجه‌ی تست‌ها
 - `bash tools/godot/test-all.sh`: **ALL PASS** (۹۷ مورد، شامل smoke، همه‌ی `--test`ها، ۷ نوار parity، export، web-check، relay، و همه‌ی سناریوهای co-op).
 - خط بد (`BADLINE_ALL=1`): `co-curl co-ssh co-crawler co-firewall co-reviewer2 co-honeypot co-flags co-bosskit` همه PASS.
-- `check4b2.py`، `check4a.py`، `world.py`: نتیجه پایین.
+- `check4b2.py`، `check4a.py`، `world.py`: `check4b2.py`: 0 problems، `check4a.py`: 0 problems، `world.py`: errors 0, warnings 0.
 - هیچ `INVARIANT` یا `SCRIPT ERROR` نبود.
 
 ## عکس‌ها
