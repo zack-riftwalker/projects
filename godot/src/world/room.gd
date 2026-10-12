@@ -226,7 +226,7 @@ func load_room(room_id: String, snap = null) -> void:
 				"Y":
 					switches.append({"x": float(x + 3), "y": float(y + 3), "w": 10.0, "h": 10.0, "i": switch_n})
 					switch_n += 1
-				"@":
+				"@", "j":
 					rings.append({"x": x + 8, "y": y + 8})
 				"c":
 					hooks.append({"x": x + 8, "y": y + 8})

@@ -41,7 +41,7 @@ class Room:
         self.rings = []
         for ty, r in enumerate(self.rows):
             for tx, c in enumerate(r):
-                if c == "@" or (c == "c" and self.hooks_rings):
+                if c in "@j" or (c == "c" and self.hooks_rings):
                     self.rings.append((tx * T + 8.0, ty * T + 8.0))
                 if c == "S":
                     self.springs.append((tx * T + 2, ty * T + 9, 12, 7))

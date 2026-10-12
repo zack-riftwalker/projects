@@ -11,6 +11,7 @@ run() { local name=$1; shift; if "$@" > "$TMP/$name.log" 2>&1; then rec "$name" 
 
 run smoke bash tools/godot/smoke.sh
 run worldcheck python3 -I tools/godot/roomcheck/world.py
+run check4b3 python3 -I tools/godot/roomcheck/check4b3.py
 # a script that does not parse makes every scenario hang until its timeout: stop at once instead
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
 if timeout 60 "$GODOT" --headless --path godot --quit-after 3 2>&1 | grep -E "Parse Error|Compile Error|Failed to load script"; then echo "FAIL parse"; exit 1; fi

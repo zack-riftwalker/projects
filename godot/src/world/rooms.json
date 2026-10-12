@@ -407,7 +407,7 @@
              ] },
     "N12": { "file": "N12.txt", "title": "port_scan", "size": [72, 16], "origin": [1314, -2], "world": 6, "music": "w6", "zone": "net",
              "signs": ["nmap -p 22,80,443 /net: the ports open for packets. Ride one, or time them on foot."],
-             "packets": {"every": 4.0, "speed": 64.0, "w": 4, "lead": 32, "lag": 16},
+             "packets": {"every": 4.0, "speed": 64.0, "w": 4, "lead": 32, "lag": 16, "lossy": {"every": 3, "x": [27, 45], "warn": 0.5, "off": 0.6}},
              "variants": [{"if": "boss:FIREWALL", "rect": [0, 0, 72, 16], "from": "3", "to": " "}],
              "doors": [
                  {"id": "N12:W", "side": "W", "a": 7, "b": 10, "to": "N22:E"},
@@ -424,7 +424,7 @@
     "N21": { "file": "N21.txt", "title": "honeypot", "size": [48, 16], "origin": [1400, 12], "world": 6, "music": "w6", "zone": "net", "secret": true,
              "signs": ["honeypot: you were not supposed to find this. (you were.)"],
              "plugins": ["rate_limit"],
-             "wave": {"flag": "wave:N21", "waves": [[[10, 6], [38, 6]], [[8, 6], [24, 4], [40, 6]], [[6, 6], [18, 4], [30, 4], [42, 6]]]},
+             "wave": {"flag": "wave:N21", "waves": [[[10, 6], [38, 6]], [[8, 6], [40, 6], ["u", 24, 12]], [["r", 24, 12], [6, 6], [42, 6], ["y", 1, 4]]]},
              "doors": [
                  {"id": "N21:N", "side": "N", "a": 20, "b": 23, "to": "N13:S", "lock": "until:wave:N21"}
              ] },
@@ -450,6 +450,7 @@
              ] },
     "N17": { "file": "N17.txt", "title": "22/tcp", "size": [26, 82], "origin": [1562, -6], "world": 6, "music": "w6", "zone": "net", "end": "to be continued in .git",
              "signs": ["22/tcp: open. ssh all the way down to .git.", "This door has no handle. It opens from the other side.", "200 OK. I missed you too."],
+             "chase": {"flag": "rst:N17", "trigger_row": 16, "speed": 46, "end_row": 76},
              "doors": [
                  {"id": "N17:W", "side": "W", "a": 7, "b": 10, "to": "N16:E"},
                  {"id": "N17:E", "side": "E", "a": 33, "b": 36, "to": "P15:W", "lock": "until:lever:CDN"},
