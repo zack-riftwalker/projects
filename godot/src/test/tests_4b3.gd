@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "firewall2", "reviewer2b", "fightsim"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "firewall2", "reviewer2b", "bosspresets", "hardrooms", "fightsim"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -26,6 +26,8 @@ func run(name: String):
 		"crawler2": return t_crawler2()
 		"firewall2": return t_firewall2()
 		"reviewer2b": return t_reviewer2b()
+		"bosspresets": return t_bosspresets()
+		"hardrooms": return t_hardrooms()
 		"fightsim": return t_fightsim()
 	return await super.run(name)
 
@@ -1741,3 +1743,200 @@ func t_reviewer2b() -> bool:
 	Game.fresh()
 	return report("reviewer2b", res.ok, res.info)
 
+
+# MVB3-09: the three bosses on every difficulty: every cue x telegraph_mult, every recover x punish_mult, and no 2-damage hit with a cue under 0.7 x telegraph_mult
+func t_bosspresets() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	var tested := 0
+	for diff in ["easy", "normal", "hard", "nightmare"]:
+		Game.diff = diff
+		var tm := float(Game.dv("telegraph_mult"))
+		var pm := float(Game.dv("punish_mult"))
+		var big := int(Game.dv("big_hit"))
+		# [room, id, expected cue, expected rec (or -1: not checked, or the family's: negative family rec)]
+		var table: Array = [
+			["N09", "fetch", 0.75, 0.8], ["N09", "spin", 0.9, 0.55], ["N09", "volley", 0.6, 0.6], ["N09", "skitter", 0.7, -1.0], ["N09", "back", 0.8, 0.8],
+			["N15", "throw", 0.75, 0.1], ["N15", "return", 0.25, 0.7], ["N15", "rule", 0.7, 0.6], ["N15", "scan", 0.6, 0.6], ["N15", "deny", 0.6, 0.7], ["N15", "phase", 0.75, 0.7], ["N15", "bash", 0.45, 0.6],
+			["N22", "cached", 1.0, -0.4], ["N22", "double", 0.75, 0.6], ["N22", "verdict", 0.6, 0.6], ["N22", "nitpick", 0.7, 0.6], ["N22", "cross", 0.9, 0.6], ["N22", "signoff", 0.75, 0.2], ["N22", "slash", 0.45, 0.2], ["N22", "sdiamond", 0.45, 0.7], ["N22", "riposte", 0.75, -0.9]]
+		var rooms := {}
+		for row in table:
+			var rid: String = row[0]
+			if not rooms.has(rid):
+				var r := new_room(rid)
+				var b = r.boss
+				if rid == "N22":
+					b.start()
+				else:
+					b.start()
+				b.active = true
+				b.passive = false
+				rooms[rid] = [r, b]
+			var rb: Array = rooms[rid]
+			var boss = rb[1]
+			boss.plan = {}
+			boss.hz.clear()
+			if boss.get("pair_next") != null:
+				boss.pair_next = ""
+			boss.hpf = float(boss.max_hp)
+			boss.on_damage()
+			boss.x = 190.0
+			boss.y = Boss.FLOOR - boss.h
+			boss.face = -1.0
+			rb[0].player.x = 100.0
+			rb[0].player.y = Boss.FLOOR - 10.0
+			var id: String = row[1]
+			if rid == "N09":
+				boss._start(id)
+			else:
+				boss._start(id, "p1")
+			if boss.plan.is_empty() or String(boss.plan.id) != id:
+				fail(res, "%s %s: no plan %s" % [diff, rid, id])
+				continue
+			tested += 1
+			var cue := float(boss.plan.t)
+			if absf(cue - float(row[2]) * tm) > 0.001:
+				fail(res, "%s %s cue %.3f, want %.3f" % [diff, id, cue, float(row[2]) * tm])
+			var ev := ""
+			var guard := 0
+			var max_dmg := 1
+			while ev != "recover" and guard < 3000:
+				ev = boss.plan_step(Game.STEP)
+				guard += 1
+				if boss.plan_active():
+					for hb in boss.harmboxes():
+						if hb is Dictionary:
+							max_dmg = maxi(max_dmg, int(hb.get("dmg", 1)))
+			if ev != "recover":
+				fail(res, "%s %s never recovered" % [diff, id])
+				continue
+			var rec_base: float = row[3]
+			if rec_base != -1.0:
+				var want: float
+				if rec_base < 0.0:
+					want = maxf(0.4, absf(rec_base) * pm)                           # the family's own recover
+				else:
+					want = maxf(minf(rec_base, 0.4), rec_base * pm)
+				if absf(float(boss.plan.t) - want) > 0.002:
+					fail(res, "%s %s recover %.3f, want %.3f" % [diff, id, boss.plan.t, want])
+			if OS.get_environment("PRESETDBG") != "" and max_dmg >= 2:
+				print("big hit: %s %s %s cue %.2f" % [diff, rid, id, cue])
+			if max_dmg >= 2 and cue < 0.7 * tm - 0.001:
+				fail(res, "%s %s: a %d-damage hit with a %.2f s cue" % [diff, id, max_dmg, cue])
+			if max_dmg >= 2 and big < 2:
+				fail(res, "%s %s: damage %d on a preset with big hits of %d" % [diff, id, max_dmg, big])
+		for rid in rooms:
+			rooms[rid][0].queue_free()
+	if tested < 84:
+		fail(res, "only %d attacks tested" % tested)
+	Game.diff = "normal"
+	Game.fresh()
+	return report("bosspresets", res.ok, res.info)
+
+# the pits of N05 (the runs of spikes in the floor row), as [first tile, last tile], left to right
+func n05_pits(r: Room) -> Array:
+	var out: Array = []
+	var tx := 0
+	while tx < r.w:
+		if r.grid.tile(tx, 19) == TileGrid.SPIKE_U:
+			var t1 := tx
+			while r.grid.tile(t1 + 1, 19) == TileGrid.SPIKE_U:
+				t1 += 1
+			out.append([tx, t1])
+			tx = t1 + 1
+		else:
+			tx += 1
+	return out
+
+# a bot that runs east along N05's floor: at the edge of every gap in the ground (a pit of spikes, the S door's hole) it holds [jump] `hold` frames; a gap `dash_w`
+# tiles wide or wider also gets a dash `dash_at` frames after take-off; a wall in the way is hopped. Returns {reached, hurt, x, frames, jumps}
+func n05_ground(r: Room, px: float, feet: float) -> bool:
+	return r.grid.solid_at(px, feet) or r.grid.tile(floori(px / 16.0), floori(feet / 16.0)) == TileGrid.ONEWAY
+
+func n05_run(hold: int, dash_w: int, dash_at: int, lead: float) -> Dictionary:
+	Game.flags = {}
+	Game.tools = {"bash": true, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
+	var r := new_room("N05")
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	var p = r.player
+	p.x = 24.0
+	p.y = 18.0 * 16.0 - 10.0 + 16.0 - 6.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var hp0: int = p.hp
+	var f_jump := -1
+	var jump_w := 0
+	var hurt := false
+	var frames := 0
+	var reached := false
+	var jumps := 0
+	var p_hi := -1.0
+	for f in range(60 * 60):
+		var keys := {"right": true}
+		var feet: float = p.y + p.h + 2.0
+		if f_jump < 0 and p.on_ground and not n05_ground(r, p.x + p.w + lead, feet):
+			f_jump = f
+			p_hi = 1.0 if (hold < 40 and p.y + p.h < 18.0 * 16.0 + 6.0) else -1.0           # standing on a block, not on the floor: the web is nearer, hop short
+			jumps += 1
+			var wt := 0                                         # how wide the gap is
+			var gx: float = p.x + p.w + lead
+			while wt < 12 and not n05_ground(r, gx + float(wt) * 16.0, feet):
+				wt += 1
+			jump_w = wt
+		if f_jump >= 0:
+			var k := f - f_jump
+			if k < (hold if p_hi < 0.0 else mini(hold, 6)):
+				keys["jump"] = true
+			if jump_w >= dash_w and k == dash_at:
+				keys["dash"] = true
+			if k > 6 and p.on_ground:
+				f_jump = -1
+		elif p.on_ground and (r.grid.solid_at(p.x + p.w + 3.0, p.y + 5.0) or r.grid.solid_at(p.x + p.w + 3.0, p.y + 1.0)):
+			keys["jump"] = true                                 # a low wall in the way: hop it
+		step_keys(r, keys)
+		if OS.get_environment("HARDDBG2") != "" and hold == 12:
+			print("TRACE f %d x %.1f y %.1f vx %.0f vy %.0f hp %d ground %s keys %s" % [f, p.x, p.y, p.vx, p.vy, p.hp, str(p.on_ground), str(keys.keys())])
+		if p.hp < hp0:
+			hurt = true
+			if OS.get_environment("HARDDBG") != "":
+				print("HARD hurt at x %.0f y %.0f (hold %d, dash_w %d at %d) vx %.0f vy %.0f" % [p.x, p.y, hold, dash_w, dash_at, p.vx, p.vy])
+		frames = f
+		if p.x > float(r.w) * 16.0 - 14.0 or r.id != "N05":
+			reached = true
+			break
+		if hurt:
+			break
+	var out := {"reached": reached, "hurt": hurt, "x": p.x, "frames": frames, "jumps": jumps}
+	r.queue_free()
+	return out
+
+# MVB3-09: the hard rooms are hard in the way the plan says: the naive way fails, the right way works (N05's pits under the webs)
+func t_hardrooms() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var naive := n05_run(40, 99, 0, 0.0)
+	if not naive.hurt:
+		fail(res, "a full-height jump before every pit was not hurt by a web (reached %s at x %.0f)" % [str(naive.reached), naive.x])
+	var info := "naive: hurt %s at x %.0f; " % [str(naive.hurt), naive.x]
+	if OS.get_environment("HARDDBG") != "":
+		for hold in [12]:
+			for lead in [0.0]:
+				for dash_w in [4]:
+					for dash_at in [4]:
+						var rr := n05_run(hold, dash_w, dash_at, lead)
+						print("HARD hold %d lead %.0f dash_w %d at %d: reached %s hurt %s x %.0f" % [hold, lead, dash_w, dash_at, str(rr.reached), str(rr.hurt), rr.x])
+	var right := n05_run(12, 4, 4, 0.0)
+	info += "right way: reached %s, hurt %s, x %.0f" % [str(right.reached), str(right.hurt), right.x]
+	if not right.reached or right.hurt:
+		fail(res, "12 frames over the 3-wide pits and a dash over the 4-wide ones: reached %s, hurt %s, x %.0f" % [str(right.reached), str(right.hurt), right.x])
+	Game.fresh()
+	return report("hardrooms", res.ok, info + res.info)

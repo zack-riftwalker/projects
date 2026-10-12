@@ -8,6 +8,7 @@ const STATES := ["tap", "probe", "hop"]
 const PROBE_EVERY := 2.5
 const HOP_EVERY := 4.0
 const HOP_T := 0.4
+const HOP_RANGE := 100.0         # the plan says 80, but the rings of N10 and N11 stand 85-98 px apart: at 80 a sniffer would never hop
 
 var ring_i := 0                  # index in room.rings (the same on both pages)
 var from_i := 0                  # the ring it left (hop)
@@ -42,7 +43,7 @@ func tapped_ring() -> int:
 
 func _free_ring_near() -> int:
 	var best := -1
-	var bd := 80.0
+	var bd := HOP_RANGE
 	var here := _ring_pos(ring_i)
 	for i in range(room.rings.size()):
 		if i == ring_i or room.ring_tapped(i):

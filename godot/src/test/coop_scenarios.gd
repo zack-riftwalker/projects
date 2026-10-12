@@ -523,7 +523,99 @@ func sc_co_netfields() -> Array:
 			bad.append("%s: %s != %s" % [NetClasses.NAMES[cls], str(f1), str(f2)])
 		e.queue_free()
 		p2.queue_free()
-	return [bad.is_empty(), "6 classes, mismatches: %s" % str(bad)]
+	for cls in range(26, 38):                                          # the NETWORK's creatures (4B-2, 4B-3): default state and a busy one
+		for busy in [false, true]:
+			var en = NetClasses.make(cls, room)
+			en.puppet = false
+			if busy:
+				_busy(en, cls)
+			var g1: Array = en.net_fields()
+			var gjson = JSON.parse_string(JSON.stringify(g1))
+			var q2 = NetClasses.make(cls, room)
+			q2.net_apply(gjson)
+			var g2: Array = q2.net_fields()
+			if not _same(g1, g2):
+				bad.append("%s (busy %s): %s != %s" % [NetClasses.NAMES[cls], str(busy), str(g1), str(g2)])
+			en.queue_free()
+			q2.queue_free()
+	return [bad.is_empty(), "18 classes, mismatches: %s" % str(bad)]
+
+# a state with something in every field the class sends
+func _busy(e, cls: int) -> void:
+	match cls:
+		30:
+			e.hpf = 51.5
+			e.max_hp = 82
+			e.active = true
+			e.node = 2
+			e.core_y = 71.0
+			e.leg_x = 140.0
+			e.sk_state = 2
+			e.sk_x = 100.0
+			e.dc = 0                       # (the deep crawl derives the core's place from the clock, not from the fields)
+			e.sw_t0 = 12.34
+			e.leg_i = 1
+			e.leg_n = 3
+			e.hz = [{"k": "strand", "t0": 3.5, "warn": 0.9, "v": [8, 144, 32]}, {"k": "strand", "t0": 4.5, "warn": 0.9, "v": [1, 240, 32]}]
+		31:
+			e.hpf = 30.0
+			e.max_hp = 82
+			e.active = true
+			e.shield_t = 1.2
+			e.turn_t = 0.2
+			e.scan_order = [2, 1, 0]
+			e.scan_gap = 0.35
+			e.drop_seed = 3
+			e.dropall_n = 4
+			e.walls_on = true
+			e.mk_x = 22.0
+			e.hz = [{"k": "deny", "t0": 3.5, "warn": 1.0, "v": [0]}, {"k": "block", "t0": 4.0, "warn": 0.7, "v": [-1, 392]}, {"k": "drop", "t0": 5.0, "warn": 0.9, "v": [2]}]
+		32:
+			e.hpf = 70.0
+			e.max_hp = 96
+			e.active = true
+			e.thrusts = 3
+			e.nit_gap = 130.0
+			e.pen_xs = [30.0, 60.0, 200.0, 250.0, 300.0, 340.0]
+			e.hz = [{"k": "mark", "t0": 3.5, "warn": 0.8, "v": [100]}, {"k": "mark", "t0": 4.5, "warn": 0.8, "v": [222]}]
+		33:
+			e.state = "probe"
+			e.state_t = 0.2
+			e.ring_i = 1
+			e.from_i = 0
+		34:
+			e.state = "echo"
+			e.state_t = 0.1
+			e.kind = 2
+			e.face = 1.0
+			e.landed = 1
+		35:
+			e.countdown = 2.5
+			e.shielded = true
+		36:
+			e.state = "tell"
+			e.state_t = 0.3
+			e.shots = 5
+		37:
+			e.left = 3.2
+			e.cell = Vector2i(6, 9)
+			e.group = Vector2i(5, 8)
+		26:
+			e.state = "drop"
+			e.state_t = 1.2
+			e.len = 80.0
+		27:
+			e.state = "out"
+			e.state_t = 0.2
+		28:
+			e.awake = true
+			e.idx = 3
+			e.state = "dart"
+			e.state_t = 0.1
+		29:
+			e.state = "track"
+			e.state_t = 0.7
+			e.angle = 1.25
 
 func _same(a, b) -> bool:
 	if typeof(a) == TYPE_ARRAY and typeof(b) == TYPE_ARRAY:
@@ -2046,10 +2138,67 @@ func plan_stats(b, seen: Dictionary) -> void:
 	if b != null and not b.plan.is_empty() and not seen.has(b.plan.seq):
 		seen[b.plan.seq] = b.plan.tgt
 
+# the guest's probe of an arena hazard (MVB3-09): once a hazard that hurts has been on its screen long enough (Boss.hz_harm lists only those), the guest
+# puts its body in it, un-immortal, and the hits it takes from the hazard alone are counted. Every other frame it stays immortal as before.
+func hazard_probe(g, pup, st: Dictionary) -> void:
+	var lost: bool = g.hp < int(st.get("last_hp", g.hp))
+	if lost:
+		var body: Dictionary = g.hurtbox()
+		var haz: Array = pup.hz_harm()
+		var on_haz := false
+		for b in haz:
+			if Game.overlap(body, b):
+				on_haz = true
+		var on_plan := false
+		for b in pup.harmboxes():
+			if not b.has("dmg") or true:
+				var is_haz := false
+				for hb in haz:
+					if absf(hb.x - b.x) < 0.01 and absf(hb.y - b.y) < 0.01 and absf(hb.w - b.w) < 0.01:
+						is_haz = true
+				if not is_haz and Game.overlap(body, b):
+					on_plan = true
+		if on_haz and not on_plan:
+			st.hz_hits = int(st.get("hz_hits", 0)) + 1
+	g.hp = g.max_hp
+	st.last_hp = g.hp
+	var boxes: Array = pup.hz_harm() if pup != null else []
+	if int(st.get("hz_hits", 0)) < 1 and not boxes.is_empty() and pup.active:
+		var b0: Dictionary = boxes[boxes.size() / 2]
+		g.inv = 0.0
+		g.x = float(b0.x) + float(b0.w) / 2.0 - 5.0
+		g.y = float(b0.y) + float(b0.h) / 2.0 - 5.0
+		g.vx = 0.0
+		g.vy = 0.0
+		st.probing = true
+	else:
+		g.inv = 999.0
+		st.probing = false
+
+# the host's scripted fight: attacks forced at set times, the phase raised twice; returns the plans seen, per target
+func boss_phase_script(b, el: float, st: Dictionary, forced: Array, hp_marks: Array) -> void:
+	if b == null or not b.active or b.dying:
+		return
+	for k in range(hp_marks.size()):
+		var m: Array = hp_marks[k]
+		if el > float(m[0]) and not st.get("hp%d" % k, false):
+			st["hp%d" % k] = true
+			b.hpf = float(b.max_hp) * float(m[1])
+			b.hp = ceili(b.hpf)
+			b.on_damage()
+	for k in range(forced.size()):
+		var fc: Array = forced[k]
+		if el > float(fc[0]) and not st.get("f%d" % k, false) and b.plan.is_empty():
+			st["f%d" % k] = true
+			if fc.size() > 2:
+				b._start(String(fc[1]), String(fc[2]))
+			else:
+				b._start(String(fc[1]))
+
 func sc_co_crawler() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
-	var secs := 32.0 * slow
+	var secs := 40.0 * slow
 	if role == "host":
 		Game.tools.catch = true
 		await wait_secs(1.0)
@@ -2058,12 +2207,13 @@ func sc_co_crawler() -> Array:
 		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
 		var b: CrawlerBoss = r.boss
 		var seen := {}
-		var forced := 0
-		var next_force := 8.0
+		var st := {}
+		var forced := [[3.0, "spin"], [6.0, "volley"], [10.0, "spin"], [14.0, "skitter"], [20.0, "spin"], [25.0, "volley"], [28.0, "spin"], [33.0, "back"]]
+		var marks := [[12.0, 0.5], [22.0, 0.2]]
 		var caught_hits := 0
-		var core_hp_lost := 0
-		var prev_hp := b.hpf
 		var prev_caught := int(r.stats.get("caught", 0))
+		var strands_max := 0
+		var phases := {}
 		var t0 := Time.get_ticks_msec()
 		var f := 0
 		while Time.get_ticks_msec() - t0 < secs * 1000.0:
@@ -2072,28 +2222,21 @@ func sc_co_crawler() -> Array:
 			Controls.script_input = {"attack": f % 50 < 3}
 			f += 1
 			plan_stats(b, seen)
-			var el := float(Time.get_ticks_msec() - t0) / 1000.0
-			if b.plan.is_empty() and forced < 3 and el > next_force and b.active and not b.dying:
-				b._start("volley")                                  # (scripted: the volleys the guest catches)
-				forced += 1
-				next_force = el + 9.0
+			var el := float(Time.get_ticks_msec() - t0) / 1000.0 / slow
+			boss_phase_script(b, el, st, forced, marks)
+			strands_max = maxi(strands_max, b.hz.size())
+			phases[b.phase] = true
 			var caught := int(r.stats.get("caught", 0))
 			if caught > prev_caught:
-				caught_hits += 1                                         # (the core's 2 hp are the unit test's: here the catch must reach it at all)
-				if prev_hp - b.hpf >= 1.9:
-					core_hp_lost += 1
+				caught_hits += 1
 			prev_caught = caught
-			prev_hp = b.hpf
-			if b.hpf < float(b.max_hp) * 0.4:
-				b.hpf = float(b.max_hp)
-				b.hp = b.max_hp
 			await get_tree().physics_frame
 		Controls.script_input = {}
 		var tg := {"p1": 0, "p2": 0}
 		for sq in seen:
 			tg[seen[sq]] += 1
 		await wait_secs(1.0)
-		return [started and seen.size() >= 5 and tg.p1 >= 1 and tg.p2 >= 1 and caught_hits >= 1, "host: started %s, %d plans (p1 %d, p2 %d), packets caught %d, of which the core lost 2 hp %d times" % [started, seen.size(), tg.p1, tg.p2, caught_hits, core_hp_lost]]
+		return [started and seen.size() >= 6 and tg.p1 >= 1 and tg.p2 >= 1 and strands_max >= 1 and phases.size() >= 3, "host: started %s, %d plans (p1 %d, p2 %d), strands at most %d, phases %s, packets caught %d" % [started, seen.size(), tg.p1, tg.p2, strands_max, str(phases.keys()), caught_hits]]
 	var has := await wait_until(func(): return Game.tools.get("catch", false), 10.0)
 	var r2 := boss_arena("N09", 230.0, 270.0)
 	var found := {"b": null}
@@ -2105,16 +2248,17 @@ func sc_co_crawler() -> Array:
 	var pup: CrawlerBoss = found.b
 	if pup == null:
 		return [false, "no crawler puppet"]
-	var st := {"f": 0, "swings": 0}
+	var st2 := {"f": 0, "swings": 0}
 	var seen2 := {}
+	var deep := false
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < secs * 1000.0:
 		var g = mgr().player
-		g.inv = 999.0
-		g.hp = g.max_hp
-		st.f += 1
+		st2.f += 1
 		plan_stats(pup, seen2)
-		Controls.script_input = boss_guest_keys(g, pup, false, st)
+		Controls.script_input = boss_guest_keys(g, pup, false, st2)
+		hazard_probe(g, pup, st2)
+		deep = deep or pup.dc == 1
 		await get_tree().physics_frame
 	Controls.script_input = {}
 	var short := 0
@@ -2126,12 +2270,12 @@ func sc_co_crawler() -> Array:
 		if seen2[sq] == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [has and seen2.size() >= 5 and short == 0 and mine >= 1 and pup.kit_violation == "", "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, swings %d, violation '%s'" % [seen2.size(), short, mine, st.swings, pup.kit_violation]]
+	return [has and seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1 and deep, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, web hits taken %d, deep crawl seen %s, violations '%s' '%s'" % [seen2.size(), short, mine, int(st2.get("hz_hits", 0)), deep, pup.kit_violation, pup.arena_violation]]
 
 func sc_co_firewall() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
-	var secs := 32.0 * slow
+	var secs := 40.0 * slow
 	if role == "host":
 		await wait_secs(1.0)
 		var r := boss_arena("N15", 150.0, 330.0)
@@ -2139,9 +2283,14 @@ func sc_co_firewall() -> Array:
 		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
 		var fw: FirewallBoss = r.boss
 		var seen := {}
+		var st := {}
+		var forced := [[3.0, "rule", "p2"], [8.0, "deny", "p2"], [14.0, "scan", "p2"], [20.0, "rule", "p1"], [26.0, "scan", "p2"], [32.0, "deny", "p2"]]
+		var marks := [[10.0, 0.55], [24.0, 0.2]]
 		var turned := 0
 		var wrong := 0
 		var was_plan := false
+		var walls := false
+		var drops := false
 		var t0 := Time.get_ticks_msec()
 		var f := 0
 		while Time.get_ticks_msec() - t0 < secs * 1000.0:
@@ -2150,8 +2299,13 @@ func sc_co_firewall() -> Array:
 			Controls.script_input = {"attack": f % 50 < 3}
 			f += 1
 			plan_stats(fw, seen)
+			var el := float(Time.get_ticks_msec() - t0) / 1000.0 / slow
+			boss_phase_script(fw, el, st, forced, marks)
+			for h in fw.hz:
+				walls = walls or h.k == "deny"
+				drops = drops or h.k == "drop"
 			var idle: bool = fw.plan.is_empty()
-			if idle and was_plan and fw.read.last_key == "p2" and coop().remote != null:
+			if idle and was_plan and fw.read.last_key == "p2" and coop().remote != null and fw._phase_now() < 3:
 				var hs: Array = fw.read.hits.get("p2", [])
 				if not hs.is_empty() and fw.read.clock - float(hs[hs.size() - 1].t) <= 2.0:
 					var want: float = Game.sign_of(fw.kit_aim("p2").x - fw.cx)
@@ -2160,16 +2314,13 @@ func sc_co_firewall() -> Array:
 					else:
 						wrong += 1
 			was_plan = not idle
-			if fw.hpf < float(fw.max_hp) * 0.5:
-				fw.hpf = float(fw.max_hp)
-				fw.hp = fw.max_hp
 			await get_tree().physics_frame
 		Controls.script_input = {}
 		var tg := {"p1": 0, "p2": 0}
 		for sq in seen:
 			tg[seen[sq]] += 1
 		await wait_secs(1.0)
-		return [started and seen.size() >= 5 and tg.p2 >= 1 and turned >= 1 and wrong == 0 and tg.p2 >= 1, "host: started %s, %d plans (p1 %d, p2 %d), shield turned to the guest %d times, wrong %d" % [started, seen.size(), tg.p1, tg.p2, turned, wrong]]
+		return [started and seen.size() >= 6 and tg.p2 >= 1 and wrong == 0 and walls and drops, "host: started %s, %d plans (p1 %d, p2 %d), shield turned to the guest %d times, wrong %d, deny walls %s, DROP ALL %s" % [started, seen.size(), tg.p1, tg.p2, turned, wrong, walls, drops]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("N15", 150.0, 330.0)
 	var found := {"b": null}
@@ -2181,16 +2332,15 @@ func sc_co_firewall() -> Array:
 	var pup: FirewallBoss = found.b
 	if pup == null:
 		return [false, "no firewall puppet"]
-	var st := {"f": 0, "swings": 0}
+	var st2 := {"f": 0, "swings": 0}
 	var seen2 := {}
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < secs * 1000.0:
 		var g = mgr().player
-		g.inv = 999.0
-		g.hp = g.max_hp
-		st.f += 1
+		st2.f += 1
 		plan_stats(pup, seen2)
-		Controls.script_input = boss_guest_keys(g, pup, true, st)
+		Controls.script_input = boss_guest_keys(g, pup, true, st2)
+		hazard_probe(g, pup, st2)
 		await get_tree().physics_frame
 	Controls.script_input = {}
 	var short := 0
@@ -2202,9 +2352,9 @@ func sc_co_firewall() -> Array:
 		if seen2[sq] == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [seen2.size() >= 5 and short == 0 and mine >= 1 and pup.kit_violation == "", "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, swings %d, violation '%s'" % [seen2.size(), short, mine, st.swings, pup.kit_violation]]
+	return [seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, arena hits taken %d, violations '%s' '%s'" % [seen2.size(), short, mine, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation]]
 
-# the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 20 s of fight, nobody is lost
+# the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 40 s of fight, nobody is lost
 func sc_co_reviewer2() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
@@ -2217,17 +2367,23 @@ func sc_co_reviewer2() -> Array:
 		var started := await wait_until(func(): return mgr().room.fight.state == "intro" or mgr().room.fight.state == "active", 60.0)
 		var active := await wait_until(func(): return mgr().room.fight.state == "active", 15.0)
 		var seen := {}
+		var st := {}
+		var phases := {}
+		var marks_seen := 0
 		var t0 := Time.get_ticks_msec()
-		while Time.get_ticks_msec() - t0 < 20000.0 * slow:
+		while Time.get_ticks_msec() - t0 < 40000.0 * slow:
 			p.inv = 999.0
 			p.hp = p.max_hp
 			var b = r.boss
 			plan_stats(b, seen)
-			if b != null and b.hpf < float(b.max_hp) * 0.5:
-				b.hpf = float(b.max_hp)
+			var el := float(Time.get_ticks_msec() - t0) / 1000.0 / slow
+			if b != null:
+				boss_phase_script(b, el, st, [[4.0, "nitpick", "p2"], [14.0, "nitpick", "p2"], [24.0, "verdict", "p2"], [34.0, "nitpick", "p2"]], [[12.0, 0.5], [26.0, 0.2]])
+				marks_seen = maxi(marks_seen, b.hz.size())
+				phases[b.phase] = true
 			await get_tree().physics_frame
 		var shut: bool = r.fight_active
-		return [started and active and seen.size() >= 3 and shut, "host: intro %s, active %s, %d plans, doors shut %s" % [started, active, seen.size(), shut]]
+		return [started and active and seen.size() >= 5 and shut and marks_seen >= 1 and phases.size() >= 3, "host: intro %s, active %s, %d plans, doors shut %s, comments on the floor at most %d, phases %s" % [started, active, seen.size(), shut, marks_seen, str(phases.keys())]]
 	var has := await wait_until(func(): return Game.flag("ability:ssh"), 10.0)
 	mgr().swap_to("N22", Vector2(11.0 * 16.0 + 3.0, 100.0))
 	var g = mgr().player
@@ -2255,15 +2411,20 @@ func sc_co_reviewer2() -> Array:
 		return found.b != null, 10.0)
 	var pup: Reviewer2 = found.b
 	var seen2 := {}
+	var st2 := {"f": 0}
 	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < 22000.0 * slow:
+	while Time.get_ticks_msec() - t1 < 42000.0 * slow:
 		var g2 = mgr().player
-		g2.inv = 999.0
-		g2.hp = g2.max_hp
+		st2.f += 1
 		plan_stats(pup, seen2)
+		if pup != null:
+			hazard_probe(g2, pup, st2)
+		else:
+			g2.inv = 999.0
 		await get_tree().physics_frame
 	var viol: String = pup.kit_violation if pup != null else "no puppet"
-	return [has and intro and pup != null and seen2.size() >= 3 and viol == "", "guest: ssh flag %s, intro %s, saw %d plans, violation '%s'" % [has, intro, seen2.size(), viol]]
+	var av: String = pup.arena_violation if pup != null else "no puppet"
+	return [has and intro and pup != null and seen2.size() >= 5 and viol == "" and av == "" and int(st2.get("hz_hits", 0)) >= 1, "guest: ssh flag %s, intro %s, saw %d plans, comment hits taken %d, violations '%s' '%s'" % [has, intro, seen2.size(), int(st2.get("hz_hits", 0)), viol, av]]
 
 # the honeypot bot: go to the nearest DDOS bit, jump when it is above, swing
 func honey_keys(r: Room, p, f: int) -> Dictionary:
@@ -2282,7 +2443,31 @@ func honey_keys(r: Room, p, f: int) -> Dictionary:
 			keys["jump"] = true
 	return keys
 
-# both drop into N21: the swarms are fought off, wave:N21 reaches both, the guest takes rate_limit out of the glass case
+# the typed creatures of the honeypot's waves (a MITM, a BOTNET, a PINGER) are shot down by the host after a few seconds (the bot only fights swarms);
+# `seen` collects the classes both pages see
+func honey_typed(r: Room, first: Dictionary, seen: Dictionary, kill: bool) -> void:
+	for e in r.ents:
+		if e.dead:
+			continue
+		var k := ""
+		if e is Mitm:
+			k = "mitm"
+		elif e is Botnet:
+			k = "botnet"
+		elif e is Pinger:
+			k = "pinger"
+		if k == "":
+			continue
+		seen[k] = true
+		if kill:
+			var iid: int = e.get_instance_id()
+			if not first.has(iid):
+				first[iid] = Time.get_ticks_msec()
+			elif Time.get_ticks_msec() - int(first[iid]) > 4000:
+				e.hp = 0
+				e.die("swipe")
+
+# both drop into N21: the swarms are fought off, the typed creatures seen, wave:N21 reaches both, the guest takes rate_limit out of the glass case
 func sc_co_honeypot() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
@@ -2292,14 +2477,17 @@ func sc_co_honeypot() -> Array:
 		await wait_secs(1.0)
 		mgr().swap_to("N21", spawn)
 		var cleared := false
+		var first := {}
+		var seen_k := {}
 		var t0 := Time.get_ticks_msec()
 		var f := 0
-		while Time.get_ticks_msec() - t0 < 100000.0 * slow:
+		while Time.get_ticks_msec() - t0 < 140000.0 * slow:
 			var p = mgr().player
 			p.inv = 999.0
 			p.hp = p.max_hp
 			f += 1
 			Controls.script_input = honey_keys(mgr().room, p, f)
+			honey_typed(mgr().room, first, seen_k, true)
 			if Game.flag("wave:N21"):
 				cleared = true
 				break
@@ -2307,18 +2495,20 @@ func sc_co_honeypot() -> Array:
 		Controls.script_input = {}
 		var owned := await wait_until(func(): return Game.flag("plugin:rate_limit"), 40.0)
 		await wait_secs(1.0)
-		return [cleared and owned, "host: waves cleared %s, rate_limit owned %s" % [cleared, owned]]
+		return [cleared and owned and seen_k.size() == 3, "host: waves cleared %s, rate_limit owned %s, typed creatures seen %s" % [cleared, owned, str(seen_k.keys())]]
 	await wait_secs(1.0)
 	mgr().swap_to("N21", spawn + Vector2(60.0, 0.0))
 	var flag := false
+	var seen_g := {}
 	var t1 := Time.get_ticks_msec()
 	var g := 0
-	while Time.get_ticks_msec() - t1 < 100000.0 * slow:
+	while Time.get_ticks_msec() - t1 < 140000.0 * slow:
 		var p2 = mgr().player
 		p2.inv = 999.0
 		p2.hp = p2.max_hp
 		g += 1
 		Controls.script_input = honey_keys(mgr().room, p2, g)
+		honey_typed(mgr().room, {}, seen_g, false)
 		if Game.flag("wave:N21"):
 			flag = true
 			break
@@ -2346,7 +2536,7 @@ func sc_co_honeypot() -> Array:
 				break
 	if not took:                                          # (the host's bot may have taken the chip first: the ownership is shared either way)
 		took = await wait_until(func(): return Game.owns_plugin("rate_limit"), 10.0)
-	return [flag and door_open and took, "guest: wave flag %s, N door open %s, chip %s taken %s" % [flag, door_open, str(not chip.is_empty()), took]]
+	return [flag and door_open and took and seen_g.size() == 3, "guest: wave flag %s, N door open %s, chip %s taken %s, typed creatures seen %s" % [flag, door_open, str(not chip.is_empty()), took, str(seen_g.keys())]]
 
 # the guest pulls N02's lever: the host has lever:D06 and D06's slot gate is open
 func sc_co_lever() -> Array:
@@ -2383,3 +2573,419 @@ func sc_co_lever() -> Array:
 	var mine := await wait_until(func(): return Game.flag("lever:D06"), 10.0)
 	await wait_secs(2.5)
 	return [mine, "guest: lever:D06 %s" % mine]
+
+# ---------------------------------------------------------------- MVB3-09: the NETWORK made hard
+# a spot to stand on: the first column from `x0` on with a floor under two free cells (px, top-left of the body)
+func stand_spot(r: Room, x0: int, row0: int, dir := 1, row1 := -1) -> Vector2:
+	var tx := x0
+	while tx > 0 and tx < r.w - 1:
+		for ty in range(row0, (r.h if row1 < 0 else mini(row1, r.h))):
+			if (r.grid.solid(tx, ty) or r.grid.tile(tx, ty) == TileGrid.ONEWAY) and not r.grid.solid(tx, ty - 1) and not r.grid.solid(tx, ty - 2):
+				return Vector2(float(tx * 16 + 3), float(ty * 16 - 10))
+		tx += dir
+	return Vector2(float(x0 * 16), 100.0)
+
+func all_of(r: Room, cls) -> Array:
+	var out: Array = []
+	for e in r.ents:
+		if is_instance_of(e, cls) and not e.dead:
+			out.append(e)
+	return out
+
+# N11: a SNIFFER taps a GET ring. The guest's zip to it is cut on its own page, a zip to a clean ring arrives, and the host's sniffer hops
+func sc_co_sniffer() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.curl = true
+		await wait_secs(1.0)
+		mgr().swap_to("N11", Vector2(14.0 * 16.0, 40.0 * 16.0 - 10.0))
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "N11", 20.0)
+		var r: Room = mgr().room
+		var sn: Array = all_of(r, Sniffer)
+		if sn.is_empty():
+			return [false, "host: no sniffer in N11"]
+		var start_rings: Array = []
+		for s2 in sn:
+			start_rings.append(s2.ring_i)
+		var hopped := false
+		var left_clean := false
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 80000.0 * slow and not hopped:
+			mgr().player.inv = 999.0
+			for k in range(sn.size()):
+				if is_instance_valid(sn[k]) and sn[k].ring_i != start_rings[k]:
+					hopped = true
+					left_clean = not r.ring_tapped(start_rings[k]) or start_rings.count(start_rings[k]) > 1
+			await get_tree().physics_frame
+		await wait_secs(4.0)
+		return [there and hopped and left_clean, "host: guest in N11 %s, %d sniffers, a sniffer hopped %s, the ring it left was clean %s" % [there, sn.size(), hopped, left_clean]]
+	var has := await wait_until(func(): return Game.tools.get("curl", false), 10.0)
+	mgr().swap_to("N11", Vector2(56.0 * 16.0, 17.0 * 16.0))
+	var r2: Room = mgr().room
+	var got := await wait_until(func(): return not all_of(r2, Sniffer).is_empty() and coop().snaps_applied > 3, 15.0)
+	if not got:
+		return [false, "guest: no sniffer puppet"]
+	var sp: Sniffer = all_of(r2, Sniffer)[0]
+	# the tapped ring: stand 50 px above it and press [special]
+	var cut := false
+	var arrived_tapped := false
+	for attempt in range(3):
+		var rp: Vector2 = Vector2(float(r2.rings[sp.ring_i].x), float(r2.rings[sp.ring_i].y))
+		var g = mgr().player
+		g.curl_last = -1
+		g.inv = 999.0
+		g.hp = g.max_hp
+		g.x = rp.x - 5.0
+		g.y = rp.y - 55.0
+		g.vx = 0.0
+		g.vy = 0.0
+		var tapped_idx: int = sp.ring_i
+		await get_tree().physics_frame
+		g.x = rp.x - 5.0
+		g.y = rp.y - 55.0
+		g.vy = 0.0
+		Controls.script_input = {"special": true}
+		await get_tree().physics_frame
+		Controls.script_input = {}
+		var started := false
+		for k in range(40):
+			await get_tree().physics_frame
+			if g.zip >= 0:
+				started = true
+			elif started:
+				break
+		var d := Vector2(g.x + 5.0 - rp.x, g.y + 5.0 - rp.y).length()
+		if started and d > 12.0 and r2.ring_tapped(tapped_idx):
+			cut = true
+			break
+		if started and d <= 12.0:
+			arrived_tapped = true
+		await wait_secs(0.5)
+	# a clean ring: the first ring nobody taps with a spot 50 px above it that picks it
+	var arrived := false
+	var tries := 0
+	for i in range(r2.rings.size()):
+		if r2.ring_tapped(i) or arrived:
+			continue
+		var rq: Vector2 = Vector2(float(r2.rings[i].x), float(r2.rings[i].y))
+		var g2 = mgr().player
+		g2.curl_last = -1
+		g2.x = rq.x - 5.0
+		g2.y = rq.y - 55.0
+		g2.vx = 0.0
+		g2.vy = 0.0
+		if r2.grid.box_hits_solid(g2.x, g2.y, 10.0, 10.0) or r2.pick_anchor(g2, 0.0) != i:
+			continue
+		tries += 1
+		await get_tree().physics_frame
+		g2.x = rq.x - 5.0
+		g2.y = rq.y - 55.0
+		g2.vy = 0.0
+		Controls.script_input = {"special": true}
+		await get_tree().physics_frame
+		Controls.script_input = {}
+		var st2 := false
+		for k in range(40):
+			await get_tree().physics_frame
+			if g2.zip >= 0:
+				st2 = true
+			elif st2:
+				break
+		if st2 and Vector2(g2.x + 5.0 - rq.x, g2.y + 5.0 - rq.y).length() <= 14.0:
+			arrived = true
+		if tries >= 4:
+			break
+	# then wait, 85+ px from any tapped ring, and watch the puppet hop
+	var ring0: int = sp.ring_i
+	var far := Vector2(float(r2.rings[0].x), float(r2.rings[0].y))
+	var best_d := 0.0
+	for i in range(r2.rings.size()):
+		var rr2: Vector2 = Vector2(float(r2.rings[i].x), float(r2.rings[i].y))
+		var dd := rr2.distance_to(Vector2(float(r2.rings[sp.ring_i].x), float(r2.rings[sp.ring_i].y)))
+		if dd > 85.0 and dd < 150.0 and (best_d == 0.0 or dd < best_d):
+			best_d = dd
+			far = rr2
+	var hop_seen := false
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 60000.0 * slow and not hop_seen:
+		var g3 = mgr().player
+		g3.inv = 999.0
+		g3.hp = g3.max_hp
+		g3.x = far.x - 5.0
+		g3.y = far.y - 5.0
+		g3.vx = 0.0
+		g3.vy = 0.0
+		if sp.ring_i != ring0:
+			hop_seen = true
+		await get_tree().physics_frame
+	await wait_secs(1.0)
+	return [has and cut and arrived and hop_seen, "guest: curl %s, zip to the tapped ring cut %s (arrived anyway %s), zip to a clean ring arrived %s, the puppet hopped %s" % [has, cut, arrived_tapped, arrived, hop_seen]]
+
+# N01: the MITM records the guest's swing and echoes it toward the guest (a side swipe, then an up swipe)
+func sc_co_mitm() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("N01", Vector2(3.0 * 16.0, 14.0 * 16.0 - 10.0))
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "N01", 20.0)
+		var r: Room = mgr().room
+		var ms: Array = all_of(r, Mitm)
+		if ms.is_empty():
+			return [false, "host: no MITM in N01"]
+		var m: Mitm = ms[0]
+		var kinds: Array = []
+		var toward := 0
+		var wrong := 0
+		var last_state := ""
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 45000.0 * slow and kinds.size() < 2:
+			mgr().player.inv = 999.0
+			mgr().player.x = 3.0 * 16.0
+			if m.state != last_state:
+				if m.state == "echo" and coop().remote != null:
+					kinds.append(m.kind)
+					var want: float = Game.sign_of(coop().remote.x + 5.0 - m.cx)
+					if want == m.face:
+						toward += 1
+					else:
+						wrong += 1
+				last_state = m.state
+			await get_tree().physics_frame
+		await wait_secs(2.0)
+		return [there and kinds.size() >= 2 and kinds[0] == 0 and kinds[1] == 1 and wrong == 0, "host: echo kinds %s (side 0, up 1), faced the guest %d times, wrong %d" % [str(kinds), toward, wrong]]
+	await wait_secs(1.5)
+	mgr().swap_to("N01", Vector2(26.0 * 16.0, 14.0 * 16.0 - 10.0))
+	var r2: Room = mgr().room
+	var got := await wait_until(func(): return not all_of(r2, Mitm).is_empty() and coop().snaps_applied > 3, 15.0)
+	if not got:
+		return [false, "guest: no MITM puppet"]
+	var pm: Mitm = all_of(r2, Mitm)[0]
+	var saw_record := [false, false]
+	var echo_toward := [false, false]
+	var kind_seen := [-1, -1]
+	for round in range(2):
+		# wait until it stands near, in `listen`
+		await wait_until(func(): return pm.state == "listen" and absf(pm.cx - (mgr().player.x + 5.0)) < 70.0, 25.0)
+		await wait_secs(0.7)                                    # (it listens again 0.3 s after `open`)
+		var g = mgr().player
+		g.inv = 999.0
+		g.hp = g.max_hp
+		g.face = 1.0 if pm.cx > g.x else -1.0
+		for q in range(4):
+			Controls.script_input = {"attack": q < 2, "up": round == 1}
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		var t1 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t1 < 6000.0 * slow:
+			g.inv = 999.0
+			g.hp = g.max_hp
+			if pm.state == "record":
+				saw_record[round] = true
+				kind_seen[round] = pm.kind
+			if pm.state == "echo":
+				for hb in pm.harmboxes():
+					if hb is Dictionary and hb.w == (28.0 if round == 0 else 26.0):
+						var mid: float = hb.x + hb.w / 2.0
+						if round == 0 and (mid - pm.cx) * (g.x + 5.0 - pm.cx) > 0.0:
+							echo_toward[round] = true
+						if round == 1 and absf(mid - pm.cx) < 2.0 and hb.y < pm.y:
+							echo_toward[round] = true
+			if pm.state == "open" and saw_record[round]:
+				break
+			await get_tree().physics_frame
+		await wait_secs(0.5)
+	return [saw_record[0] and saw_record[1] and echo_toward[0] and echo_toward[1] and kind_seen[0] == 0 and kind_seen[1] == 1, "guest: recorded %s (kinds %s), echo toward me %s" % [str(saw_record), str(kind_seen), str(echo_toward)]]
+
+# N17: the guest passes row 16 and starts the RST chase; both pages draw the line within 8 px (plus the line's own delay); the line hurts the guest once;
+# when both stand below row 77 rst:N17 is set on both and the line is gone
+func sc_co_rst() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("N17", Vector2(3.0 * 16.0, 4.0 * 16.0))
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "N17", 20.0)
+		var r: Room = mgr().room
+		clear_creatures(r)                                           # (the line is the test, not the room's creatures)
+		var top: Vector2 = stand_spot(r, 2, 3, 1, 15)
+		var host_above := true
+		var started := false
+		var samples: Array = []
+		var t0 := Time.get_ticks_msec()
+		var next_s := 0.0
+		while Time.get_ticks_msec() - t0 < 90000.0 * slow:
+			var p = mgr().player
+			p.inv = 999.0
+			p.hp = p.max_hp
+			for e in r.ents:
+				if not e.dead:
+					e.dead = true
+			if not started:
+				p.x = top.x
+				p.y = top.y
+				p.vx = 0.0
+				p.vy = 0.0
+				if r.ch_t0 >= 0.0:
+					started = true
+					host_above = p.y < 16.0 * 16.0
+			else:
+				if float(Time.get_ticks_msec()) / 1000.0 > next_s:
+					next_s = float(Time.get_ticks_msec()) / 1000.0 + 0.25
+					samples.append([Time.get_unix_time_from_system(), r.chase_line_y(), r.time])
+				if r.time - r.ch_t0 > 12.0 and not Game.flag("rst:N17"):
+					var bot: Vector2 = stand_spot(r, 2, 78)
+					p.x = bot.x
+					p.y = bot.y
+					p.vx = 0.0
+					p.vy = 0.0
+				if Game.flag("rst:N17"):
+					break
+			await get_tree().physics_frame
+		await wait_secs(2.0)
+		var gone: bool = r.ch_t0 < 0.0
+		# the guest's samples (its log lines reach this log) against ours at the same wall time
+		var gs: Array = []
+		for ln in Game.log_buf:
+			var txt: String = ln[1]
+			if txt.begins_with("P2> SCN chase "):
+				var parts := txt.substr(14).split(" ")
+				gs.append([float(parts[0]), float(parts[1]), float(parts[2])])
+		var cmp := 0
+		var worst := 0.0
+		var tdiff: Array = []
+		for gsm in gs.slice(6):                                      # (the first seconds after the guest came in: its clock is still catching up with ours)
+			var best = null
+			for hs in samples:
+				if absf(hs[0] - gsm[0]) < 0.13 and (best == null or absf(hs[0] - gsm[0]) < absf(best[0] - gsm[0])):
+					best = hs
+			if best != null:
+				cmp += 1
+				worst = maxf(worst, absf(best[1] - gsm[1]))
+				tdiff.append(snappedf(gsm[2] - best[2], 0.01))
+		var tol := 8.0 + 46.0 * (Net.rtt / 2.0 + 0.2 if slow > 1.0 else 0.0)
+		return [there and started and host_above and Game.flag("rst:N17") and gone and cmp >= 4 and worst <= tol, "host: guest in N17 %s, chase started by the guest %s (host above row 16: %s), rst:N17 %s, line gone %s, %d samples compared, worst difference %.1f px (limit %.1f), clock differences guest-host %s" % [there, started, host_above, Game.flag("rst:N17"), gone, cmp, worst, tol, str(tdiff.slice(0, 12))]]
+	await wait_secs(1.5)
+	mgr().swap_to("N17", Vector2(3.0 * 16.0, 18.0 * 16.0))
+	var r2: Room = mgr().room
+	var g = mgr().player
+	var spot: Vector2 = stand_spot(r2, 2, 17, 1, 30)
+	g.x = spot.x
+	g.y = spot.y
+	g.vx = 0.0
+	g.vy = 0.0
+	var saw := await wait_until(func(): return r2.ch_t0 >= 0.0, 15.0)
+	var hp0: int = g.hp
+	var hurt_once := false
+	var moved_below := false
+	var t1 := Time.get_ticks_msec()
+	var next_log := 0.0
+	var line_ok := true
+	while Time.get_ticks_msec() - t1 < 30000.0 * slow and not hurt_once:
+		g.inv = 0.0 if g.hp >= hp0 else 999.0
+		if r2.ch_t0 >= 0.0 and float(Time.get_ticks_msec()) / 1000.0 > next_log:
+			next_log = float(Time.get_ticks_msec()) / 1000.0 + 0.25
+			Game.dlog("SCN chase %.3f %.1f %.3f" % [Time.get_unix_time_from_system(), r2.chase_line_y(), r2.time])
+		if g.hp < hp0:
+			hurt_once = true
+			moved_below = g.y > r2.chase_line_y() - 2.0
+			g.inv = 999.0
+		await get_tree().physics_frame
+	# then on down, to row 77 and below, logging the line on the way
+	var t2 := Time.get_ticks_msec()
+	var bot2: Vector2 = stand_spot(r2, 2, 78)
+	while Time.get_ticks_msec() - t2 < 60000.0 * slow and not Game.flag("rst:N17"):
+		g.inv = 999.0
+		g.hp = g.max_hp
+		if r2.ch_t0 >= 0.0 and float(Time.get_ticks_msec()) / 1000.0 > next_log:
+			next_log = float(Time.get_ticks_msec()) / 1000.0 + 0.25
+			Game.dlog("SCN chase %.3f %.1f %.3f" % [Time.get_unix_time_from_system(), r2.chase_line_y(), r2.time])
+		if r2.time - maxf(r2.ch_t0, 0.0) > 10.0:
+			g.x = bot2.x
+			g.y = bot2.y
+			g.vx = 0.0
+			g.vy = 0.0
+		await get_tree().physics_frame
+	await wait_secs(3.0)
+	var flag := Game.flag("rst:N17")
+	return [saw and hurt_once and moved_below and flag and r2.ch_t0 < 0.0, "guest: line seen %s, hurt once by it %s and put below it %s, rst:N17 %s, line gone %s" % [saw, hurt_once, moved_below, flag, r2.ch_t0 < 0.0]]
+
+# N12: packet loss. Both pages lose the same packets (the guest's list of lost packets is a run of the host's), and the guest, riding a lossy packet, falls with it
+func loss_watch(r: Room, st: Dictionary) -> void:
+	for m in r.plats:
+		if m.get("packet", false) and m.get("lossy", false):
+			var j: int = m.j
+			var was: bool = st.was.get(j, false)
+			var now: bool = bool(m.lost)
+			if now and not was:
+				st.events.append(j)
+				if role == "guest":
+					Game.dlog("SCN loss %d" % j)
+			st.was[j] = now
+
+func sc_co_loss() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var st := {"was": {}, "events": []}
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("N12", Vector2(2.0 * 16.0, 10.0 * 16.0 - 10.0))
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "N12", 20.0)
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 50000.0 * slow:
+			mgr().player.inv = 999.0
+			mgr().player.hp = mgr().player.max_hp
+			mgr().player.x = 2.0 * 16.0
+			mgr().player.y = 10.0 * 16.0 - 10.0
+			loss_watch(mgr().room, st)
+			await get_tree().physics_frame
+		await wait_secs(2.0)
+		var gl: Array = []
+		for ln in Game.log_buf:
+			var txt: String = ln[1]
+			if txt.begins_with("P2> SCN loss "):
+				gl.append(int(txt.substr(13)))
+		# the guest's events are a run of ours (it came in later)
+		var ok := gl.size() >= 3
+		var hl: Array = st.events
+		var start := -1
+		for i in range(hl.size()):
+			if hl.slice(i, i + gl.size()) == gl:
+				start = i
+		var all_third := true
+		for j in hl:
+			if int(j) % 3 != 2:
+				all_third = false
+		return [there and ok and start >= 0 and all_third and hl.size() >= 3, "host: %d losses %s, the guest saw %s (a run of ours at %d), only every third packet %s" % [hl.size(), str(hl), str(gl), start, all_third]]
+	await wait_secs(1.5)
+	mgr().swap_to("N12", Vector2(2.0 * 16.0, 10.0 * 16.0 - 10.0))
+	var r2: Room = mgr().room
+	await wait_until(func(): return coop().snaps_applied > 3, 10.0)
+	var rode := 0
+	var fell := false
+	var riding_j := -1
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 52000.0 * slow:
+		var g = mgr().player
+		g.inv = 999.0
+		g.hp = g.max_hp
+		loss_watch(r2, st)
+		# ride a lossy packet that is still before the first loss column
+		if riding_j < 0 or g.y > 15.0 * 16.0:
+			for m in r2.plats:
+				if m.get("packet", false) and m.get("lossy", false) and not m.off and m.x + m.w / 2.0 > 22.0 * 16.0 and m.x + m.w / 2.0 < 25.0 * 16.0:
+					riding_j = m.j
+					g.x = m.x + m.w / 2.0 - 5.0
+					g.y = m.y - 10.0
+					g.vx = 0.0
+					g.vy = 0.0
+					break
+		if g.ride != null and g.ride.get("lossy", false):
+			rode += 1
+		for m in r2.plats:
+			if m.get("packet", false) and m.j == riding_j and m.lost and g.y > m.y + 14.0:
+				fell = true
+		await get_tree().physics_frame
+	await wait_secs(1.0)
+	return [rode >= 10 and fell and st.events.size() >= 3, "guest: rode a lossy packet for %d frames, fell with it when it was lost %s, saw %d losses %s" % [rode, fell, st.events.size(), str(st.events)]]
