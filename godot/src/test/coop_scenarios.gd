@@ -2004,7 +2004,8 @@ func sc_co_ssh() -> Array:
 	await wait_secs(2.0)
 	var there := await walk_until("right", "N17", 40.0)
 	await wait_secs(1.5)
-	mgr().swap_to("N17", Vector2(6.0 * 16.0, 11.0 * 16.0 - 10.0)) if not there else null
+	if not there:
+		mgr().swap_to("N17", Vector2(6.0 * 16.0, 11.0 * 16.0 - 10.0))
 	var back := await walk_until("left", "N16", 40.0)
 	await wait_secs(1.5)
 	return [has and there and back, "guest: ssh %s, N16 -> N17 %s, back %s" % [has, there, back]]
@@ -2072,7 +2073,7 @@ func sc_co_crawler() -> Array:
 			plan_stats(b, seen)
 			var el := float(Time.get_ticks_msec() - t0) / 1000.0
 			if b.plan.is_empty() and forced < 3 and el > next_force and b.active and not b.dying:
-				b._start("volley", "p2")                                  # (scripted: the volleys the guest catches)
+				b._start("volley")                                  # (scripted: the volleys the guest catches)
 				forced += 1
 				next_force = el + 9.0
 			var caught := int(r.stats.get("caught", 0))
@@ -2347,8 +2348,9 @@ func sc_co_lever() -> Array:
 		p.vx = 0.0
 		p.face = 1.0
 		p.inv = 999.0
-		Controls.script_input = {"attack": true}
-		await get_tree().physics_frame
+		for q in range(4):
+			Controls.script_input = {"attack": q < 2}
+			await get_tree().physics_frame
 		Controls.script_input = {}
 		await wait_secs(0.4)
 		if Game.flag("lever:D06"):
