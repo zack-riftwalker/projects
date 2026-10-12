@@ -160,7 +160,7 @@ func grounded(e) -> bool:
 # plats: the room's moving platforms (dictionaries with x y w h dx dy)
 func plat_under(e, prev_bottom: float, plats: Array):
 	for p in plats:
-		if p.get("off", false):
+		if p.get("off", false) or p.get("lost", false):
 			continue
 		if e.x + e.w > p.x and e.x < p.x + p.w and prev_bottom <= p.y + 2 + absf(p.dy) and e.y + e.h >= p.y:
 			return p

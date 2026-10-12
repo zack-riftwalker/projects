@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -22,6 +22,7 @@ func run(name: String):
 		"kit4b3": return t_kit4b3()
 		"w6enemies2": return t_w6enemies2()
 		"w6enemies": return t_w6enemies()
+		"net4b3": return t_net4b3()
 	return await super.run(name)
 
 func partner(room: Room, px: float, py: float) -> RemotePlayer:
@@ -626,3 +627,217 @@ func finish_w6enemies(res: Dictionary) -> bool:
 		fail(res, "a player behind a wall during the track was tagged")
 	Game.fresh()
 	return report("w6enemies", res.ok, res.info)
+
+func lossy_packet(r: Room) -> Dictionary:
+	for m in r.plats:
+		if m.get("packet", false) and int(m.j) % 3 == 2:
+			return m
+	return {}
+
+# the room time at which packet m's centre is over column `col` (searched on a copy of the clock)
+func time_over(r: Room, m: Dictionary, col: int) -> float:
+	var pa: Dictionary = m.path
+	var span: float = float(pa.n) * float(pa.every)
+	var prev := -1e9
+	for k in range(int(span * 100.0)):
+		var tt := float(k) / 100.0
+		var u := fposmod(tt + float(m.j) * float(pa.every), span)
+		var nx: float = float(pa.xa) + u * float(pa.speed) + float(pa.w) / 2.0
+		var target := float(col * 16 + 8)
+		if k > 0 and prev < target and nx >= target and nx <= float(pa.xb) + float(pa.w):
+			return tt
+		prev = nx
+	return -1.0
+
+func t_net4b3() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	# ---- N12: packet loss
+	var r := new_room("N12")
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	var m := lossy_packet(r)
+	if m.is_empty():
+		fail(res, "N12 has no lossy packet")
+		r.queue_free()
+		return report("net4b3", false, res.info)
+	var tc := time_over(r, m, 27)
+	if tc < 0.0:
+		fail(res, "the third packet never reaches column 27")
+	var r2 := new_room("N12")
+	var m2 := lossy_packet(r2)
+	var identical := true
+	var lost_for := 0.0
+	var warned := false
+	for k in range(int(8.0 * 100.0)):
+		var tt := tc - 2.0 + float(k) / 100.0
+		r.time = tt
+		r2.time = tt
+		r._move_packets()
+		r2._move_packets()
+		if bool(m.lost) != bool(m2.lost) or bool(m.warn) != bool(m2.warn):
+			identical = false
+		if m.lost:
+			lost_for += 0.01
+			if tt < tc - 0.011:
+				fail(res, "lost before column 27 (%.2f vs %.2f)" % [tt, tc])
+		if m.warn:
+			warned = true
+	if not identical:
+		fail(res, "two rooms at the same time disagree about the loss")
+	if absf(lost_for - 1.2) > 0.1 and absf(lost_for - 0.6) > 0.1:      # (two columns inside the window: 27 and later 45 are 18 columns apart = more than 8 s)
+		fail(res, "lost for %.2f s" % lost_for)
+	if not warned:
+		fail(res, "no warning before the loss")
+	for other in r.plats:
+		if other.get("packet", false) and int(other.j) % 3 != 2:
+			for k in range(300):
+				r.time = float(k) * 0.1
+				r._move_packets()
+				if other.lost:
+					fail(res, "packet %d was lost" % other.j)
+					break
+	# a rider standing on it falls into the spike strip under the column; a rider who runs and jumps off 0.3 s before clears the strip
+	var outcomes: Array = []
+	for variant in ["stand", "run-jump"]:
+		var rr := new_room("N12")
+		for e in rr.ents:
+			e.queue_free()
+		rr.ents.clear()
+		var mm := lossy_packet(rr)
+		rr.time = tc - 1.5
+		rr._move_packets()
+		var q = rr.player
+		q.inv = 99.0
+		q.hp = q.max_hp
+		q.x = mm.x + float(mm.w) / 2.0 - 5.0
+		q.y = mm.y - q.h
+		q.vx = 0.0
+		q.vy = 0.0
+		for f in range(int(3.0 * 60.0)):
+			var keys := {}
+			var rel: float = rr.time - tc                     # seconds relative to the moment its centre is over the column
+			if variant == "run-jump" and rel > -0.31:
+				keys["right"] = true
+				if rel < 0.05:
+					keys["jump"] = true
+			step_keys(rr, keys)
+			q.inv = 99.0
+			if OS.get_environment("LOSSDBG") != "" and variant == "run-jump" and f % 6 == 0:
+				print("rel %.2f dy %.1f x %.1f lost %s hp %d" % [rel, q.y - mm.y, q.x, str(mm.lost), q.hp])
+		outcomes.append([q.hp, q.x])
+		rr.queue_free()
+	if outcomes[0][0] >= 5:
+		fail(res, "a rider that stood still did not fall into the spikes (hp %d)" % outcomes[0][0])
+	if outcomes[1][0] < 5:
+		fail(res, "a rider that ran and jumped 0.3 s before still lost hp (%d, x %.0f)" % [outcomes[1][0], outcomes[1][1]])
+	r.queue_free()
+	r2.queue_free()
+	# ---- N17: the RST chase
+	Game.flags = {}
+	var rc := new_room("N17")
+	for e in rc.ents:
+		e.queue_free()
+	rc.ents.clear()
+	var p = rc.player
+	p.inv = 99.0
+	p.x = 3.0 * 16.0
+	p.y = 4.0 * 16.0
+	for f in range(30):
+		step_keys(rc, {})
+		p.vy = 0.0
+		p.y = 4.0 * 16.0
+		p.inv = 99.0
+	if rc.ch_t0 >= 0.0:
+		fail(res, "the chase started above row 16")
+	p.y = 16.0 * 16.0 + 24.0
+	step_keys(rc, {})
+	if rc.ch_t0 < 0.0:
+		fail(res, "the chase did not start when a player passed row 16")
+	var line0 := rc.chase_line_y()
+	for f in range(60):
+		p.inv = 99.0
+		p.y = 40.0 * 16.0
+		p.vy = 0.0
+		step_keys(rc, {})
+	var line1 := rc.chase_line_y()
+	if absf((line1 - line0) - 46.0) > 6.0:
+		fail(res, "the line moved %.1f px in a second, want 46" % (line1 - line0))
+	# a player above the line is hurt once and put below it
+	rc.time = 40.0
+	rc.ch_t0 = rc.time - 10.0                              # the line is at about 428
+	var ly := rc.chase_line_y()
+	p.inv = 0.0
+	p.hp = p.max_hp
+	p.x = 3.0 * 16.0
+	p.y = ly - 60.0
+	p.vy = 0.0
+	rc._chase_hurt(p)
+	if p.hp != p.max_hp - 1 or p.y <= ly:
+		fail(res, "above the line: hp %d/%d, y %.0f vs line %.0f" % [p.hp, p.max_hp, p.y, ly])
+	# reaching row 77 ends it for good
+	p.inv = 99.0
+	p.x = 3.0 * 16.0
+	p.y = 77.0 * 16.0 + 2.0
+	for f in range(10):
+		p.y = 77.0 * 16.0 + 2.0
+		p.vy = 0.0
+		step_keys(rc, {})
+	if not Game.flag("rst:N17") or rc.ch_t0 >= 0.0:
+		fail(res, "rst:N17 not set at row 77 (flag %s, ch %.2f)" % [str(Game.flag("rst:N17")), rc.ch_t0])
+	rc.queue_free()
+	var rc2 := new_room("N17")
+	rc2.player.y = 40.0 * 16.0
+	for f in range(10):
+		step_keys(rc2, {})
+		rc2.player.y = 40.0 * 16.0
+	if rc2.ch_t0 >= 0.0:
+		fail(res, "a rebuilt room has a chase after rst:N17")
+	rc2.queue_free()
+	Game.flags = {}
+	# ---- N21: the honeypot's typed waves
+	var rw := new_room("N21")
+	for e in rw.ents:
+		e.queue_free()
+	rw.ents.clear()
+	rw.player.inv = 99.0
+	var kinds_seen := {}
+	var wave_idx := -1
+	for f in range(60 * 90):
+		rw.player.inv = 99.0
+		rw.player.x = 24.0 * 16.0
+		rw.player.y = 12.0 * 16.0 - 10.0
+		step_keys(rw, {})
+		for e in rw.ents:
+			if e is Botnet:
+				kinds_seen["r"] = true
+			if e is Pinger:
+				kinds_seen["y"] = true
+			if e is Mitm:
+				kinds_seen["u"] = true
+		if rw.wave_i == 1:
+			# clear this wave
+			for e in rw.wave_ents:
+				if is_instance_valid(e):
+					e.dead = true
+		if rw.wave_i == 2 and kinds_seen.has("r") and kinds_seen.has("y"):
+			break
+		if rw.wave_i >= 1 and rw.wave_i != wave_idx:
+			wave_idx = rw.wave_i
+			for e in rw.wave_ents:
+				if is_instance_valid(e) and wave_idx < 1:
+					e.dead = true
+		if rw.wave_i == 0:
+			for e in rw.wave_ents:
+				if is_instance_valid(e):
+					e.dead = true
+	if not (kinds_seen.has("u") and kinds_seen.has("r") and kinds_seen.has("y")):
+		fail(res, "waves: seen %s" % str(kinds_seen.keys()))
+	rw.queue_free()
+	Game.fresh()
+	return report("net4b3", res.ok, res.info)

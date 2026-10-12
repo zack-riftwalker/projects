@@ -64,6 +64,11 @@ var zones: Array = []                      # short-lived damage areas the guest 
 var next_zone := 1
 var next_pid := 1
 var next_lid := 1
+var ch_t0 := -1.0                           # N17's RST chase (rooms.json `chase`): the room time it started (-1: not running). Host decides; the guest gets it in the snapshot (`ch`)
+var ch_seen := -1.0
+var ch_prev := -1.0
+var ch_fade_y := 0.0
+var ch_fade := 0.0                          # > 0: the line fades after the chase ended
 var next_swarm := 0                        # DDOS swarms made in this room (host): their round robin runs inside each
 var summon_ok := true
 var pending_cracks := {}                   # guest: tiles hidden before the host confirmed them
@@ -611,9 +616,11 @@ func _find_ports() -> void:
 		port_cols.append({"tx": keys[i], "ty0": cols[keys[i]][0], "ty1": cols[keys[i]][1], "idx": i})
 
 func _move_packets() -> void:
+	var lossy: Dictionary = def.get("packets", {}).get("lossy", {})
 	for m in plats:
 		if not m.get("packet", false):
 			continue
+		m["warn"] = false
 		var pa: Dictionary = m.path
 		var span: float = float(pa.n) * float(pa.every)
 		var u := fposmod(time + float(m.j) * float(pa.every), span)
@@ -622,6 +629,18 @@ func _move_packets() -> void:
 		m.off = nx > float(pa.xb)
 		m.dx = 0.0 if (m.off or was_off) else nx - m.x
 		m.x = nx if not m.off else float(pa.xa)
+		m["lost"] = false
+		m["lossy"] = false
+		if not lossy.is_empty() and int(m.j) % int(lossy.every) == int(lossy.every) - 1:
+			m["lossy"] = true
+			if not m.off:                                         # packet loss: a pure function of the clock, so both pages lose the same packet
+				var centre: float = m.x + float(m.w) / 2.0
+				for lc in lossy.x:
+					var reach: float = ((float(lc) * T + 8.0) - centre) / float(pa.speed)    # seconds until its centre is over the column
+					if reach > 0.0 and reach <= float(lossy.warn):
+						m["warn"] = true
+					elif reach <= 0.0 and -reach < float(lossy.off):
+						m["lost"] = true
 
 # a port is open while a packet's front is close enough (the lead) and its back has not left yet (the lag); it never closes on a body
 func _update_ports(bodies: Array) -> void:
@@ -634,7 +653,7 @@ func _update_ports(bodies: Array) -> void:
 		var px: float = pc.tx * T
 		var want := false
 		for m in plats:
-			if m.get("packet", false) and not m.off and m.x + m.w >= px - lead and m.x <= px + T + lag:
+			if m.get("packet", false) and not m.off and not m.get("lost", false) and m.x + m.w >= px - lead and m.x <= px + T + lag:
 				want = true
 				break
 		for ty in range(pc.ty0, pc.ty1 + 1):
@@ -1002,6 +1021,101 @@ func ring_tapped(i: int) -> bool:
 			return true
 	return false
 
+# ---- the RST chase (N17, MVB3-05): a red line of `connection reset` falls from the top; a body above it is hurt and put below it
+func chase_line_y() -> float:
+	return -32.0 + float(def.chase.speed) * (time - ch_t0)
+
+# host / solo: it starts when somebody passes the trigger row, it ends (for good: a world flag) when everybody is below the end row
+func _chase_track(dt: float) -> void:
+	if ch_fade > 0.0:
+		ch_fade -= dt
+	if ch_t0 >= 0.0:
+		ch_seen = ch_t0
+	elif ch_seen >= 0.0:                                                  # it just ended: the line fades where it stopped
+		if def.has("chase") and Game.flag(String(def.chase.flag)):
+			ch_fade = 1.0
+			ch_prev = ch_seen
+			ch_fade_y = -32.0 + float(def.chase.speed) * (time - ch_seen)
+		ch_seen = -1.0
+
+func _step_chase(dt: float) -> void:
+	_chase_track(dt)
+	if not def.has("chase") or mode == "guest":
+		return
+	var cd: Dictionary = def.chase
+	if Game.flag(String(cd.flag)):
+		ch_t0 = -1.0
+		return
+	var live := players()
+	if ch_t0 < 0.0:
+		for q in live:
+			if q.y > float(cd.trigger_row) * T:
+				ch_t0 = snappedf(time, 0.01)
+				Audio.sfx("glitch")
+				shake(0.4)
+				break
+	elif not live.is_empty() and live.all(func(q): return q.y > float(cd.end_row) * T):
+		Game.flags[String(cd.flag)] = true
+		Game.write_save()
+		ch_t0 = -1.0
+		Audio.sfx("gate")
+		for q in live:
+			pop(q.x + 5.0, q.y - 14.0, "connection restored", "#58f0c8", true)
+			break
+
+# each page, its own body: above the line costs 1 hp and a place on the nearest floor below the line
+func _chase_hurt(p) -> void:
+	if ch_t0 < 0.0 or not def.has("chase") or p.dead or p.gone:
+		return
+	var ly := chase_line_y()
+	if p.y >= ly:
+		return
+	var spot = _chase_spot(p, ly)
+	p.hurt(1, p.x + 5.0)
+	if p.dead:
+		return
+	if spot != null:
+		p.x = spot.x
+		p.y = spot.y
+	p.vx = 0.0
+	p.vy = 0.0
+	p.on_ground = true
+	p.inv = maxf(p.inv, 1.0)
+
+# searching down from the line, the same column first, then the neighbours: a floor with a free cell above it
+func _chase_spot(p, ly: float):
+	var tx0 := floori((p.x + 5.0) / T)
+	for off in [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]:
+		var tx: int = tx0 + off
+		if tx < 1 or tx >= w - 1:
+			continue
+		var ty := maxi(1, ceili((ly + 12.0) / T))
+		while ty < h - 1:
+			if (grid.tile(tx, ty) == TileGrid.SOLID or grid.tile(tx, ty) == TileGrid.ONEWAY) and grid.tile(tx, ty - 1) == TileGrid.E and float(ty * T) - 10.0 > ly:
+				return {"x": float(tx * T + 3), "y": float(ty * T - 10)}
+			ty += 1
+	return null
+
+func _draw_chase(ci: CanvasItem) -> void:
+	if not def.has("chase") or (ch_t0 < 0.0 and ch_fade <= 0.0):
+		return
+	var a := 1.0 if ch_t0 >= 0.0 else clampf(ch_fade, 0.0, 1.0)
+	if ch_t0 < 0.0 and (ch_fade <= 0.0 or ch_prev < 0.0):
+		return
+	var ly: float = chase_line_y() if ch_t0 >= 0.0 else ch_fade_y
+	var red := Color("#ff3b3b")
+	red.a = a
+	ci.draw_rect(Rect2(0, ly - 3.0, pw, 6), red)
+	ci.draw_rect(Rect2(0, ly - 3.0, pw, 1), Color(1.0, 0.8, 0.8, a))
+	for k in range(int(pw / 14)):                                         # static falling off the band
+		var sx: float = float(k) * 14.0 + Game.hash3(float(k), floorf(time * 14.0), 5) * 10.0
+		ci.draw_rect(Rect2(sx, ly + 3.0 + fposmod(time * 40.0 + float(k) * 7.0, 14.0), 1, 2), Color(1.0, 0.4, 0.4, a * 0.6))
+	var cxm: float = cam.x + 192.0
+	for k in range(-2, 3):
+		PixelText.draw_text(ci, "RST", cxm + k * 90.0, ly - 9.0, "#ffd0d0", {"align": "c", "tiny": true, "outline": Game.COL.ink})
+	if time - ch_t0 < 0.6:
+		PixelText.draw_text(ci, "connection reset", cxm, cam.y + 70.0, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
+
 # DDOS bits close round a body make it "jam" (MVB3-02): slow and no dash. Computed on each page for its own body from the bits it sees.
 func jam_for(q) -> bool:
 	var n := 0
@@ -1124,10 +1238,12 @@ func step_guest(dt: float) -> void:
 	_step_variants()
 	_move_platforms()
 	_step_tags(dt)
+	_chase_track(dt)
 	var p = player
 	if p != null:
 		p.jam = jam_for(p) if not p.dead else false
 		p.update(dt)
+		_chase_hurt(p)
 		_check_door()
 		if not p.dead and _touches_dead(p):
 			reveal_dead()
@@ -1361,11 +1477,13 @@ func step(dt: float) -> void:
 	_move_platforms()
 
 	_step_tags(dt)
+	_step_chase(dt)
 	if p != null:
 		p.jam = jam_for(p) if not p.dead else false
 		ctx = "p1"
 		p.update(dt)
 		ctx = "all"
+		_chase_hurt(p)
 		if not p.dead and _touches_dead(p):
 			reveal_dead()
 	_check_door()
@@ -2185,6 +2303,14 @@ func _step_wave(dt: float) -> void:
 			break
 		return
 	for cell in wv.waves[wave_i]:
+		if cell[0] is String:                                   # ["u" | "r" | "y", x, y]: a MITM, a BOTNET or a PINGER at that cell (MVB3-05)
+			var te = spawn_enemy(String(cell[0]), int(cell[1]) * T, int(cell[2]) * T)
+			if te != null:
+				add_entity(te)
+				if te.has_method("settle"):
+					te.settle()
+				wave_ents.append(te)                          # (a botnet's bits die with it, so the rack is the wave's whole claim)
+			continue
 		for e in spawn_ddos(float(int(cell[0]) * T), float(int(cell[1]) * T)):
 			wave_ents.append(e)
 
@@ -2407,6 +2533,19 @@ func _draw_packet(ci: CanvasItem, m: Dictionary) -> void:
 	var x := floori(m.x + 0.5)
 	var y := floori(m.y + 0.5) - 1
 	var wd := int(m.w)
+	if m.get("lost", false):                                  # lost: an outline, no floor
+		ci.draw_rect(Rect2(x, y, wd, 6), Color(1.0, 0.35, 0.35, 0.7), false, 1.0)
+		PixelText.draw_text(ci, "LOSS", x + wd / 2.0, y - 8, "#ff5a5a", {"align": "c", "tiny": true, "outline": Game.COL.ink})
+		return
+	if m.get("warn", false):                                  # about to be lost: red / clear at 10 Hz
+		PixelText.draw_text(ci, "LOSS", x + wd / 2.0, y - 8, "#ff5a5a", {"align": "c", "tiny": true, "outline": Game.COL.ink})
+		if int(time * 10.0) % 2 == 0:
+			ci.draw_rect(Rect2(x - 1, y - 1, wd + 2, 8), Color(Game.COL.ink))
+			ci.draw_rect(Rect2(x, y, wd, 6), Color("#c0392b"))
+			ci.draw_rect(Rect2(x, y, wd, 2), Color("#ff7a6a"))
+			return
+		ci.draw_rect(Rect2(x, y, wd, 6), Color(1.0, 0.35, 0.35, 0.5), false, 1.0)
+		return
 	ci.draw_rect(Rect2(x - 1, y - 1, wd + 2, 8), Color(Game.COL.ink))
 	ci.draw_rect(Rect2(x, y, wd, 6), Color("#2a8f86"))
 	ci.draw_rect(Rect2(x, y, wd, 2), Color("#58f0c8"))
@@ -2703,6 +2842,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 	elif kind == "top":
 		_draw_curl(ci)
 		_draw_status(ci)
+		_draw_chase(ci)
 		for a in agents:
 			a.draw(ci)
 		for av in agent_view:
