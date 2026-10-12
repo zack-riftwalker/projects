@@ -15,6 +15,9 @@ var first_sfx_msec := -1       # when the first sound actually started (debug ov
 var first_touch_msec := -1
 var duck_db := 0.0
 var music_index := {}                # assets/music/index.json, read on the first song
+var amb: AudioStreamPlayer           # the ambience channel: a terminal's fan (MVB1-14); its own volume, it follows the music setting
+var amb_vol := 0.0                   # 0..1, smoothed
+var calm_db := 0.0                   # the music is quieter near a terminal's bench (smoothed)
 var music_tw: Tween = null          # the running crossfade: a new music change ends it (its stop callback must not hit the new song)
 
 func _ready() -> void:
@@ -30,6 +33,15 @@ func _ready() -> void:
 	music_b = AudioStreamPlayer.new()
 	add_child(music_a)
 	add_child(music_b)
+	amb = AudioStreamPlayer.new()
+	add_child(amb)
+	if ResourceLoader.exists("res://assets/audio/amb_fan.wav"):
+		var fan = load("res://assets/audio/amb_fan.wav")
+		if fan is AudioStreamWAV:
+			fan.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			fan.loop_begin = 0
+			fan.loop_end = fan.data.size() / (2 if fan.format == AudioStreamWAV.FORMAT_16_BITS else 1)
+		amb.stream = fan
 
 var room_ctx = null                 # the room being simulated right now (RoomManager.tick sets it)
 var listen_room = null              # the local player's room: only its sounds play here
@@ -130,7 +142,44 @@ func duck(db: float) -> void:
 		music_a.volume_db = _music_db()
 
 func _music_db() -> float:
-	return linear_to_db(maxf(0.0005, MUSIC_LINEAR * Game.vol_music / 10.0)) + duck_db
+	return linear_to_db(maxf(0.0005, MUSIC_LINEAR * Game.vol_music / 10.0)) + duck_db + calm_db
+
+# ---- terminals (MVB1-14): a fan that fades in as you come near, and calmer music. Sound is only extra: nothing depends on hearing it.
+const FAN_FULL := 6.0                # tiles: full volume within this distance of a terminal's bench
+const FAN_FAR := 20.0                # tiles: silent from here
+const CALM_R := 8.0                  # tiles: the music is 6 dB quieter within this distance
+const CALM_DB := -6.0
+
+static func fan_volume(is_terminal: bool, dist_tiles: float) -> float:
+	if not is_terminal:
+		return 0.0
+	return clampf((FAN_FAR - dist_tiles) / (FAN_FAR - FAN_FULL), 0.0, 1.0)
+
+static func calm_target(is_terminal: bool, dist_tiles: float) -> float:
+	return CALM_DB if is_terminal and dist_tiles < CALM_R else 0.0
+
+# every step the local player's room runs (RoomManager.tick)
+func update_terminal(room, player, dt: float) -> void:
+	var term := false
+	var dist := 1e9
+	if room != null and player != null and bool(room.def.get("terminal", false)):
+		term = true
+		for c in room.cps:
+			dist = minf(dist, Vector2(player.x + 5.0 - float(c.x), player.y + 5.0 - float(c.y)).length() / 16.0)
+	amb_vol = move_toward(amb_vol, fan_volume(term, dist), dt * 1.0)
+	var want_calm := calm_target(term, dist)
+	if calm_db != want_calm:
+		calm_db = move_toward(calm_db, want_calm, dt * 12.0)
+		if music_a.playing and (music_tw == null or not music_tw.is_valid()):
+			music_a.volume_db = _music_db()
+	if amb.stream == null or Game.mute:
+		return
+	if amb_vol > 0.01:
+		amb.volume_db = linear_to_db(maxf(0.0005, 0.45 * amb_vol * Game.vol_music / 10.0))
+		if not amb.playing:
+			amb.play()
+	elif amb.playing:
+		amb.stop()
 
 # settings: the volume slider changed
 func refresh_music_volume() -> void:

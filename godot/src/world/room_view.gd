@@ -40,6 +40,12 @@ func build(rm: Room) -> void:
 	spr.centered = false
 	bg.add_child(spr)
 	add_child(bg)
+	if not room.def.get("landmarks", []).is_empty():           # far shapes between the sky and the tiles (MVB1-14)
+		var lm := Landmarks.new()
+		lm.name = "Landmarks"
+		lm.room = room
+		lm.kinds = room.def.landmarks
+		add_child(lm)
 	decor = TileMapLayer.new()
 	decor.name = "Decor"
 	decor.tile_set = ts

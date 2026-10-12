@@ -54,14 +54,14 @@
                  {"id": "R08:W", "side": "W", "a": 9, "b": 12, "to": "R07:E"},
                  {"id": "R08:E", "side": "E", "a": 9, "b": 12, "to": "R09:W"}
              ] },
-    "R09": { "file": "R09.txt", "zone": "src", "title": "Makefile", "size": [24, 32], "origin": [688, -16], "world": 1, "music": "w1",
+    "R09": { "file": "R09.txt", "landmarks": ["horizon"], "zone": "src", "title": "Makefile", "size": [24, 32], "origin": [688, -16], "world": 1, "music": "w1",
              "signs": ["make review: climb the ledges. make install: the low door on the right."],
              "doors": [
                  {"id": "R09:W", "side": "W", "a": 25, "b": 28, "to": "R08:E"},
                  {"id": "R09:NE", "side": "E", "a": 5, "b": 8, "to": "R10:W"},
                  {"id": "R09:E", "side": "E", "a": 25, "b": 28, "to": "D01:W"}
              ] },
-    "R10": { "file": "R10.txt", "zone": "src", "title": "code_review.md", "size": [24, 14], "origin": [712, -18], "world": 1, "music": "",
+    "R10": { "file": "R10.txt", "landmarks": ["horizon"], "zone": "src", "title": "code_review.md", "size": [24, 14], "origin": [712, -18], "world": 1, "music": "",
              "signs": [],
              "boss": {"id": "REVIEWER1", "class": "Reviewer", "name": "THE REVIEWER", "sub": "changes requested", "trigger_x": 80, "T": 70, "u": 0.7, "reward": "catch", "banner": "catch", "banner_sub": "swipe a yellow attack just as it hits you: it flies back", "music": "tension", "drop": 30},
              "doors": [
@@ -120,21 +120,21 @@
              "doors": [
                  {"id": "D07:W", "side": "W", "a": 9, "b": 12, "to": "D06:E"}
              ] },
-    "H01": { "file": "H01.txt", "zone": "heap", "title": "brk.c", "size": [32, 16], "origin": [768, -20], "world": 3, "music": "w3",
+    "H01": { "file": "H01.txt", "landmarks": ["tower"], "zone": "heap", "title": "brk.c", "size": [32, 16], "origin": [768, -20], "world": 3, "music": "w3",
              "signs": ["/proc/heap. Memory that was taken and never given back. Do not touch the green."],
              "doors": [
                  {"id": "H01:W", "side": "W", "a": 9, "b": 12, "to": "R11:E"},
                  {"id": "H01:E", "side": "E", "a": 9, "b": 12, "to": "H02:W"},
                  {"id": "H01:N", "side": "N", "a": 16, "b": 19, "to": "H14:S"}
              ] },
-    "H02": { "file": "H02.txt", "zone": "heap", "title": "malloc.c", "size": [194, 16], "origin": [800, -20], "world": 3, "music": "w3",
+    "H02": { "file": "H02.txt", "landmarks": ["lantern"], "zone": "heap", "title": "malloc.c", "size": [194, 16], "origin": [800, -20], "world": 3, "music": "w3",
              "signs": ["malloc(): every blob you pop splits in two. Something down here allocates and never frees."],
              "doors": [
                  {"id": "H02:W", "side": "W", "a": 9, "b": 12, "to": "H01:E"},
                  {"id": "H02:E", "side": "E", "a": 9, "b": 12, "to": "H04:W"},
                  {"id": "H02:N", "side": "N", "a": 130, "b": 133, "to": "H12:S"}
              ] },
-    "H04": { "file": "H04.txt", "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}], "decor": [{"kind": "scrap", "x": 40, "y": 8}, {"kind": "scrap", "x": 42, "y": 8}, {"kind": "scrap", "x": 27, "y": 14}], "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
+    "H04": { "file": "H04.txt", "landmarks": ["lantern"], "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}], "decor": [{"kind": "scrap", "x": 40, "y": 8}, {"kind": "scrap", "x": 42, "y": 8}, {"kind": "scrap", "x": 27, "y": 14}], "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
              "signs": [],
              "doors": [
                  {"id": "H04:W", "side": "W", "a": 9, "b": 12, "to": "H02:E"},
@@ -208,7 +208,7 @@
                  {"id": "H10:S", "side": "S", "a": 40, "b": 43, "to": "H04:N", "sets": "hatch:H10S"},
                  {"id": "H10:N", "side": "N", "a": 50, "b": 53, "to": "H11:S", "sets": "hatch:H10N"}
              ] },
-    "H11": { "file": "H11.txt", "zone": "heap", "title": "mmap.c", "size": [200, 16], "origin": [1060, -52], "world": 3, "music": "w3", "end": "to be continued in /net",
+    "H11": { "file": "H11.txt", "landmarks": ["tower"], "zone": "heap", "title": "mmap.c", "size": [200, 16], "origin": [1060, -52], "world": 3, "music": "w3", "end": "to be continued in /net",
              "signs": ["mmap.c: the whole heap is under your feet. The cable goes on to /net.", "/net: connection refused (for now)."],
              "doors": [
                  {"id": "H11:S", "side": "S", "a": 50, "b": 53, "to": "H10:N", "lock": "until:hatch:H10N"},

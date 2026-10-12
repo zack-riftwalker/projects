@@ -262,6 +262,7 @@ func tick(dt: float) -> void:
 		Audio.room_ctx = r
 		r.step(dt)
 	Audio.room_ctx = null
+	Audio.update_terminal(room, player, dt)
 
 func _tick_transition(dt: float) -> void:
 	trans.t += dt

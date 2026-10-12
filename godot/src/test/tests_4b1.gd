@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs", "lostagents", "decor"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs", "lostagents", "decor", "terminals"]
 
 func _init(m) -> void:
 	main = m
@@ -25,6 +25,7 @@ func run(name: String) -> bool:
 		"logs": return t_logs()
 		"lostagents": return t_lostagents()
 		"decor": return await t_decor()
+		"terminals": return await t_terminals()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -877,3 +878,54 @@ func t_decor() -> bool:
 		rm.queue_free()
 	Game.fresh()
 	return report("decor", res.ok, res.info)
+
+# MVB1-14: a terminal is a quiet place: no enemy within 10 tiles of its bench, a fan that fades in, calm music; the far landmarks draw
+func t_terminals() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	var n := 0
+	for id in Game.rooms_meta.rooms:
+		if not bool(Game.rooms_meta.rooms[id].get("terminal", false)):
+			continue
+		n += 1
+		var r := new_room(id)
+		if r.cps.is_empty():
+			fail(res, "%s has no bench" % id)
+		for c in r.cps:
+			for e in r.ents:
+				var d := Vector2(float(e.x) + float(e.w) / 2.0 - float(c.x), float(e.y) + float(e.h) / 2.0 - float(c.y)).length() / 16.0
+				if d < 10.0:
+					fail(res, "%s: a %s %.1f tiles from the bench" % [id, e.get_class(), d])
+		r.queue_free()
+	if n < 4:
+		fail(res, "only %d terminals" % n)
+	# the fan: 1 within 6 tiles of the bench, silent at 20, silent in a room that is no terminal
+	if Audio.fan_volume(true, 0.0) != 1.0 or Audio.fan_volume(true, 6.0) != 1.0:
+		fail(res, "fan at the bench")
+	if Audio.fan_volume(true, 20.0) != 0.0 or Audio.fan_volume(true, 40.0) != 0.0:
+		fail(res, "fan at 20 tiles")
+	if absf(Audio.fan_volume(true, 13.0) - 0.5) > 0.001:
+		fail(res, "fan halfway")
+	if Audio.fan_volume(false, 0.0) != 0.0:
+		fail(res, "fan outside a terminal room")
+	if not ResourceLoader.exists("res://assets/audio/amb_fan.wav"):
+		fail(res, "amb_fan.wav is missing")
+	# the calm music: ducked 6 dB within 8 tiles of a bench
+	if Audio.calm_target(true, 7.9) != -6.0 or Audio.calm_target(true, 8.5) != 0.0 or Audio.calm_target(false, 1.0) != 0.0:
+		fail(res, "calm target")
+	# the far landmarks: the six rooms load and draw
+	var want := {"H01": "tower", "H11": "tower", "H02": "lantern", "H04": "lantern", "R09": "horizon", "R10": "horizon"}
+	for id in want:
+		if not Game.rooms_meta.rooms[id].get("landmarks", []).has(want[id]):
+			fail(res, "%s lacks the %s landmark" % [id, want[id]])
+		var r2 := new_room(id)
+		await frames(2)
+		var lm = r2.view.get_node_or_null("Landmarks")
+		if lm == null or lm.draws < 1:
+			fail(res, "%s: the landmarks did not draw" % id)
+		r2.queue_free()
+	Game.fresh()
+	return report("terminals", res.ok, res.info)
