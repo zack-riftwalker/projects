@@ -2265,6 +2265,23 @@ func sc_co_reviewer2() -> Array:
 	var viol: String = pup.kit_violation if pup != null else "no puppet"
 	return [has and intro and pup != null and seen2.size() >= 3 and viol == "", "guest: ssh flag %s, intro %s, saw %d plans, violation '%s'" % [has, intro, seen2.size(), viol]]
 
+# the honeypot bot: go to the nearest DDOS bit, jump when it is above, swing
+func honey_keys(r: Room, p, f: int) -> Dictionary:
+	var best = null
+	for e in r.ents:
+		if e is DdosBit and not e.dead and (best == null or absf(e.x - p.x) < absf(best.x - p.x)):
+			best = e
+	var keys := {"attack": f % 12 < 2}
+	if best != null:
+		var dx: float = best.x - p.x
+		if absf(dx) > 14.0:
+			keys["right" if dx > 0.0 else "left"] = true
+		else:
+			p.face = 1.0 if (f / 24) % 2 == 0 else -1.0
+		if best.y < p.y - 20.0 and f % 40 < 12:
+			keys["jump"] = true
+	return keys
+
 # both drop into N21: the swarms are fought off, wave:N21 reaches both, the guest takes rate_limit out of the glass case
 func sc_co_honeypot() -> Array:
 	if not await wait_joined():
@@ -2282,8 +2299,7 @@ func sc_co_honeypot() -> Array:
 			p.inv = 999.0
 			p.hp = p.max_hp
 			f += 1
-			var keys := {"attack": f % 14 < 2, ("left" if (f / 70) % 2 == 0 else "right"): f % 70 < 20}
-			Controls.script_input = keys
+			Controls.script_input = honey_keys(mgr().room, p, f)
 			if Game.flag("wave:N21"):
 				cleared = true
 				break
@@ -2302,7 +2318,7 @@ func sc_co_honeypot() -> Array:
 		p2.inv = 999.0
 		p2.hp = p2.max_hp
 		g += 1
-		Controls.script_input = {"attack": g % 14 < 2, ("right" if (g / 70) % 2 == 0 else "left"): g % 70 < 20}
+		Controls.script_input = honey_keys(mgr().room, p2, g)
 		if Game.flag("wave:N21"):
 			flag = true
 			break
