@@ -102,8 +102,152 @@ func t_rooms4b() -> bool:
 	if de == null or not de.open:
 		fail(res, "D07:E is not open")
 	d07.queue_free()
+	await door_walk(res)
+	await airgap_falls(res)
+	depths_loop(res)
+	await secrets4b(res)
 	Game.fresh()
 	return report("rooms4b", res.ok, res.info)
+
+# MVB2-12 (1): through every N door that can open, the way a player goes: the next room, a body on free ground
+func door_walk(res: Dictionary) -> void:
+	Game.flags = {}
+	for f in ["boss:CRAWLER", "boss:FIREWALL", "boss:REVIEWER2", "wave:N21", "lever:CDN", "lever:D06"]:
+		Game.flags[f] = true
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": true, "opus": false, "curl": true, "ssh": true}
+	var m := new_manager()
+	var crossed := 0
+	for rid in Game.rooms_meta.rooms:
+		if not String(rid).begins_with("N"):
+			continue
+		var def: Dictionary = Game.rooms_meta.rooms[rid]
+		for d in def.doors:
+			var to_room := String(d.to).get_slice(":", 0)
+			var lock := String(d.get("lock", ""))
+			if not Game.rooms_meta.rooms.has(to_room) or lock == "oneway":
+				continue
+			var pw: float = float(def.size[0]) * 16.0
+			var ph: float = float(def.size[1]) * 16.0
+			m.swap_to(rid, Vector2(pw / 2.0, ph / 2.0), null, true)
+			m.room.ents.clear()
+			m.room.update_doors()
+			var q = m.player
+			var side := String(d.side)
+			var mid_row := float(int(d.a) + int(d.b) + 1) * 8.0
+			var keys := {}
+			q.vx = 0.0
+			q.vy = 0.0
+			match side:
+				"W":
+					q.x = 2.0
+					q.y = float(int(d.b) + 1) * 16.0 - q.h
+					keys = {"left": true}
+				"E":
+					q.x = pw - q.w - 2.0
+					q.y = float(int(d.b) + 1) * 16.0 - q.h
+					keys = {"right": true}
+				"N":
+					q.x = mid_row - q.w / 2.0
+					q.y = 2.0
+					q.vy = -300.0
+				"S":
+					q.x = mid_row - q.w / 2.0
+					q.y = ph - q.h - 2.0
+					q.vy = 200.0
+			var got := -1
+			for f in range(60):
+				Controls.script_input = keys
+				m.player.hp = m.player.max_hp
+				m.tick(Game.STEP)
+				if m.room.id == to_room and not m.trans.on:
+					got = f
+					break
+			Controls.script_input = null
+			if got < 0:
+				fail(res, "door %s: still in %s after 60 frames" % [d.id, m.room.id])
+				continue
+			crossed += 1
+			for f in range(4):
+				m.tick(Game.STEP)
+			var b = m.player
+			var inside := false
+			for ty in range(floori(b.y / 16.0), floori((b.y + b.h - 0.01) / 16.0) + 1):
+				for tx in range(floori(b.x / 16.0), floori((b.x + b.w - 0.01) / 16.0) + 1):
+					if m.room.grid.solid(tx, ty):
+						inside = true
+			if inside or (m.room.hazard_at(b) != "" and m.room.hazard_at(b) != "pit"):
+				fail(res, "door %s: the body arrived in a wall or a hazard (%s)" % [d.id, m.room.hazard_at(b)])
+	res.info += " doors %d" % crossed
+	if crossed < 40:
+		fail(res, "only %d doors crossed" % crossed)
+	m.queue_free()
+	await frames(1)
+
+# MVB2-12 (2): the airgap in N11 drops into H11, N01 or N04, on solid ground, hp unchanged
+func airgap_falls(res: Dictionary) -> void:
+	Game.flags = {}
+	var m := new_manager()
+	for pair in [[14, "H11"], [40, "N01"], [80, "N04"]]:
+		m.swap_to("N11", Vector2(float(pair[0]) * 16.0, 48.0 * 16.0), null, true)
+		m.room.ents.clear()
+		m.player.x = float(pair[0]) * 16.0
+		m.player.y = 48.0 * 16.0
+		m.player.vx = 0.0
+		m.player.vy = 200.0
+		var hp0: int = m.player.hp
+		var in_target := false
+		for f in range(240):
+			m.tick(Game.STEP)
+			if m.room.id == String(pair[1]) and not m.trans.on:
+				in_target = true
+			if in_target and f > 0 and m.player.on_ground and f > 30:
+				pass
+			if in_target and m.player.on_ground:
+				break
+		if m.room.id != String(pair[1]):
+			fail(res, "airgap x %d landed in %s, not %s" % [pair[0], m.room.id, pair[1]])
+		elif not m.player.on_ground:
+			fail(res, "airgap x %d: not on the ground in %s" % [pair[0], pair[1]])
+		if m.player.hp != hp0:
+			fail(res, "airgap x %d cost hp" % pair[0])
+	m.queue_free()
+	await frames(1)
+
+# MVB2-12 (5): the DEPTHS loop: N02's lever opens D06's slot gate, without agents
+func depths_loop(res: Dictionary) -> void:
+	Game.flags = {}
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
+	var d6 := new_room("D06")
+	if d6.grid.gates_open.agents:
+		fail(res, "D06's slot gate was open without the lever")
+	d6.queue_free()
+	var n2 := new_room("N02")
+	if n2.levers.size() != 1:
+		fail(res, "N02 has %d levers" % n2.levers.size())
+		n2.queue_free()
+		return
+	var lv: Dictionary = n2.levers[0]
+	for e in n2.ents:
+		e.queue_free()
+	n2.ents.clear()
+	var p = n2.player
+	p.x = float(lv.x) - 14.0
+	p.y = float(lv.y) + 16.0 - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	p.face = 1.0
+	for f in range(16):
+		Controls.script_input = {"attack": f < 2}
+		Controls.poll()
+		n2.step(Game.STEP)
+	Controls.script_input = {}
+	if not Game.flag("lever:D06"):
+		fail(res, "a swipe did not pull N02's lever")
+	n2.queue_free()
+	var d6b := new_room("D06")
+	if not d6b.grid.gates_open.agents:
+		fail(res, "D06's slot gate stayed shut after the lever")
+	d6b.queue_free()
 
 # MVB2-02: world 6 has its own tiles, theme, song, backdrop and the `ci` landmark
 func t_w6assets() -> bool:
@@ -1418,3 +1562,145 @@ func t_net4b1() -> bool:
 	mgr.queue_free()
 	Game.fresh()
 	return report("net4b1", res.ok, res.info)
+
+# one frame of a small bot: walk to x `tx` (centre), jump while the feet are below `feet_y`; true when it stands there
+func bot_step(m: RoomManager, tx: float, feet_y: float, extra := {}) -> bool:
+	var p = m.player
+	var cxp: float = p.x + p.w / 2.0
+	var keys := extra.duplicate()
+	if cxp < tx - 3.0:
+		keys["right"] = true
+	elif cxp > tx + 3.0:
+		keys["left"] = true
+	var feet: float = p.y + p.h
+	if (feet > feet_y + 4.0 and absf(cxp - tx) < 30.0 and p.on_ground) or (not p.on_ground and p.vy < 0.0):
+		keys["jump"] = true                                  # (held while it rises: a short press is a short hop)
+	Controls.script_input = keys
+	p.hp = p.max_hp
+	m.tick(Game.STEP)
+	return p.on_ground and absf(p.y + p.h - feet_y) < 3.0 and absf(p.x + p.w / 2.0 - tx) < 8.0
+
+func run_keys(m: RoomManager, keys: Dictionary, n: int, stop_room := "") -> void:
+	for f in range(n):
+		Controls.script_input = keys
+		m.player.hp = m.player.max_hp
+		m.tick(Game.STEP)
+		if stop_room != "" and m.room.id == stop_room and not m.trans.on:
+			break
+	Controls.script_input = null
+
+# MVB2-12 (3): the secrets of N05 (N19 above, N20 below) and N13 (N21 under the crack)
+func secrets4b(res: Dictionary) -> void:
+	Game.flags = {}
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": true, "opus": false, "curl": false, "ssh": false}
+	var m := new_manager()
+	# N05 -> N19: a jump from the ledge at (70, 4)
+	m.swap_to("N05", Vector2(70.0 * 16.0 + 6.0, 4.0 * 16.0 - 14.0), null, true)
+	m.room.ents.clear()
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	for f in range(30):
+		m.tick(Game.STEP)
+	var feet0: float = m.player.y + m.player.h
+	if m.room.id != "N05" or absf(feet0 - 4.0 * 16.0) > 3.0:
+		fail(res, "N05: not standing on the ledge (%s, feet %.0f)" % [m.room.id, feet0])
+	run_keys(m, {"jump": true}, 80, "N19")
+	if m.room.id != "N19":
+		fail(res, "N05: a jump from the ledge did not reach N19 (%s)" % m.room.id)
+	else:
+		run_keys(m, {"jump": true}, 24)                                   # (the hop out of the doorway: jump stays held, as a player's thumb does)
+		run_keys(m, {}, 100)
+		if not m.player.on_ground or not Game.flag("dead:N05"):
+			fail(res, "N19: arrival (ground %s, dead:N05 %s)" % [str(m.player.on_ground), str(Game.flag("dead:N05"))])
+		# dropping through the lid lands back on the ledge
+		run_keys(m, {"down": true, "jump": true}, 3)                      # (a short press: a held [down] would also drop through the ledge below)
+		for f in range(200):
+			Controls.script_input = null
+			m.tick(Game.STEP)
+			if m.room.id == "N05" and not m.trans.on and f > 40:
+				break
+		run_keys(m, {}, 60)
+		var fy: float = m.player.y + m.player.h
+		if m.room.id != "N05" or not m.player.on_ground or absf(fy - 4.0 * 16.0) > 3.0:
+			fail(res, "N19: the lid did not drop back onto the ledge (%s feet %.0f)" % [m.room.id, fy])
+	# N05 -> N20: down+jump on the lid at (53, 17), then climb out
+	m.swap_to("N05", Vector2(53.0 * 16.0 + 3.0, 17.0 * 16.0 - 14.0), null, true)
+	m.room.ents.clear()
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	run_keys(m, {}, 20)
+	run_keys(m, {"down": true, "jump": true}, 3)
+	run_keys(m, {}, 200, "N20")
+	if m.room.id != "N20":
+		fail(res, "N05: down+jump on the lid did not reach N20 (%s)" % m.room.id)
+	else:
+		if not Game.flag("dead:N05"):
+			fail(res, "N20 reached without dead:N05")
+		run_keys(m, {}, 60)
+		var legs := [[136.0, 144.0], [168.0, 144.0], [196.0, 96.0], [224.0, 48.0]]
+		var ok := true
+		for leg in legs:
+			var there := false
+			for f in range(240):
+				if bot_step(m, leg[0], leg[1]):
+					there = true
+					break
+			if not there:
+				ok = false
+				fail(res, "N20: the climb stopped before the platform at feet %.0f (player %.0f, %.0f)" % [leg[1], m.player.x, m.player.y + m.player.h])
+				break
+		if ok:
+			for f in range(240):
+				var keys := {"jump": f % 12 < 8}
+				var cxp: float = m.player.x + m.player.w / 2.0
+				if cxp < 221.0:
+					keys["right"] = true
+				elif cxp > 227.0:
+					keys["left"] = true
+				Controls.script_input = keys
+				m.player.hp = m.player.max_hp
+				m.tick(Game.STEP)
+				if m.room.id == "N05" and not m.trans.on:
+					break
+			Controls.script_input = null
+			run_keys(m, {}, 60)
+			var fy2: float = m.player.y + m.player.h
+			if m.room.id != "N05" or not m.player.on_ground or absf(fy2 - 17.0 * 16.0) > 3.0 or absf(m.player.x + 5.0 - 53.0 * 16.0 - 8.0) > 40.0:
+				fail(res, "N20: the way out did not land on the lid (%s, %.0f,%.0f)" % [m.room.id, m.player.x, fy2])
+	# N13 -> N21: the crack at (35, 21) breaks under a dash down; the door above is shut until wave:N21
+	Game.flags.erase("dead:N05")
+	m.swap_to("N13", Vector2(35.0 * 16.0 + 3.0, 19.0 * 16.0), null, true)
+	m.room.ents.clear()
+	m.player.vx = 0.0
+	m.player.vy = 0.0
+	run_keys(m, {}, 10)
+	var broke := false
+	for f in range(150):
+		var keys2 := {}
+		if f < 4:
+			keys2["jump"] = true
+		keys2["dash"] = f == 8
+		keys2["down"] = f >= 7
+		Controls.script_input = keys2
+		m.player.hp = m.player.max_hp
+		m.tick(Game.STEP)
+		if Game.flag("crack:N13:35:21") or Game.flag("crack:N13:34:21"):
+			broke = true
+		if m.room.id == "N21" and not m.trans.on:
+			break
+	Controls.script_input = null
+	if not broke:
+		fail(res, "N13: the crack did not break")
+	if m.room.id != "N21":
+		fail(res, "N13: the crack did not lead into N21 (%s)" % m.room.id)
+	else:
+		var dn = m.room.grid.door_at("N", 21)
+		if dn == null or dn.open:
+			fail(res, "N21: the door above is not shut")
+		Game.flags["wave:N21"] = true
+		m.room.update_doors()
+		dn = m.room.grid.door_at("N", 21)
+		if dn == null or not dn.open:
+			fail(res, "N21: the door above stays shut after wave:N21")
+	m.queue_free()
+	await frames(1)
