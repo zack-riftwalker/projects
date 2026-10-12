@@ -1791,3 +1791,34 @@ func sc_co_tree() -> Array:
 	var got2 := await wait_until(func(): return Game.owns_map("dep") and main.index_menu.pending == "", 8.0)
 	await wait_secs(2.0)
 	return [asked and pending and got2 and Game.tokens == 0, "guest: asked %s, nothing paid before the answer %s, map:dep %s, tokens %d (0)" % [asked, pending, got2, Game.tokens]]
+
+# MVB1-06: the map overlay does not pause co-op. The guest opens it for 3 s: the host's room clock keeps running, the host is not paused, and
+# the host sees the folded-map icon (`mn`) over the guest only while it is open; then the same the other way round.
+func sc_co_map() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		var saw := await wait_until(func(): return coop().remote.mapping, 12.0)
+		var t0: float = mgr().room.time
+		await wait_secs(2.0)
+		var ran: bool = mgr().room.time - t0 > 1.0 and not main.paused
+		var off := await wait_until(func(): return not coop().remote.mapping, 10.0)
+		await wait_secs(1.5)
+		main.open_map()
+		var mine: bool = main.map_overlay.active
+		await wait_secs(3.0)
+		main.map_overlay.close()
+		await wait_secs(2.0)
+		return [saw and ran and off and mine, "host: saw the guest's map %s, my clock ran %s, icon gone after %s, my overlay opened %s" % [saw, ran, off, mine]]
+	await wait_secs(2.0)
+	main.open_map()
+	var opened: bool = main.map_overlay.active
+	var t1: float = mgr().room.time
+	await wait_secs(3.0)
+	var unpaused: bool = not main.paused and mgr().room.time - t1 > 1.0
+	main.map_overlay.close()
+	var saw2 := await wait_until(func(): return coop().host_body != null and coop().host_body.mapping, 14.0)
+	var off2 := await wait_until(func(): return coop().host_body != null and not coop().host_body.mapping, 10.0)
+	await wait_secs(1.0)
+	return [opened and unpaused and saw2 and off2, "guest: overlay opened %s, not paused and clock ran %s, saw the host's map %s then not %s" % [opened, unpaused, saw2, off2]]

@@ -15,6 +15,7 @@ var k := 1.0                  # layout scale from the window size
 var stick_r := 50.0
 var btn := {}                 # action -> {x, y, r, label}
 var pause_rect := Rect2()
+var map_rect := Rect2()
 var held := {}
 var down_at := {}
 var pending := {}             # action -> msec when the press may end
@@ -57,11 +58,13 @@ func layout() -> void:
 	if h > w:
 		top = get_parent().game_rect.end.y + 8.0 * kc    # just below the picture
 	pause_rect = Rect2(w - 16.0 * kc - pw, top, pw, ph)
+	map_rect = Rect2(pause_rect.position.x - 8.0 * kc - pw, top, pw, ph)        # the map button: left of pause, the same size
 	stick_r = 50.0 * k * kc
 	if Game.debug and enabled:                # (window px: the phone tests tap the buttons where they are drawn)
 		for a in btn:
 			print("CLAWD: pad ", a, " ", int(btn[a].x), " ", int(btn[a].y), " ", int(btn[a].r))
 		print("CLAWD: pad pause ", int(pause_rect.get_center().x), " ", int(pause_rect.get_center().y), " 0")
+		print("CLAWD: pad map ", int(map_rect.get_center().x), " ", int(map_rect.get_center().y), " 0")
 	queue_redraw()
 
 var suspended := false
@@ -96,6 +99,8 @@ func _hit(p: Vector2) -> String:
 			best = a
 	if best == "" and pause_rect.grow(8.0 * kc).has_point(p):
 		best = "pause"
+	if best == "" and map_rect.grow(8.0 * kc).has_point(p):
+		best = "map"
 	return best
 
 # true when p is on a button or the pause rect: a tap there belongs to the pad, not to a menu item behind it
@@ -232,3 +237,9 @@ func _draw() -> void:
 	draw_rect(pause_rect, Color("#ffe3d6") if pon else border, false, 2.0 * kc)
 	var pc := pause_rect.get_center()
 	PixelText.draw_text(self, "II", pc.x - PixelText.text_width("II", {"scale": lbl}) / 2.0, pc.y - 3.5 * lbl, Game.COL.ink if pon else Color(1, 0.97, 0.93, 0.92), {"scale": lbl})
+	# map (MVB1-06): the same look as pause, left of it
+	var mon: bool = held.get("map", 0) > 0 or pending.has("map")
+	draw_rect(map_rect, clawd if mon else fill)
+	draw_rect(map_rect, Color("#ffe3d6") if mon else border, false, 2.0 * kc)
+	var mc := map_rect.get_center()
+	PixelText.draw_text(self, "MAP", mc.x - PixelText.text_width("MAP", {"tiny": true, "scale": lbl}) / 2.0, mc.y - 2.5 * lbl, Game.COL.ink if mon else Color(1, 0.97, 0.93, 0.92), {"tiny": true, "scale": lbl})

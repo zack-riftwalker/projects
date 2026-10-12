@@ -37,6 +37,7 @@ var away := false
 var lagging := false
 var t := 0.0
 var inv := 0.0
+var mapping := false             # it has its map overlay open (the partner sees a folded map above its head: the world does not wait for it)
 var focusing := false            # host: the partner is turning context into hit points (its `fo` report): the boss kit reads it
 var samples: Array = []          # [time, x, y] reported positions
 var ghost_since := 0.0
@@ -136,6 +137,8 @@ func _draw() -> void:
 	# who it is (as the JS game): P2 on the host's screen, P1 on the guest's, or why it looks faint
 	var label := "away" if away else ("lag" if lagging else ("P2" if room != null and room.mode == "host" else "P1"))
 	PixelText.draw_text(self, label, px, py - 21, "#9cc4ff" if label == "P2" else "#ffb38a", {"align": "c", "tiny": true, "outline": Game.COL.ink})
+	if mapping:
+		_draw_map_icon(px, py - 31 + (1 if int(t * 3.0) % 2 == 0 else 0))
 	if atk_t > 0.0:
 		var f2 := 0 if atk_t > 0.115 else (1 if atk_t > 0.05 else 2)
 		var pcy := py - 5
@@ -152,6 +155,15 @@ func _draw() -> void:
 		else:
 			pos = Vector2(px - 1 - (n - 3), pcy - n / 2.0)
 		draw_texture(tex, Vector2(floori(pos.x), floori(pos.y)), Color(0.42, 0.66, 1.0, 0.9))
+
+# a small folded map: three panels with a fold line each and a dot
+func _draw_map_icon(cx: int, top: int) -> void:
+	var ink := Color(Game.COL.ink)
+	draw_rect(Rect2(cx - 6, top - 1, 12, 9), ink)
+	draw_rect(Rect2(cx - 5, top, 10, 7), Color(Game.COL.paper))
+	draw_rect(Rect2(cx - 2, top, 1, 7), Color("#c3bccd"))
+	draw_rect(Rect2(cx + 2, top, 1, 7), Color("#c3bccd"))
+	draw_rect(Rect2(cx + 3, top + 2, 2, 2), Color(Game.COL.hazard))
 
 func hazard() -> void:
 	pass

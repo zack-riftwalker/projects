@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay"]
 
 func _init(m) -> void:
 	main = m
@@ -19,6 +19,7 @@ func run(name: String) -> bool:
 		"mapdata": return t_mapdata()
 		"tree": return t_tree()
 		"mappage": return await t_mappage()
+		"mapoverlay": return t_mapoverlay()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -341,3 +342,77 @@ func t_mappage() -> bool:
 	mv.queue_free()
 	Game.fresh()
 	return report("mappage", res.ok, res.info)
+
+# a whole Main (menus, manager, first room) that this test steps by hand: Main skips its loop while a test name is set
+func make_main() -> Control:
+	Game.persist = false
+	Game.net_role = ""
+	Game.play_now = true
+	Game.fresh()
+	var saved := Game.test_name
+	Game.test_name = ""
+	var m: Control = load("res://src/main.gd").new()
+	main.add_child(m)
+	Game.test_name = saved
+	return m
+
+func step_main(m: Control, keys: Dictionary, n := 1) -> void:
+	var saved := Game.test_name
+	Game.test_name = ""
+	for i in range(n):
+		Controls.script_input = keys
+		m._physics_process(Game.STEP)
+	Controls.script_input = null
+	Game.test_name = saved
+
+# MVB1-06: alone, the world waits while the overlay is open; the map button opens it when let go, and held 0.6 s it pins instead
+func t_mapoverlay() -> bool:
+	var res := checker()
+	var m := make_main()
+	var room: Room = m.manager.room
+	step_main(m, {}, 5)
+	var t0: float = room.time
+	step_main(m, {}, 10)
+	if room.time <= t0:
+		fail(res, "the world runs when nothing is open")
+	# a short press and release opens the overlay
+	step_main(m, {"map": true}, 4)
+	if m.map_overlay.active:
+		fail(res, "opened on the press, not the release")
+	step_main(m, {}, 2)
+	if not m.map_overlay.active:
+		fail(res, "the map button did not open the overlay")
+	t0 = room.time
+	step_main(m, {}, 20)
+	if room.time != t0:
+		fail(res, "the world moved while the map is open (alone)")
+	if m.manager.player.in_menu:
+		pass
+	# [dash] closes it and never pins
+	var pins0: int = Game.pins.size()
+	step_main(m, {"dash": true}, 2)
+	step_main(m, {}, 2)
+	if m.map_overlay.active:
+		fail(res, "dash did not close it")
+	if Game.pins.size() != pins0:
+		fail(res, "dash pinned")
+	# the map action again closes it
+	step_main(m, {"map": true}, 3)
+	step_main(m, {}, 2)
+	if not m.map_overlay.active:
+		fail(res, "reopen")
+	step_main(m, {"map": true}, 3)
+	step_main(m, {}, 2)
+	if m.map_overlay.active:
+		fail(res, "the map action closes it")
+	# held for 0.6 s: a TODO pin, and no overlay
+	step_main(m, {"map": true}, 40)
+	step_main(m, {}, 3)
+	if m.map_overlay.active:
+		fail(res, "a held press opened the map")
+	if Game.pins.size() != pins0 + 1 or String(Game.pins[Game.pins.size() - 1].kind) != "TODO":
+		fail(res, "the held press did not drop a TODO pin")
+	m.queue_free()
+	Game.play_now = false
+	Game.fresh()
+	return report("mapoverlay", res.ok, res.info)

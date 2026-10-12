@@ -188,8 +188,88 @@ func world_digest() -> int:
 # where the other player is ({room, x, y} while a partner is connected, else {}); Coop keeps it, the map and travel read it
 var partner := {}
 
+# ---- pins on the map (MVB1-08): shared, at most PIN_MAX; the host owns the list (a guest asks, snapshots carry it) ----
+const PIN_KINDS := ["TODO", "?", "HELP", "ability"]
+const PIN_MAX := 24
+var pins: Array = []                    # [{id, room, x, y, kind, by}] (x, y in pixels of the room)
+var pin_seq := 0
+var pins_rev := 0                       # bumps on every change (Coop sends the list when it moved)
+signal pin_requested(op: String, pin: Dictionary)      # a guest's wish; Coop sends it to the host
+
 func pins_digest() -> int:
-	return 0
+	var acc := 0
+	for pn in pins:
+		acc = (acc + ("%s:%d:%d:%s:%s" % [pn.room, int(pn.x), int(pn.y), pn.kind, pn.by]).hash()) & 0xFFFFFFFF
+	return acc
+
+func pin_label_by() -> String:
+	return "P2" if net_role == "guest" else "P1"
+
+# the same call on every page: the host (or solo) changes the list, a guest asks the host
+func pin_add(kind: String, room_id: String, x: float, y: float) -> bool:
+	if not rooms_meta.rooms.has(room_id) or is_offmap(room_id) or not PIN_KINDS.has(kind):
+		return false
+	var pn := {"room": room_id, "x": int(roundf(x)), "y": int(roundf(y)), "kind": kind, "by": pin_label_by()}
+	if net_role == "guest":
+		pin_requested.emit("add", pn)
+		return true
+	apply_pin_add(pn)
+	return true
+
+# removes the pin nearest to a point of the room (within `reach` px); the owner of any pin may remove it
+func pin_del_near(room_id: String, x: float, y: float, reach: float) -> bool:
+	var best := -1
+	var bd := reach
+	for i in range(pins.size()):
+		var pn: Dictionary = pins[i]
+		if pn.room == room_id:
+			var d := Vector2(float(pn.x) - x, float(pn.y) - y).length()
+			if d <= bd:
+				bd = d
+				best = i
+	if best < 0:
+		return false
+	if net_role == "guest":
+		pin_requested.emit("del", pins[best].duplicate())
+		return true
+	pins.remove_at(best)
+	pins_rev += 1
+	return true
+
+func apply_pin_add(pn: Dictionary) -> void:
+	pin_seq += 1
+	var q := pn.duplicate()
+	q["id"] = pin_seq
+	pins.append(q)
+	while pins.size() > PIN_MAX:
+		pins.pop_front()
+	pins_rev += 1
+
+# the host applies a guest's request (the same checks as for its own)
+func apply_pin_request(op: String, pn: Dictionary) -> void:
+	if op == "add":
+		if rooms_meta.rooms.has(String(pn.room)) and not is_offmap(String(pn.room)) and PIN_KINDS.has(String(pn.kind)):
+			apply_pin_add({"room": String(pn.room), "x": int(pn.x), "y": int(pn.y), "kind": String(pn.kind), "by": "P2"})
+	elif op == "del":
+		for i in range(pins.size()):
+			var q: Dictionary = pins[i]
+			if q.room == pn.room and int(q.x) == int(pn.x) and int(q.y) == int(pn.y) and q.kind == pn.kind:
+				pins.remove_at(i)
+				pins_rev += 1
+				break
+
+# the guest takes the host's list as it is
+func set_pins(list: Array) -> void:
+	pins = []
+	for q in list:
+		pins.append({"id": int(q[0]), "room": String(q[1]), "x": int(q[2]), "y": int(q[3]), "kind": String(q[4]), "by": String(q[5])})
+	pins_rev += 1
+
+func pins_wire() -> Array:
+	var out: Array = []
+	for pn in pins:
+		out.append([int(pn.id), pn.room, int(pn.x), int(pn.y), pn.kind, pn.by])
+	return out
 
 # THE HEAP's water level: 2 = flooded, 1 = after the valve (free.c), 0 = after THE LEAK. The guest reads the host's (snapshot `fl`).
 var flood_net := -1          # guest: the host's flood level from the last snapshot (-1 = none yet)
@@ -370,6 +450,10 @@ func fresh() -> void:
 	play_time = 0.0
 	deaths = 0
 	fights = []
+	pins = []
+	pin_seq = 0
+	pins_rev += 1
+	partner = {}
 
 # settings live in their own file so the guest (who has no save) keeps them too
 func load_settings() -> void:
@@ -418,7 +502,7 @@ func write_save() -> void:
 		return
 	flags["map:migrated"] = true                # (a save written by this build never needs migrating)
 	var d := {"version": 1, "flags": flags, "tools": tools, "bench": bench, "tokens": tokens, "max_hp": max_hp, "fragments": fragments,
-		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights, "equipped": equipped}
+		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights, "equipped": equipped, "pins": pins_wire()}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(d))
@@ -446,6 +530,10 @@ func load_save() -> bool:
 	deaths = int(d.get("deaths", 0))
 	fights = d.get("fights", [])
 	equipped = filter_loadout(d.get("equipped", []))
+	set_pins(d.get("pins", []))
+	pin_seq = 0
+	for pn in pins:
+		pin_seq = maxi(pin_seq, int(pn.id))
 	return true
 
 # the player's top-left when standing on the bench of a room

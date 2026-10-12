@@ -1,7 +1,7 @@
 extends Node
 # Controls: input actions and the per-step poll(), a port of js/core.js `input`.
 
-const ACTIONS := ["left", "right", "up", "down", "jump", "attack", "dash", "special", "pause", "start"]
+const ACTIONS := ["left", "right", "up", "down", "jump", "attack", "dash", "special", "pause", "start", "map"]
 
 var down := {}
 var pressed := {}
@@ -23,6 +23,7 @@ func _ready() -> void:
 	_add("special", [KEY_V, KEY_E], [], [], [JOY_BUTTON_Y, JOY_BUTTON_LEFT_SHOULDER])
 	_add("pause", [KEY_ESCAPE, KEY_P], [], [], [JOY_BUTTON_BACK])
 	_add("start", [KEY_ENTER], [], [], [JOY_BUTTON_START])
+	_add("map", [KEY_M, KEY_TAB], [], [], [JOY_BUTTON_GUIDE, JOY_BUTTON_LEFT_STICK])
 	for a in ACTIONS:
 		down[a] = false
 		pressed[a] = false

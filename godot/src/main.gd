@@ -18,6 +18,7 @@ var pause_menu: PauseMenu
 var bench_menu: BenchMenu
 var shop_menu: ShopMenu
 var index_menu: IndexMenu
+var map_overlay: MapView                 # the map as a local overlay (MVB1-06): the world does not stop in co-op
 var touch: TouchControls
 var debug_overlay: DebugOverlay
 var coop: Coop
@@ -82,6 +83,10 @@ func _ready() -> void:
 	hud_layer.add_child(shop_menu)
 	index_menu = IndexMenu.new()
 	hud_layer.add_child(index_menu)
+	map_overlay = MapView.new()
+	map_overlay.back_requested.connect(func():
+		map_overlay.close())
+	hud_layer.add_child(map_overlay)
 	touch = TouchControls.new()
 	touch.name = "Touch"
 	touch.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -102,6 +107,7 @@ func _ready() -> void:
 	bench_menu.travel_chosen.connect(func(id): manager.travel(id))
 	manager.room_changed.connect(func(r): hud.set_room(r))
 	pause_menu.manager = manager
+	map_overlay.manager = manager
 	end_screen = EndScreen.new()
 	end_screen.done.connect(_back_to_title)
 	hud_layer.add_child(end_screen)
@@ -360,7 +366,7 @@ var bench_idx := 0
 
 # the menus that stand over the running game (the bench, the stall, the cartographer's index, ...): at most one is open
 func overlays() -> Array:
-	return [bench_menu, shop_menu, index_menu]
+	return [bench_menu, shop_menu, index_menu, map_overlay]
 
 func active_overlay():
 	for o in overlays():
@@ -416,6 +422,7 @@ func _input(event: InputEvent) -> void:
 			else:
 				title.tap(tg)
 		return
+	_map_drag(event)
 	# a tap on a pause option
 	if paused or active_overlay() != null:
 		var pos := Vector2.ZERO
@@ -428,10 +435,34 @@ func _input(event: InputEvent) -> void:
 			hit = true
 		if hit:
 			var gp := to_game(pos)
+			var mv0 = _map_in_use()
+			if mv0 != null:
+				mv0.press_at(gp)
 			if paused:
 				pause_menu.tap(gp)
 			else:
 				active_overlay().tap(gp)
+
+# the map page that is on screen now (the overlay, or the pause menu's Map page), or null
+func _map_in_use():
+	if map_overlay != null and map_overlay.active:
+		return map_overlay
+	if paused and pause_menu.page == "map":
+		return pause_menu.map_view
+	return null
+
+# dragging the map with a finger or the mouse
+func _map_drag(event: InputEvent) -> void:
+	var mv = _map_in_use()
+	if mv == null:
+		return
+	var k := float(W) / game_rect.size.x
+	if event is InputEventScreenDrag:
+		mv.drag(event.relative * k)
+	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0 and event.device != InputEvent.DEVICE_ID_EMULATION:
+		mv.drag(event.relative * k)
+	elif (event is InputEventScreenTouch and not event.pressed) or (event is InputEventMouseButton and not event.pressed):
+		mv.drag_end()
 
 # Fullscreen (F, and the menu entries). Browsers only allow it inside a user gesture, and a gesture keeps the permission for a few
 # seconds: F runs straight from its key event; a menu entry (chosen on a press or in the next physics step) goes at once when a
@@ -548,8 +579,49 @@ func _physics_process(_d: float) -> void:
 						o.close()
 		return
 	manager.tick(Game.STEP)
+	_map_button()
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
 		set_paused(true)
+
+# The map button opens the overlay when it is let go; held for QUICK_PIN_T it drops a TODO pin at the player instead (and then opens nothing).
+const QUICK_PIN_T := 0.6
+var map_hold := -1.0
+var map_quick := false
+
+func _map_button() -> void:
+	if manager.player == null or manager.player.dead:
+		map_hold = -1.0
+		return
+	if Controls.pressed.get("map", false):
+		map_hold = 0.0
+		map_quick = false
+	if map_hold < 0.0:
+		return
+	if Controls.down.get("map", false):
+		map_hold += Game.STEP
+		if map_hold >= QUICK_PIN_T and not map_quick:
+			map_quick = true
+			quick_pin()
+	else:
+		if not map_quick:
+			open_map()
+		map_hold = -1.0
+
+func open_map() -> void:
+	if active_overlay() != null or paused:
+		return
+	map_overlay.open()
+	Audio.sfx("uiOk")
+
+# a TODO pin at the player's feet (MVB1-08 puts it in the shared list)
+func quick_pin() -> void:
+	var r := manager.room
+	var p := manager.player
+	if r == null or p == null:
+		return
+	if Game.pin_add("TODO", r.id, p.x + p.w / 2.0, p.y + p.h / 2.0):
+		r.pop(p.x + 5.0, p.y - 14.0, "pinned", Game.COL.gold, true)
+		Audio.sfx("uiOk")
 
 # The music follows the state (the room, its fight), it is not started by events: a missed or reordered event (P2 summoned
 # into a running fight, a fade still running) can no longer leave the wrong song or silence.

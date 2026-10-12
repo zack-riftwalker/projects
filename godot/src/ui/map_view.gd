@@ -25,6 +25,7 @@ var scale_px := 1.0             # px per tile
 var center := Vector2.ZERO      # the tile at the middle of the map area
 var canvas: Control             # the map area (clips what is drawn outside it)
 var drag_active := false
+var drag_ok := false             # the finger went down on the map area (a drag that began on a button does not pan)
 var repeat_t := 0.0
 var _keys_prev := {}
 var buttons: Array = []         # [{id, rect, label}] (rebuilt by _layout_buttons)
@@ -172,7 +173,7 @@ func update() -> void:
 		if msg_t <= 0.0:
 			msg = ""
 	var c := Controls.pressed
-	if c.get("dash", false) or c.get("pause", false):
+	if c.get("dash", false) or c.get("pause", false) or c.get("map", false):
 		Audio.sfx("uiBack")
 		back_requested.emit()
 		_redraw()
@@ -259,14 +260,18 @@ func press_button(id: String) -> void:
 	_redraw()
 
 # a finger or the mouse dragging the map (screen px of the 384 x 216 picture)
+func press_at(p: Vector2) -> void:
+	drag_ok = AREA.has_point(p)
+
 func drag(rel: Vector2) -> void:
-	if active:
+	if active and drag_ok:
 		pan_px(-rel)
 		drag_active = true
 		_redraw()
 
 func drag_end() -> void:
 	drag_active = false
+	drag_ok = false
 
 # ---------------------------------------------------------------- drawing
 func _draw() -> void:
