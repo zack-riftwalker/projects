@@ -184,6 +184,29 @@ func travel_targets() -> Array:
 			out.append(id)
 	return out
 
+# the terminal this player rested at that is nearest to the partner, when the partner is in another zone ("" = no such line); nobody is pulled, each moves only itself
+func partner_travel_target() -> String:
+	if room == null or Game.partner.is_empty():
+		return ""
+	var prid := String(Game.partner.room)
+	if not Game.rooms_meta.rooms.has(prid) or Game.is_lab(prid):
+		return ""
+	var pz := Game.zone_of(prid)
+	if pz == Game.zone_of(room.id):
+		return ""
+	var best := ""
+	var bd := 1e18
+	var po: Array = Game.rooms_meta.rooms[prid].origin
+	for id in travel_targets():
+		if Game.zone_of(id) != pz:
+			continue
+		var o: Array = Game.rooms_meta.rooms[id].origin
+		var d := Vector2(float(o[0]) - float(po[0]), float(o[1]) - float(po[1])).length()
+		if d < bd:
+			bd = d
+			best = id
+	return best
+
 func rested_benches() -> Array:
 	var out: Array = []
 	for id in Game.rooms_meta.rooms:

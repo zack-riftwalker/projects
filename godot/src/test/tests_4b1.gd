@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2"]
 
 func _init(m) -> void:
 	main = m
@@ -21,6 +21,7 @@ func run(name: String) -> bool:
 		"mappage": return await t_mappage()
 		"mapoverlay": return t_mapoverlay()
 		"changelog": return t_changelog()
+		"travelp2": return t_travelp2()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -506,3 +507,61 @@ func t_changelog() -> bool:
 	mgr.queue_free()
 	Game.fresh()
 	return report("changelog", res.ok, res.info)
+
+# MVB1-09: the Travel page's first line goes to the terminal in the partner's zone; the player moves, nobody is pulled
+func t_travelp2() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	Game.flags["bench:H03"] = true
+	Game.flags["bench:R08"] = true
+	var mgr := new_manager()
+	mgr.swap_to("R08")
+	var menu := BenchMenu.new()
+	main.add_child(menu)
+	menu.manager = mgr
+	var chosen := [""]
+	menu.travel_chosen.connect(func(id): chosen[0] = id)
+	Game.partner = {"room": "H05", "x": 100.0, "y": 100.0}
+	menu.open()
+	menu.choose(menu.options().find("Travel"))
+	var o: Array = menu.options()
+	if o.is_empty() or o[0] != "→ P2 (/proc/heap)":
+		fail(res, "first line: " + str(o))
+	menu.choose(0)
+	if chosen[0] != "H03":
+		fail(res, "chose " + chosen[0])
+	# the partner in the same zone: no such line
+	Game.partner = {"room": "R03", "x": 100.0, "y": 100.0}
+	menu.open()
+	menu.choose(menu.options().find("Travel"))
+	o = menu.options()
+	if o.is_empty() or String(o[0]).begins_with("→"):
+		fail(res, "a line for a partner in the same zone: " + str(o))
+	# a partner in a zone where this player never rested at a terminal: no line either
+	Game.partner = {"room": "D03", "x": 100.0, "y": 100.0}
+	menu.open()
+	menu.choose(menu.options().find("Travel"))
+	if String(menu.options()[0]).begins_with("→"):
+		fail(res, "a line to a zone without a rested terminal")
+	# alone: none
+	Game.partner = {}
+	menu.open()
+	menu.choose(menu.options().find("Travel"))
+	if String(menu.options()[0]).begins_with("→"):
+		fail(res, "a line when alone")
+	# on the guest's page the partner is P1
+	Game.net_role = "guest"
+	Game.partner = {"room": "H05", "x": 100.0, "y": 100.0}
+	menu.open()
+	menu.choose(menu.options().find("Travel"))
+	if String(menu.options()[0]) != "→ P1 (/proc/heap)":
+		fail(res, "guest line " + String(menu.options()[0]))
+	Game.net_role = ""
+	Game.partner = {}
+	menu.queue_free()
+	mgr.queue_free()
+	Game.fresh()
+	return report("travelp2", res.ok, res.info)

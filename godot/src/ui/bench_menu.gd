@@ -13,6 +13,8 @@ var sel := 0
 var page := "main"
 var manager: RoomManager
 var travel_list: Array = []
+var p2_target := ""              # the Travel page's first line goes to the terminal nearest the partner, when it is in another zone
+var p2_line := ""                # (its text, made when the page opens: the partner may leave while the menu is open)
 var plugin_ids: Array = []        # the owned plugins listed on the Plugins page
 
 func _ready() -> void:
@@ -50,11 +52,16 @@ func plugin_rows() -> Array:
 	rows.append("Back")
 	return rows
 
+func partner_name() -> String:
+	return "P1" if Game.net_role == "guest" else "P2"
+
 func options() -> Array:
 	if page == "plugins":
 		return plugin_rows()
 	if page == "travel":
 		var o: Array = []
+		if p2_target != "":
+			o.append(p2_line)
 		for id in travel_list:
 			o.append(String(Game.rooms_meta.rooms[id].title))
 		o.append("Back")
@@ -99,7 +106,7 @@ func choose(i: int) -> void:
 			page = "main"
 			sel = 0
 		else:
-			var target: String = travel_list[i]
+			var target: String = p2_target if (p2_target != "" and i == 0) else String(travel_list[i - (1 if p2_target != "" else 0)])
 			close()
 			travel_chosen.emit(target)
 		return
@@ -109,6 +116,9 @@ func choose(i: int) -> void:
 			close()
 		"Travel":
 			travel_list = manager.travel_targets()
+			p2_target = manager.partner_travel_target()
+			if p2_target != "":
+				p2_line = "→ %s (%s)" % [partner_name(), String(Game.zone_def(Game.zone_of(String(Game.partner.room))).get("path", ""))]
 			page = "travel"
 			sel = 0
 		"Plugins":
