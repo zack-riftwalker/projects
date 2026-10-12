@@ -619,7 +619,7 @@ func t_net4b() -> bool:
 		fail(res, "wave 0 has %d bits (want 10)" % bits)
 	for wv in range(3):
 		for e in n21.ents.duplicate():
-			if e is DdosBit:
+			if e is DdosBit or e is Mitm or e is Botnet or e is Pinger:          # (4B-3: the waves also have a MITM, a BOTNET and a PINGER)
 				e.hp = 0
 				e.die("swipe")
 		for f in range(130):
