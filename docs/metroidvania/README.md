@@ -47,3 +47,4 @@
 | [`08-world-design.md`](08-world-design.md) | طراحی دنیا و اتاق‌های فاز ۴ و ۵: شش منطقه، ۱۰۶ اتاق، درهای مخفی، حلقه‌ها، روح هر منطقه (نقشه‌ی تعاملی: https://claude.ai/artifact/3idnat2P5utcSquVZ7oSyp) | Claude | تأیید شد (۲۰۲۶-۱۰-۱۱) |
 | [`world-phase45.json`](world-phase45.json) | داده‌ی خام همون طراحی (اتاق‌ها، درها، قفل‌ها) برای پلن پیاده‌سازی | Claude | تأیید شد (۲۰۲۶-۱۰-۱۱) |
 | [`09-design-pass1-proposals.md`](09-design-pass1-proposals.md) | فاز ۱ طراحی: ۴۶ پیشنهاد از ۸ پژوهش (ساختار، لحظه‌ی امضا، راز، نقشه، باس، داستان) و بسته‌ی پیشنهادی | Claude | منتظر انتخاب Zakaria |
+| [`10-open-topics.md`](10-open-topics.md) | بحث‌های باز طراحی (S8، K1، M5، ساختار نقشه، B1، W6) و ایده‌ی DLC «پیام‌های ناشناس» | Claude | باز |
