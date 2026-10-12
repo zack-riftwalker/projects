@@ -1849,3 +1849,22 @@ func sc_co_pins() -> Array:
 		Game.ping_ack_one(String(main.hud.ping_arrows()[0].id))
 	await wait_secs(2.5)
 	return [listed and gone and arrow, "guest: my pin came back in the list after %.2f s %s, the host's removal reached me %s, the host's ping arrow %s" % [took, listed, gone, arrow]]
+
+# MVB1-10: a sign the guest reads is a world flag the host learns (a guest-only flag would break the digest rule)
+func sc_co_logs() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var got := await wait_until(func(): return Game.flag("log:R01:0") and Game.flag("changelog:opus"), 15.0)
+		await wait_secs(8.0)           # (the watchdog gives a differing digest 5 s: no INVARIANT line may follow)
+		return [got, "host: the guest's sign and changelog flags arrived %s" % got]
+	await wait_secs(1.5)
+	var r: Room = mgr().room
+	var sg: Dictionary = r.signs[0]
+	mgr().player.x = float(sg.x) - 5.0
+	mgr().player.y = float(sg.y) - 10.0
+	await wait_secs(1.0)
+	Game.tools["opus"] = true
+	Game.set_world_flag("changelog:opus")
+	await wait_secs(9.0)
+	return [Game.flag("log:R01:0"), "guest: read the first sign %s" % Game.flag("log:R01:0")]

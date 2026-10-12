@@ -145,6 +145,59 @@ func zone_counts(zone_id: String) -> Array:
 			n += 1
 	return [n, v.outline.size()]
 
+# ---- the Logs page (MVB1-10, MVB1-12) ----
+# one line per memory fragment, keyed by the room that holds it (the rooms of later zones come with their zones)
+const MEMORIES := {
+	"R01": "02:47 — the build went red. nobody else was awake.",
+	"R02": "02:51 — the first test failed: null, where something used to be.",
+	"R03": "02:58 — the linter screamed about code nobody had read in years.",
+	"R06": "03:02 — an old room, left in on purpose. the lamp was still on.",
+	"R11": "03:20 — try/catch around everything, and then sleep.",
+	"R13": "03:05 — the tests folder still had a test for two players.",
+	"D01": "03:34 — npm install. one thousand and forty-two packages.",
+	"D02": "03:41 — a package was unpublished. everything above it fell.",
+	"D03": "03:50 — the lockfile and the code disagreed about what was true.",
+	"H12": "04:20 — memory was taken and never given back.",
+	"H15": "04:31 — the crash dump kept a process mid-sentence.",
+	"N19": "04:47 — the backup still had last week's working build.",
+	"T14": "05:12 — two threads wrote the same line at once.",
+	"X13": "03:59 — the cache remembered a version that worked.",
+	"G15": "05:33 — the first commit: \"hello world. for two.\"",
+	"P16": "05:51 — nine minutes to deploy. the old core still holding the roof up.",
+}
+# the logbook pages (n -> text); the order of Panel F's switches in G15 is the relays sorted by time: 3, 1, 4, 2
+const LOGBOOK := {
+	1: "15:25  relay #4 clicked twice. nothing found.",
+	2: "14:10  relay #1 stuck open. tapped it shut.",
+	3: "15:45  relay #2: moth in relay. first actual case of bug being found.",
+	4: "13:05  relay #3 warm. ran the test again.",
+	5: "16:00  taped into this book. we checked the relays in the order of these times.",
+	6: "15:50  panel F closed up. it ran.",
+}
+
+# the text of sign n of a room as it reads now (alts decided by the flags), with the key names of this device
+func sign_text_of(room_id: String, n: int) -> String:
+	var list: Array = rooms_meta.rooms.get(room_id, {}).get("signs", [])
+	if n < 0 or n >= list.size():
+		return ""
+	var se = list[n]
+	if se is Dictionary:
+		for a in se.get("alt", []):
+			if cond(String(a["if"])):
+				return Hud._expand(String(a.text))
+		return Hud._expand(String(se.text))
+	return Hud._expand(String(se))
+
+# the memory fragments picked up: [room id] in the table's order (lab rooms have none)
+func memories_found() -> Array:
+	var out: Array = []
+	for id in MEMORIES:
+		for i in range(3):
+			if flag("item:%s:f%d" % [id, i]):
+				out.append(id)
+				break
+	return out
+
 # ---- obstacles (MVB1-07): what the map marks with an unnamed `?` until the player has passed it ----
 const OBSTACLES := {"%": "bash", "!": "catch", "&": "agents", "k": "agents", "@": "curl", "N": "ssh"}
 const CHANGELOG_WORDS := {"bash": "gives way to bash", "catch": "answers to catch", "agents": "waits for agents", "curl": "answers to curl", "ssh": "lets ssh through"}

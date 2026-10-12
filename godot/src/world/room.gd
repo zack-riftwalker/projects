@@ -99,6 +99,7 @@ var banner := {"text": "", "sub": "", "t": 0.0}
 var stats_line := ""
 var stats_t := 0.0
 var end_door = null
+var memory := {"text": "", "t": 0.0}                       # the line of the memory fragment just picked up (the HUD shows it for a few seconds)
 var pick_banner := {"text": "", "sub": "", "t": 0.0}      # "<plugin>" / "plugin - equip it at a bench" for 2 s
 var agents: Array = []         # the helpers of every player in this room (host / solo simulate them all)
 var agent_view: Array = []     # guest: [{owner, x, y, t}] as the host's snapshot lists them
@@ -231,9 +232,9 @@ func load_room(room_id: String, snap = null) -> void:
 					var texts: Array = def.get("signs", [])
 					var se = texts[sign_n] if sign_n < texts.size() else "..."
 					if se is Dictionary:        # {"text", "alt": [{"if": "<flag>" | "!<flag>", "text"}]}: the first alt that holds wins
-						signs.append({"x": x + 8, "y": y + T, "text": String(se.text), "alt": se.get("alt", [])})
+						signs.append({"x": x + 8, "y": y + T, "text": String(se.text), "alt": se.get("alt", []), "i": sign_n})
 					else:
-						signs.append({"x": x + 8, "y": y + T, "text": String(se)})
+						signs.append({"x": x + 8, "y": y + T, "text": String(se), "i": sign_n})
 					sign_n += 1
 				"M", "V":
 					_add_platform(ch, tx, ty, rows)
@@ -927,6 +928,7 @@ func step_guest(dt: float) -> void:
 	update_doors()
 	fx.decay(dt)
 	pick_banner.t -= dt
+	memory.t -= dt
 	if hitstop > 0.0:
 		hitstop -= dt
 		return
@@ -1129,6 +1131,7 @@ func step(dt: float) -> void:
 	update_doors()
 	fx.decay(dt)
 	pick_banner.t -= dt
+	memory.t -= dt
 	if hitstop > 0.0:
 		hitstop -= dt
 		return
@@ -1605,6 +1608,8 @@ func interact_goals(p) -> void:
 	for s in signs:
 		if absf(p.x + p.w / 2.0 - s.x) < 26 and absf(p.y + p.h - s.y) < 30:
 			sign_now = s
+	if sign_now != null:
+		Game.set_world_flag("log:%s:%d" % [id, int(sign_now.i)])          # read: the Logs page lists it (a world flag: the partner's page knows too)
 
 func update_items(dt: float) -> void:
 	var p = player                      # may be null: then the partner picks things up (through the network)
@@ -1676,6 +1681,7 @@ func collect(it: Dictionary) -> void:
 			ring(it.x, it.y, 2, 30, Game.COL.clawdHi, 0.5)
 			burst(it.x, it.y, 18, [Game.COL.clawd, Game.COL.clawdHi, "#fff3e4"], 130.0, 60.0, {"glow": 1})
 			pop(it.x, it.y - 12, "memory chip ✳ %d/4" % ((Game.fragments - 1) % 4 + 1), "#fff3e4", true)
+			show_memory(id)
 			stop(0.07)
 			Audio.sfx("spark")
 			if Game.fragments % 4 == 0:
@@ -1794,6 +1800,12 @@ func plugin_bought(pid: String, by: String) -> void:
 	Game.flags["plugin:" + pid] = true
 	pop(player.x + 5.0 if player != null else sx_default(), (player.y - 14.0) if player != null else 40.0, "npm install " + String(Game.plugin_def(pid).get("name", pid)), "#58f0c8", true)
 	plugin_got.emit(pid, by)
+
+# the line of a memory fragment, under its pop (the table lives in Game)
+func show_memory(room_id: String) -> void:
+	var line := String(Game.MEMORIES.get(room_id, ""))
+	if line != "":
+		memory = {"text": line, "t": 6.0}
 
 func sx_default() -> float:
 	return pw / 2.0

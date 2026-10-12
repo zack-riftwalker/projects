@@ -91,6 +91,13 @@ func _draw() -> void:
 	if room.pick_banner.t > 0.0:
 		PixelText.draw_text(self, room.pick_banner.text, W / 2.0, 60, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
 		PixelText.draw_text(self, room.pick_banner.sub, W / 2.0, 80, "#58f0c8", {"align": "c", "outline": Game.COL.ink})
+	if room.memory.t > 0.0:                                 # the memory line under the fragment's pop
+		var mlines := PixelText.wrap(String(room.memory.text), 300)
+		var ma := clampf(room.memory.t, 0.0, 1.0)
+		for mi in range(mlines.size()):
+			var mc := Color("#fff3e4")
+			mc.a = ma
+			PixelText.draw_text(self, mlines[mi], W / 2.0, 100 + mi * 11, mc, {"align": "c", "outline": Color(0.106, 0.071, 0.149, ma)})
 	if room.stats_t > 0.0 and room.stats_line != "":
 		PixelText.draw_text(self, room.stats_line, W / 2.0, H - 34, Game.COL.paper, {"align": "c", "outline": Game.COL.ink})
 	if notice != "":

@@ -1445,6 +1445,8 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				Audio.sfx("token")
 			if String(d.kind) == "spark":
 				Game.fragments += 1
+				if r != null and r.id == rid2:
+					r.show_memory(rid2)
 				if Game.fragments % 4 == 0 and p != null:
 					p.max_hp = Game.max_hp
 					p.hp = p.max_hp

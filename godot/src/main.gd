@@ -257,6 +257,17 @@ func _ready() -> void:
 				Game.tokens = 41
 				Game.fights = [{"boss": "NULL", "secs": 72.4, "hits": [41, 22], "dmg_taken": [3, 2], "won": true, "diff": "normal", "coop": true}]
 				end_screen.open()
+		elif Game.scene == "logs":                     # screenshot helper: the Logs page with some signs read and memories found
+			for id in ["R01", "R02", "R08", "D01", "D04", "H03"]:
+				for n in range(Game.rooms_meta.rooms[id].get("signs", []).size()):
+					Game.flags["log:%s:%d" % [id, n]] = true
+			for id in ["R01", "R06", "D01", "H12"]:
+				Game.flags["item:%s:f0" % id] = true
+			Game.flags["page:1"] = true
+			Game.changelog_lines = ["changelog: something in /proc/heap answers to curl"]
+			set_paused(true)
+			pause_menu.page = "logs"
+			pause_menu.logs_view.open()
 		elif Game.scene in ["map", "mapworld", "mapheap"]:     # screenshot helper: the map page with every room committed and every zone indexed (mapworld: the world view)
 			for id in Game.rooms_meta.rooms:
 				if not Game.is_lab(id):
@@ -460,6 +471,10 @@ func _map_in_use():
 		return map_overlay
 	if paused and pause_menu.page == "map":
 		return pause_menu.map_view
+	if paused and pause_menu.page == "logs":
+		return pause_menu.logs_view
+	if bench_menu.active and bench_menu.page == "logs":
+		return bench_menu.logs_view
 	return null
 
 # dragging the map with a finger or the mouse

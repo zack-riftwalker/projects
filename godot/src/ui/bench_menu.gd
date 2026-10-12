@@ -12,6 +12,7 @@ var active := false
 var sel := 0
 var page := "main"
 var manager: RoomManager
+var logs_view: LogsView
 var travel_list: Array = []
 var p2_target := ""              # the Travel page's first line goes to the terminal nearest the partner, when it is in another zone
 var p2_line := ""                # (its text, made when the page opens: the partner may leave while the menu is open)
@@ -19,6 +20,12 @@ var plugin_ids: Array = []        # the owned plugins listed on the Plugins page
 
 func _ready() -> void:
 	visible = false
+	logs_view = LogsView.new()
+	logs_view.back_requested.connect(func():
+		page = "main"
+		sel = 0
+		logs_view.close())
+	add_child(logs_view)
 
 func open() -> void:
 	active = true
@@ -31,6 +38,7 @@ func open() -> void:
 func close() -> void:
 	active = false
 	visible = false
+	logs_view.close()
 	closed.emit()
 
 func main_options() -> Array:
@@ -38,6 +46,8 @@ func main_options() -> Array:
 	if not manager.travel_targets().is_empty() and bool(Game.rooms_meta.rooms[manager.room.id].get("terminal", false)):
 		o.append("Travel")
 	o.append("Plugins")
+	if bool(Game.rooms_meta.rooms[manager.room.id].get("terminal", false)):
+		o.append("Logs")
 	o.append("Leave")
 	return o
 
@@ -70,6 +80,10 @@ func options() -> Array:
 
 func update() -> void:
 	if not active:
+		return
+	if page == "logs":
+		logs_view.update()
+		queue_redraw()
 		return
 	var n := options().size()
 	if Controls.pressed.get("up", false):
@@ -124,12 +138,18 @@ func choose(i: int) -> void:
 		"Plugins":
 			page = "plugins"
 			sel = 0
+		"Logs":
+			page = "logs"
+			logs_view.open()
 		"Leave":
 			close()
 	queue_redraw()
 
 func tap(p: Vector2) -> void:
 	if not active:
+		return
+	if page == "logs":
+		logs_view.tap(p)
 		return
 	for i in range(options().size()):
 		if Rect2(W / 2.0 - 70, (70 if page != "plugins" else 62) + i * row_step(), 140, row_h()).has_point(p):
@@ -145,7 +165,7 @@ func row_h() -> int:
 	return 18 if row_step() == 22 else 14
 
 func _draw() -> void:
-	if not active:
+	if not active or page == "logs":
 		return
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.04, 0.07, 0.55))
 	PixelText.draw_text(self, {"main": "BENCH", "travel": "TRAVEL", "plugins": "PLUGINS"}[page], W / 2.0, 30, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})

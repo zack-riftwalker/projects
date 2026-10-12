@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs"]
 
 func _init(m) -> void:
 	main = m
@@ -22,6 +22,7 @@ func run(name: String) -> bool:
 		"mapoverlay": return t_mapoverlay()
 		"changelog": return t_changelog()
 		"travelp2": return t_travelp2()
+		"logs": return t_logs()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -565,3 +566,82 @@ func t_travelp2() -> bool:
 	mgr.queue_free()
 	Game.fresh()
 	return report("travelp2", res.ok, res.info)
+
+func logs_text(lv: LogsView) -> String:
+	var out := ""
+	for l in lv.lines:
+		out += String(l.text) + "\n"
+	return out
+
+# stand next to sign n of a room for a step: reading it
+func read_sign(room: Room, n: int) -> void:
+	var p = room.player
+	var sg: Dictionary = room.signs[n]
+	p.x = float(sg.x) - p.w / 2.0
+	p.y = float(sg.y) - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	Controls.script_input = {}
+	Controls.poll()
+	room.step(Game.STEP)
+
+# MVB1-10: reading a sign is remembered (a world flag) and listed by zone; a memory fragment shows its line and is listed too; the lab is skipped
+func t_logs() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	var lv := LogsView.new()
+	main.add_child(lv)
+	lv.open()
+	if not logs_text(lv).contains("nothing logged yet"):
+		fail(res, "empty page")
+	var z := new_room("Z01")
+	read_sign(z, 0)
+	if not Game.flag("log:Z01:0"):
+		fail(res, "Z01 sign flag")
+	z.queue_free()
+	var r8 := new_room("R08")
+	read_sign(r8, 0)
+	if not Game.flag("log:R08:0"):
+		fail(res, "R08 sign flag")
+	lv.open()
+	var txt := logs_text(lv)
+	if not txt.contains("THE SOURCE TREE") or not txt.contains("Next door: the ledges go up"):
+		fail(res, "R08 sign not listed under THE SOURCE TREE: " + txt.left(200))
+	if txt.contains("LAB") or txt.contains("lab:") or txt.contains("waiting for a"):
+		fail(res, "a lab sign is listed")
+	r8.queue_free()
+	# a memory fragment: the line under its pop, and in the list
+	var r6 := new_room("R06")
+	var spark = null
+	for it in r6.items:
+		if it.kind == "spark":
+			spark = it
+	if spark == null:
+		fail(res, "R06 has no fragment")
+	else:
+		r6.collect(spark)
+		if r6.memory.text != "03:02 — an old room, left in on purpose. the lamp was still on.":
+			fail(res, "memory line " + str(r6.memory.text))
+		lv.open()
+		var t2 := logs_text(lv)
+		if not t2.contains("memories") or not t2.contains("the lamp was still on"):
+			fail(res, "memory not listed: " + t2.left(300))
+	r6.queue_free()
+	# the changelog lines are listed too
+	Game.changelog_lines = ["changelog: something in /proc/heap answers to curl"]
+	lv.open()
+	if not logs_text(lv).contains("answers to curl"):
+		fail(res, "changelog not listed")
+	# scrolling stays inside the page
+	lv.scroll_by(99999.0)
+	if lv.scroll > lv.max_scroll() + 0.01:
+		fail(res, "scroll past the end")
+	lv.scroll_by(-99999.0)
+	if lv.scroll != 0.0:
+		fail(res, "scroll above the top")
+	lv.queue_free()
+	Game.fresh()
+	return report("logs", res.ok, res.info)

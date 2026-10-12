@@ -17,12 +17,13 @@ var manager: RoomManager:
 		if map_view != null:
 			map_view.manager = v
 var map_view: MapView
+var logs_view: LogsView
 var blink_t := 0.0
 var log_msg := ""
 var refight_msg := ""
 
 func options() -> Array:
-	var o := ["Resume", "Map", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
+	var o := ["Resume", "Map", "Logs", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
 	if Game.debug:
 		o.append("Refight bosses" if refight_msg == "" else refight_msg)
 		o.append(log_msg if log_msg != "" else "Copy log (5 min)")
@@ -43,6 +44,7 @@ func open() -> void:
 	page = "menu"
 	if map_view != null:
 		map_view.close()
+		logs_view.close()
 	visible = true
 	Audio.sfx("pause")
 	Audio.duck(-10.0)
@@ -53,6 +55,7 @@ func close() -> void:
 	visible = false
 	if map_view != null:
 		map_view.close()
+		logs_view.close()
 	Audio.duck(0.0)
 
 func _ready() -> void:
@@ -64,6 +67,11 @@ func _ready() -> void:
 		page = "menu"
 		map_view.close())
 	add_child(map_view)
+	logs_view = LogsView.new()
+	logs_view.back_requested.connect(func():
+		page = "menu"
+		logs_view.close())
+	add_child(logs_view)
 
 # called every fixed step while paused (Main polls the controls itself then)
 func update() -> void:
@@ -72,6 +80,10 @@ func update() -> void:
 	blink_t += Game.STEP
 	if page == "map":
 		map_view.update()
+		queue_redraw()
+		return
+	if page == "logs":
+		logs_view.update()
 		queue_redraw()
 		return
 	if page == "fights":
@@ -106,14 +118,17 @@ func choose(i: int) -> void:
 		1:
 			page = "map"
 			map_view.open()
-		2: page = "fights"
-		3: restart_requested.emit()
-		4:
+		2:
+			page = "logs"
+			logs_view.open()
+		3: page = "fights"
+		4: restart_requested.emit()
+		5:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
-		5: fullscreen_requested.emit()
-		6: refight_bosses()
-		7: log_msg = "Log copied: %d lines" % Game.export_log()
+		6: fullscreen_requested.emit()
+		7: refight_bosses()
+		8: log_msg = "Log copied: %d lines" % Game.export_log()
 	queue_redraw()
 
 # a tap in game coordinates (0..384, 0..216)
@@ -123,19 +138,22 @@ func tap(p: Vector2) -> void:
 	if page == "map":
 		map_view.tap(p)
 		return
+	if page == "logs":
+		logs_view.tap(p)
+		return
 	if page != "menu":
 		page = "menu"
 		return
 	for i in range(options().size()):
-		if Rect2(W / 2.0 - 70, 52 + i * 19, 140, 17).has_point(p):
+		if Rect2(W / 2.0 - 70, 52 + i * row_step(), 140, row_h()).has_point(p):
 			choose(i)
 
 func _draw() -> void:
 	if not active:
 		return
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.04, 0.07, 0.6))
-	if page == "map":
-		return                                    # (the map view is a child node and draws itself)
+	if page == "map" or page == "logs":
+		return                                    # (the map and the logs are child nodes and draw themselves)
 	if page == "fights":
 		_draw_fights()
 		return
@@ -147,9 +165,16 @@ func _draw() -> void:
 	PixelText.draw_text(self, "PAUSED", W / 2.0, 30, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink, "shadow": Game.COL.ink})
 	var opts := options()
 	for i in range(opts.size()):
-		var y := 52 + i * 19
-		Gfx.panel(self, W / 2.0 - 70, y, 140, 17, "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
-		PixelText.draw_text(self, opts[i], W / 2.0, y + 4, Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
+		var y := 52 + i * row_step()
+		Gfx.panel(self, W / 2.0 - 70, y, 140, row_h(), "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")
+		PixelText.draw_text(self, opts[i], W / 2.0, y + (4 if row_h() == 17 else 2), Game.COL.paper if i == sel else Game.COL.dim, {"align": "c"})
+
+# more options than fit: tighter rows (the debug menu, a boss fight with the skip entry)
+func row_step() -> int:
+	return 19 if options().size() <= 7 else 16
+
+func row_h() -> int:
+	return 17 if row_step() == 19 else 14
 
 # ?debug: forget the beaten bosses so they can be fought again for more measurements (abilities and plugins stay)
 func refight_bosses() -> void:
