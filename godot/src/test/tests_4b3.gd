@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "fightsim"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -23,6 +23,8 @@ func run(name: String):
 		"w6enemies2": return t_w6enemies2()
 		"w6enemies": return t_w6enemies()
 		"net4b3": return t_net4b3()
+		"crawler2": return t_crawler2()
+		"fightsim": return t_fightsim()
 	return await super.run(name)
 
 func partner(room: Room, px: float, py: float) -> RemotePlayer:
@@ -841,3 +843,300 @@ func t_net4b3() -> bool:
 	rw.queue_free()
 	Game.fresh()
 	return report("net4b3", res.ok, res.info)
+
+# starts the N09 fight and returns the boss (the player is kept safe)
+func crawler_fight(res: Dictionary) -> Array:
+	var r := new_room("N09")
+	var cb: CrawlerBoss = null
+	for e in r.ents:
+		if e is CrawlerBoss:
+			cb = e
+	if cb == null or r.boss != cb:
+		fail(res, "N09 has no CrawlerBoss")
+		return [r, null]
+	r.player.x = 250.0
+	r.player.y = 150.0
+	var n := 0
+	while r.fight.state != "active" and n < 500:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never became active")
+	cb.plan = {}
+	cb.idle_t = 999.0
+	return [r, cb]
+
+# MVB3-06: WEB CRAWLER v2
+func t_crawler2() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var r := new_room("N09")
+	var cb: CrawlerBoss = null
+	for e in r.ents:
+		if e is CrawlerBoss:
+			cb = e
+	if cb == null or r.boss != cb:
+		fail(res, "N09 has no CrawlerBoss")
+		r.queue_free()
+		return report("crawler2", false, res.info)
+	if cb.max_hp != 82:
+		fail(res, "hp %d, want 82" % cb.max_hp)
+	# the intro starts only when a centre is below x 304
+	r.player.x = 340.0
+	r.player.y = 150.0
+	r.player.inv = 99.0
+	for f in range(30):
+		r.step(Game.STEP)
+	if r.fight.state != "none":
+		fail(res, "intro started with the player east of 304")
+	r.player.x = 250.0
+	r.step(Game.STEP)
+	if r.fight.state != "intro":
+		fail(res, "intro did not start below 304 (%s)" % r.fight.state)
+	var n := 0
+	while r.fight.state != "active" and n < 400:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never became active")
+	r.attacker = r.player
+	# fetch in phase 2: two plans, the first with a 0.75 s cue and 2 damage, the second 0.45 s and 1 damage
+	cb.hpf = float(cb.max_hp) * 0.5
+	cb.on_damage()
+	cb.scr_spawned = 1                                     # (the phase's scrapers are not the point here)
+	cb.plan = {}
+	cb.idle_t = 999.0
+	cb._start("fetch")
+	var cues: Array = []
+	var dmgs: Array = []
+	var seqs := {}
+	for f in range(60 * 6):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		r.player.x = 250.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		cb.idle_t = 999.0
+		if cb.plan.is_empty():
+			continue
+		if not seqs.has(cb.plan.seq):
+			seqs[cb.plan.seq] = true
+			cues.append(snappedf(float(cb.plan.t), 0.02))
+		if cb.plan_active():
+			for hb in cb.harmboxes():
+				if hb is Dictionary and hb.has("sid"):
+					if dmgs.size() < cues.size():
+						dmgs.append(int(hb.dmg))
+		if cues.size() == 2 and dmgs.size() == 2:
+			break
+	if cues.size() != 2 or absf(cues[0] - 0.75) > 0.04 or absf(cues[1] - 0.45) > 0.04:
+		fail(res, "fetch cues %s" % str(cues))
+	if dmgs != [2, 1]:
+		fail(res, "fetch damages %s" % str(dmgs))
+	cb.plan = {}
+	cb.idle_t = 999.0
+	cb.leg_on = 0
+	# a fifth strand cuts the oldest
+	cb.hz.clear()
+	for k in [7, 8, 9, 10]:
+		cb._add_strand(k, Vector2(CrawlerBoss.NODES[1]), 0.9)
+	var first_key: String = cb.hz_key(cb.hz[0])
+	cb._add_strand(0, Vector2(CrawlerBoss.NODES[1]), 0.9)
+	if cb.hz.size() != 4 or cb.strand_at_knot(7) or not cb.strand_at_knot(0):
+		fail(res, "a fifth strand: %d strands, knot 7 %s" % [cb.hz.size(), str(cb.strand_at_knot(7))])
+	# a swipe on a floor knot cuts its strand (and the boss takes nothing)
+	cb.hz.clear()
+	cb._add_strand(7, Vector2(CrawlerBoss.NODES[0]), 0.9)
+	var hp_before := cb.hpf
+	r.player.x = 36.0
+	r.player.y = 166.0
+	r.player.vx = 0.0
+	r.player.vy = 0.0
+	r.player.face = 1.0
+	r.player.inv = 99.0
+	for f in range(20):
+		r.player.x = 36.0
+		r.player.y = 166.0
+		r.player.inv = 99.0
+		step_keys(r, {"attack": f == 1})
+	if cb.strand_at_knot(7) or cb.hpf != hp_before:
+		fail(res, "a swipe on the floor knot: strand still there %s, boss hp %.1f -> %.1f" % [str(cb.strand_at_knot(7)), hp_before, cb.hpf])
+	# a caught packet flying back across a strand cuts it
+	cb.hz.clear()
+	cb._add_strand(8, Vector2(CrawlerBoss.NODES[1]), 0.9)
+	var pk := r.shoot(150.0, 100.0, -50.0, 0.0, {"friendly": true, "pierce": true, "hit": {}, "life": 2.0})
+	cb._cut_by_packets()
+	if cb.strand_at_knot(8):
+		fail(res, "a caught packet did not cut the strand it crossed")
+	pk.dead = true
+	# a strand hurts only after its warning
+	cb.hz.clear()
+	cb._add_strand(9, Vector2(CrawlerBoss.NODES[2]), 0.9)
+	var tc := r.time
+	var early := cb.hz_all_boxes(tc + 0.5).size()
+	var late := cb.hz_all_boxes(tc + 1.0).size()
+	if early != 0 or late < 5:
+		fail(res, "strand boxes: %d before the warning, %d after" % [early, late])
+	cb.hz.clear()
+	# skitter: the running body hurts a standing player and not one at the top of a jump
+	cb.sk_state = 2
+	cb.core_px = 100.0
+	cb.core_y = Boss.FLOOR - 9.0
+	var stand := {"x": 96.0, "y": 166.0, "w": 8.0, "h": 9.0}
+	var jumped := {"x": 96.0, "y": 166.0 - 54.0, "w": 8.0, "h": 9.0}
+	var hit_stand := false
+	var hit_jump := false
+	for hb in cb.harmboxes():
+		if Game.overlap(stand, hb):
+			hit_stand = true
+		if Game.overlap(jumped, hb):
+			hit_jump = true
+	if not hit_stand or hit_jump:
+		fail(res, "skitter body: stand %s jump %s" % [str(hit_stand), str(hit_jump)])
+	cb.sk_state = 0
+	# the deep crawl: the swing is the same on two rooms at the same time; a jump and an up-swipe at the middle hit the core
+	cb.hpf = float(cb.max_hp) * 0.25
+	cb.on_damage()
+	cb.scr_spawned = 1
+	cb.plan = {}
+	cb.idle_t = 999.0
+	for f in range(5):
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		cb.idle_t = 999.0
+	if cb.dc != 1 or not cb.hz.is_empty():
+		fail(res, "no deep crawl at 25 % (dc %d, strands %d)" % [cb.dc, cb.hz.size()])
+	var r2 := new_room("N09")
+	var pup = NetClasses.make(30, r2)
+	NetClasses.apply(pup, JSON.parse_string(JSON.stringify(NetClasses.record(cb))))
+	var same := true
+	for tm in [0.0, 0.4, 0.8, 1.2, 1.6, 2.4, 3.3, 5.0]:
+		var tt: float = cb.sw_t0 + tm + 1.0
+		if cb.dc_pos(tt).distance_to(pup.dc_pos(tt)) > 0.2:
+			same = false
+	if not same:
+		fail(res, "the pendulum differs between two rooms")
+	pup.free()
+	r2.queue_free()
+	var mid_t: float = cb.sw_t0 + 3.2 * 2.0                # the middle of a swing, long after the blend
+	var mp := cb.dc_pos(mid_t)
+	if absf(mp.x - 192.0) > 1.0 or absf((Boss.FLOOR - mp.y) - 56.0) > 1.5:
+		fail(res, "the swing's middle is at (%.0f, %.0f), want x 192, 56 px over the floor" % [mp.x, mp.y])
+	cb.core_px = mp.x
+	cb.core_y = mp.y
+	r.player.x = mp.x - 5.0
+	r.player.y = 140.0                                    # in the air, under the core, not touching it
+	r.player.atk_dir = "u"
+	var ab: Dictionary = r.player.atk_box()
+	var touching := false
+	for hb in cb.harmboxes():
+		if Game.overlap(r.player.hurtbox(), hb):
+			touching = true
+	var swipe_reaches := false
+	for hu in cb.hurtboxes():
+		if Game.overlap(ab, hu):
+			swipe_reaches = true
+	var apex: float = Player.JUMP * Player.JUMP / (2.0 * Player.G_UP)
+	if touching or not swipe_reaches or apex < 36.0:
+		fail(res, "jump + up-swipe at the middle: touching %s, swipe reaches %s, apex %.0f" % [str(touching), str(swipe_reaches), apex])
+	var hp1 := cb.hpf
+	cb.hit(1, 0.0, -1.0, "swipe", cb)
+	if cb.hpf >= hp1:
+		fail(res, "the core took no damage")
+	# phases at 65 % and 30 %
+	cb.hpf = float(cb.max_hp) * 0.66
+	cb.on_damage()
+	if cb._phase_now() != 1:
+		fail(res, "phase 1 at 66 %")
+	cb.hpf = float(cb.max_hp) * 0.64
+	cb.on_damage()
+	if cb.phase != 2:
+		fail(res, "no phase 2 at 64 %")
+	# the kill: curl, boss flag, N09:W opens
+	Game.flags = {}
+	Game.tools = {}
+	if not r.skip_boss():
+		fail(res, "skip boss refused")
+	n = 0
+	while r.fight.state != "done" and n < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if not Game.flag("ability:curl") or not Game.flag("boss:CRAWLER") or not Game.tools.get("curl", false):
+		fail(res, "reward missing (state %s)" % r.fight.state)
+	var w_open := true
+	r.update_doors()
+	for d in r.grid.doors:
+		if String(d.to).begins_with("N08") or String(d.get("side", "")) == "W":
+			w_open = w_open and bool(d.open)
+	if not w_open:
+		fail(res, "N09:W stayed shut")
+	r.queue_free()
+	Game.fresh()
+	return report("crawler2", res.ok, res.info)
+
+# not in the suite: runs a boss fight for FIGHT_S seconds with an invulnerable player who walks about, and counts the attacks (BOSS = N09 | N15 | N22)
+func t_fightsim() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = OS.get_environment("DIFF") if OS.get_environment("DIFF") != "" else "normal"
+	var rid := OS.get_environment("BOSS") if OS.get_environment("BOSS") != "" else "N09"
+	var secs := float(OS.get_environment("FIGHT_S")) if OS.get_environment("FIGHT_S") != "" else 60.0
+	var r := new_room(rid)
+	var b = r.boss
+	if rid == "N22":
+		Game.tools.curl = true
+		r.player.x = 11.0 * 16.0
+		r.player.y = 10.0 * 16.0 - 10.0
+		for f in range(40):
+			r.player.inv = 99.0
+			r.step(Game.STEP)
+	r.player.x = 250.0
+	r.player.y = 150.0
+	var n := 0
+	while r.fight.state != "active" and n < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	r.player.inv = 0.0
+	if OS.get_environment("HP_FRAC") != "" and b != null:
+		b.hpf = float(b.max_hp) * float(OS.get_environment("HP_FRAC"))
+		b.hp = ceili(b.hpf)
+		b.on_damage()
+	var counts := {}
+	var seen := {}
+	var hits := 0
+	var hp_start: int = r.player.hp
+	for f in range(int(secs * 60.0)):
+		if OS.get_environment("GODMODE") != "":
+			r.player.inv = 99.0
+		var ph := float(f) / 60.0
+		if rid == "N09":
+			r.player.x = 200.0 + 120.0 * sin(ph * 0.7)
+		else:
+			r.player.x = 190.0 + 140.0 * sin(ph * 0.7)
+		r.player.y = 150.0
+		r.player.vy = 0.0
+		step_keys(r, {"attack": f % 40 == 0})
+		if r.player.hp < r.player.max_hp and OS.get_environment("GODMODE") == "":
+			hits += 1
+			r.player.hp = r.player.max_hp
+		if b != null and not b.plan.is_empty():
+			b.plan_seen(int(b.plan.seq))
+			var key := "%s@P%d" % [String(b.plan.id), b.phase]
+			if not seen.has("%d" % b.plan.seq):
+				seen["%d" % b.plan.seq] = true
+				counts[key] = int(counts.get(key, 0)) + 1
+		if b != null and (b.dying or b.dead):
+			break
+	print("FIGHTSIM %s %.0f s: attacks %s, hp %.1f/%d, hits taken %d" % [rid, secs, str(counts), b.hpf if b != null else -1.0, b.max_hp if b != null else 0, hits])
+	Game.fresh()
+	return report("fightsim", true, "")

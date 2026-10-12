@@ -346,7 +346,7 @@
              ] },
     "N09": { "file": "N09.txt", "title": "WEB CRAWLER", "size": [24, 14], "origin": [1436, -104], "world": 6, "music": "w6", "zone": "net",
              "signs": [],
-             "boss": {"id": "CRAWLER", "class": "CrawlerBoss", "name": "WEB CRAWLER", "sub": "it follows every link", "trigger_x": 304, "trigger_side": "E", "T": 80, "u": 0.7, "reward": "curl", "banner": "curl", "banner_sub": "near a GET ring, press [special]: you zip to it", "music": "boss", "drop": 40},
+             "boss": {"id": "CRAWLER", "class": "CrawlerBoss", "name": "WEB CRAWLER", "sub": "it follows every link", "trigger_x": 304, "trigger_side": "E", "T": 109.4, "u": 0.75, "reward": "curl", "banner": "curl", "banner_sub": "near a GET ring, press [special]: you zip to it", "music": "boss", "drop": 40},
              "doors": [
                  {"id": "N09:E", "side": "E", "a": 7, "b": 10, "to": "N08:W2", "lock": "fight"},
                  {"id": "N09:W", "side": "W", "a": 7, "b": 10, "to": "N10:E", "lock": "until:boss:CRAWLER"}
