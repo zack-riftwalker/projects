@@ -181,9 +181,7 @@ func _draw_map() -> void:
 	var x1 := -1e9
 	var y0 := 1e9
 	var y1 := -1e9
-	for id in rooms:
-		if not Game.flag("room:%s:visited" % id):
-			continue
+	for id in Game.map_rooms():
 		var m: Dictionary = rooms[id]
 		x0 = minf(x0, m.origin[0])
 		x1 = maxf(x1, m.origin[0] + m.size[0])
@@ -194,9 +192,7 @@ func _draw_map() -> void:
 	var sc := minf(minf(360.0 / (x1 - x0), 170.0 / (y1 - y0)), 0.5)
 	var ox: float = floorf(W / 2.0 - (x1 - x0) * sc / 2.0 - x0 * sc)
 	var oy: float = floorf(114.0 - (y1 - y0) * sc / 2.0 - y0 * sc)
-	for id in rooms:
-		if not Game.flag("room:%s:visited" % id):
-			continue
+	for id in Game.map_rooms():
 		var m: Dictionary = rooms[id]
 		var r := Rect2(ox + m.origin[0] * sc, oy + m.origin[1] * sc, m.size[0] * sc, m.size[1] * sc)
 		var here: bool = manager != null and manager.room != null and manager.room.id == id

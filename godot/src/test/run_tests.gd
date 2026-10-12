@@ -77,6 +77,7 @@ func run(name: String) -> bool:
 		"rooms4": return t_rooms4()
 		"stackover": return t_stackover()
 		"rise": return t_rise()
+		"lab": return t_lab()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -3048,3 +3049,33 @@ func _notch(m: RoomManager, double: bool) -> String:
 			break
 	Controls.script_input = {}
 	return m.room.id
+
+# MVB0-02: the lab rooms load, and stay off the map and out of Travel
+func t_lab() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	for id in ["Z01", "Z02", "Z03", "Z04", "Z05", "Z06"]:
+		var r := new_room(id)
+		chk.call(id + " loads", r.w > 0 and r.id == id)
+		chk.call(id + " is lab", Game.is_lab(id))
+		r.queue_free()
+	Game.flags["room:Z01:visited"] = true
+	Game.flags["bench:Z01"] = true
+	Game.flags["room:R01:visited"] = true
+	chk.call("map has R01", Game.map_rooms().has("R01"))
+	var lab_on_map := false
+	for id in Game.map_rooms():
+		lab_on_map = lab_on_map or String(id).begins_with("Z0")
+	chk.call("map has no lab room", not lab_on_map)
+	var m := new_manager()
+	for id in m.travel_targets():
+		chk.call("travel has no lab room", not String(id).begins_with("Z0"))
+	m.queue_free()
+	chk.call("R01 is not lab", not Game.is_lab("R01"))
+	Game.flags = {}
+	return report("lab", res.ok, res.info)

@@ -43,6 +43,18 @@ func theme(w: int) -> Dictionary:
 		_themes[w] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/theme/w%d.json" % w))
 	return _themes[w]
 
+# a lab room is a test room: never on the map, never in Travel, never counted
+func is_lab(room_id: String) -> bool:
+	return bool(rooms_meta.rooms.get(room_id, {}).get("lab", false))
+
+# the rooms the pause map draws: visited, and not a lab room
+func map_rooms() -> Array:
+	var out: Array = []
+	for id in rooms_meta.rooms:
+		if flag("room:%s:visited" % id) and not is_lab(id):
+			out.append(id)
+	return out
+
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
@@ -331,6 +343,7 @@ var low_fx := false          # G.save.data.opt.min
 
 # query options: ?debug ?fps30 ?mute ?selftest (web) or user args (native)
 var debug := false
+var lab := false                    # ?debug&lab: a new game starts in the lab rooms (Z05), nothing is saved
 var fps30 := false
 var mute := false
 var selftest := false
@@ -425,6 +438,7 @@ func _ready() -> void:
 		var v := kv[1] if kv.size() > 1 else ""
 		match k:
 			"debug": debug = true
+			"lab": lab = true
 			"fps30": fps30 = true
 			"mute": mute = true
 			"selftest": selftest = true
@@ -448,7 +462,8 @@ func _ready() -> void:
 			"full": full_shot = true
 	if fps30:
 		Engine.max_fps = 30
-	if test_name != "" or selftest or shot_path != "" or demo or net_role == "guest" or scenario != "":
+	lab = lab and debug                 # (only together with ?debug)
+	if test_name != "" or selftest or shot_path != "" or demo or net_role == "guest" or scenario != "" or lab:
 		persist = false
 	if persist:
 		load_settings()

@@ -249,7 +249,8 @@ func _ready() -> void:
 				end_screen.open()
 		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited
 			for id in Game.rooms_meta.rooms:
-				Game.flags["room:%s:visited" % id] = true
+				if not Game.is_lab(id):
+					Game.flags["room:%s:visited" % id] = true
 			manager.swap_to("R03")
 			manager.player.x = 1200.0
 			set_paused(true)

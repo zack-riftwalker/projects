@@ -126,6 +126,8 @@ func respawn(count_death := true) -> void:
 	if room != null:
 		room.player = null
 	var rid := String(Game.rooms_meta.start.room)
+	if Game.lab and Game.rooms_meta.rooms.has("Z05"):
+		rid = "Z05"
 	var spawn = null
 	if Game.bench != "" and Game.rooms_meta.rooms.has(Game.bench):
 		rid = Game.bench
@@ -162,7 +164,7 @@ func rest(r: Room, index: int) -> void:
 func travel_targets() -> Array:
 	var out: Array = []
 	for id in rested_benches():
-		if bool(Game.rooms_meta.rooms[id].get("terminal", false)) and (room == null or id != room.id):
+		if bool(Game.rooms_meta.rooms[id].get("terminal", false)) and not Game.is_lab(id) and (room == null or id != room.id):
 			out.append(id)
 	return out
 

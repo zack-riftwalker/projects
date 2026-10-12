@@ -10,10 +10,11 @@ rec() { NAMES+=("$1"); RES+=("$2"); }
 run() { local name=$1; shift; if "$@" > "$TMP/$name.log" 2>&1; then rec "$name" PASS; else rec "$name" FAIL; echo "---- $name ----"; tail -25 "$TMP/$name.log"; fi; }
 
 run smoke bash tools/godot/smoke.sh
+run worldcheck python3 -I tools/godot/roomcheck/world.py
 # a script that does not parse makes every scenario hang until its timeout: stop at once instead
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
 if timeout 60 "$GODOT" --headless --path godot --quit-after 3 2>&1 | grep -E "Parse Error|Compile Error|Failed to load script"; then echo "FAIL parse"; exit 1; fi
-for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork rooms3b merge agents shop mergeinterp loadout bossstats strikeseen sidunique bossfree skipboss nsdoors tiles4 flood rise plugins4 w3assets w3enemies segfault stackover leak rooms4; do
+for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork rooms3b merge agents shop mergeinterp loadout bossstats strikeseen sidunique bossfree skipboss nsdoors tiles4 flood rise plugins4 w3assets w3enemies segfault stackover leak rooms4 lab; do
   timeout 180 "$GODOT" --headless --path godot -- --test=$t > "$TMP/$t.log" 2>&1
   if grep -q "^TEST $t PASS" "$TMP/$t.log" && ! grep -q "SCRIPT ERROR" "$TMP/$t.log"; then rec "test-$t" PASS; else rec "test-$t" FAIL; echo "---- $t ----"; tail -20 "$TMP/$t.log"; fi
 done
