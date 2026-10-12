@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "firewall2", "fightsim"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler2", "firewall2", "reviewer2b", "fightsim"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -25,6 +25,7 @@ func run(name: String):
 		"net4b3": return t_net4b3()
 		"crawler2": return t_crawler2()
 		"firewall2": return t_firewall2()
+		"reviewer2b": return t_reviewer2b()
 		"fightsim": return t_fightsim()
 	return await super.run(name)
 
@@ -1094,17 +1095,17 @@ func t_fightsim() -> bool:
 	var r := new_room(rid)
 	var b = r.boss
 	if rid == "N22":
-		Game.tools.curl = true
-		r.player.x = 11.0 * 16.0
-		r.player.y = 10.0 * 16.0 - 10.0
-		for f in range(40):
-			r.player.inv = 99.0
-			r.step(Game.STEP)
+		Game.flags["ability:ssh"] = true
+		for f in range(6):
+			on_pad(r)
+			step_keys(r, {"up": true} if f == 3 else {})
 	r.player.x = 250.0
 	r.player.y = 150.0
 	var n := 0
 	while r.fight.state != "active" and n < 900:
 		r.player.inv = 99.0
+		if rid == "N22":
+			on_pad(r)
 		r.step(Game.STEP)
 		n += 1
 	r.player.inv = 0.0
@@ -1462,3 +1463,281 @@ func t_firewall2() -> bool:
 	r.queue_free()
 	Game.fresh()
 	return report("firewall2", res.ok, res.info)
+
+# MVB3-08: THE REVIEWER #2 v2 (the pad and reward checks are the 4B-2 ones)
+func t_reviewer2b() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	# [up] on the chair without curl/ssh: nothing starts
+	var r := new_room("N22")
+	var rv: Reviewer2 = null
+	for e in r.ents:
+		if e is Reviewer2:
+			rv = e
+	if rv == null or r.boss != rv:
+		fail(res, "N22 has no Reviewer2")
+		r.queue_free()
+		return report("reviewer2b", false, res.info)
+	if rv.max_hp != 96 or rv.max_hp != Game.boss_hp(r.def.boss):
+		fail(res, "hp %d, want 96" % rv.max_hp)
+	on_pad(r)
+	for f in range(6):
+		on_pad(r)
+		step_keys(r, {"up": true} if f == 3 else {})
+	if r.fight.state != "none":
+		fail(res, "the fight started without curl/ssh")
+	# walking through the arena never starts it
+	for f in range(240):
+		r.player.x = 20.0 + float(f) * 1.3
+		r.player.y = 176.0 - r.player.h
+		r.player.inv = 99.0
+		step_keys(r, {"up": f % 7 == 0})
+	if r.fight.state != "none":
+		fail(res, "walking through started the fight")
+	# with a tool of the network, [up] on the chair starts the intro
+	Game.flags["ability:ssh"] = true
+	for f in range(6):
+		on_pad(r)
+		step_keys(r, {"up": true} if f == 3 else {})
+	if r.fight.state != "intro":
+		fail(res, "[up] on the chair did not start the intro (%s)" % r.fight.state)
+	var n := 0
+	while r.fight.state != "active" and n < 400:
+		on_pad(r)
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never became active")
+	rv.plan = {}
+	rv.idle_t = 999.0
+	rv.x = 250.0
+	rv.y = Boss.FLOOR - rv.h
+	rv.face = -1.0
+	r.attacker = r.player
+	# cached: three up-swipes -> the icon is "up"; an up claw is blocked, a side claw lands
+	for i in range(3):
+		rv.hit(1, 0.0, -1.0, "swipe", rv)
+	if rv.last_kind.p1 != "up":
+		fail(res, "last kind %s" % rv.last_kind.p1)
+	rv.hpf = float(rv.max_hp)
+	r.player.x = 150.0
+	r.player.y = 150.0
+	rv._start("cached", "p1")
+	if rv.cached_kind != "up":
+		fail(res, "cached shows %s" % rv.cached_kind)
+	if not fw_until2(r, rv, "cached", "active", Vector2(150.0, 150.0)):
+		fail(res, "cached never active")
+	var hp0 := rv.hpf
+	if rv.hit(1, 0.0, -1.0, "swipe", rv) != "block" or rv.hpf != hp0:
+		fail(res, "an up claw was not blocked")
+	if rv.riposte_to != "p1":
+		fail(res, "no riposte owed")
+	rv.plan = {}
+	rv._start("cached", "p1")
+	rv.last_kind["p1"] = "up"
+	rv.cached_kind = "up"
+	if not fw_until2(r, rv, "cached", "active", Vector2(150.0, 150.0)):
+		fail(res, "cached (2) never active")
+	hp0 = rv.hpf
+	rv.hit(1, -1.0, 0.0, "swipe", rv)
+	if rv.hpf >= hp0:
+		fail(res, "a side claw was blocked by an up cache")
+	rv.plan = {}
+	rv.riposte_to = ""
+	# the riposte follows a block
+	rv.riposte_to = "p1"
+	rv.idle_t = 0.0
+	r.step(Game.STEP)
+	if rv.plan.is_empty() or String(rv.plan.id) != "riposte":
+		fail(res, "no riposte after a block (%s)" % str(rv.plan.get("id")))
+	rv.plan = {}
+	# verdict: a diamond (catchable) and a grey orb (not)
+	for q in r.projs:
+		q.dead = true
+	r.projs.clear()
+	rv.idle_t = 999.0
+	rv._start("verdict", "p1")
+	var seen_c := false
+	var seen_n := false
+	for f in range(60 * 7):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		r.player.x = 150.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		rv.idle_t = 999.0
+		for q in r.projs:
+			if q.get("by_boss", false):
+				if q.get("catchable", false):
+					seen_c = true
+				else:
+					seen_n = true
+		if rv.plan.is_empty():
+			break
+	if not seen_c or not seen_n:
+		fail(res, "verdict shots: catchable %s, not catchable %s" % [str(seen_c), str(seen_n)])
+	if rv.shots != 6:
+		fail(res, "verdict fired %d shots" % rv.shots)
+	# parity of the boxes: double, cross, signoff
+	rv.hz.clear()
+	for id in ["double", "cross", "signoff"]:
+		rv.plan = {}
+		rv.x = 250.0
+		rv._start(id, "p1")
+		rv.plan.t = 0.01
+		if not fw_until2(r, rv, id, "active", Vector2(150.0, 150.0)):
+			fail(res, "%s never active" % id)
+			continue
+		var pup = NetClasses.make(32, r)
+		NetClasses.apply(pup, JSON.parse_string(JSON.stringify(NetClasses.record(rv))))
+		pup.x = rv.x
+		pup.y = rv.y
+		if rv.harmboxes().is_empty() or not same_boxes(rv.harmboxes(), pup.harmboxes()):
+			fail(res, "%s parity (%d boxes)" % [id, rv.harmboxes().size()])
+		pup.free()
+	# unresolved comments: a grey shot leaves a mark that hurts after 0.8 s and not before
+	rv.plan = {}
+	rv.hz.clear()
+	rv.hpf = float(rv.max_hp)
+	rv.on_damage()
+	for q in r.projs:
+		q.dead = true
+	rv.plan = {"seq": 99, "id": "verdict", "fam": "proj", "tgt": "p1", "ph": "recover", "t": 5.0, "fp": [0.0, 0.0, 0.0, 0.0], "lock": 0.0}
+	rv._shoot_grey()
+	var landed := false
+	for f in range(90):
+		r.player.inv = 99.0
+		r.player.x = 40.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		rv.idle_t = 999.0
+		rv.plan = {"seq": 99, "id": "verdict", "fam": "proj", "tgt": "p1", "ph": "recover", "t": 5.0, "fp": [0.0, 0.0, 0.0, 0.0], "lock": 0.0}
+		if not rv.hz.is_empty():
+			landed = true
+			break
+	if not landed:
+		fail(res, "a grey shot left no mark")
+	else:
+		var mk: Dictionary = rv.hz[0]
+		var tm: float = float(mk.t0)
+		if not rv.hz_all_boxes(tm + 0.79).is_empty() or rv.hz_all_boxes(tm + 0.81).size() != 1:
+			fail(res, "a mark hurts at the wrong time")
+		var bxm: Dictionary = rv.hz_all_boxes(tm + 0.9)[0]
+		if bxm.h != 6.0 or bxm.w != 16.0 or int(bxm.dmg) != 1:
+			fail(res, "mark box %s" % str(bxm))
+	rv.plan = {}
+	# a caught diamond back into the boss clears the two oldest marks
+	rv.hz.clear()
+	for k in range(3):
+		rv.leave_mark(40.0 + 30.0 * float(k))
+	r.attacker = r.player
+	var first_x: float = float(rv.hz[0].v[0])
+	rv.hit(2, 1.0, 0.0, "catch", rv)
+	if rv.hz.size() != 1 or float(rv.hz[0].v[0]) == first_x:
+		fail(res, "a caught diamond left %d marks" % rv.hz.size())
+	# a ninth mark drops the oldest
+	rv.hz.clear()
+	for k in range(9):
+		rv.leave_mark(30.0 + 30.0 * float(k))
+	if rv.hz.size() != 8 or float(rv.hz[0].v[0]) != 60.0:
+		fail(res, "nine marks: %d left, first at %s" % [rv.hz.size(), str(rv.hz[0].v[0]) if not rv.hz.is_empty() else "-"])
+	# a phase change clears them all
+	rv.hpf = float(rv.max_hp) * 0.55
+	rv.on_damage()
+	if not rv.hz.is_empty():
+		fail(res, "a phase change left %d marks" % rv.hz.size())
+	# nitpick always leaves a 64 px gap free of pens
+	for k in range(30):
+		rv.plan = {}
+		rv._start("nitpick", "p1")
+		var xs: Array = rv.pen_xs
+		var edges: Array = [16.0]
+		for px in xs:
+			edges.append(float(px) - 6.0)
+			edges.append(float(px) + 6.0)
+		edges.append(368.0)
+		var best_gap := 0.0
+		for gi in range(0, edges.size(), 2):
+			best_gap = maxf(best_gap, float(edges[gi + 1]) - float(edges[gi]))
+		if xs.size() != 6 or best_gap < 64.0:
+			fail(res, "nitpick %d: %d pens, widest gap %.0f" % [k, xs.size(), best_gap])
+			break
+	rv.plan = {}
+	# phase 2 chains two attacks with a 0.4 s recover between; phase 3 chains the sign-off (lunge, slash, diamond)
+	rv.cycle = 0
+	rv.idle_t = 0.0
+	rv.hpf = float(rv.max_hp) * 0.5
+	rv.on_damage()
+	rv._choose()
+	var order: Array = []
+	var rec_t := -1.0
+	var gap_ok := false
+	for f in range(60 * 12):
+		r.player.inv = 99.0
+		r.player.x = 40.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		if rv.plan.is_empty():
+			continue
+		rv.plan_seen(int(rv.plan.seq))
+		var pid := String(rv.plan.id)
+		if order.is_empty() or order[order.size() - 1] != pid:
+			order.append(pid)
+		if order.size() == 1 and String(rv.plan.ph) == "recover" and rec_t < 0.0:
+			rec_t = float(rv.plan.t)
+		if order.size() >= 2:
+			gap_ok = true
+			break
+	if order.size() < 2 or order[0] != "double" or order[1] != "verdict" or absf(rec_t - 0.4) > 0.03:
+		fail(res, "phase 2 pair: %s, recover %.2f" % [str(order), rec_t])
+	rv.plan = {}
+	rv.pair_next = ""
+	rv.hpf = float(rv.max_hp) * 0.2
+	rv.on_damage()
+	rv._start("signoff", "p1")
+	var chain: Array = []
+	var rec_ok := true
+	for f in range(60 * 12):
+		r.player.inv = 99.0
+		r.player.x = 40.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		rv.idle_t = 999.0
+		if rv.plan.is_empty():
+			if chain.size() >= 3:
+				break
+			continue
+		rv.plan_seen(int(rv.plan.seq))
+		var pid2 := String(rv.plan.id)
+		if chain.is_empty() or chain[chain.size() - 1] != pid2:
+			chain.append(pid2)
+	if chain.slice(0, 3) != ["signoff", "slash", "sdiamond"]:
+		fail(res, "sign-off chain: %s" % str(chain))
+	rv.plan = {}
+	# the kill: the plugin flag and the boss flag, but no tool (skip boss from an unstarted pad fight works too)
+	r.queue_free()
+	Game.flags = {}
+	Game.tools = {}
+	r = new_room("N22")
+	rv = r.boss
+	if not r.skip_boss():
+		fail(res, "skip boss refused")
+	n = 0
+	while r.fight.state != "done" and n < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if not Game.flag("plugin:review_cache") or not Game.flag("boss:REVIEWER2"):
+		fail(res, "reward flags missing (state %s)" % r.fight.state)
+	if not Game.tools.is_empty():
+		fail(res, "a tool was given: %s" % str(Game.tools.keys()))
+	if r.sign_text(r.def.signs[0]) != "2nd review: approved. LGTM.":
+		fail(res, "sign: %s" % r.sign_text(r.def.signs[0]))
+	r.queue_free()
+	Game.fresh()
+	return report("reviewer2b", res.ok, res.info)
+

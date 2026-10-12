@@ -377,7 +377,7 @@
              ] },
     "N22": { "file": "N22.txt", "title": "review_queue", "size": [24, 14], "origin": [1290, -2], "world": 6, "music": "w6", "zone": "net",
              "signs": [{"text": "2nd review: pending. (sit, when you have something new to show.)", "alt": [{"if": "boss:REVIEWER2", "text": "2nd review: approved. LGTM."}]}],
-             "boss": {"id": "REVIEWER2", "class": "Reviewer2", "name": "THE REVIEWER #2", "sub": "second review", "trigger": "pad", "pad": [11, 10], "pad_needs": "1of:ability:curl,ability:ssh", "T": 70, "u": 0.84, "reward": "plugin:review_cache", "banner": "review cache", "banner_sub": "plugin - after a catch, your next claw hits harder", "music": "tension", "drop": 30},
+             "boss": {"id": "REVIEWER2", "class": "Reviewer2", "name": "THE REVIEWER #2", "sub": "second review", "trigger": "pad", "pad": [11, 10], "pad_needs": "1of:ability:curl,ability:ssh", "T": 120, "u": 0.8, "reward": "plugin:review_cache", "banner": "review cache", "banner_sub": "plugin - after a catch, your next claw hits harder", "music": "tension", "drop": 30},
              "decor": [{"kind": "chair", "x": 11, "y": 10}],
              "doors": [
                  {"id": "N22:N", "side": "N", "a": 10, "b": 13, "to": "N03:S", "lock": "fight"},

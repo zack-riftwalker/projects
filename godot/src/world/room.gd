@@ -2408,6 +2408,8 @@ func update_projs(dt: float) -> void:
 			continue
 		if q.tile and mode != "guest" and grid.solid_at(q.x, q.y):
 			q.dead = true
+			if q.get("mark", false) and boss != null and boss.has_method("leave_mark") and not q.get("friendly", false):
+				boss.leave_mark(q.x)                  # REVIEWER #2's grey shots and pens leave a comment where they land (MVB3-08)
 			if q.kind == "drip":                    # a drip splashes (js: onLand); a memory leak, so always in world 3's colours
 				var th3: Dictionary = Game.theme(3)
 				burst(q.x, q.y - 2.0, 4, [th3.liq, th3.liqHi], 50.0, 300.0)
@@ -2486,6 +2488,11 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px - 2, py, 5, 1), col)
 			if not minus:
 				ci.draw_rect(Rect2(px, py - 2, 1, 5), col)
+		"pen":                                    # a red pen falling point first
+			ci.draw_rect(Rect2(px - 2, py - 7, 5, 15), ink)
+			ci.draw_rect(Rect2(px - 1, py - 6, 3, 10), col)
+			ci.draw_rect(Rect2(px - 1, py + 4, 3, 3), Color("#ffd0d8"))
+			ci.draw_rect(Rect2(px - 1, py - 6, 1, 8), Color("#ffffff"))
 		"thread":                                 # a SCRAPER's sticky thread: a 1-px line from the scraper to the shot (hgt = its network id)
 			var src = null
 			for e in ents:
