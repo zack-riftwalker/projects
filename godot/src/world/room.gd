@@ -277,7 +277,7 @@ func _step_variants(at_load := false) -> void:
 	if vs.is_empty():
 		return
 	for vi in range(vs.size()):
-		if variants_on.has(vi) or not Game.flag(String(vs[vi]["if"])):
+		if variants_on.has(vi) or not Game.cond(String(vs[vi]["if"])):
 			continue
 		variants_on[vi] = true
 		var v: Dictionary = vs[vi]
@@ -424,8 +424,7 @@ func _until_open(spec: String) -> bool:
 # the text of a sign, chosen when it is read (so a flag set while the player stands there shows at once)
 func sign_text(s: Dictionary) -> String:
 	for a in s.get("alt", []):
-		var cond := String(a["if"])
-		if (not Game.flag(cond.substr(1))) if cond.begins_with("!") else Game.flag(cond):
+		if Game.cond(String(a["if"])):
 			return String(a.text)
 	return String(s.text)
 

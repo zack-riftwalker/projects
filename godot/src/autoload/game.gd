@@ -47,6 +47,45 @@ func theme(w: int) -> Dictionary:
 func is_lab(room_id: String) -> bool:
 	return bool(rooms_meta.rooms.get(room_id, {}).get("lab", false))
 
+# the zones in map legend order (MVB1-02). `path` is what a player sees as the place's address.
+const ZONES := [
+	{"id": "src", "name": "THE SOURCE TREE", "path": "~/src", "col": "#3fa46a"},
+	{"id": "dep", "name": "DEPENDENCY DEPTHS", "path": "~/node_modules", "col": "#c9792a"},
+	{"id": "heap", "name": "THE HEAP", "path": "/proc/heap", "col": "#3cbfaa"},
+	{"id": "net", "name": "THE NETWORK", "path": "/net", "col": "#5078e6"},
+	{"id": "tower", "name": "THREAD TOWER", "path": "/dev/threads", "col": "#c8a05a"},
+	{"id": "git", "name": "GIT HISTORY", "path": ".git", "col": "#e6783c"},
+	{"id": "hell", "name": "DEPENDENCY HELL", "path": "~/node_modules/**", "col": "#9a5ac8"},
+	{"id": "prod", "name": "PRODUCTION", "path": "/var/prod", "col": "#dc3c3c"},
+	{"id": "lab", "name": "LAB", "path": "/tmp/lab", "col": "#8a8f99"},
+]
+
+func zone_def(zone_id: String) -> Dictionary:
+	for z in ZONES:
+		if z.id == zone_id:
+			return z
+	return {}
+
+func zone_of(room_id: String) -> String:
+	return String(rooms_meta.rooms.get(room_id, {}).get("zone", ""))
+
+# a secret room is on the map only once it has been found (committed); an `offmap` room never is
+func is_secret(room_id: String) -> bool:
+	return bool(rooms_meta.rooms.get(room_id, {}).get("secret", false))
+
+func is_offmap(room_id: String) -> bool:
+	return bool(rooms_meta.rooms.get(room_id, {}).get("offmap", false))
+
+# One parser for every `if` in the room data (decor, sign alts, variants): "<flag>", "!<flag>", "flood>0", "flood==0"
+func cond(s: String) -> bool:
+	if s.begins_with("!"):
+		return not cond(s.substr(1))
+	if s == "flood>0":
+		return heap_flood() > 0
+	if s == "flood==0":
+		return heap_flood() == 0
+	return flag(s)
+
 # the rooms the pause map draws: visited, and not a lab room
 func map_rooms() -> Array:
 	var out: Array = []
