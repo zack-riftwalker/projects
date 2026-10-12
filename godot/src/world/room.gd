@@ -85,6 +85,7 @@ signal net_buy(plugin_id: String)
 signal net_buymap(zone_id: String)
 signal shop_requested
 signal index_requested(npc_index: int)
+signal net_freejar(jar_index: int)
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
@@ -105,6 +106,8 @@ var agents: Array = []         # the helpers of every player in this room (host 
 var agent_view: Array = []     # guest: [{owner, x, y, t}] as the host's snapshot lists them
 var keys: Array = []           # slot keys (letter k): {x, y, w, h, i}; only agents can press them
 var shops: Array = []          # npm registry stalls (letter $): {x (centre), y (bottom)}
+var jars: Array = []           # lost agents' jars (rooms.json `agents`): {x, y (bottom centre), broken, fly, asked, t}
+var decor_items: Array = []    # rooms.json `decor`: {kind, x, y (px, bottom centre), if?, lit?, fall_y?}
 var npcs: Array = []           # the cartographer `tree` (rooms.json `npc`): {kind, x (centre), y (feet), zone, price, ...look state}
 var stations: Array = []       # cache stations (letter R): {x, y, w, h}
 var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
@@ -270,6 +273,19 @@ func load_room(room_id: String, snap = null) -> void:
 	for nd in def.get("npc", []):
 		npcs.append({"kind": String(nd.kind), "x": float(int(nd.x) * T + 8), "y": float(int(nd.y) * T + T), "zone": String(nd.zone), "price": int(nd.price),
 			"strip": 0, "acc": 0.0, "scraps": [], "tick_t": 0.0})
+	for jc in def.get("agents", []):
+		jars.append({"x": float(int(jc[0]) * T + 8), "y": float(int(jc[1]) * T + T), "broken": Game.flag("agent:" + id), "fly": null, "asked": -10.0, "t": 0.0})
+	for dd in def.get("decor", []):
+		var di: Dictionary = dd.duplicate()
+		var dtx := int(dd.x)
+		var dty := int(dd.y)
+		di["x"] = float(dtx * T + 8)
+		di["y"] = float(dty * T + T)
+		var fy := dty + 1
+		while fy < h - 1 and grid.tile(dtx, fy) != TileGrid.SOLID and grid.tile(dtx, fy) != TileGrid.ONEWAY:
+			fy += 1
+		di["fall_y"] = float(fy * T)
+		decor_items.append(di)
 	if def.has("flood"):
 		liquid_y = flood_target()
 	_find_ports()
@@ -946,6 +962,7 @@ func step_guest(dt: float) -> void:
 		if not p.dead and not p.gone:
 			interact_combat(p)
 			interact_goals(p)
+			_check_jars(p)
 			# damage areas the host announced (blasts, the slam): checked on this body, once each
 			var hb: Dictionary = p.hurtbox()
 			for z in zones:
@@ -1188,6 +1205,8 @@ func step(dt: float) -> void:
 	if remote_players.size() > 0:
 		record_hist()
 	interact()
+	if p != null and not p.dead:
+		_check_jars(p)
 	update_items(dt)
 	update_projs(dt)
 	for s in springs:
@@ -1800,6 +1819,37 @@ func plugin_bought(pid: String, by: String) -> void:
 	Game.flags["plugin:" + pid] = true
 	pop(player.x + 5.0 if player != null else sx_default(), (player.y - 14.0) if player != null else 40.0, "npm install " + String(Game.plugin_def(pid).get("name", pid)), "#58f0c8", true)
 	plugin_got.emit(pid, by)
+
+func jar_rect(j: Dictionary) -> Dictionary:
+	return Decor.jar_rect(j)
+
+# a swipe or a dash of the local player that overlaps a jar breaks it (walking into it does not): host and solo set the flag, a guest asks the host
+func _check_jars(p) -> void:
+	if jars.is_empty() or p.dead:
+		return
+	var swipe: bool = p.atk_t > 0.0 and p.atk_live
+	var dash: bool = p.dash_t > 0.0
+	if not swipe and not dash:
+		return
+	for i in range(jars.size()):
+		var j: Dictionary = jars[i]
+		if j.broken:
+			continue
+		var jr := jar_rect(j)
+		if (swipe and Game.overlap(p.atk_box(), jr)) or (dash and Game.overlap(p.hurtbox(), jr)):
+			if mode == "guest":
+				if time - float(j.asked) > 0.6:
+					j.asked = time
+					net_freejar.emit(i)
+			else:
+				free_jar(i)
+
+# the jar's agent is free for good (flag agent:<room>, shared); the effect plays from the flag on every page
+func free_jar(_i: int) -> void:
+	if Game.flag("agent:" + id):
+		return
+	Game.flags["agent:" + id] = true
+	Game.write_save()
 
 # the line of a memory fragment, under its pop (the table lives in Game)
 func show_memory(room_id: String) -> void:

@@ -171,7 +171,7 @@ func _draw() -> void:
 	PixelText.draw_text(self, {"main": "BENCH", "travel": "TRAVEL", "plugins": "PLUGINS"}[page], W / 2.0, 30, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})
 	var opts := options()
 	if page == "plugins":
-		PixelText.draw_text(self, "context %d/%d" % [Game.notches_used(), Game.NOTCHES], W / 2.0, 50, Game.COL.gold, {"align": "c"})
+		PixelText.draw_text(self, "context %d/%d" % [Game.notches_used(), Game.notches()], W / 2.0, 50, Game.COL.gold, {"align": "c"})
 	for i in range(opts.size()):
 		var y := (70 if page != "plugins" else 62) + i * row_step()
 		Gfx.panel(self, W / 2.0 - 70, y, 140, row_h(), "#2a2236" if i == sel else "#17131f", Game.COL.clawd if i == sel else "#3a3346")

@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs", "lostagents"]
 
 func _init(m) -> void:
 	main = m
@@ -23,6 +23,7 @@ func run(name: String) -> bool:
 		"changelog": return t_changelog()
 		"travelp2": return t_travelp2()
 		"logs": return t_logs()
+		"lostagents": return t_lostagents()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -645,3 +646,93 @@ func t_logs() -> bool:
 	lv.queue_free()
 	Game.fresh()
 	return report("logs", res.ok, res.info)
+
+# MVB1-11: a swipe or a dash frees the agent in a jar, walking into it does not; four freed agents widen the context window, eight widen it again
+func t_lostagents() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	var room := new_room("D07")
+	if room.jars.size() != 1:
+		fail(res, "D07 has no jar")
+		return report("lostagents", false, res.info)
+	var jar: Dictionary = room.jars[0]
+	for e in room.ents:
+		e.queue_free()
+	room.ents.clear()
+	var p = room.player
+	# walking into it: nothing
+	p.x = float(jar.x) - 60.0
+	p.y = float(jar.y) - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	for f in range(70):
+		Controls.script_input = {"right": true}
+		Controls.poll()
+		room.step(Game.STEP)
+	if Game.flag("agent:D07") or room.jars[0].broken:
+		fail(res, "walking into the jar freed it")
+	if p.x + p.w < float(jar.x) - 2.0:
+		fail(res, "the player did not reach the jar (x %.0f)" % p.x)
+	# a swipe next to it
+	p.x = float(jar.x) - 22.0
+	p.y = float(jar.y) - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	p.face = 1.0
+	for f in range(12):
+		Controls.script_input = {"attack": f < 2}
+		Controls.poll()
+		room.step(Game.STEP)
+	Controls.script_input = {}
+	for f in range(4):
+		Controls.poll()
+		room.step(Game.STEP)
+	if not Game.flag("agent:D07"):
+		fail(res, "a swipe did not free the agent")
+	if not room.jars[0].broken or room.jars[0].fly == null:
+		fail(res, "no effect from the flag")
+	if Game.agents_freed() != 1:
+		fail(res, "count %d" % Game.agents_freed())
+	# a dash through a fresh jar
+	Game.flags.erase("agent:D07")
+	Game.tools.bash = true
+	var room2 := new_room("D07")
+	room2.ents.clear()
+	var p2 = room2.player
+	p2.x = float(room2.jars[0].x) - 40.0
+	p2.y = float(room2.jars[0].y) - p2.h
+	p2.face = 1.0
+	for f in range(25):
+		Controls.script_input = {"dash": f == 1, "right": true}
+		Controls.poll()
+		room2.step(Game.STEP)
+	Controls.script_input = null
+	if not Game.flag("agent:D07"):
+		fail(res, "a dash did not free the agent")
+	# the context window
+	Game.flags = {}
+	for pid in ["async_await", "cache", "verbose", "restart_always"]:
+		Game.flags["plugin:" + pid] = true
+	for rid in ["D07", "H13", "R01"]:
+		Game.flags["agent:" + rid] = true
+	if Game.notches() != 3:
+		fail(res, "3 agents: %d notches" % Game.notches())
+	if Game.filter_loadout(["async_await", "cache", "verbose"]) != ["async_await", "cache"]:
+		fail(res, "3 notches fit two plugins of cost 2 and 1 only")
+	Game.flags["agent:R02"] = true
+	if Game.notches() != 4 or Game.filter_loadout(["async_await", "cache", "verbose"]).size() != 3:
+		fail(res, "4 agents: %d notches" % Game.notches())
+	for rid in ["R03", "D01", "D02", "D03"]:
+		Game.flags["agent:" + rid] = true
+	if Game.notches() != 5 or Game.filter_loadout(["async_await", "cache", "verbose", "restart_always"]).size() != 4:
+		fail(res, "8 agents: %d notches" % Game.notches())
+	Game.equipped = ["async_await", "cache", "verbose", "restart_always"]
+	if Game.notches_used() != 5:
+		fail(res, "notches used")
+	Game.fresh()
+	room.queue_free()
+	room2.queue_free()
+	return report("lostagents", res.ok, res.info)

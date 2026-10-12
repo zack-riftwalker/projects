@@ -543,7 +543,7 @@ func boss_hp(b: Dictionary) -> int:
 	return maxi(1, roundi(float(b.T) * R_PLAYER * float(b.u) * float(dv("boss_hp_mult"))))
 
 # ---- plugins (MV3-06): like the charms of Hollow Knight. Owned = flag plugin:<id> (shared by both players); equipped = this player's own list ----
-const NOTCHES := 3                    # the "context window"
+const NOTCHES := 3                    # the "context window" at the start; Game.notches() adds one at 4 freed lost agents and one more at 8 (D47)
 const PLUGINS := [
 	{"id": "async_await", "name": "async/await", "cost": 2, "price": 0, "desc": "dash recharges twice as fast"},
 	{"id": "cache", "name": "cache", "cost": 1, "price": 0, "desc": "tokens fly to you from farther away"},
@@ -556,6 +556,18 @@ const PLUGINS := [
 ]
 var equipped: Array = []              # plugin ids (saved; the guest keeps its own in user://profile.json)
 signal loadout_changed
+
+# how many lost agents were freed (flags agent:<room>, shared) and the context window they widen
+func agents_freed() -> int:
+	var n := 0
+	for k in flags:
+		if flags[k] and String(k).begins_with("agent:"):
+			n += 1
+	return n
+
+func notches() -> int:
+	var n := agents_freed()
+	return NOTCHES + (1 if n >= 4 else 0) + (1 if n >= 8 else 0)
 
 func plugin_def(id: String) -> Dictionary:
 	for d in PLUGINS:
@@ -577,7 +589,7 @@ func filter_loadout(ids: Array) -> Array:
 	var out: Array = []
 	for id in ids:
 		var d := plugin_def(String(id))
-		if d.size() > 0 and owns_plugin(String(id)) and not out.has(String(id)) and notches_used(out) + int(d.cost) <= NOTCHES:
+		if d.size() > 0 and owns_plugin(String(id)) and not out.has(String(id)) and notches_used(out) + int(d.cost) <= notches():
 			out.append(String(id))
 	return out
 
@@ -587,7 +599,7 @@ func toggle_plugin(id: String) -> bool:
 		equipped.erase(id)
 	else:
 		var d := plugin_def(id)
-		if d.is_empty() or not owns_plugin(id) or notches_used() + int(d.cost) > NOTCHES:
+		if d.is_empty() or not owns_plugin(id) or notches_used() + int(d.cost) > notches():
 			return false
 		equipped.append(id)
 	loadout_changed.emit()

@@ -10,6 +10,7 @@ const T := 16
 static func step(r: Room, dt: float) -> void:
 	for n in r.npcs:
 		_step_tree(r, n, dt)
+	_step_jars(r, dt)
 
 static func _near(r: Room, x: float, y: float, tiles: float) -> float:
 	var best := 1e9
@@ -95,7 +96,151 @@ static func draw_tree(ci: CanvasItem, r: Room, n: Dictionary) -> void:
 	if r.player != null and absf(r.player.x + r.player.w / 2.0 - n.x) < 36.0 and absf(r.player.y + r.player.h - n.y) < 20.0:
 		PixelText.draw_text(ci, "[up]", n.x + 8, y - 28, Game.COL.paper, {"align": "c", "tiny": true, "outline": Game.COL.ink})
 
+# ---------------------------------------------------------------- lost agents (MVB1-11)
+# A glass jar with a tiny agent in it, a `…` bubble above it and a soft beep every 2 s while somebody is within 10 tiles (never sound alone).
+# Breaking it is state: the flag agent:<room> is set (by a swipe or dash on the host, asked by the guest) and every page plays the burst from the flag.
+static func jar_rect(j: Dictionary) -> Dictionary:
+	return {"x": j.x - 6.0, "y": j.y - 16.0, "w": 12.0, "h": 16.0}
+
+static func _step_jars(r: Room, dt: float) -> void:
+	var freed := Game.flag("agent:" + r.id)
+	for j in r.jars:
+		if freed and not j.broken:
+			j.broken = true
+			var cols := ["#bfe9ff", "#e8f7ff", "#ffffff"]
+			r.fx.burst(j.x, j.y - 8.0, 18, cols, 110.0, 220.0, {"glow": 1})
+			r.fx.ring(j.x, j.y - 8.0, 2, 22, "#bfe9ff", 0.3)
+			r.fx.pop(j.x, j.y - 24.0, "agent freed  %d/8" % Game.agents_freed(), Game.COL.okHi, true)
+			j.fly = {"x": j.x, "y": j.y - 8.0, "t": 0.0}
+			Audio.local_sfx("brk", 0.8)
+			Audio.local_sfx("agent", 0.8)
+		if j.fly != null:
+			j.fly.t += dt
+			j.fly.y -= (50.0 + 90.0 * j.fly.t) * dt
+			j.fly.x += sin(j.fly.t * 6.0) * 20.0 * dt
+			if j.fly.t > 2.5:
+				j.fly = null
+		if not j.broken:
+			j.t += dt
+			if j.t >= 2.0:
+				j.t = 0.0
+				if r.player != null and not r.player.dead:
+					var d := _near(r, j.x, j.y - 8.0, 10.0)
+					if d < 1.0:
+						Audio.local_sfx("tock", 0.12 + 0.2 * (1.0 - d))
+
+static func draw_jar(ci: CanvasItem, r: Room, j: Dictionary) -> void:
+	var x := floori(j.x)
+	var y := floori(j.y)
+	var t: float = r.time
+	if j.fly != null:
+		Agent._draw_at(ci, j.fly.x, j.fly.y, t * 2.0, 9.0, [])
+	if j.broken:
+		return
+	var bob := 1 if int(t * 2.0 + x) % 2 == 0 else 0
+	# the agent inside, smaller than the helper's own look
+	var tex := Gfx.tex("agent_%d" % (int(t * 4.0) % 2))
+	ci.draw_texture_rect(tex, Rect2(x - 4, y - 12 + bob, tex.get_width() * 0.8, tex.get_height() * 0.8), false)
+	# the glass: a pale outline, a faint fill, a dark lid and a glint
+	ci.draw_rect(Rect2(x - 6, y - 15, 12, 15), Color(0.75, 0.91, 1.0, 0.16))
+	ci.draw_rect(Rect2(x - 6, y - 15, 12, 1), Color(0.75, 0.91, 1.0, 0.8))
+	ci.draw_rect(Rect2(x - 6, y - 1, 12, 1), Color(0.75, 0.91, 1.0, 0.8))
+	ci.draw_rect(Rect2(x - 6, y - 15, 1, 15), Color(0.75, 0.91, 1.0, 0.8))
+	ci.draw_rect(Rect2(x + 5, y - 15, 1, 15), Color(0.75, 0.91, 1.0, 0.8))
+	ci.draw_rect(Rect2(x - 5, y - 17, 10, 2), Color("#4c4658"))
+	ci.draw_rect(Rect2(x - 4, y - 13, 1, 5), Color(1, 1, 1, 0.5))
+	# the bubble with `…` (it shows even when the beep cannot be heard)
+	var by := y - 30 - (1 if int(t * 3.0) % 2 == 0 else 0)
+	ci.draw_rect(Rect2(x - 8, by, 16, 10), Color(Game.COL.ink))
+	ci.draw_rect(Rect2(x - 7, by + 1, 14, 8), Color(Game.COL.paper))
+	ci.draw_rect(Rect2(x - 1, by + 10, 3, 2), Color(Game.COL.ink))
+	PixelText.draw_text(ci, "…", x - 2, by + 1, Game.COL.ink, {"tiny": true})
+
+# ---------------------------------------------------------------- decoration (MVB1-13)
+# rooms.json `decor`: {kind, x, y, if?, lit?} in cells; the thing stands on the bottom of its cell. `if` decides whether it is there at all.
+static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
+	if d.has("if") and not Game.cond(String(d["if"])):
+		return
+	var x := floori(d.x)
+	var y := floori(d.y)
+	var t: float = r.time
+	var ink := Color(Game.COL.ink)
+	match String(d.kind):
+		"scrap":
+			ci.draw_rect(Rect2(x - 4, y - 5, 8, 5), ink)
+			ci.draw_rect(Rect2(x - 3, y - 4, 6, 3), Color(Game.COL.paper))
+			ci.draw_rect(Rect2(x + 1, y - 5, 3, 2), Color("#cfc8d8"))
+			PixelText.draw_text(ci, "├", x - 3, y - 4, "#3a3346", {"tiny": true})
+		"bucket":
+			ci.draw_rect(Rect2(x - 5, y - 8, 10, 8), ink)
+			ci.draw_rect(Rect2(x - 4, y - 7, 8, 7), Color("#8d8798"))
+			ci.draw_rect(Rect2(x - 4, y - 7, 8, 1), Color("#c3bccd"))
+			ci.draw_rect(Rect2(x - 3, y - 4, 6, 1), Color("#6b6478"))
+			ci.draw_rect(Rect2(x - 4, y - 10, 1, 3), ink)
+			ci.draw_rect(Rect2(x + 3, y - 10, 1, 3), ink)
+		"chair":
+			ci.draw_rect(Rect2(x - 5, y - 12, 2, 7), ink)
+			ci.draw_rect(Rect2(x - 5, y - 6, 10, 3), ink)
+			ci.draw_rect(Rect2(x - 4, y - 11, 1, 6), Color("#4a4458"))
+			ci.draw_rect(Rect2(x - 4, y - 5, 8, 1), Color("#4a4458"))
+			ci.draw_rect(Rect2(x - 1, y - 3, 2, 2), ink)
+			ci.draw_rect(Rect2(x - 4, y - 1, 8, 1), ink)
+			ci.draw_rect(Rect2(x - 4, y - 1, 1, 1), Color("#8d8798"))
+			ci.draw_rect(Rect2(x + 3, y - 1, 1, 1), Color("#8d8798"))
+		"package":
+			ci.draw_rect(Rect2(x - 6, y - 10, 12, 10), ink)
+			ci.draw_rect(Rect2(x - 5, y - 9, 10, 9), Color("#a8794a"))
+			ci.draw_rect(Rect2(x - 5, y - 9, 10, 2), Color("#c4936a"))
+			ci.draw_rect(Rect2(x - 1, y - 9, 3, 9), Color("#d8c9a0"))                    # a patch of tape
+			ci.draw_rect(Rect2(x - 4, y - 5, 3, 3), Color("#85592f"))                    # a handprint: a palm and two fingers
+			ci.draw_rect(Rect2(x - 4, y - 6, 1, 1), Color("#85592f"))
+			ci.draw_rect(Rect2(x - 2, y - 6, 1, 1), Color("#85592f"))
+		"lamp":
+			var lit := d.has("lit") and Game.cond(String(d.lit))
+			ci.draw_rect(Rect2(x - 3, y - 2, 6, 2), ink)
+			ci.draw_rect(Rect2(x - 2, y - 2, 4, 1), Color("#6b6478"))
+			ci.draw_rect(Rect2(x - 1, y - 8, 2, 6), ink)
+			ci.draw_rect(Rect2(x - 4, y - 12, 8, 4), ink)
+			ci.draw_rect(Rect2(x - 3, y - 11, 6, 2), Color("#ff9a3a") if lit else Color("#8a5a2a"))
+			if lit:                                                                       # a warm cone of light
+				var flick := 0.9 + 0.1 * sin(t * 5.0)
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(x - 3, y - 9), Vector2(x + 3, y - 9), Vector2(x + 22, y + 2), Vector2(x - 22, y + 2)]), Color(1.0, 0.78, 0.4, 0.2 * flick))
+				ci.draw_circle(Vector2(x, y - 9), 3.0, Color(1.0, 0.9, 0.6, 0.5))
+		"drip":
+			# a harmless green drop from the cell to the first solid cell below, one every 0.6 s, with a small splash
+			var fall_y: float = d.get("fall_y", y + 40.0)
+			var ph := fposmod(t, 0.6) / 0.6
+			var top := float(y) - 8.0
+			if ph < 0.85:
+				var k := ph / 0.85
+				var dy := top + (fall_y - top) * k * k
+				ci.draw_rect(Rect2(x - 1, dy - 2, 2, 3), Color("#7fe08a"))
+				ci.draw_rect(Rect2(x - 1, dy - 3, 1, 1), Color("#d6ffd0"))
+			else:
+				var sp := (ph - 0.85) / 0.15
+				ci.draw_rect(Rect2(x - 3 - sp * 2.0, fall_y - 2 - sp * 2.0, 1, 1), Color("#7fe08a"))
+				ci.draw_rect(Rect2(x + 2 + sp * 2.0, fall_y - 2 - sp * 2.0, 1, 1), Color("#7fe08a"))
+				ci.draw_rect(Rect2(x - 1, fall_y - 3 - sp * 3.0, 2, 1), Color("#d6ffd0"))
+			ci.draw_rect(Rect2(x - 1, top - 2, 2, 2), Color("#3fa46a"))                  # the drop forming at the edge
+		"contributors":
+			var n := Game.agents_freed()
+			if n >= 1:
+				PixelText.draw_text(ci, "contributors: %d/8" % n, x, y - 4, Game.COL.paper, {"align": "c", "tiny": true, "outline": Game.COL.ink})
+				# the freed agents wait around R08's bench, left and right of it
+				var bx := float(r.cps[0].x) if not r.cps.is_empty() else float(x)
+				var by := float(r.cps[0].y) if not r.cps.is_empty() else float(y + 40)
+				for i in range(mini(n, 8)):
+					var side := -1.0 if i % 2 == 0 else 1.0
+					var step := float(i / 2)
+					var ax := bx + side * (16.0 + step * 11.0)
+					var ay := by - 10.0 - float(int(step) % 2) * 5.0 + sin(t * 2.0 + float(i)) * 1.5
+					Agent._draw_at(ci, ax, ay, t * 2.0 + float(i), 9.0, [])
+
 # ---------------------------------------------------------------- the furniture layer
 static func draw(r: Room, ci: CanvasItem) -> void:
+	for d in r.decor_items:
+		draw_decor(ci, r, d)
 	for n in r.npcs:
 		draw_tree(ci, r, n)
+	for j in r.jars:
+		draw_jar(ci, r, j)

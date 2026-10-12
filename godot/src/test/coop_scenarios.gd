@@ -1868,3 +1868,31 @@ func sc_co_logs() -> Array:
 	Game.set_world_flag("changelog:opus")
 	await wait_secs(9.0)
 	return [Game.flag("log:R01:0"), "guest: read the first sign %s" % Game.flag("log:R01:0")]
+
+# MVB1-11: the guest breaks the jar in H13 with a swipe: the host decides, both pages have agent:H13, R08's contributors count it
+func sc_co_lostagent() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var got := await wait_until(func(): return Game.flag("agent:H13"), 25.0)
+		await wait_secs(1.0)
+		mgr().swap_to("R08", Game.bench_spawn("R08"))
+		await wait_secs(1.0)
+		var shown: bool = Game.agents_freed() == 1 and mgr().room.decor_items.size() > 0
+		return [got and shown, "host: agent:H13 %s, contributors %d" % [got, Game.agents_freed()]]
+	await wait_secs(1.5)
+	mgr().swap_to("H13", Vector2(52.0 * 16.0 + 8.0 - 24.0, 13.0 * 16.0 - 10.0))
+	await wait_secs(1.0)
+	mgr().player.inv = 999.0
+	var r: Room = mgr().room
+	var jar_ok: bool = r.jars.size() == 1 and not r.jars[0].broken
+	for k in range(6):
+		Controls.script_input = {"attack": true}
+		await wait_secs(0.15)
+		Controls.script_input = {}
+		await wait_secs(0.35)
+		if Game.flag("agent:H13"):
+			break
+	var got2 := await wait_until(func(): return Game.flag("agent:H13") and mgr().room.jars.size() == 1 and mgr().room.jars[0].broken, 8.0)
+	await wait_secs(2.0)
+	return [jar_ok and got2, "guest: jar was there %s, freed and broken %s" % [jar_ok, got2]]

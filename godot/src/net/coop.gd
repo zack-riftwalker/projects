@@ -186,6 +186,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_agents.connect(func(): Net.rel("agents", {}))
 		r.net_buy.connect(func(pid): Net.rel("buy", {"id": pid}))
 		r.net_buymap.connect(func(zid): Net.rel("buymap", {"zone": zid}))
+		r.net_freejar.connect(func(ji): Net.rel("freejar", {"room": r.id, "jar": ji, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
@@ -486,6 +487,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				if br != null:
 					_as_p2(br, func(): br.show_plugin_banner(pid))
 			Net.rel("plugin", {"id": pid, "by": by})
+		"freejar": _host_freejar(d)
 		"pin": Game.apply_pin_request(String(d.op), d)
 		"ping": Game.ping_receive(d)
 		"pingok": Game.ping_ack_received(String(d.id))
@@ -700,6 +702,27 @@ func _host_parry(d: Dictionary) -> void:
 			else:
 				log_("P2 parry nid %d sid %d: that strike was not active" % [int(d.nid), sid])
 			return
+
+# the guest's swipe or dash met a lost agent's jar: accepted when its recent reports put it next to the jar (the same lenient check as the other hits)
+func _host_freejar(d: Dictionary) -> void:
+	var r := _remote_room()
+	if r == null or r.id != String(d.room) or r.jars.is_empty() or Game.flag("agent:" + r.id):
+		return
+	var j: Dictionary = r.jars[clampi(int(d.jar), 0, r.jars.size() - 1)]
+	var c := Vector2(float(j.x), float(j.y) - 8.0)
+	var pts: Array = [Vector2(remote.x + 5.0, remote.y + 5.0)]
+	if d.has("px") and absf(float(d.px) - remote.x) + absf(float(d.py) - remote.y) < 240.0:
+		pts.append(Vector2(float(d.px) + 5.0, float(d.py) + 5.0))
+	for smp in remote.samples:
+		if hms() - float(smp[0]) <= Net.rtt / 2.0 + 0.35:
+			pts.append(Vector2(smp[1] + 5.0, smp[2] + 5.0))
+	for pt in pts:
+		if pt.distance_to(c) <= 48.0 + 120.0 * Net.rtt:
+			r.free_jar(int(d.jar))
+			Net.rel("flag", {"k": "agent:" + r.id, "v": true})
+			log_("host: guest freed the agent of %s" % r.id)
+			return
+	log_("P2 freejar in %s refused (too far)" % r.id)
 
 # the guest's body stepped on a crumbling block: start it here if the guest's recent reports really put it on that block
 func _host_crumble(d: Dictionary) -> void:

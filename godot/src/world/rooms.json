@@ -46,7 +46,7 @@
                  {"id": "R07:W", "side": "W", "a": 9, "b": 12, "to": "R05:E"},
                  {"id": "R07:E", "side": "E", "a": 9, "b": 12, "to": "R08:W"}
              ] },
-    "R08": { "file": "R08.txt", "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}], "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
+    "R08": { "file": "R08.txt", "decor": [{"kind": "contributors", "x": 3, "y": 9}], "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}], "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
              "signs": ["Next door: the ledges go up to a code review; the low door goes down to ~/node_modules."],
              "doors": [
                  {"id": "R08:W", "side": "W", "a": 9, "b": 12, "to": "R07:E"},
@@ -112,7 +112,7 @@
                  {"id": "D06:W", "side": "W", "a": 9, "b": 12, "to": "D05:E"},
                  {"id": "D06:E", "side": "E", "a": 9, "b": 12, "to": "D07:W"}
              ] },
-    "D07": { "file": "D07.txt", "zone": "dep", "secret": true, "title": ".npmrc", "size": [24, 16], "origin": [1212, 45], "world": 2, "music": "w2",
+    "D07": { "file": "D07.txt", "agents": [[21, 12]], "zone": "dep", "secret": true, "title": ".npmrc", "size": [24, 16], "origin": [1212, 45], "world": 2, "music": "w2",
              "signs": ["A hidden .npmrc. Someone left a plugin here."],
              "plugins": ["cache"],
              "doors": [
@@ -151,7 +151,7 @@
                  {"id": "H03:SW", "side": "W", "a": 53, "b": 56, "to": "D03:E2"},
                  {"id": "H03:S", "side": "S", "a": 14, "b": 17, "to": "D04:N", "lock": "flood:0"}
              ] },
-    "H13": { "file": "H13.txt", "zone": "heap", "secret": true, "title": "use_after_free.c", "size": [64, 14], "origin": [1148, -20], "world": 3, "music": "w3",
+    "H13": { "file": "H13.txt", "agents": [[52, 12]], "zone": "heap", "secret": true, "title": "use_after_free.c", "size": [64, 14], "origin": [1148, -20], "world": 3, "music": "w3",
              "signs": ["I was freed. Why can I still hear you?", "use after free: anything can happen here. Nothing does.", "// TODO: remove this room"],
              "doors": [
                  {"id": "H13:W", "side": "W", "a": 9, "b": 12, "to": "H03:NE"}
