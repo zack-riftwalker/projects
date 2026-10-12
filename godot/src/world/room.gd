@@ -86,6 +86,7 @@ signal net_buymap(zone_id: String)
 signal shop_requested
 signal index_requested(npc_index: int)
 signal net_lever(lever_index: int)
+signal net_pad()
 signal net_freejar(jar_index: int)
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
@@ -468,6 +469,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 		"LeakBoss": b = LeakBoss.new(self, bx, by, hp_)
 		"CrawlerBoss": b = CrawlerBoss.new(self, bx, by, hp_)
 		"FirewallBoss": b = FirewallBoss.new(self, bx, by, hp_)
+		"Reviewer2": b = Reviewer2.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))
@@ -1339,6 +1341,7 @@ func step(dt: float) -> void:
 				keep.append(e)
 		ents = keep
 	_step_fight(dt)
+	_step_pad()
 	if cam.lock == null:
 		update_cam(dt)
 	else:
@@ -1393,6 +1396,35 @@ func _step_fight(dt: float) -> void:
 			if fight.t <= 0.0:
 				_finish_reward()
 
+# ---- the pad boss (MVB2-09): started by [up] on a marked cell, not by walking in ----
+func pad_on(q) -> bool:
+	var pd: Array = def.boss.get("pad", []) if def.has("boss") else []
+	if pd.size() < 2 or q == null:
+		return false
+	return floori((q.x + q.w / 2.0) / T) == int(pd[0]) and floori((q.y + q.h - 1.0) / T) == int(pd[1])
+
+func pad_ready() -> bool:
+	var need := String(def.boss.get("pad_needs", ""))
+	return need == "" or Game.cond(need)
+
+func _step_pad() -> void:
+	if not def.has("boss") or String(def.boss.get("trigger", "")) != "pad" or fight.state != "none" or Game.flag("boss:" + String(def.boss.id)):
+		return
+	var p = player
+	if p == null or p.dead or p.gone or not Controls.pressed.get("up", false) or not pad_on(p):
+		return
+	if not pad_ready():
+		pop(p.x + p.w / 2.0, p.y - 14.0, "you have nothing new to show", Game.COL.dim)
+	elif mode == "guest":
+		net_pad.emit()
+	elif boss != null:
+		pad_start()
+
+# host / solo: the intro of a pad fight (the guest's `pad` event comes here after the host checked where it stands)
+func pad_start() -> void:
+	if fight.state == "none" and boss != null:
+		_start_intro()
+
 # co-op overrides this: the partner has to be in the arena (or 5 s have passed)
 func summon_ready() -> bool:
 	return summon_ok or summon_t >= 5.0
@@ -1414,6 +1446,8 @@ func _start_intro() -> void:
 func skip_boss() -> bool:
 	if mode == "guest" or boss == null or not is_instance_valid(boss) or player == null:
 		return false
+	if fight.state == "none" and String(def.boss.get("trigger", "")) == "pad":
+		_start_intro()                                  # (a pad boss waits for the chair: the skip button starts it)
 	if fight.state == "intro":
 		_begin_fight()
 	if fight.state != "active" or boss.dying:
@@ -1471,8 +1505,12 @@ func record_loss() -> void:
 
 func _finish_reward() -> void:
 	var bd: Dictionary = def.boss
-	Game.tools[String(bd.reward)] = true
-	Game.flags["ability:" + String(bd.reward)] = true
+	var rw := String(bd.reward)
+	if rw.begins_with("plugin:"):
+		Game.flags[rw] = true                              # (a plugin is a flag, shared by both players; no tool)
+	else:
+		Game.tools[rw] = true
+		Game.flags["ability:" + rw] = true
 	Game.flags["boss:" + String(bd.id)] = true
 	fight.state = "done"
 	fight_active = false

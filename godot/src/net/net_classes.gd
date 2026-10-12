@@ -13,6 +13,8 @@ static func cls_of(e) -> int:
 		return 30
 	if e is FirewallBoss:
 		return 31
+	if e is Reviewer2:
+		return 32
 	if e is Scraper:
 		return 26
 	if e is Worm:
@@ -100,6 +102,7 @@ static func make(cls: int, room: Room):
 		29: e = Spyware.new(room, 0, 0)
 		30: e = CrawlerBoss.new(room, 0, 0)
 		31: e = FirewallBoss.new(room, 0, 0)
+		32: e = Reviewer2.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

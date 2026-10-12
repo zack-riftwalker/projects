@@ -190,6 +190,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_buy.connect(func(pid): Net.rel("buy", {"id": pid}))
 		r.net_buymap.connect(func(zid): Net.rel("buymap", {"zone": zid}))
 		r.net_lever.connect(func(li): Net.rel("lever", {"room": r.id, "n": li}))
+		r.net_pad.connect(func(): Net.rel("pad", {"room": r.id}))
 		r.net_freejar.connect(func(ji): Net.rel("freejar", {"room": r.id, "jar": ji, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
@@ -499,6 +500,10 @@ func _host_rel(k: String, d: Dictionary) -> void:
 			if lrm != null and lrm.id == String(d.room):
 				lrm.pull_lever(int(d.n))
 				Net.rel("flag", {"k": lrm.lever_flag(int(d.n)), "v": true})
+		"pad":                                   # the guest pressed [up] on the chair: the host checks where it stands
+			var prm := _remote_room()
+			if prm != null and prm.id == String(d.room) and not prm.remote_players.is_empty() and prm.pad_on(prm.remote_players[0]) and prm.pad_ready():
+				prm.pad_start()
 		"pin": Game.apply_pin_request(String(d.op), d)
 		"ping": Game.ping_receive(d)
 		"pingok": Game.ping_ack_received(String(d.id))

@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler", "firewall"]
+const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler", "firewall", "reviewer2"]
 
 func _init(m) -> void:
 	main = m
@@ -23,6 +23,7 @@ func run(name: String):
 		"w6enemies": return t_w6enemies()
 		"crawler": return t_crawler()
 		"firewall": return t_firewall()
+		"reviewer2": return t_reviewer2()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -1002,3 +1003,182 @@ func t_firewall() -> bool:
 	r.queue_free()
 	Game.fresh()
 	return report("firewall", res.ok, res.info)
+
+func on_pad(r: Room) -> void:
+	r.player.x = 11.0 * 16.0 + 8.0 - r.player.w / 2.0
+	r.player.y = 176.0 - r.player.h
+	r.player.vx = 0.0
+	r.player.vy = 0.0
+	r.player.inv = 99.0
+
+# MVB2-09: THE REVIEWER #2
+func t_reviewer2() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	# [up] on the chair without curl/ssh: nothing starts
+	var r := new_room("N22")
+	var rv: Reviewer2 = null
+	for e in r.ents:
+		if e is Reviewer2:
+			rv = e
+	if rv == null or r.boss != rv:
+		fail(res, "N22 has no Reviewer2")
+		r.queue_free()
+		return report("reviewer2", false, res.info)
+	if rv.max_hp != Game.boss_hp(r.def.boss) or rv.max_hp < 57 or rv.max_hp > 61:
+		fail(res, "hp %d" % rv.max_hp)
+	on_pad(r)
+	for f in range(6):
+		on_pad(r)
+		step_keys(r, {"up": true} if f == 3 else {})
+	if r.fight.state != "none":
+		fail(res, "the fight started without curl/ssh")
+	# walking through the arena never starts it
+	for f in range(240):
+		r.player.x = 20.0 + float(f) * 1.3
+		r.player.y = 176.0 - r.player.h
+		r.player.inv = 99.0
+		step_keys(r, {"up": f % 7 == 0})
+	if r.fight.state != "none":
+		fail(res, "walking through started the fight")
+	# with a tool of the network, [up] on the chair starts the intro
+	Game.flags["ability:ssh"] = true
+	for f in range(6):
+		on_pad(r)
+		step_keys(r, {"up": true} if f == 3 else {})
+	if r.fight.state != "intro":
+		fail(res, "[up] on the chair did not start the intro (%s)" % r.fight.state)
+	var n := 0
+	while r.fight.state != "active" and n < 400:
+		on_pad(r)
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never became active")
+	rv.plan = {}
+	rv.idle_t = 999.0
+	rv.x = 250.0
+	rv.y = Boss.FLOOR - rv.h
+	rv.face = -1.0
+	r.attacker = r.player
+	# cached: three up-swipes -> the icon is "up"; an up claw is blocked, a side claw lands
+	for i in range(3):
+		rv.hit(1, 0.0, -1.0, "swipe", rv)
+	if rv.last_kind.p1 != "up":
+		fail(res, "last kind %s" % rv.last_kind.p1)
+	rv.hpf = float(rv.max_hp)
+	r.player.x = 150.0
+	r.player.y = 150.0
+	rv._start("cached", "p1")
+	if rv.cached_kind != "up":
+		fail(res, "cached shows %s" % rv.cached_kind)
+	if not fw_until2(r, rv, "cached", "active", Vector2(150.0, 150.0)):
+		fail(res, "cached never active")
+	var hp0 := rv.hpf
+	if rv.hit(1, 0.0, -1.0, "swipe", rv) != "block" or rv.hpf != hp0:
+		fail(res, "an up claw was not blocked")
+	if rv.riposte_to != "p1":
+		fail(res, "no riposte owed")
+	rv.plan = {}
+	rv._start("cached", "p1")
+	rv.last_kind["p1"] = "up"
+	rv.cached_kind = "up"
+	if not fw_until2(r, rv, "cached", "active", Vector2(150.0, 150.0)):
+		fail(res, "cached (2) never active")
+	hp0 = rv.hpf
+	rv.hit(1, -1.0, 0.0, "swipe", rv)
+	if rv.hpf >= hp0:
+		fail(res, "a side claw was blocked by an up cache")
+	rv.plan = {}
+	rv.riposte_to = ""
+	# the riposte follows a block
+	rv.riposte_to = "p1"
+	rv.idle_t = 0.0
+	r.step(Game.STEP)
+	if rv.plan.is_empty() or String(rv.plan.id) != "riposte":
+		fail(res, "no riposte after a block (%s)" % str(rv.plan.get("id")))
+	rv.plan = {}
+	# verdict: a diamond (catchable) and a grey orb (not)
+	for q in r.projs:
+		q.dead = true
+	r.projs.clear()
+	rv.idle_t = 999.0
+	rv._start("verdict", "p1")
+	var seen_c := false
+	var seen_n := false
+	for f in range(60 * 4):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		r.player.x = 150.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		rv.idle_t = 999.0
+		for q in r.projs:
+			if q.get("by_boss", false):
+				if q.get("catchable", false):
+					seen_c = true
+				else:
+					seen_n = true
+		if rv.plan.is_empty():
+			break
+	if not seen_c or not seen_n:
+		fail(res, "verdict shots: catchable %s, not catchable %s" % [str(seen_c), str(seen_n)])
+	if rv.shots != 4:
+		fail(res, "verdict fired %d shots" % rv.shots)
+	# parity of the boxes: double, cross, signoff
+	for id in ["double", "cross", "signoff"]:
+		rv.plan = {}
+		rv.x = 250.0
+		rv._start(id, "p1")
+		rv.plan.t = 0.01
+		if not fw_until2(r, rv, id, "active", Vector2(150.0, 150.0)):
+			fail(res, "%s never active" % id)
+			continue
+		var pup = NetClasses.make(32, r)
+		NetClasses.apply(pup, JSON.parse_string(JSON.stringify(NetClasses.record(rv))))
+		pup.x = rv.x
+		pup.y = rv.y
+		if rv.harmboxes().is_empty() or not same_boxes(rv.harmboxes(), pup.harmboxes()):
+			fail(res, "%s parity (%d boxes)" % [id, rv.harmboxes().size()])
+		pup.free()
+	rv.plan = {}
+	# the kill: the plugin flag and the boss flag, but no tool (skip boss from an unstarted pad fight works too)
+	r.queue_free()
+	Game.flags = {}
+	Game.tools = {}
+	r = new_room("N22")
+	rv = r.boss
+	if not r.skip_boss():
+		fail(res, "skip boss refused")
+	n = 0
+	while r.fight.state != "done" and n < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if not Game.flag("plugin:review_cache") or not Game.flag("boss:REVIEWER2"):
+		fail(res, "reward flags missing (state %s)" % r.fight.state)
+	if not Game.tools.is_empty():
+		fail(res, "a tool was given: %s" % str(Game.tools.keys()))
+	if r.sign_text(r.def.signs[0]) != "2nd review: approved. LGTM.":
+		fail(res, "sign: %s" % r.sign_text(r.def.signs[0]))
+	r.queue_free()
+	Game.fresh()
+	return report("reviewer2", res.ok, res.info)
+
+func fw_until2(r: Room, b, id: String, ph: String, keep: Vector2, max_f := 600) -> bool:
+	for f in range(max_f):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		r.player.x = keep.x
+		r.player.y = keep.y
+		r.player.vx = 0.0
+		r.player.vy = 0.0
+		r.step(Game.STEP)
+		b.idle_t = 999.0
+		if not b.plan.is_empty() and String(b.plan.id) == id and String(b.plan.ph) == ph:
+			return true
+	return false
