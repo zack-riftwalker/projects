@@ -2344,6 +2344,8 @@ func sc_co_honeypot() -> Array:
 			if Game.owns_plugin("rate_limit"):
 				took = true
 				break
+	if not took:                                          # (the host's bot may have taken the chip first: the ownership is shared either way)
+		took = await wait_until(func(): return Game.owns_plugin("rate_limit"), 10.0)
 	return [flag and door_open and took, "guest: wave flag %s, N door open %s, chip %s taken %s" % [flag, door_open, str(not chip.is_empty()), took]]
 
 # the guest pulls N02's lever: the host has lever:D06 and D06's slot gate is open
