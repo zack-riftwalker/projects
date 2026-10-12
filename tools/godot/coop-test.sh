@@ -8,7 +8,7 @@ GODOT=$(bash tools/godot/setup-godot.sh | tail -1) || { echo "FAIL setup"; exit 
 # a script that does not parse makes every scenario hang until its timeout: stop at once instead
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
 if timeout 60 "$GODOT" --headless --path godot --quit-after 3 2>&1 | grep -E "Parse Error|Compile Error|Failed to load script"; then echo "FAIL parse"; exit 1; fi
-PORT=3120; CODE=246810
+PORT=${COOP_PORT:-3120}; CODE=${COOP_CODE:-246810}
 TMP=$(mktemp -d)
 SRV=0
 stop_srv() { if [ "$SRV" != 0 ]; then kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; SRV=0; fi; }

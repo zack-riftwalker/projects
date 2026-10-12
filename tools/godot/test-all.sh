@@ -14,7 +14,7 @@ run worldcheck python3 -I tools/godot/roomcheck/world.py
 # a script that does not parse makes every scenario hang until its timeout: stop at once instead
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
 if timeout 60 "$GODOT" --headless --path godot --quit-after 3 2>&1 | grep -E "Parse Error|Compile Error|Failed to load script"; then echo "FAIL parse"; exit 1; fi
-for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork rooms3b merge agents shop mergeinterp loadout bossstats strikeseen sidunique bossfree skipboss nsdoors tiles4 flood rise plugins4 w3assets w3enemies segfault stackover leak rooms4 lab locks4b signs4b variants4b symlink packets bosskit worlddigest mapdata tree mappage mapoverlay changelog travelp2 logs lostagents decor terminals rooms4b w6assets curl ssh net4b w6enemies; do
+for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork rooms3b merge agents shop mergeinterp loadout bossstats strikeseen sidunique bossfree skipboss nsdoors tiles4 flood rise plugins4 w3assets w3enemies segfault stackover leak rooms4 lab locks4b signs4b variants4b symlink packets bosskit worlddigest mapdata tree mappage mapoverlay changelog travelp2 logs lostagents decor terminals rooms4b w6assets curl ssh net4b w6enemies crawler firewall reviewer2 plugins4b net4b1; do
   timeout 180 "$GODOT" --headless --path godot -- --test=$t > "$TMP/$t.log" 2>&1
   if grep -q "^TEST $t PASS" "$TMP/$t.log" && ! grep -q "SCRIPT ERROR" "$TMP/$t.log"; then rec "test-$t" PASS; else rec "test-$t" FAIL; echo "---- $t ----"; tail -20 "$TMP/$t.log"; fi
 done
@@ -29,7 +29,13 @@ run export bash tools/godot/export-web.sh
 run web-check node tools/godot/web-check.js
 cat "$TMP/web-check.log" 2>/dev/null | grep -E "^(PASS|FAIL)" | sed 's/^/    /'
 run relay node tools/coop-harness.js mv-serve mv-coop mv-title mv-phone cache
-run coop bash tools/godot/coop-test.sh all
+# two lanes of scenarios (own relay port and code each), so the co-op part takes about half the time
+ALLC=$(grep -E '^ALL=' tools/godot/coop-test.sh | sed -e 's/^ALL="//' -e 's/"$//')
+LANE1=""; LANE2=""; i=0
+for sc in $ALLC; do if [ $((i % 2)) = 0 ]; then LANE1="$LANE1 $sc"; else LANE2="$LANE2 $sc"; fi; i=$((i + 1)); done
+COOP_PORT=3120 COOP_CODE=246810 bash tools/godot/coop-test.sh $LANE1 > "$TMP/coop1.log" 2>&1 & P1=$!
+COOP_PORT=3121 COOP_CODE=135790 bash tools/godot/coop-test.sh $LANE2 > "$TMP/coop2.log" 2>&1 & P2=$!
+if wait $P1 && wait $P2; then rec coop PASS; else rec coop FAIL; grep -hE "^FAIL|COOP|INVARIANT|SCRIPT ERROR" "$TMP/coop1.log" "$TMP/coop2.log" | tail -40; fi
 
 echo
 echo "================ summary ================"
