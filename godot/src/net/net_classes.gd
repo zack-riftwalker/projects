@@ -11,6 +11,8 @@ static func cls_of(e) -> int:
 		return 25
 	if e is CrawlerBoss:
 		return 30
+	if e is FirewallBoss:
+		return 31
 	if e is Scraper:
 		return 26
 	if e is Worm:
@@ -97,6 +99,7 @@ static func make(cls: int, room: Room):
 		28: e = DdosBit.new(room, 0, 0)
 		29: e = Spyware.new(room, 0, 0)
 		30: e = CrawlerBoss.new(room, 0, 0)
+		31: e = FirewallBoss.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e
