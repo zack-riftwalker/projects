@@ -26,6 +26,7 @@ var guest_here := false
 var guest_ready := false
 var guest_bench := ""
 var snap_n := 0
+var last_wf_sent: Array = []            # host: the world flags the last `wf` carried
 var snap_sent := {}
 var force_full := false
 var both_t := -1.0
@@ -311,6 +312,7 @@ func _guest_joined() -> void:
 	guest_ready = false
 	Net.epoch += 1
 	snap_n = 0
+	last_wf_sent = []
 	snap_sent.clear()
 	fight_seen.clear()
 	phase_seen.clear()
@@ -960,6 +962,10 @@ func _send_snapshot() -> void:
 	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
+	var wf: Array = Game.world_flags()  # world flags: sent when they changed, and every 10th snapshot anyway (state: a lost one corrects itself)
+	if wf != last_wf_sent or snap_n % 10 == 0:
+		s["wf"] = wf
+		last_wf_sent = wf
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
 	if r.stats_line != "" and r.stats_t > 0.0:
@@ -1211,8 +1217,10 @@ func _apply_snapshot(m: Dictionary) -> void:
 		if String(fk) == "dead:" + r.id and not Game.flag(String(fk)):
 			r.reveal_dead(false)
 		Game.flags[String(fk)] = true
+	for fk in m.get("wf", []):
+		Game.flags[String(fk)] = true   # (never clears one)
 	Game.flood_net = int(m.get("fl", Game.flood_net))
-	last_lq = int(m.get("lq", -1))
+	last_lq =int(m.get("lq", -1))
 	last_lq_room = r.id
 	if last_lq < 0:
 		r.liquid_y = null

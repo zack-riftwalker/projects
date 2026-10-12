@@ -46,6 +46,22 @@ func theme(w: int) -> Dictionary:
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
+# world state: flags that every player's world needs (a hatch the host opened must open for the guest too); they travel in snapshots
+const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:"]
+
+func world_flags() -> Array:
+	var out: Array = []
+	for k in flags:
+		if not flags[k]:
+			continue
+		var ks := String(k)
+		for p in WORLD_PREFIXES:
+			if ks.begins_with(p):
+				out.append(ks)
+				break
+	out.sort()
+	return out
+
 # THE HEAP's water level: 2 = flooded, 1 = after the valve (free.c), 0 = after THE LEAK. The guest reads the host's (snapshot `fl`).
 var flood_net := -1          # guest: the host's flood level from the last snapshot (-1 = none yet)
 func heap_flood() -> int:

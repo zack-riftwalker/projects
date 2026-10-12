@@ -1541,3 +1541,26 @@ func sc_co_leak() -> Array:
 				popped = true
 	await wait_secs(2.0)
 	return [fight and lv and diff < 10.0 and hurt and seen_gc and popped, "guest: fight %s, level 1 %s, water off by %.1f, wet floor hurt %s, drone seen %s, hit it %s" % [fight, lv, diff, hurt, seen_gc, popped]]
+
+# MVB0-01: a world flag the host sets (a one-way hatch it fell through) reaches the guest while it plays, and opens the guest's door
+func sc_co_flags() -> Array:
+	Game.tools.sudo = true
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(3.0)
+		mgr().swap_to("H10", Vector2(41.0 * 16.0 + 4.0, 8.0 * 16.0))
+		await wait_secs(1.0)                # (lands on the one-way hatch, then [down]+[jump] drops through it)
+		Controls.script_input = {"down": true, "jump": true}
+		var went := await wait_until(func(): return Game.flag("hatch:H10S"), 10.0)
+		Controls.script_input = {}
+		await wait_secs(6.0 * slow)
+		return [went, "host crossed the hatch %s" % went]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(1.0)
+	mgr().swap_to("H04", Vector2(107.0 * 16.0, 18.0 * 16.0))
+	var flag_ok := await wait_until(func(): return Game.flag("hatch:H10S"), 12.0)
+	await wait_secs(0.3)
+	var d = mgr().room.grid.door_at("N", 107)
+	var open: bool = d != null and d.open
+	return [flag_ok and open, "guest has hatch:H10S %s, H04:N open %s" % [flag_ok, open]]
