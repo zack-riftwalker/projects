@@ -9,6 +9,7 @@ signal room_changed(room: Room)
 signal restart_requested
 signal bench_requested(room: Room, index: int)
 signal shop_requested(room: Room)
+signal index_requested(room: Room, npc_index: int)
 signal end_requested
 signal rested(room_id: String)          # the local player rested at a bench (a guest tells the host)
 
@@ -44,6 +45,7 @@ func make_room(room_id: String, spawn = null, local := true) -> Room:
 	r.restart_requested.connect(func(_s): restart_requested.emit())
 	r.bench_requested.connect(func(i): bench_requested.emit(r, i))
 	r.shop_requested.connect(func(): shop_requested.emit(r))
+	r.index_requested.connect(func(i): index_requested.emit(r, i))
 	r.end_requested.connect(func(): end_requested.emit())
 	r.bench_touched.connect(func(i): rest(r, i))
 	r.local_died.connect(func(): local_died.emit(r))

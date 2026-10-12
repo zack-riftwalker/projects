@@ -17,6 +17,7 @@ var hud_layer: CanvasLayer
 var pause_menu: PauseMenu
 var bench_menu: BenchMenu
 var shop_menu: ShopMenu
+var index_menu: IndexMenu
 var touch: TouchControls
 var debug_overlay: DebugOverlay
 var coop: Coop
@@ -79,6 +80,8 @@ func _ready() -> void:
 	hud_layer.add_child(bench_menu)
 	shop_menu = ShopMenu.new()
 	hud_layer.add_child(shop_menu)
+	index_menu = IndexMenu.new()
+	hud_layer.add_child(index_menu)
 	touch = TouchControls.new()
 	touch.name = "Touch"
 	touch.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -91,7 +94,8 @@ func _ready() -> void:
 	add_child(manager)
 	manager.restart_requested.connect(func(): manager.respawn(true))
 	manager.bench_requested.connect(func(r, i): open_bench(r, i))
-	manager.shop_requested.connect(func(r): if not shop_menu.active and not bench_menu.active: shop_menu.open(r))
+	manager.shop_requested.connect(func(r): if active_overlay() == null: shop_menu.open(r))
+	manager.index_requested.connect(func(r, i): if active_overlay() == null: index_menu.open(r, r.npcs[i]))
 	bench_menu.manager = manager
 	bench_menu.rest_chosen.connect(func():
 		manager.rest(bench_room, bench_idx))
@@ -349,6 +353,16 @@ func _back_to_title() -> void:
 var bench_room: Room
 var bench_idx := 0
 
+# the menus that stand over the running game (the bench, the stall, the cartographer's index, ...): at most one is open
+func overlays() -> Array:
+	return [bench_menu, shop_menu, index_menu]
+
+func active_overlay():
+	for o in overlays():
+		if o != null and o.active:
+			return o
+	return null
+
 func open_bench(r: Room, i: int) -> void:
 	bench_room = r
 	bench_idx = i
@@ -398,7 +412,7 @@ func _input(event: InputEvent) -> void:
 				title.tap(tg)
 		return
 	# a tap on a pause option
-	if paused or bench_menu.active or shop_menu.active:
+	if paused or active_overlay() != null:
 		var pos := Vector2.ZERO
 		var hit := false
 		if event is InputEventScreenTouch and event.pressed:
@@ -411,10 +425,8 @@ func _input(event: InputEvent) -> void:
 			var gp := to_game(pos)
 			if paused:
 				pause_menu.tap(gp)
-			elif shop_menu.active:
-				shop_menu.tap(gp)
 			else:
-				bench_menu.tap(gp)
+				active_overlay().tap(gp)
 
 # Fullscreen (F, and the menu entries). Browsers only allow it inside a user gesture, and a gesture keeps the permission for a few
 # seconds: F runs straight from its key event; a menu entry (chosen on a press or in the next physics step) goes at once when a
@@ -514,12 +526,10 @@ func _physics_process(_d: float) -> void:
 		Controls.poll()
 		pause_menu.update()
 		return
-	if bench_menu.active or shop_menu.active:
+	var ov = active_overlay()
+	if ov != null:
 		Controls.poll()
-		if bench_menu.active:
-			bench_menu.update()
-		else:
-			shop_menu.update()
+		ov.update()
 		if not Net.is_active() or manager.player == null:
 			return                              # alone the world waits while a menu is open
 		# co-op: the partner's world goes on (the host simulates it); this body stands still and takes no input
@@ -528,10 +538,9 @@ func _physics_process(_d: float) -> void:
 		if manager.player != null:
 			manager.player.in_menu = false
 			if manager.player.dead:              # hurt to death while choosing: the menu goes away
-				if shop_menu.active:
-					shop_menu.close()
-				if bench_menu.active:
-					bench_menu.close()
+				for o in overlays():
+					if o.active:
+						o.close()
 		return
 	manager.tick(Game.STEP)
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):

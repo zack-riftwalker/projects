@@ -46,7 +46,7 @@
                  {"id": "R07:W", "side": "W", "a": 9, "b": 12, "to": "R05:E"},
                  {"id": "R07:E", "side": "E", "a": 9, "b": 12, "to": "R08:W"}
              ] },
-    "R08": { "file": "R08.txt", "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
+    "R08": { "file": "R08.txt", "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}], "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
              "signs": ["Next door: the ledges go up to a code review; the low door goes down to ~/node_modules."],
              "doors": [
                  {"id": "R08:W", "side": "W", "a": 9, "b": 12, "to": "R07:E"},
@@ -73,7 +73,7 @@
                  {"id": "R11:W", "side": "W", "a": 9, "b": 12, "to": "R10:E"},
                  {"id": "R11:E", "side": "E", "a": 9, "b": 12, "to": "H01:W"}
              ] },
-    "D01": { "file": "D01.txt", "zone": "dep", "title": "npm_install.sh", "size": [186, 22], "origin": [712, 4], "world": 2, "music": "w2",
+    "D01": { "file": "D01.txt", "npc": [{"kind": "tree", "x": 19, "y": 4, "zone": "dep", "price": 40}], "zone": "dep", "title": "npm_install.sh", "size": [186, 22], "origin": [712, 4], "world": 2, "music": "w2",
              "signs": ["~/node_modules: 1,042 packages, and each one needs three more. Keep your bash ready.", "BASH works in mid-air too. Jump, then bash across."],
              "doors": [
                  {"id": "D01:W", "side": "W", "a": 5, "b": 8, "to": "R09:E"},
@@ -132,7 +132,7 @@
                  {"id": "H02:E", "side": "E", "a": 9, "b": 12, "to": "H04:W"},
                  {"id": "H02:N", "side": "N", "a": 130, "b": 133, "to": "H12:S"}
              ] },
-    "H04": { "file": "H04.txt", "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
+    "H04": { "file": "H04.txt", "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}], "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
              "signs": [],
              "doors": [
                  {"id": "H04:W", "side": "W", "a": 9, "b": 12, "to": "H02:E"},

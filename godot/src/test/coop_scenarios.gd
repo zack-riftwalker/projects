@@ -1769,3 +1769,25 @@ func sc_co_commit() -> Array:
 	var dep_v: Dictionary = Game.map_view("dep")
 	var listed: bool = src_v.filled.has("R09") and dep_v.filled.has("D01")
 	return [got and listed, "guest: R09 and D01 committed %s, in the map view %s" % [got, listed]]
+
+# MVB1-04: the guest buys the DEPTHS index from the cartographer: the host sets the flag and answers; only the buyer pays.
+func sc_co_tree() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tokens = 40
+		var got := await wait_until(func(): return Game.owns_map("dep"), 20.0)
+		await wait_secs(3.0)
+		return [got and Game.tokens == 40, "host: map:dep %s, my tokens %d (still 40)" % [got, Game.tokens]]
+	await wait_secs(1.5)
+	Game.tokens = 40
+	mgr().swap_to("D01", Vector2(19.0 * 16.0, 3.0 * 16.0))
+	await wait_secs(1.0)
+	mgr().player.inv = 999.0
+	var r: Room = mgr().room
+	main.index_menu.open(r, r.npcs[0])
+	var asked: bool = main.index_menu.buy()
+	var pending: bool = main.index_menu.pending == "dep" and Game.tokens == 40       # nothing is paid before the answer
+	var got2 := await wait_until(func(): return Game.owns_map("dep") and main.index_menu.pending == "", 8.0)
+	await wait_secs(2.0)
+	return [asked and pending and got2 and Game.tokens == 0, "guest: asked %s, nothing paid before the answer %s, map:dep %s, tokens %d (0)" % [asked, pending, got2, Game.tokens]]

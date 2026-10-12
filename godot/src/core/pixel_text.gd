@@ -8,12 +8,43 @@ static func _font(tiny: bool) -> Dictionary:
 	var key := "tiny" if tiny else "big"
 	if not _fonts.has(key):
 		var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/fonts/%s.json" % key))
-		_fonts[key] = {"tex": load("res://assets/fonts/%s.png" % key), "h": int(meta.h), "sp": int(meta.sp), "glyphs": meta.glyphs}
+		_fonts[key] = {"key": key, "tex": load("res://assets/fonts/%s.png" % key), "h": int(meta.h), "sp": int(meta.sp), "glyphs": meta.glyphs}
 	return _fonts[key]
+
+# A few signs the captured fonts do not have (tree lines, arrows, a tick, an ellipsis), drawn from small bitmaps: rows of equal length.
+const CUSTOM := {
+	"big": {
+		"├": ["..#..", "..#..", "..#..", "..###", "..#..", "..#..", "..#.."],
+		"└": ["..#..", "..#..", "..#..", "..###", ".....", ".....", "....."],
+		"─": [".....", ".....", ".....", "#####", ".....", ".....", "....."],
+		"→": [".....", "...#.", "....#", "#####", "....#", "...#.", "....."],
+		"←": [".....", ".#...", "#....", "#####", "#....", ".#...", "....."],
+		"…": [".....", ".....", ".....", ".....", ".....", ".....", "#.#.#"],
+		"✓": [".....", "....#", "...#.", "#.#..", ".#...", ".....", "....."],
+		"—": ["......", "......", "......", "######", "......", "......", "......"],
+		"·": [".", ".", ".", "#", ".", ".", "."],
+	},
+	"tiny": {
+		"├": [".#.", ".#.", ".##", ".#.", ".#."],
+		"└": [".#.", ".#.", ".##", "...", "..."],
+		"─": ["...", "...", "###", "...", "..."],
+		"→": ["..#.", "...#", "####", "...#", "..#."],
+		"←": [".#..", "#...", "####", "#...", ".#.."],
+		"…": [".....", ".....", ".....", ".....", "#.#.#"],
+		"✓": [".....", "....#", "#..#.", ".##..", "....."],
+		"—": ["....", "....", "####", "....", "...."],
+		"·": [".", ".", "#", ".", "."],
+	},
+}
 
 static func _glyph(f: Dictionary, ch: String) -> Array:
 	var g: Dictionary = f.glyphs
-	return g[ch] if g.has(ch) else g["?"]
+	if g.has(ch):
+		return g[ch]
+	var c: Dictionary = CUSTOM[f.key]
+	if c.has(ch):
+		return [-1, String(c[ch][0]).length(), ch]
+	return g["?"]
 
 # opts: align ("c" | "r"), scale, tiny, shadow (color), outline (color), sp
 static func text_width(text: String, opts := {}) -> int:
@@ -28,7 +59,13 @@ static func text_width(text: String, opts := {}) -> int:
 static func _run(ci: CanvasItem, f: Dictionary, text: String, x: int, y: int, col: Color, sc: int, sp: int) -> void:
 	for ch in text:
 		var gl := _glyph(f, ch)
-		if ch != " ":
+		if int(gl[0]) < 0:
+			var rows: Array = CUSTOM[f.key][ch]
+			for ry in range(rows.size()):
+				for rx in range(String(rows[ry]).length()):
+					if String(rows[ry])[rx] == "#":
+						ci.draw_rect(Rect2(x + rx * sc, y + ry * sc, sc, sc), col)
+		elif ch != " ":
 			ci.draw_texture_rect_region(f.tex, Rect2(x, y, gl[1] * sc, f.h * sc), Rect2(gl[0], 0, gl[1], f.h), col)
 		x += (int(gl[1]) + sp) * sc
 

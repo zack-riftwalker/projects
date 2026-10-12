@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata"]
+const NAMES := ["worlddigest", "mapdata", "tree"]
 
 func _init(m) -> void:
 	main = m
@@ -17,6 +17,7 @@ func run(name: String) -> bool:
 	match name:
 		"worlddigest": return t_worlddigest()
 		"mapdata": return t_mapdata()
+		"tree": return t_tree()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -156,3 +157,84 @@ func t_mapdata() -> bool:
 		fail(res, "migrated view " + str(heap.filled))
 	Game.fresh()
 	return report("mapdata", res.ok, res.info)
+
+func new_room(room_id: String) -> Room:
+	var room := Room.new()
+	main.world.add_child(room)
+	room.load_room(room_id)
+	room.build_nodes()
+	return room
+
+# MVB1-04: the cartographer. R08's index is free, D01's costs 40 tokens; an owned index cannot be bought again; [up] next to it opens the menu.
+func t_tree() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	var menu := IndexMenu.new()
+	main.add_child(menu)
+	var r8 := new_room("R08")
+	if r8.npcs.size() != 1 or r8.npcs[0].zone != "src" or r8.npcs[0].price != 0:
+		fail(res, "R08 npc")
+	else:
+		menu.open(r8, r8.npcs[0])
+		if menu.rows()[0] != "take the index of ~/src":
+			fail(res, "free row: " + str(menu.rows()))
+		Game.tokens = 0
+		if not menu.buy() or not Game.owns_map("src") or Game.tokens != 0:
+			fail(res, "free index")
+		if menu.rows() != ["Back"]:
+			fail(res, "owned rows " + str(menu.rows()))
+		menu.close()
+	var d01 := new_room("D01")
+	menu.open(d01, d01.npcs[0])
+	if d01.npcs[0].price != 40 or menu.rows()[0] != "index ~/node_modules — 40 tokens":
+		fail(res, "D01 offer " + str(menu.rows()))
+	Game.tokens = 39
+	if menu.buy() or Game.owns_map("dep") or Game.tokens != 39 or menu.msg != "not enough tokens":
+		fail(res, "39 tokens buy nothing")
+	Game.tokens = 45
+	if not menu.buy() or not Game.owns_map("dep") or Game.tokens != 5:
+		fail(res, "buy with 45: tokens %d" % Game.tokens)
+	if menu.buy() or Game.tokens != 5:
+		fail(res, "an owned index costs nothing")
+	menu.close()
+	# [up] next to it opens the menu; far away it does not
+	var opened := [0]
+	d01.index_requested.connect(func(_i): opened[0] += 1)
+	var p = d01.player
+	var n: Dictionary = d01.npcs[0]
+	p.x = n.x + 8.0 - p.w / 2.0
+	p.y = n.y - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	for f in range(8):
+		Controls.script_input = {"up": f == 4}
+		Controls.poll()
+		d01.step(Game.STEP)
+	Controls.script_input = null
+	if opened[0] != 1:
+		fail(res, "[up] next to it opened %d times" % opened[0])
+	p.x += 200.0
+	for f in range(4):
+		Controls.script_input = {"up": f == 2}
+		Controls.poll()
+		d01.step(Game.STEP)
+	Controls.script_input = null
+	if opened[0] != 1:
+		fail(res, "far away it opened too")
+	# the paper strip grows by a line every 2 s while somebody is within 10 tiles
+	p.x = n.x - 40.0
+	p.y = n.y - p.h
+	var s0: int = n.strip
+	for f in range(130):
+		p.x = n.x - 40.0
+		p.y = n.y - p.h
+		p.vx = 0.0
+		p.vy = 0.0
+		d01.step(Game.STEP)
+	if n.strip <= s0:
+		fail(res, "the strip did not grow (%d)" % n.strip)
+	menu.queue_free()
+	return report("tree", res.ok, res.info)

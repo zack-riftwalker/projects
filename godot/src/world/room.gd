@@ -82,7 +82,9 @@ signal net_lqhit
 signal plugin_got(plugin_id: String, by: String)
 signal net_agents
 signal net_buy(plugin_id: String)
+signal net_buymap(zone_id: String)
 signal shop_requested
+signal index_requested(npc_index: int)
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
@@ -102,6 +104,7 @@ var agents: Array = []         # the helpers of every player in this room (host 
 var agent_view: Array = []     # guest: [{owner, x, y, t}] as the host's snapshot lists them
 var keys: Array = []           # slot keys (letter k): {x, y, w, h, i}; only agents can press them
 var shops: Array = []          # npm registry stalls (letter $): {x (centre), y (bottom)}
+var npcs: Array = []           # the cartographer `tree` (rooms.json `npc`): {kind, x (centre), y (feet), zone, price, ...look state}
 var stations: Array = []       # cache stations (letter R): {x, y, w, h}
 var switches: Array = []       # catch switches (letter Y): {x, y, w, h, i}; pressed = flag switch:<room>:<i>
 var dead_cells: Array = []     # [tx, ty] of the dead code (`;`): wall to look at, air to walk through
@@ -263,6 +266,9 @@ func load_room(room_id: String, snap = null) -> void:
 		if not Game.flag(fid) and mode != "guest":
 			items.append({"kind": "spark", "x": float(spark_spots[i].x), "y": float(spark_spots[i].y), "idx": i, "id": fid, "ph": i, "ghost": false})
 	_group_dead()
+	for nd in def.get("npc", []):
+		npcs.append({"kind": String(nd.kind), "x": float(int(nd.x) * T + 8), "y": float(int(nd.y) * T + T), "zone": String(nd.zone), "price": int(nd.price),
+			"strip": 0, "acc": 0.0, "scraps": [], "tick_t": 0.0})
 	if def.has("flood"):
 		liquid_y = flood_target()
 	_find_ports()
@@ -925,6 +931,7 @@ func step_guest(dt: float) -> void:
 		hitstop -= dt
 		return
 	time += dt
+	Decor.step(self, dt)
 	_step_variants()
 	_move_platforms()
 	var p = player
@@ -1126,6 +1133,7 @@ func step(dt: float) -> void:
 		hitstop -= dt
 		return
 	time += dt
+	Decor.step(self, dt)
 	var p = player                       # null in a room only the partner is in
 	var live := players()
 	_step_flood(dt)
@@ -1579,6 +1587,10 @@ func interact_goals(p) -> void:
 		for sh in shops:
 			if absf(p.x + p.w / 2.0 - sh.x) < 20.0 and absf(p.y + p.h - sh.y) < 20.0:
 				shop_requested.emit()
+				break
+		for ni in range(npcs.size()):
+			if absf(p.x + p.w / 2.0 - (npcs[ni].x + 8.0)) < 32.0 and absf(p.y + p.h - npcs[ni].y) < 20.0:
+				index_requested.emit(ni)
 				break
 	if p.cache_cool <= 0.0 and not stations.is_empty():
 		var hb2: Dictionary = p.hurtbox()
@@ -2116,6 +2128,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 				ci.draw_texture_rect_region(gate, Rect2(gc[0] * T, gc[1] * T, T, T), Rect2(7, 12, 16, 16))
 		for sh in shops:
 			_draw_stall(ci, sh)
+		Decor.draw(self, ci)
 		for k in keys:
 			var lit := Game.flag("key:%s:%d" % [id, k.i])
 			ci.draw_rect(Rect2(k.x - 3, k.y - 3, 16, 16), Color("#17131f"))

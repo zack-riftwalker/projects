@@ -56,6 +56,21 @@ func sfx(sfx_name: String, opts := {}) -> void:
 				first_sfx_msec = now
 			return
 
+# A sound only this page hears (the cartographer's typing, a jar's beep): it is not recorded for the partner, who has its own copy of the room.
+func local_sfx(sfx_name: String, vol: float) -> void:
+	if Game.mute or Game.vol_sfx <= 0 or not streams.has(sfx_name) or vol <= 0.02:
+		return
+	var now := Time.get_ticks_msec()
+	if now - int(last_play.get(sfx_name, -1000)) < MIN_GAP_MS:
+		return
+	last_play[sfx_name] = now
+	for p in pool:
+		if not p.playing:
+			p.stream = streams[sfx_name]
+			p.volume_db = linear_to_db(maxf(0.001, vol * Game.vol_sfx / 10.0)) + duck_db
+			p.play()
+			return
+
 func music(music_key: String) -> void:
 	if Game.mute or music_key == music_name:
 		return

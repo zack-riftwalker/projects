@@ -180,6 +180,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_catch.connect(func(pid): Net.rel("catch", {"pid": pid}))
 		r.net_agents.connect(func(): Net.rel("agents", {}))
 		r.net_buy.connect(func(pid): Net.rel("buy", {"id": pid}))
+		r.net_buymap.connect(func(zid): Net.rel("buymap", {"zone": zid}))
 		r.net_crumble.connect(func(tx, ty): Net.rel("crumble", {"tx": tx, "ty": ty, "px": roundi(mgr.player.x) if mgr.player != null else 0, "py": roundi(mgr.player.y) if mgr.player != null else 0}))
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id}))
@@ -471,6 +472,14 @@ func _host_rel(k: String, d: Dictionary) -> void:
 				if br != null:
 					_as_p2(br, func(): br.show_plugin_banner(pid))
 			Net.rel("plugin", {"id": pid, "by": by})
+		"buymap":                                # the guest buys a zone's index: the first buyer pays, the answer says who it was
+			var zid := String(d.zone)
+			var by := ""
+			if Game.zone_def(zid).size() > 0 and not Game.owns_map(zid):
+				Game.flags["map:" + zid] = true
+				Game.write_save()
+				by = "p2"
+			Net.rel("mapbought", {"zone": zid, "by": by})
 		"agents":                                # the guest spent a full meter (its own check): its two agents, replacing any it still has here
 			var ar := _remote_room()
 			if ar != null:
@@ -1081,6 +1090,9 @@ func _guest_start(m: Dictionary) -> void:
 	if main.shop_menu.pending != "":                 # a purchase asked on the old link gets no answer: ask again from scratch
 		main.shop_menu.pending = ""
 		main.shop_menu.msg = ""
+	if main.index_menu.pending != "":
+		main.index_menu.pending = ""
+		main.index_menu.msg = ""
 	Net.rel("ready", {"build": Game.build_text})
 	Net.rel("loadout", {"ids": Game.equipped})
 
@@ -1411,6 +1423,8 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				r.show_plugin_banner(String(d.id))
 		"pause":
 			main.set_paused(bool(d.on), true)
+		"mapbought":
+			main.index_menu.answered(String(d.zone), String(d.by))
 		"committed":
 			if r != null and p != null and int(d.n) > 0:
 				r.pop(p.x + 5.0, p.y - 30.0, "+%d rooms" % int(d.n), Game.COL.okHi, true)
