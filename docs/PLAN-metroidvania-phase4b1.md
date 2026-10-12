@@ -65,21 +65,21 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MVB1-01 | world state by digest (the guest asks for the world flags only when its digest differs) | Sonnet | todo |
-| MVB1-02 | zones table; `zone`, `secret`, `offmap` in `rooms.json` | Sonnet | todo |
-| MVB1-03 | map data: staged and committed rooms, map ownership, commit on rest, save migration | Sonnet | todo |
-| MVB1-04 | the cartographer `tree`: NPC data, drawing, sound, paper scraps, the index menu, co-op buying | Sonnet | todo |
-| MVB1-05 | the map page: zone and world view, rooms, doors, stubs, markers, header, counters, secret rules | Sonnet | todo |
-| MVB1-06 | the map as a local overlay (no pause in co-op); the `map` action and touch button; the partner's map icon | Sonnet | todo |
-| MVB1-07 | obstacles: `?` marks and the terminal changelog line | Sonnet | todo |
-| MVB1-08 | pins and pings | Sonnet | todo |
-| MVB1-09 | travel to the partner's zone terminal | Sonnet | todo |
-| MVB1-10 | the Logs page and the memory line of every fragment | Sonnet | todo |
-| MVB1-11 | lost agents and the plugin notches | Sonnet | todo |
-| MVB1-12 | logbook pages (the item and the data for all six) | Sonnet | todo |
-| MVB1-13 | decor and the built-zone changes (R06, R08, D01, D04, D07, H03, H04, H13, H15) | Sonnet | todo |
-| MVB1-14 | terminals (safe, fan, calm music) and far landmarks | Sonnet | todo |
-| MVB1-15 | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MVB1-01 | world state by digest (the guest asks for the world flags only when its digest differs) | Sonnet | done |
+| MVB1-02 | zones table; `zone`, `secret`, `offmap` in `rooms.json` | Sonnet | done |
+| MVB1-03 | map data: staged and committed rooms, map ownership, commit on rest, save migration | Sonnet | done |
+| MVB1-04 | the cartographer `tree`: NPC data, drawing, sound, paper scraps, the index menu, co-op buying | Sonnet | done |
+| MVB1-05 | the map page: zone and world view, rooms, doors, stubs, markers, header, counters, secret rules | Sonnet | done |
+| MVB1-06 | the map as a local overlay (no pause in co-op); the `map` action and touch button; the partner's map icon | Sonnet | done |
+| MVB1-07 | obstacles: `?` marks and the terminal changelog line | Sonnet | done |
+| MVB1-08 | pins and pings | Sonnet | done |
+| MVB1-09 | travel to the partner's zone terminal | Sonnet | done |
+| MVB1-10 | the Logs page and the memory line of every fragment | Sonnet | done |
+| MVB1-11 | lost agents and the plugin notches | Sonnet | done |
+| MVB1-12 | logbook pages (the item and the data for all six) | Sonnet | done |
+| MVB1-13 | decor and the built-zone changes (R06, R08, D01, D04, D07, H03, H04, H13, H15) | Sonnet | done |
+| MVB1-14 | terminals (safe, fan, calm music) and far landmarks | Sonnet | done |
+| MVB1-15 | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ## 2. Facts already verified (do not rediscover)
 
