@@ -170,7 +170,7 @@
                  {"id": "H05:W", "side": "W", "a": 9, "b": 12, "to": "H03:E2"},
                  {"id": "H05:E", "side": "E", "a": 9, "b": 12, "to": "H06:W"}
              ] },
-    "H15": { "file": "H15.txt", "zone": "heap", "secret": true, "title": "core_dump", "size": [64, 16], "origin": [1148, 29], "world": 3, "music": "w3",
+    "H15": { "file": "H15.txt", "pages": [[24, 12, 1]], "zone": "heap", "secret": true, "title": "core_dump", "size": [64, 16], "origin": [1148, 29], "world": 3, "music": "w3",
              "signs": ["Segmentation fault (core dumped). It stopped right here, mid-sentence.", "Killed: out of memory. It was holding 3 GB of cat pictures.", "panic: runtime error: index out of range [5] with length 5", "PID 1 is locked behind this door. fork() never returns. (later)"],
              "flood": [0, 1, null],
              "doors": [

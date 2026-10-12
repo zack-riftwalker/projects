@@ -8,7 +8,7 @@ const SNAP_HZ := 15.0
 const ST_HZ := 30.0
 const REVIVE_T := 6.0
 const FIGHT_STATES := ["none", "intro", "active", "reward", "done"]
-const ITEM_KINDS := ["token", "spark", "coffee", "plugin"]
+const ITEM_KINDS := ["token", "spark", "coffee", "plugin", "page"]
 
 var main
 var mgr: RoomManager
@@ -1275,7 +1275,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 	for rec in m.it:
 		var iid := String(rec[0])
 		var old = old_items.get(iid)
-		var d := {"kind": ITEM_KINDS[clampi(int(rec[1]), 0, 3)], "id": iid, "x": rec[2] / 4.0, "y": rec[3] / 4.0, "loose": iid.begins_with("L"), "t": 1.0, "ph": float(hash(iid) % 100) / 10.0, "ghost": false, "idx": 0, "vx": 0.0, "vy": 0.0}
+		var d := {"kind": ITEM_KINDS[clampi(int(rec[1]), 0, ITEM_KINDS.size() - 1)], "id": iid, "x": rec[2] / 4.0, "y": rec[3] / 4.0, "loose": iid.begins_with("L"), "t": 1.0, "ph": float(hash(iid) % 100) / 10.0, "ghost": false, "idx": 0, "vx": 0.0, "vy": 0.0}
 		if old != null:
 			d["asked"] = old.get("asked", -10.0)
 		items.append(d)

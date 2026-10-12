@@ -631,6 +631,31 @@ func t_logs() -> bool:
 		if not t2.contains("memories") or not t2.contains("the lamp was still on"):
 			fail(res, "memory not listed: " + t2.left(300))
 	r6.queue_free()
+	# MVB1-12: a logbook page: picked up by touch (the item path), its flag is page:1, the text is listed under logbook
+	Game.flags["boss:LEAK"] = true                          # (the heap is dry: no water over the page)
+	var h15 := new_room("H15")
+	var page_it = null
+	for it in h15.items:
+		if it.kind == "page":
+			page_it = it
+	if page_it == null:
+		fail(res, "H15 has no page")
+	else:
+		var pp = h15.player
+		pp.x = float(page_it.x) - 5.0
+		pp.y = float(page_it.y) - 5.0
+		pp.vx = 0.0
+		pp.vy = 0.0
+		Controls.script_input = {}
+		Controls.poll()
+		h15.step(Game.STEP)
+		if not Game.flag("page:1"):
+			fail(res, "touching the page did not collect it")
+		lv.open()
+		var t3 := logs_text(lv)
+		if not t3.contains("logbook") or not t3.contains("15:25  relay #4 clicked twice. nothing found."):
+			fail(res, "logbook not listed: " + t3.left(300))
+	h15.queue_free()
 	# the changelog lines are listed too
 	Game.changelog_lines = ["changelog: something in /proc/heap answers to curl"]
 	lv.open()

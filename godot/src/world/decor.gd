@@ -96,6 +96,20 @@ static func draw_tree(ci: CanvasItem, r: Room, n: Dictionary) -> void:
 	if r.player != null and absf(r.player.x + r.player.w / 2.0 - n.x) < 36.0 and absf(r.player.y + r.player.h - n.y) < 20.0:
 		PixelText.draw_text(ci, "[up]", n.x + 8, y - 28, Game.COL.paper, {"align": "c", "tiny": true, "outline": Game.COL.ink})
 
+# ---------------------------------------------------------------- a logbook page (MVB1-12): a torn yellowed sheet that flutters in place
+static func draw_page(ci: CanvasItem, it: Dictionary, t: float) -> void:
+	var sway := sin(t * 2.6 + float(it.ph)) * 0.18
+	var bob := sin(t * 1.9 + float(it.ph)) * 1.5
+	ci.draw_set_transform(Vector2(floorf(it.x), floorf(it.y + bob)), sway, Vector2.ONE)
+	ci.draw_rect(Rect2(-5, -6, 10, 12), Color(Game.COL.ink))
+	ci.draw_rect(Rect2(-4, -5, 8, 10), Color("#e8d9a8"))
+	ci.draw_rect(Rect2(-4, -5, 8, 1), Color("#cdb87a"))
+	ci.draw_rect(Rect2(-3, -5, 2, 1), Color(Game.COL.ink))                  # the torn top edge
+	ci.draw_rect(Rect2(1, -5, 1, 1), Color(Game.COL.ink))
+	for ly in range(3):
+		ci.draw_rect(Rect2(-3, -3 + ly * 3, 6 - (ly % 2) * 2, 1), Color("#8a7a52"))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 # ---------------------------------------------------------------- lost agents (MVB1-11)
 # A glass jar with a tiny agent in it, a `…` bubble above it and a soft beep every 2 s while somebody is within 10 tiles (never sound alone).
 # Breaking it is state: the flag agent:<room> is set (by a swipe or dash on the host, asked by the guest) and every page plays the burst from the flag.

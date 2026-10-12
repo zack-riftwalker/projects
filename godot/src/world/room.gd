@@ -273,6 +273,10 @@ func load_room(room_id: String, snap = null) -> void:
 	for nd in def.get("npc", []):
 		npcs.append({"kind": String(nd.kind), "x": float(int(nd.x) * T + 8), "y": float(int(nd.y) * T + T), "zone": String(nd.zone), "price": int(nd.price),
 			"strip": 0, "acc": 0.0, "scraps": [], "tick_t": 0.0})
+	for pg in def.get("pages", []):                    # logbook pages (MVB1-12): an item whose id is the flag page:<n>
+		var pgid := "page:%d" % int(pg[2])
+		if not Game.flag(pgid) and mode != "guest":
+			items.append({"kind": "page", "x": float(int(pg[0]) * T + 8), "y": float(int(pg[1]) * T + 8), "id": pgid, "ph": float(pg[2])})
 	for jc in def.get("agents", []):
 		jars.append({"x": float(int(jc[0]) * T + 8), "y": float(int(jc[1]) * T + T), "broken": Game.flag("agent:" + id), "fly": null, "asked": -10.0, "t": 0.0})
 	for dd in def.get("decor", []):
@@ -1711,6 +1715,12 @@ func collect(it: Dictionary) -> void:
 			events.append("spark")
 		"plugin":
 			plugin_collected(String(it.id).trim_prefix("plugin:"))
+		"page":
+			var pn := int(String(it.id).get_slice(":", 1))
+			pop(it.x, it.y - 12, "logbook page %d/6" % pn, Game.COL.gold, true)
+			burst(it.x, it.y, 8, ["#e8d9a8", "#cdb87a", "#ffffff"], 70.0, 100.0)
+			Audio.sfx("spark", {"vol": 0.7})
+			Game.write_save()
 		"coffee":
 			if Game.diff == "easy" and p.hp < p.max_hp:
 				heal(p, 1)
@@ -2254,6 +2264,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					ci.draw_texture(Gfx.tex(("sparkGhost_%d" if it.ghost else "spark_%d") % f), Vector2(ix - 7, iy - 7))
 				"coffee":
 					ci.draw_texture(Gfx.tex("coffee"), Vector2(ix - 6, iy - 7))
+				"page":
+					Decor.draw_page(ci, it, time)
 				"plugin":
 					ci.draw_rect(Rect2(ix - 6, iy - 6, 12, 12), Color(Game.COL.ink))
 					ci.draw_rect(Rect2(ix - 5, iy - 5, 10, 10), Color("#231d2e"))
