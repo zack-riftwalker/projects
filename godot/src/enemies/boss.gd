@@ -256,11 +256,18 @@ func _tm() -> float:
 func _pm(base: float) -> float:
 	return maxf(0.4, base * float(Game.dv("punish_mult")))
 
-# a new attack; the target is fixed for the whole attack. cue < 0: the family's own cue
-func plan_start(id: String, fam: String, tgt: String, fp: Array, lock := 0.0, cue := -1.0) -> void:
+# a recover time set by the boss itself (MVB3-02): x punish_mult, never below 0.4 (a chain's own short gap, under 0.4, is kept)
+func _pm_rec(rec: float) -> float:
+	return maxf(minf(rec, 0.4), rec * float(Game.dv("punish_mult")))
+
+func _plan_rec(f: Array) -> float:
+	return _pm(f[2]) if float(plan.get("rec", -1.0)) < 0.0 else _pm_rec(float(plan.rec))
+
+# a new attack; the target is fixed for the whole attack. cue < 0: the family's own cue; rec >= 0: this recover instead of the family's
+func plan_start(id: String, fam: String, tgt: String, fp: Array, lock := 0.0, cue := -1.0, rec := -1.0) -> void:
 	plan_seq += 1
 	var f: Array = FAMILY[fam]
-	plan = {"seq": plan_seq, "id": id, "fam": fam, "tgt": tgt, "ph": "cue", "t": (f[0] if cue < 0.0 else cue) * _tm(), "fp": fp.duplicate(), "lock": lock}
+	plan = {"seq": plan_seq, "id": id, "fam": fam, "tgt": tgt, "ph": "cue", "t": (f[0] if cue < 0.0 else cue) * _tm(), "fp": fp.duplicate(), "lock": lock, "rec": rec}
 	hold_t = 0.0
 	if not _guest_waits():
 		seen_seq = plan_seq
@@ -292,7 +299,7 @@ func plan_step(dt: float) -> String:
 				if hold_t > HOLD_MAX:
 					Game.dlog("%s plan %d cancelled: the guest did not see it" % [boss_name, plan.seq])
 					plan.ph = "recover"
-					plan.t = _pm(f[2])
+					plan.t = _plan_rec(f)
 					return "recover"
 				return ""
 			plan.ph = "active"
@@ -300,7 +307,7 @@ func plan_step(dt: float) -> String:
 			return "active"
 		"active":
 			plan.ph = "recover"
-			plan.t = _pm(f[2])
+			plan.t = _plan_rec(f)
 			return "recover"
 	plan = {}
 	return "done"
@@ -315,7 +322,7 @@ func plan_active() -> bool:
 func plan_cut() -> void:
 	if not plan.is_empty() and plan.ph != "recover":
 		plan.ph = "recover"
-		plan.t = _pm(FAMILY[plan.fam][2])
+		plan.t = _plan_rec(FAMILY[plan.fam])
 
 func plan_fields() -> Array:
 	if plan.is_empty():
@@ -443,3 +450,83 @@ func _target_marker(ci: CanvasItem, key: String) -> void:
 
 func _diamond(ci: CanvasItem, px: float, py: float, r: float, col: Color) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([Vector2(px, py - r), Vector2(px + r, py), Vector2(px, py + r), Vector2(px - r, py)]), col)
+
+# ================================================================ arena hazards (docs/PLAN-metroidvania-phase4b3.md MVB3-02)
+# A boss's environment, beside its one attack plan: strands, deny walls, comments on the floor. A hazard is {k, t0, warn, v}: its kind, the
+# room time it was made, its warning (>= 0.6 s: it is drawn from t0 and hurts only after t0 + warn) and numbers. Its harm boxes are a pure
+# function of those fields and the room time (hz_boxes), so the guest, who gets the fields in net_fields and the time in the snapshot (`rt`),
+# builds the same boxes. Damage is contact damage: each page checks its own body. On the guest a hazard hurts only after it has been on
+# screen HZ_SEEN_MIN seconds; the watchdog rule arena-tell reads arena_violation if one ever did without that.
+const HZ_WARN_MIN := 0.6
+const HZ_SEEN_MIN := 0.5          # the guest is hurt only by a hazard it has been looking at for this long
+const HZ_TELL_MIN := 0.45         # ... and the watchdog complains below this
+var hz: Array = []
+var hz_seen := {}                 # guest: hazard key -> seconds it has been in the list
+var arena_violation := ""         # guest: set when a hazard hurt without having been shown (the watchdog rule arena-tell)
+var hz_gate := HZ_SEEN_MIN        # (a test lowers it to prove the rule)
+
+func hz_kinds() -> Array:
+	return []
+
+func hz_add(kind: String, warn: float, v: Array = []) -> Dictionary:
+	var h := {"k": kind, "t0": snappedf(room.time, 0.01), "warn": snappedf(maxf(warn, HZ_WARN_MIN), 0.01), "v": v}
+	hz.append(h)
+	return h
+
+func hz_live(h: Dictionary, now: float) -> bool:
+	return now - float(h.t0) >= float(h.warn)
+
+# the harm boxes of one hazard at room time `now` (only called once it is live); override. Each box may carry its own "dmg".
+func hz_boxes(_h: Dictionary, _now: float) -> Array:
+	return []
+
+# every live hazard's boxes: a pure function of the hazard fields and `now`
+func hz_all_boxes(now: float) -> Array:
+	var out: Array = []
+	for h in hz:
+		if hz_live(h, now):
+			out.append_array(hz_boxes(h, now))
+	return out
+
+func hz_key(h: Dictionary) -> String:
+	return "%s:%d" % [h.k, roundi(float(h.t0) * 100.0)]
+
+# what the room's contact check uses: on the guest only the hazards it has been looking at
+func hz_harm() -> Array:
+	if not puppet:
+		return hz_all_boxes(room.time)
+	var out: Array = []
+	for h in hz:
+		if not hz_live(h, room.time):
+			continue
+		var seen := float(hz_seen.get(hz_key(h), 0.0))
+		if seen >= hz_gate:
+			var bx := hz_boxes(h, room.time)
+			if not bx.is_empty() and seen < HZ_TELL_MIN and arena_violation == "":
+				arena_violation = "%s %s after %.2f" % [boss_name, h.k, seen]
+			out.append_array(bx)
+	return out
+
+func hz_puppet_tick(dt: float) -> void:
+	var keep := {}
+	for h in hz:
+		var k := hz_key(h)
+		keep[k] = float(hz_seen.get(k, 0.0)) + dt
+	hz_seen = keep
+
+func hz_pack() -> Array:
+	var kinds := hz_kinds()
+	var out: Array = []
+	for h in hz:
+		var a: Array = [maxi(0, kinds.find(h.k)), roundi(float(h.t0) * 100.0), roundi(float(h.warn) * 100.0)]
+		a.append_array(h.v)
+		out.append(a)
+	return out
+
+func hz_unpack(list: Array) -> void:
+	var kinds := hz_kinds()
+	var fresh: Array = []
+	for a in list:
+		var h := {"k": kinds[clampi(int(a[0]), 0, maxi(0, kinds.size() - 1))] if not kinds.is_empty() else "", "t0": float(a[1]) / 100.0, "warn": float(a[2]) / 100.0, "v": a.slice(3)}
+		fresh.append(h)
+	hz = fresh

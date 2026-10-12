@@ -114,6 +114,12 @@ func _guest(b: Dictionary) -> void:
 		if e.puppet and kv != null and kv != "":
 			b["boss-cue"] = [0.0, kv]
 			break
+	# ... and by no arena hazard it had not been looking at for 0.5 s (MVB3-02)
+	for e in mgr.room.ents:
+		var av = e.get("arena_violation")
+		if e.puppet and av != null and av != "":
+			b["arena-tell"] = [0.0, av + " s"]
+			break
 	# the FIREWALL's scan leaves exactly the lane its fields name open (MVB2-13): the boxes the guest builds are the host's
 	for e in mgr.room.ents:
 		if e.puppet and e is FirewallBoss and e.plan_active() and String(e.plan.id) == "scan":

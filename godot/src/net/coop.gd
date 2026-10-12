@@ -1047,7 +1047,7 @@ func _send_snapshot() -> void:
 	var pj: Array = []
 	for q in r.projs:
 		if not q.dead:
-			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg, 1 if q.get("friendly", false) else 0, 1 if q.get("catchable", false) else 0, roundi(float(q.get("hgt", 0.0))), roundi(float(q.g)), 1 if q.cut else 0])
+			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg, 1 if q.get("friendly", false) else 0, 1 if q.get("catchable", false) else 0, roundi(float(q.get("hgt", 0.0))), roundi(float(q.g)), 1 if q.cut else 0, roundi(float(q.get("slow", 0.0)) * 100.0)])
 	var gf: Array = []                  # the room's switch / key / gate flags: state, applied by the guest on every snapshot
 	for fk in Game.flags:
 		var fks := String(fk)
@@ -1066,12 +1066,16 @@ func _send_snapshot() -> void:
 		if not is_instance_valid(a.owner_p):
 			continue                        # (its owner was just freed; the room drops the agent on its next step)
 		ag.append([2 if a.owner_p.get("is_remote") == true else 1, NetClasses.x4(a.x), NetClasses.x4(a.y)])
+	var tg: Array = []                  # SPYWARE's tags (state): [1 | 2, tenths of a second left]
+	for tk in ["p1", "p2"]:
+		if float(r.tags[tk]) > 0.0:
+			tg.append([1 if tk == "p1" else 2, roundi(float(r.tags[tk]) * 10.0)])
 	var hz: Array = []
 	for z in r.zones:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn, 1 if _map_open() else 0, hp_.zip, 1 if hp_.ssh_t > 0.0 else 0]
-	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
+	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "tg": tg, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
 	# world flags are state: every snapshot carries the digest, the full list goes out only while the guest's digest differs (a lost one corrects itself)
@@ -1266,6 +1270,9 @@ func _apply_snapshot(m: Dictionary) -> void:
 		r.time = float(m.rt)
 	else:
 		r.time = lerpf(r.time, float(m.rt), 0.15)
+	r.tags = {"p1": 0.0, "p2": 0.0}
+	for tgr in m.get("tg", []):
+		r.tags["p1" if int(tgr[0]) == 1 else "p2"] = float(tgr[1]) / 10.0
 	# creatures
 	var seen := {}
 	for rec in m.en:
@@ -1320,7 +1327,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 		var pid := int(rec[0])
 		var q: Dictionary = old_pj.get(pid, {})
 		if q.is_empty():
-			q = {"id": pid, "kind": rec[1], "r": float(rec[6]), "col": rec[7], "life": 4.0, "dmg": int(rec[8]), "tile": false, "cut": int(rec[13]) == 1, "t": 0.0, "dead": false, "friendly": false, "catchable": false, "hgt": float(rec[11]), "g": float(rec[12])}
+			q = {"id": pid, "kind": rec[1], "r": float(rec[6]), "col": rec[7], "life": 4.0, "dmg": int(rec[8]), "tile": false, "cut": int(rec[13]) == 1, "t": 0.0, "dead": false, "friendly": false, "catchable": false, "hgt": float(rec[11]), "g": float(rec[12]), "slow": float(rec[14]) / 100.0 if rec.size() > 14 else 0.0}
 		var host_friendly: bool = int(rec[9]) == 1
 		q.catchable = int(rec[10]) == 1
 		if host_friendly:

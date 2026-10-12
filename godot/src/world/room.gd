@@ -91,6 +91,7 @@ signal net_freejar(jar_index: int)
 signal net_crumble(tx: int, ty: int)
 signal net_catch(pid: int)
 signal net_parry(nid: int, sid: int)
+var tags := {"p1": 0.0, "p2": 0.0}         # SPYWARE's tag (MVB3-02): seconds left per player key (p1 = the host's player, p2 = the guest's), host; the guest follows the snapshot
 var boss_spawn = null
 var boss = null                            # the boss of this room (R05: NULL) while it is not beaten
 var fight := {"state": "none", "t": 0.0}   # none | intro | active | reward | done
@@ -951,6 +952,48 @@ func _touches_dead(p) -> bool:
 func snapshot() -> Dictionary:
 	return {"cp": cp_index, "tokens": tokens, "got": got.duplicate(), "sparks": sparks.duplicate(), "clock": clock, "kills": kills, "hits": hits}
 
+# the key ("p1" host's player, "p2" guest's) of a body on this page
+func key_of(q) -> String:
+	var remote: bool = q.get("is_remote") == true
+	return ("p1" if remote else "p2") if mode == "guest" else ("p2" if remote else "p1")
+
+func tag_player(q, secs: float) -> void:
+	tags[key_of(q)] = maxf(float(tags[key_of(q)]), secs)
+
+func is_tagged(q) -> bool:
+	return float(tags.get(key_of(q), 0.0)) > 0.0
+
+# the living tagged players (every creature of the room chases one of them while the tag lasts)
+func tagged_players() -> Array:
+	var out: Array = []
+	for q in players():
+		if is_tagged(q):
+			out.append(q)
+	return out
+
+func _step_tags(dt: float) -> void:
+	for k in tags:
+		if tags[k] > 0.0:
+			tags[k] = maxf(0.0, tags[k] - dt)
+
+# is a GET ring tapped by a SNIFFER (MVB3-03)? Host and guest read it from the creature (the guest's is a puppet with the host's fields)
+func ring_tapped(i: int) -> bool:
+	for e in ents:
+		if not e.dead and e.has_method("tapped_ring") and e.tapped_ring() == i:
+			return true
+	return false
+
+# DDOS bits close round a body make it "jam" (MVB3-02): slow and no dash. Computed on each page for its own body from the bits it sees.
+func jam_for(q) -> bool:
+	var n := 0
+	var c := Vector2(q.x + q.w / 2.0, q.y + q.h / 2.0)
+	for e in ents:
+		if e is DdosBit and not e.dead and Vector2(e.cx, e.cy).distance_to(c) <= 28.0:
+			n += 1
+			if n >= 3:
+				return true
+	return false
+
 # everyone who counts for the room's mechanics: the living players
 func players() -> Array:
 	var out: Array = []
@@ -1061,8 +1104,10 @@ func step_guest(dt: float) -> void:
 	_step_sighting(dt)
 	_step_variants()
 	_move_platforms()
+	_step_tags(dt)
 	var p = player
 	if p != null:
+		p.jam = jam_for(p) if not p.dead else false
 		p.update(dt)
 		_check_door()
 		if not p.dead and _touches_dead(p):
@@ -1296,7 +1341,9 @@ func step(dt: float) -> void:
 		break_q = break_q.filter(func(q): return not q.get("done", false))
 	_move_platforms()
 
+	_step_tags(dt)
 	if p != null:
+		p.jam = jam_for(p) if not p.dead else false
 		ctx = "p1"
 		p.update(dt)
 		ctx = "all"
@@ -1726,7 +1773,7 @@ func interact_combat(p) -> void:
 				if res3 != "":
 					stop(0.05)
 			elif p.grace <= 0.0 and not (lenient and e.get_meta("ex", false)):
-				if p.hurt(e.dmg, b.x + b.w / 2.0) and e.has_method("on_contact"):
+				if p.hurt(int(b.get("dmg", e.dmg)) if b is Dictionary else e.dmg, b.x + b.w / 2.0) and e.has_method("on_contact"):
 					e.on_contact()
 			break
 	# spikes, liquid, pits
@@ -2033,6 +2080,33 @@ func _draw_curl(ci: CanvasItem) -> void:
 				ci.draw_rect(Rect2(bx + c[0], by + c[1], 1, 4) if c[2] > 0 else Rect2(bx + c[0], by + c[1], 1, 4), bc)
 				ci.draw_rect(Rect2(bx + c[0] + (0 if c[2] > 0 else -3), by + c[1] + (0 if c[3] > 0 else 3), 4, 1), bc)
 
+# body effects of the NETWORK enemies (MVB3-02): the tag's red crosshair on both pages, JAM and a slowed body on the local one
+func _draw_status(ci: CanvasItem) -> void:
+	var red := Color("#ff5a5a")
+	for q in tagged_players():
+		var tx: float = floorf(q.x + q.w / 2.0 + 0.5)
+		var ty: float = floorf(q.y + q.h / 2.0 + 0.5)
+		var rr: float = 11.0 + sin(time * 12.0) * 1.5
+		ci.draw_arc(Vector2(tx, ty), rr, 0.0, TAU, 20, red, 1.0)
+		ci.draw_line(Vector2(tx - rr - 3.0, ty), Vector2(tx - rr + 4.0, ty), red, 1.0)
+		ci.draw_line(Vector2(tx + rr - 4.0, ty), Vector2(tx + rr + 3.0, ty), red, 1.0)
+		ci.draw_line(Vector2(tx, ty - rr - 3.0), Vector2(tx, ty - rr + 4.0), red, 1.0)
+		ci.draw_line(Vector2(tx, ty + rr - 4.0), Vector2(tx, ty + rr + 3.0), red, 1.0)
+	var p = player
+	if p == null or p.dead:
+		return
+	if p.jam:
+		var jx: float = floorf(p.x + p.w / 2.0 + 0.5)
+		var jy: float = floorf(p.y + p.h / 2.0 + 0.5)
+		for k in range(14):                                       # static noise on a ring
+			var a: float = Game.hash3(float(k), floorf(time * 24.0), 7) * TAU
+			ci.draw_rect(Rect2(jx + cos(a) * 13.0, jy + sin(a) * 13.0, 2, 1), red if k % 2 == 0 else Color("#ffd0d0"))
+		PixelText.draw_text(ci, "JAM", jx, p.y - 14.0, "#ff5a5a", {"align": "c", "tiny": true, "outline": Game.COL.ink})
+	if p.slow_t > 0.0:
+		var sx_: float = floorf(p.x + p.w / 2.0 + 0.5)
+		for k in range(3):
+			ci.draw_line(Vector2(sx_ - 6.0 + k * 6.0, p.y + p.h), Vector2(sx_ - 6.0 + k * 6.0, p.y + p.h + 3.0 + sin(time * 10.0 + k)), Color("#c3bccd"), 1.0)
+
 # ---- levers (MVB2-05): a swipe or a dash on the box sets the lever's world flag; a guest asks the host
 func lever_flag(i: int) -> String:
 	var l: Array = def.get("levers", [])
@@ -2184,6 +2258,9 @@ func update_projs(dt: float) -> void:
 		if q.kind == "drip" and mode != "guest" and liquid_y != null and q.y > liquid_y + 3:
 			q.dead = true
 			continue
+		if q.tile and mode != "guest" and int(q.get("bounce", 0)) > 0 and grid.solid_at(q.x, q.y):
+			_bounce_proj(q, dt)
+			continue
 		if q.tile and mode != "guest" and grid.solid_at(q.x, q.y):
 			q.dead = true
 			if q.kind == "drip":                    # a drip splashes (js: onLand); a memory leak, so always in world 3's colours
@@ -2206,6 +2283,8 @@ func update_projs(dt: float) -> void:
 				if pl.dash_t > 0.0 and Game.dv("dash_iframes"):
 					continue
 				if pl.hurt(q.dmg, q.x) and not q.get("pierce", false):
+					if float(q.get("slow", 0.0)) > 0.0:
+						pl.slow_t = float(q.slow)
 					q.dead = true
 					if mode == "guest":
 						net_projhit.emit(q.id)
@@ -2213,6 +2292,23 @@ func update_projs(dt: float) -> void:
 					break
 	if projs.size() > 30:
 		projs = projs.filter(func(q): return not q.dead)
+
+# a shot with `bounce` left reflects instead of dying (MVB3-02): vx when the cell it came from is open in y (it hit a wall), vy when open in x
+# (a floor or a ceiling), both in a corner; it is put back where it was
+func _bounce_proj(q: Dictionary, dt: float) -> void:
+	var px: float = q.x - q.vx * dt
+	var py: float = q.y - q.vy * dt
+	var side_solid: bool = grid.solid_at(q.x, py)           # moving in x alone runs into a wall
+	var vert_solid: bool = grid.solid_at(px, q.y)           # moving in y alone runs into a floor / ceiling
+	if side_solid or not vert_solid:
+		q.vx = -q.vx
+	if vert_solid or not side_solid:
+		q.vy = -q.vy
+	q.x = px
+	q.y = py
+	q.bounce = int(q.bounce) - 1
+	Audio.sfx("tick", {"vol": 0.5})
+	spark(q.x, q.y, q.col, 2)
 
 # a caught projectile: hurts every creature it touches once, presses switches
 func _friendly_proj_hits(q: Dictionary) -> void:
@@ -2577,6 +2673,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 						ci.draw_rect(Rect2(ix + 8, iy - 9, 1, 18), Color(0.75, 0.91, 1.0, 0.8))
 	elif kind == "top":
 		_draw_curl(ci)
+		_draw_status(ci)
 		for a in agents:
 			a.draw(ci)
 		for av in agent_view:

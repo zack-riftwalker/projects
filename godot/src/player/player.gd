@@ -95,6 +95,9 @@ var focus_t := -1.0              # < 0: not focusing
 var focus_ring := 0.0
 var downed := false              # co-op: lying there, the partner can bring Clawd back
 var down_t := -1.0
+var slow_t := 0.0                # SCRAPER's thread (MVB3-02): RUN and air acceleration halved while > 0
+var jam := false                 # DDOS bits round the body (set by the room each frame): RUN x 0.6, no dash start
+var zip_t := 0.0                 # how long the current zip has run (a tapped ring cuts it at 0.25 s)
 var zip := -1                    # curl (MVB2-03): the anchor Clawd is zipping to (-1: not zipping)
 var zip_dx := 0.0                # the horizontal direction of the zip (for the exit speed)
 var zip_blocked := 0
@@ -166,6 +169,7 @@ func update(dt: float) -> void:
 			room.ring(x + 5, y + 5, 2, 18, Game.COL.clawdHi, 0.3)
 		return
 	if inv > 0.0: inv -= dt
+	if slow_t > 0.0: slow_t -= dt
 	if rate_cd > 0.0: rate_cd -= dt
 	if hurt_t > 0.0: hurt_t -= dt
 	if atk_cd > 0.0: atk_cd -= dt
@@ -244,6 +248,7 @@ func update(dt: float) -> void:
 		if ai >= 0:
 			var anc: Dictionary = room.anchors()[ai]
 			zip = ai
+			zip_t = 0.0
 			zip_dx = float(anc.x) - (x + w / 2.0)
 			zip_blocked = 0
 			dash_t = 0.0
@@ -289,7 +294,7 @@ func update(dt: float) -> void:
 		dash_buf = 0.1
 	elif dash_buf > 0.0:
 		dash_buf -= dt
-	if dash_buf > 0.0 and tools.bash and can_dash and dash_cd <= 0.0 and hurt_t <= 0.0:
+	if dash_buf > 0.0 and tools.bash and can_dash and dash_cd <= 0.0 and hurt_t <= 0.0 and not jam:
 		var ddx := mx
 		var ddy := my
 		if on_ground and ddy > 0.0:
@@ -357,11 +362,12 @@ func update(dt: float) -> void:
 			vx = dash_dx * RUN * 1.1
 			vy = dash_dy * 130.0 if dash_dy < 0.0 else dash_dy * RUN
 	else:
-		var target := mx * RUN
-		var acc := (ACC if mx != 0.0 else DEC) if on_ground else (AIR_ACC if mx != 0.0 else AIR_DEC)
+		var run_k := (0.5 if slow_t > 0.0 else 1.0) * (0.6 if jam else 1.0)
+		var target := mx * RUN * run_k
+		var acc := (ACC if mx != 0.0 else DEC) if on_ground else (AIR_ACC * (0.5 if slow_t > 0.0 else 1.0) if mx != 0.0 else AIR_DEC)
 		if lock > 0.0 and not on_ground:
 			acc *= 0.2
-		if absf(vx) > RUN and Game.sign_of(vx) == mx:
+		if absf(vx) > RUN * run_k and Game.sign_of(vx) == mx:
 			acc = 260.0
 		vx = Game.approach(vx, target, acc * dt)
 		var gr := G_UP if vy < 0.0 else G_DOWN
@@ -597,6 +603,15 @@ func _zip_step(dt: float, pressed: Dictionary) -> bool:
 		return false
 	if pressed.get("dash", false) and tools.bash:        # [dash] ends the zip and starts the dash
 		zip = -1
+		return false
+	zip_t += dt
+	if zip_t >= 0.25 and room.ring_tapped(zip):          # a SNIFFER taps this ring: the zip is cut half way and Clawd falls (MVB3-03)
+		zip = -1
+		vx = 0.0
+		vy = 0.0
+		room.pop(x + 5.0, y - 12.0, "RST", "#ff5a5a", true)
+		room.ring(x + 5.0, y + 5.0, 2, 14, "#ff5a5a", 0.25)
+		Audio.sfx("thud")
 		return false
 	var a: Dictionary = list[zip]
 	var d := Vector2(float(a.x) - (x + w / 2.0), float(a.y) - (y + h / 2.0))

@@ -122,7 +122,10 @@ func tick(dt: float) -> void:
 func to_player() -> Dictionary:
 	var p = room.player
 	var best := 1e18
-	for q in room.players():
+	var cand: Array = room.tagged_players()          # SPYWARE's tag: while somebody is tagged, everyone hunts the tagged
+	if cand.is_empty():
+		cand = room.players()
+	for q in cand:
 		var qd: float = Vector2(q.x + 5 - cx, q.y + 5 - cy).length_squared()
 		if qd < best:
 			best = qd
