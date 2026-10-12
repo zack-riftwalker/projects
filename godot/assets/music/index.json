@@ -43,5 +43,15 @@
   "len": 41.739,
   "loop_start": 0,
   "once": false
+ },
+ "w6": {
+  "len": 62.609,
+  "loop_start": 6.957,
+  "once": false
+ },
+ "w6_hi": {
+  "len": 62.609,
+  "loop_start": 6.957,
+  "once": false
  }
 }

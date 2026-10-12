@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b"]
+const NAMES := ["rooms4b", "w6assets"]
 
 func _init(m) -> void:
 	main = m
@@ -16,6 +16,7 @@ func report(name: String, ok: bool, info: String) -> bool:
 func run(name: String):
 	match name:
 		"rooms4b": return await t_rooms4b()
+		"w6assets": return await t_w6assets()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -94,3 +95,37 @@ func t_rooms4b() -> bool:
 	d07.queue_free()
 	Game.fresh()
 	return report("rooms4b", res.ok, res.info)
+
+# MVB2-02: world 6 has its own tiles, theme, song, backdrop and the `ci` landmark
+func t_w6assets() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	for f in ["res://assets/tiles/w6_tiles.png", "res://assets/music/w6.ogg", "res://assets/theme/w6.json", "res://assets/sprites/platform_w6.png"]:
+		if not ResourceLoader.exists(f):
+			fail(res, "missing " + f)
+	if Game.vis_world(6) != 6 or String(Game.theme(6).accent) != "#5ad1ff":
+		fail(res, "theme 6: " + str(Game.theme(6).get("accent")))
+	var n03 := new_room("N03")
+	await frames(2)
+	var nb = n03.view.get_node_or_null("NetBackdrop")
+	if nb == null or nb.draws < 1:
+		fail(res, "the backdrop did not draw")
+	n03.queue_free()
+	var n05 := new_room("N05")
+	for f in range(20):
+		Controls.script_input = {}
+		Controls.poll()
+		n05.step(Game.STEP)
+	await frames(3)
+	var lm = n05.view.get_node_or_null("Landmarks")
+	var nb5 = n05.view.get_node_or_null("NetBackdrop")
+	if lm == null or lm.draws < 1 or not lm.kinds.has("ci"):
+		fail(res, "N05 landmark ci")
+	if nb5 == null or nb5.draws < 1:
+		fail(res, "N05 backdrop")
+	n05.queue_free()
+	Game.fresh()
+	return report("w6assets", res.ok, res.info)

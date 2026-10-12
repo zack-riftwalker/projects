@@ -1,0 +1,28 @@
+{
+ "name": "THE NETWORK",
+ "path": "/net",
+ "time": "04:47",
+ "music": "w6",
+ "ambient": "#8aa0e0",
+ "base": "#141a3a",
+ "dark": "#0b0f24",
+ "lite": "#24306a",
+ "cap": "#5ad1ff",
+ "capHi": "#d6f6ff",
+ "capLo": "#2a6fa8",
+ "code": [
+  "#1c2550",
+  "#26326a",
+  "#3a2a6a",
+  "#1c2550"
+ ],
+ "plat": "#c04a9a",
+ "platHi": "#ff9ad8",
+ "platLo": "#5a1f4a",
+ "accent": "#5ad1ff",
+ "fx": "#ff6ad5",
+ "glow": "#9ae8ff",
+ "liq": "#ff6ad5",
+ "liqHi": "#ffe0f6",
+ "liqLo": "#7a1f5a"
+}

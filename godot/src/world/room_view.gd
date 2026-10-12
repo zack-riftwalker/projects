@@ -35,11 +35,17 @@ func build(rm: Room) -> void:
 	bg.name = "Background"
 	bg.scroll_scale = Vector2(0.25, 0.1)
 	bg.repeat_size = Vector2(384, 0)
-	var spr := Sprite2D.new()
-	spr.texture = load("res://assets/bg/w%d.png" % Game.vis_world(world))
-	spr.centered = false
-	bg.add_child(spr)
-	add_child(bg)
+	if world == 6:                                      # THE NETWORK draws its own sky (no art file)
+		var nb := NetBackdrop.new()
+		nb.name = "NetBackdrop"
+		nb.room = room
+		add_child(nb)
+	else:
+		var spr := Sprite2D.new()
+		spr.texture = load("res://assets/bg/w%d.png" % Game.vis_world(world))
+		spr.centered = false
+		bg.add_child(spr)
+		add_child(bg)
 	if not room.def.get("landmarks", []).is_empty():           # far shapes between the sky and the tiles (MVB1-14)
 		var lm := Landmarks.new()
 		lm.name = "Landmarks"

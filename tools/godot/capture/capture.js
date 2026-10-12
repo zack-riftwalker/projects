@@ -9,7 +9,7 @@ const WHAT = process.argv.slice(2).length ? process.argv.slice(2) : ['all'];
 const want = (k) => WHAT.includes('all') || WHAT.includes(k);
 const WORLDS = (process.env.WORLDS || '1,2').split(',').map(Number);     // tiles, bg and theme are captured for these worlds
 const SFX = 'jump djump walljump land swipe swipeBig hit clang squish kill hurt die token spark heal dash spring crumble brk checkpoint shoot bossHit explode bigExplode uiMove uiOk uiBack text textLow textSys key gate agent agentHit warn charge laser drip splash thud roar glitch tick tock pause flap logo stamp'.split(' ');
-const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'w3', 'w3_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
+const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'w3', 'w3_hi', 'w6', 'w6_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
 const LONG = new Set(['explode', 'bigExplode', 'roar', 'logo', 'die', 'gate', 'spark']);
 const mk = (...p) => { const d = path.join(...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(b64, 'base64')); return f; };
@@ -26,6 +26,8 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
   });
   await page.goto('file://' + path.join(ROOT, 'public/index.html') + '?mute&manual');
   await page.waitForFunction(() => window.G && G.scene);
+  // INJECT=w6: THE NETWORK's theme and song exist only in Godot; they are put into the page before anything is captured (inject-w6.js)
+  if (process.env.INJECT === 'w6') await page.evaluate('(' + require('./inject-w6.js').toString() + ')()');
   const png = (expr, arg) => page.evaluate(expr, arg);
 
   // 16-bit WAV (base64) of window.__lastBuf. mono: average the channels; trim: cut the silent tail (keeps 50 ms)
@@ -121,6 +123,7 @@ const put = (rel, srcAbs) => { const f = path.join(ASSETS, rel); fs.mkdirSync(pa
   if (want('music')) {
     const names = await page.evaluate(() => Object.keys(G.SONGS)), index = {};
     for (const name of names) {
+      if (process.env.ONLY && !process.env.ONLY.split(',').includes(name)) continue;      // ONLY=w6: just these songs
       for (const hi of [false, true]) {
         const info = await page.evaluate(async ([name, hi]) => {
           G.audio.intensity = 0; await G.audio.renderOffline(name, 1);

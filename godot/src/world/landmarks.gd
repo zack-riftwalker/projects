@@ -31,6 +31,7 @@ func _draw() -> void:
 			"tower": _tower()
 			"lantern": _lantern()
 			"horizon": _horizon()
+			"ci": _ci()
 
 # three thin brass columns and a clock face, far top right
 func _tower() -> void:
@@ -64,6 +65,18 @@ func _lantern() -> void:
 	draw_rect(Rect2(p.x - 3, p.y - 9, 6, 9), Color(0.7, 0.9, 0.85, 0.28))
 	draw_rect(Rect2(p.x - 1, p.y - 7, 2, 5), Color(0.9, 1.0, 0.95, 0.4))
 	draw_rect(Rect2(p.x - 1, p.y, 2, 40), Color(0.3, 0.34, 0.36, 0.35))
+
+# a thin diagonal line of light across the upper sky with three brighter dots running along it (the network seen from far away), parallax 0.05
+func _ci() -> void:
+	var cx: float = room.cam.x if room != null else 0.0
+	var off := fposmod(cx * PARALLAX, PERIOD) - fposmod(cx * 0.05, PERIOD)       # (this node moves at 0.15: undo the difference)
+	var a := Vector2(W * 0.2 + off, 30.0)
+	var b := Vector2(W * 0.8 + off, 12.0)
+	draw_line(a, b, Color(0.6, 0.91, 1.0, 0.5), 1.0)
+	for i in range(3):
+		var u := fposmod(t / 2.5 + float(i) / 3.0, 1.0)
+		var p := a.lerp(b, u)
+		draw_rect(Rect2(p.x - 1, p.y - 1, 2, 2), Color(0.85, 0.97, 1.0, 0.75))
 
 # PRODUCTION on fire at the horizon: a low red glow with specks that rise
 func _horizon() -> void:
