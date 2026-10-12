@@ -72,17 +72,17 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MVB0-01 | world flags travel in snapshots (fixes host-crossed `sets` doors never opening for the guest) | Sonnet | todo |
-| MVB0-02 | lab rooms Z01–Z06, `lab` rooms kept off the map, `?lab`; world checker in `test-all.sh` | Sonnet | todo |
-| MVB0-03 | lock `until:<k>of:<flags>`; one-way lids over floor holes | Sonnet | todo |
-| MVB0-04 | signs whose text depends on flags | Sonnet | todo |
-| MVB0-05 | tiles that change with a flag, never under or inside a body | Sonnet | todo |
-| MVB0-06 | symlink doors (two doors whose rooms do not touch) | Sonnet | todo |
-| MVB0-07 | packets (looping platforms, letter `J`) and ports (letter `3`) | Sonnet | todo |
-| MVB0-08 | boss kit 1: the attack plan, families and timings, tells, plan gating on the guest's acks | Sonnet | todo |
-| MVB0-09 | boss kit 2: target rules, the behaviour reader (rule 8), the guest's focus report | Sonnet | todo |
-| MVB0-10 | the sparring dummy `KitDummy` in Z06; `bosskit` test, `co-bosskit` scenario, watchdog rule `boss-cue` | Sonnet | todo |
-| MVB0-11 | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MVB0-01 | world flags travel in snapshots (fixes host-crossed `sets` doors never opening for the guest) | Sonnet | done |
+| MVB0-02 | lab rooms Z01–Z06, `lab` rooms kept off the map, `?lab`; world checker in `test-all.sh` | Sonnet | done |
+| MVB0-03 | lock `until:<k>of:<flags>`; one-way lids over floor holes | Sonnet | done |
+| MVB0-04 | signs whose text depends on flags | Sonnet | done |
+| MVB0-05 | tiles that change with a flag, never under or inside a body | Sonnet | done |
+| MVB0-06 | symlink doors (two doors whose rooms do not touch) | Sonnet | done |
+| MVB0-07 | packets (looping platforms, letter `J`) and ports (letter `3`) | Sonnet | done |
+| MVB0-08 | boss kit 1: the attack plan, families and timings, tells, plan gating on the guest's acks | Sonnet | done |
+| MVB0-09 | boss kit 2: target rules, the behaviour reader (rule 8), the guest's focus report | Sonnet | done |
+| MVB0-10 | the sparring dummy `KitDummy` in Z06; `bosskit` test, `co-bosskit` scenario, watchdog rule `boss-cue` | Sonnet | done |
+| MVB0-11 | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ## 2. Facts already verified (do not rediscover)
 
