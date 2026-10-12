@@ -59,20 +59,34 @@ func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
 # world state: flags that every player's world needs (a hatch the host opened must open for the guest too); they travel in snapshots
-const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:"]
+const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:", "map:", "mapped:", "changelog:", "log:", "agent:", "page:"]
+const _WORLD_HEADS := ["boss", "hatch", "link", "thread", "lever", "lab", "map", "mapped", "changelog", "log", "agent", "page"]
+
+func is_world_flag(ks: String) -> bool:
+	var c := ks.find(":")
+	return c > 0 and _WORLD_HEADS.has(ks.substr(0, c))
 
 func world_flags() -> Array:
 	var out: Array = []
 	for k in flags:
-		if not flags[k]:
-			continue
-		var ks := String(k)
-		for p in WORLD_PREFIXES:
-			if ks.begins_with(p):
-				out.append(ks)
-				break
+		if flags[k] and is_world_flag(String(k)):
+			out.append(String(k))
 	out.sort()
 	return out
+
+# A short number for "which world flags are set" (MVB1-01): the sum of one hash per flag, so it does not depend on the order flags were set in.
+# The host sends the full list only to a guest whose number differs. `extra` is state that travels beside the flags (the pins, MVB1-08).
+func world_digest() -> int:
+	var acc := 0
+	for k in flags:
+		if flags[k]:
+			var ks := String(k)
+			if is_world_flag(ks):
+				acc = (acc + (ks.hash() * 2654435761 & 0xFFFFFFFF)) & 0xFFFFFFFF
+	return (acc + pins_digest()) & 0xFFFFFFFF
+
+func pins_digest() -> int:
+	return 0
 
 # THE HEAP's water level: 2 = flooded, 1 = after the valve (free.c), 0 = after THE LEAK. The guest reads the host's (snapshot `fl`).
 var flood_net := -1          # guest: the host's flood level from the last snapshot (-1 = none yet)

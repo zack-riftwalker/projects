@@ -84,6 +84,9 @@ func _host(b: Dictionary) -> void:
 	for f in coop.sets_pending:
 		if not Game.flag(f) and Net.now() - float(coop.sets_pending[f]) > 2.0:
 			b["door-sets"] = [0.0, "the guest crossed a door that sets %s, still not set" % f]
+	# the guest's world flags equal the host's (MVB1-01): a guest-only world flag the host never learns, or a list that never arrives
+	if rem != null and coop.guest_ready and coop.guest_wh >= 0 and not rem.lagging and Net.is_open and coop.guest_wh != Game.world_digest():
+		b["world-digest"] = [5.0, "the guest's world digest %d differs from the host's %d" % [coop.guest_wh, Game.world_digest()]]
 	# a room is kept only while somebody is in it (a stale room comes back later with frozen creatures: G6)
 	for r in mgr.rooms.values():
 		if r != mgr.room and r.remote_players.is_empty():

@@ -1714,3 +1714,28 @@ func sc_co_bosskit() -> Array:
 			short += 1
 	await wait_secs(1.0)
 	return [seen.size() >= 6 and short == 0 and mine >= 2 and pup.kit_violation == "", "guest: saw %d plans, %d turned active (%d shown < 0.30 s), targeted %d times, violation '%s'" % [seen.size(), turned, short, mine, pup.kit_violation]]
+
+# MVB1-01: the guest asks for the world flags by digest. 200 flags set in one step reach it within 3 s; afterwards the host sends no list at all.
+func sc_co_worldsync() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(2.0)
+		for i in range(200):
+			Game.flags["log:Z01:%d" % i] = true
+		var t0 := Time.get_ticks_msec()
+		var synced := await wait_until(func(): return coop().guest_wh == Game.world_digest(), 4.0)
+		var took := (Time.get_ticks_msec() - t0) / 1000.0
+		await wait_secs(1.0)
+		var n0: int = coop().wf_count
+		var b0: int = coop().wf_bytes
+		await wait_secs(10.0)
+		var n1: int = coop().wf_count
+		return [synced and n1 == n0, "host: guest in sync after %.1f s, wf lists sent while nothing changed: %d (total %d lists, %d bytes)" % [took, n1 - n0, n1, b0]]
+	var all := await wait_until(func():
+		for i in range(200):
+			if not Game.flag("log:Z01:%d" % i):
+				return false
+		return true, 9.0)
+	await wait_secs(12.0)
+	return [all, "guest: has all 200 flags %s" % all]

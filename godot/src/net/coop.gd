@@ -27,7 +27,10 @@ var guest_ready := false
 var guest_bench := ""
 var snap_n := 0
 var plan_snaps: Array = []             # host: [nid, plan seq, snapshot number] of the first snapshot that carried each boss-kit plan
-var last_wf_sent: Array = []            # host: the world flags the last `wf` carried
+var guest_wh := -1                      # host: the world digest the guest last reported (MVB1-01)
+var wf_t := -10.0                       # host: when the last full `wf` went out (at most one per second)
+var wf_count := 0                       # host: how many full `wf` lists were sent (the tests count them)
+var wf_bytes := 0
 var snap_sent := {}
 var force_full := false
 var both_t := -1.0
@@ -313,7 +316,8 @@ func _guest_joined() -> void:
 	guest_ready = false
 	Net.epoch += 1
 	snap_n = 0
-	last_wf_sent = []
+	guest_wh = -1
+	wf_t = -10.0
 	plan_snaps.clear()
 	snap_sent.clear()
 	fight_seen.clear()
@@ -378,6 +382,8 @@ func _host_msg(t: String, m: Dictionary) -> void:
 		return
 	if t != "st" or remote == null or int(m.get("e", -1)) != Net.epoch:
 		return
+	if m.has("wh"):
+		guest_wh = int(m.wh)
 	var r := _remote_room()
 	if r == null or String(m.get("room", "")) != r.id:
 		return
@@ -979,10 +985,15 @@ func _send_snapshot() -> void:
 	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
-	var wf: Array = Game.world_flags()  # world flags: sent when they changed, and every 10th snapshot anyway (state: a lost one corrects itself)
-	if wf != last_wf_sent or snap_n % 10 == 0:
+	# world flags are state: every snapshot carries the digest, the full list goes out only while the guest's digest differs (a lost one corrects itself)
+	var wh := Game.world_digest()
+	s["wh"] = wh
+	if wh != guest_wh and hms() - wf_t >= 1.0:
+		var wf: Array = Game.world_flags()
 		s["wf"] = wf
-		last_wf_sent = wf
+		wf_t = hms()
+		wf_count += 1
+		wf_bytes += JSON.stringify(wf).length()
 	if r.banner.text != "":
 		s["bn"] = [r.banner.text, r.banner.sub]
 	if r.stats_line != "" and r.stats_t > 0.0:
@@ -1093,7 +1104,7 @@ func _guest_tick(dt: float) -> void:
 		st_acc = 0.0
 		var d := {"room": r.id, "x4": NetClasses.x4(p.x), "y4": NetClasses.x4(p.y), "vx": roundi(p.vx), "vy": roundi(p.vy), "face": int(p.face), "pose": 0, "hp": p.hp, "maxhp": p.max_hp,
 			"dead": 1 if p.dead else 0, "dn": guest_dn, "atk": [p.atk_id, p.atk_dir, p.atk_t > 0.0 and p.atk_live], "dash": [p.dash_id, roundi(p.dash_dx * 100.0), roundi(p.dash_dy * 100.0), roundi(maxf(p.dash_t, 0.0) * 100.0)],
-			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0}
+			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0, "wh": Game.world_digest()}
 		Net.send_msg("st", d, true)
 	# downed countdown (the host decides when to bring it back)
 	if p.dead and p.downed and guest_down_t >= 0.0:
