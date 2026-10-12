@@ -1,6 +1,6 @@
 # 09 · فاز ۱ طراحی: پیشنهادهای دور اول
 
-**وضعیت:** پیشنهاد، منتظر انتخاب Zakaria (۲۰۲۶-۱۰-۱۲). هنوز هیچ‌کدوم تو [`08-world-design.md`](08-world-design.md) و [`world-phase45.json`](world-phase45.json) نیومده.
+**وضعیت:** Zakaria ۴۴ تا از ۴۶ رو انتخاب کرد (همه جز W6 و B9، ۲۰۲۶-۱۰-۱۲). پنج بحث باز (S8، K1، M5، ساختار نقشه، B1) با گزینه‌ی «الف» بسته شدن؛ برای همین K1 و M5 و M9 و S8 و B1 اینجا با نسخه‌ی نهایی فرق دارن ([`10-open-topics.md`](10-open-topics.md)). نتیجه تو [`08-world-design.md`](08-world-design.md)، [`world-phase45.json`](world-phase45.json) و بخش ۱۴ِ [`00-decisions.md`](00-decisions.md) (D37 تا D52) اومده. این سند همون پیشنهادهای اولیه و منبع‌هاشونه.
 
 **صفحه‌ی خوندنی (با تیک زدن و کپی شماره‌ها):** https://claude.ai/artifact/8uSbbyYDhj82nHtNk9h86F
 
