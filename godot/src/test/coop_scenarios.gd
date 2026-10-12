@@ -2025,6 +2025,9 @@ func sc_co_curl() -> Array:
 		Game.tools.curl = true
 		await wait_secs(1.0)
 		mgr().swap_to("N10", Vector2(90.0 * 16.0, 19.0 * 16.0 - 10.0))
+		for e in mgr().room.ents:
+			if e is Sniffer:
+				e.dead = true                                   # (4B-3: N10's sniffer taps a ring; co-sniffer is about that, this one is about the trenches)
 		var seen_cable := false
 		var past := false
 		var t0 := Time.get_ticks_msec()

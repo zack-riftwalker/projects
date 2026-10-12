@@ -236,6 +236,48 @@ func _ready() -> void:
 			elif mk == "revert":
 				mb.hit(999, 0.0, 0.0, "swipe", mb.hurtboxes()[0])
 				mb.heads[0].rv = 5.0
+		elif Game.scene.begins_with("bossp3:"):         # screenshot helper: a 4B-3 boss in its last phase (bossp3:<N09|N15|N22>[:<hp fraction>])
+			var bp := Game.scene.substr(7).split(":")
+			Game.flags["ability:ssh"] = true
+			manager.swap_to(bp[0])
+			var pp = manager.player
+			pp.x = 250.0
+			pp.y = 166.0
+			pp.inv = 999.0
+			var rr: Room = manager.room
+			rr._start_intro()
+			rr.fight.t = 0.0
+			rr._begin_fight()
+			var bb = rr.boss
+			bb.hpf = float(bb.max_hp) * (float(bp[1]) if bp.size() > 1 else 0.2)
+			bb.hp = ceili(bb.hpf)
+			bb.on_damage()
+		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
+			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
+			var rc: Room = manager.room
+			rc.time = 20.0
+			rc.ch_t0 = 8.0
+			var pc = manager.player
+			pc.x = 3.0 * 16.0 + 3.0
+			pc.y = 36.0 * 16.0
+			pc.inv = 999.0
+		elif Game.scene == "loss":                      # screenshot helper: N12 with a packet about to be lost / lost (MVB3-05)
+			manager.swap_to("N12", Vector2(24.0 * 16.0, 7.0 * 16.0))
+			manager.player.inv = 999.0
+			var rl: Room = manager.room
+			for m in rl.plats:
+				if m.get("packet", false) and int(m.j) % 3 == 2:
+					var pa: Dictionary = m.path
+					var span: float = float(pa.n) * float(pa.every)
+					var prev := -1e9
+					for k in range(int(span * 100.0)):
+						var tt := float(k) / 100.0
+						var nx: float = float(pa.xa) + fposmod(tt + float(m.j) * float(pa.every), span) * float(pa.speed) + float(pa.w) / 2.0
+						if k > 0 and prev < 440.0 and nx >= 440.0 and nx <= float(pa.xb) + float(pa.w):
+							rl.time = tt - 0.3                       # about to be lost: it flickers
+							break
+						prev = nx
+					break
 		elif Game.scene.begins_with("roomat:"):       # screenshot helper: stand in a room at a place (roomat:<id>:<x>:<y>)
 			var ra := Game.scene.substr(7).split(":")
 			manager.swap_to(ra[0], Vector2(float(ra[1]), float(ra[2])))
