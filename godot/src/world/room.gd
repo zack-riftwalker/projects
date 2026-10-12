@@ -222,7 +222,11 @@ func load_room(room_id: String, snap = null) -> void:
 					item_id += 1
 				"T":
 					var texts: Array = def.get("signs", [])
-					signs.append({"x": x + 8, "y": y + T, "text": texts[sign_n] if sign_n < texts.size() else "..."})
+					var se = texts[sign_n] if sign_n < texts.size() else "..."
+					if se is Dictionary:        # {"text", "alt": [{"if": "<flag>" | "!<flag>", "text"}]}: the first alt that holds wins
+						signs.append({"x": x + 8, "y": y + T, "text": String(se.text), "alt": se.get("alt", [])})
+					else:
+						signs.append({"x": x + 8, "y": y + T, "text": String(se)})
 					sign_n += 1
 				"M", "V":
 					_add_platform(ch, tx, ty, rows)
@@ -358,6 +362,14 @@ func _until_open(spec: String) -> bool:
 		if Game.flag(String(f)):
 			n += 1
 	return n >= int(p[0])
+
+# the text of a sign, chosen when it is read (so a flag set while the player stands there shows at once)
+func sign_text(s: Dictionary) -> String:
+	for a in s.get("alt", []):
+		var cond := String(a["if"])
+		if (not Game.flag(cond.substr(1))) if cond.begins_with("!") else Game.flag(cond):
+			return String(a.text)
+	return String(s.text)
 
 func update_doors() -> void:
 	grid.gates_open.catch = Game.flag("gate:%s:catch" % id)

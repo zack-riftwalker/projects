@@ -112,7 +112,7 @@ func _draw() -> void:
 	# sign bubble
 	if room.sign_now != null:
 		var s: Dictionary = room.sign_now
-		var lines := PixelText.wrap(_expand(s.text), 196)
+		var lines := PixelText.wrap(_expand(room.sign_text(s)), 196)
 		var bw := 0
 		for l in lines:
 			bw = maxi(bw, PixelText.text_width(l))

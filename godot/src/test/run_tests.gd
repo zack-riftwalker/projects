@@ -78,6 +78,7 @@ func run(name: String) -> bool:
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 		"lab": return t_lab()
+		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
 	return report(name, false, "unknown test")
 
@@ -3145,3 +3146,27 @@ func t_locks4b() -> bool:
 	Game.flags = {}
 	Game.tools.sudo = false
 	return report("locks4b", res.ok, res.info)
+
+# MVB0-04: a sign whose text depends on flags
+func t_signs4b() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var z := new_room("Z01")
+	var s: Dictionary = z.signs[0]
+	chk.call("none", z.sign_text(s) == "lab: waiting for a.")
+	Game.flags["lab:a"] = true
+	chk.call("a", z.sign_text(s) == "lab: nothing joined yet.")
+	Game.flags["lab:c"] = true
+	chk.call("a+c", z.sign_text(s) == "lab: c joined.")
+	z.queue_free()
+	var r8 := new_room("R08")
+	var plain: Dictionary = r8.signs[0]
+	chk.call("plain sign reads as before", r8.sign_text(plain) == String(Game.rooms_meta.rooms.R08.signs[0]))
+	r8.queue_free()
+	Game.flags = {}
+	return report("signs4b", res.ok, res.info)
