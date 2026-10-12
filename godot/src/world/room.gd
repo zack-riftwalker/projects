@@ -248,6 +248,11 @@ func load_room(room_id: String, snap = null) -> void:
 						e.nid = next_nid
 						next_nid += 1
 						ents.append(e)
+	if def.has("lab_boss") and mode != "guest" and boss_spawn != null:     # the sparring dummy: an entity, not the room's boss fight
+		var kd := KitDummy.new(self, boss_spawn.x, boss_spawn.y)
+		kd.nid = next_nid
+		next_nid += 1
+		ents.append(kd)
 	if def.has("boss") and not Game.flag("boss:" + def.boss.id) and mode != "guest":
 		var bs: Dictionary = boss_spawn if boss_spawn != null else {"x": pw - 80.0, "y": ph - 48.0}
 		boss = make_boss(def.boss, bs.x, bs.y)
@@ -836,6 +841,8 @@ func recent_damage(q, secs: float) -> float:
 func boss_damage(_boss, d: float, how := "swipe") -> void:
 	if attacker == null:
 		return
+	if _boss != null and _boss.get("read") != null:       # a kit boss reads what the players do (rule 8)
+		_boss.read.note_hit("p2" if attacker in remote_players else "p1", how)
 	dmg_log.append({"t": time, "who": attacker, "d": d})
 	if fight.state == "active":
 		var i: int = 1 if (attacker in remote_players) else 0
@@ -1883,6 +1890,10 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px + 2, py - 1, 2, 2), Color.WHITE)
 		"comment":
 			PixelText.draw_text(ci, "//", px - 3, py - 3, q.col, {"outline": Game.COL.ink})
+		"diamond":                                       # a catchable orb of the boss kit: a yellow diamond
+			var dr: float = q.r + 1.0
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(px, py - dr - 1), Vector2(px + dr + 1, py), Vector2(px, py + dr + 1), Vector2(px - dr - 1, py)]), ink)
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(px, py - dr), Vector2(px + dr, py), Vector2(px, py + dr), Vector2(px - dr, py)]), col)
 		"err":
 			Fx._disc(ci, px, py, q.r + 1, ink)
 			Fx._disc(ci, px, py, q.r, col)

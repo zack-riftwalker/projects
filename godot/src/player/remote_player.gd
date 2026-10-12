@@ -37,6 +37,7 @@ var away := false
 var lagging := false
 var t := 0.0
 var inv := 0.0
+var focusing := false            # host: the partner is turning context into hit points (its `fo` report): the boss kit reads it
 var samples: Array = []          # [time, x, y] reported positions
 var ghost_since := 0.0
 var down_t := -1.0               # host: the revive countdown of the partner (-1: not down)

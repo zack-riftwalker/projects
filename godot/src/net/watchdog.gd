@@ -101,6 +101,12 @@ func _guest(b: Dictionary) -> void:
 			n += 1
 	if n != coop.puppets.size():
 		b["puppets-match"] = [1.0, "%d puppets in the room, %d known (G6)" % [n, coop.puppets.size()]]
+	# the guest was never hurt by an attack it did not see: a boss-kit plan turns active only after it was shown in its cue
+	for e in mgr.room.ents:
+		var kv = e.get("kit_violation")
+		if e.puppet and kv != null and kv != "":
+			b["boss-cue"] = [0.0, kv]
+			break
 	if _bodies() > 1:
 		b["one-host-body"] = [1.0, "%d host bodies" % _bodies()]
 	if mgr.rooms.size() > 1:

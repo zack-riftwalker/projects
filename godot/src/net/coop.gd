@@ -26,6 +26,7 @@ var guest_here := false
 var guest_ready := false
 var guest_bench := ""
 var snap_n := 0
+var plan_snaps: Array = []             # host: [nid, plan seq, snapshot number] of the first snapshot that carried each boss-kit plan
 var last_wf_sent: Array = []            # host: the world flags the last `wf` carried
 var snap_sent := {}
 var force_full := false
@@ -313,6 +314,7 @@ func _guest_joined() -> void:
 	Net.epoch += 1
 	snap_n = 0
 	last_wf_sent = []
+	plan_snaps.clear()
 	snap_sent.clear()
 	fight_seen.clear()
 	phase_seen.clear()
@@ -399,7 +401,19 @@ func _host_msg(t: String, m: Dictionary) -> void:
 	remote.dash_dy = dash[2] / 100.0
 	remote.dash_t = dash[3] / 100.0
 	remote.inv = float(m.get("inv", 0.0))
+	remote.focusing = int(m.get("fo", 0)) == 1
 	var sa := int(m.get("sa", 0))
+	if not plan_snaps.is_empty():                  # the guest applied snapshot `sa`: every boss-kit plan those snapshots carried has been seen
+		var keep: Array = []
+		for ps in plan_snaps:
+			if int(ps[2]) <= sa:
+				for e in r.ents:
+					if e.nid == int(ps[0]) and e.get("plan") != null:
+						e.plan_seen(int(ps[1]))
+						break
+			elif int(ps[2]) > sa - 300:
+				keep.append(ps)
+		plan_snaps = keep
 	if snap_sent.has(sa):
 		var rtt: float = hms() - float(snap_sent[sa])
 		Net.jitter = lerpf(Net.jitter, absf(rtt - Net.rtt), 0.1)
@@ -927,6 +941,9 @@ func _send_snapshot() -> void:
 		if e.dead and not (e.get("is_boss") and e.dying):
 			continue
 		en.append(NetClasses.record(e))
+		if e.get("plan") != null and not e.plan.is_empty() and int(e.plan.seq) > e.plan_snap_seq:
+			e.plan_snap_seq = int(e.plan.seq)
+			plan_snaps.append([e.nid, int(e.plan.seq), snap_n])
 	var it: Array = []
 	for i in r.items:
 		if i.get("dead", false):
@@ -1076,7 +1093,7 @@ func _guest_tick(dt: float) -> void:
 		st_acc = 0.0
 		var d := {"room": r.id, "x4": NetClasses.x4(p.x), "y4": NetClasses.x4(p.y), "vx": roundi(p.vx), "vy": roundi(p.vy), "face": int(p.face), "pose": 0, "hp": p.hp, "maxhp": p.max_hp,
 			"dead": 1 if p.dead else 0, "dn": guest_dn, "atk": [p.atk_id, p.atk_dir, p.atk_t > 0.0 and p.atk_live], "dash": [p.dash_id, roundi(p.dash_dx * 100.0), roundi(p.dash_dy * 100.0), roundi(maxf(p.dash_t, 0.0) * 100.0)],
-			"gt": hms(), "sa": last_snap_n, "inv": p.inv}
+			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0}
 		Net.send_msg("st", d, true)
 	# downed countdown (the host decides when to bring it back)
 	if p.dead and p.downed and guest_down_t >= 0.0:
@@ -1148,7 +1165,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 			puppets[id] = e
 			r.ents.append(e)
 			r.entity_root.add_child(e)
-			if e is Boss:
+			if e is Boss and not e.get("lab_dummy"):
 				r.boss = e
 		NetClasses.apply(e, rec)
 		if e.has_method("net_sample"):

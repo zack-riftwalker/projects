@@ -1640,3 +1640,77 @@ func sc_co_packet() -> Array:
 	var secs := (Time.get_ticks_msec() - t0) / 1000.0
 	await wait_secs(1.5)
 	return [p.x >= 50.0 * 16.0 and not inside, "guest rode to x=%.0f in %.1f s, inside a solid cell %s, on a packet at column 50 %s" % [p.x, secs, inside, on_packet]]
+
+# MVB0-10: the sparring dummy (the boss kit) with both players in Z06: every attack the guest is hurt by was shown to it first, and both players are targeted
+func sc_co_bosskit() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var secs := 25.0 * slow
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("Z06", Vector2(5.0 * 16.0, 10.0 * 16.0 + 6.0))
+		await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "Z06", 20.0)
+		var d: KitDummy = null
+		for e in mgr().room.ents:
+			if e is KitDummy:
+				d = e
+		if d == null:
+			return [false, "no dummy in Z06"]
+		var tgt_of := {}
+		var changed := false
+		var counts := {"p1": 0, "p2": 0}
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		while Time.get_ticks_msec() - t0 < secs * 1000.0:
+			var p = mgr().player
+			p.inv = 99.0
+			p.hp = p.max_hp
+			Controls.script_input = {"attack": f % 50 < 3}
+			f += 1
+			if not d.plan.is_empty():
+				var sq: int = d.plan.seq
+				if not tgt_of.has(sq):
+					tgt_of[sq] = d.plan.tgt
+					counts[d.plan.tgt] += 1
+				elif tgt_of[sq] != d.plan.tgt:
+					changed = true
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		await wait_secs(1.0)
+		return [counts.p1 >= 1 and counts.p2 >= 1 and not changed and tgt_of.size() >= 6, "host: %d attacks (p1 %d, p2 %d), target changed inside an attack %s" % [tgt_of.size(), counts.p1, counts.p2, changed]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(1.5)
+	mgr().swap_to("Z06", Vector2(15.0 * 16.0, 10.0 * 16.0 + 6.0))
+	var found := {"d": null}
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is KitDummy:
+				found.d = e
+		return found.d != null, 15.0)
+	var pup: KitDummy = found.d
+	if pup == null:
+		return [false, "no dummy puppet"]
+	var seen := {}
+	var mine := 0
+	var t1 := Time.get_ticks_msec()
+	var g := 0
+	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+		var p = mgr().player
+		p.inv = 99.0
+		p.hp = p.max_hp
+		Controls.script_input = {"attack": g % 70 < 3}
+		g += 1
+		if not pup.plan.is_empty() and not seen.has(pup.plan.seq):
+			seen[pup.plan.seq] = pup.plan.tgt
+			if pup.plan.tgt == "p2":
+				mine += 1
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	var turned := 0
+	for sq in pup.kit_active_seen:
+		turned += 1
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	await wait_secs(1.0)
+	return [seen.size() >= 6 and short == 0 and mine >= 2 and pup.kit_violation == "", "guest: saw %d plans, %d turned active (%d shown < 0.30 s), targeted %d times, violation '%s'" % [seen.size(), turned, short, mine, pup.kit_violation]]

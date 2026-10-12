@@ -78,6 +78,7 @@ func run(name: String) -> bool:
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 		"lab": return t_lab()
+		"bosskit": return t_bosskit()
 		"packets": return t_packets()
 		"symlink": return t_symlink()
 		"variants4b": return t_variants4b()
@@ -2882,7 +2883,7 @@ func t_rooms4() -> bool:
 			if back.is_empty():
 				continue
 			chk.call("%s points back" % d.id, String(back.to) == String(d.id))
-			if (rid + ":" + to_room) in skip_pairs:
+			if (rid + ":" + to_room) in skip_pairs or d.get("symlink", false):       # (a symlink door's rooms do not touch: only the world checker reads it)
 				continue
 			var o1: Array = meta.origin
 			var o2: Array = rooms[to_room].origin
@@ -3359,3 +3360,215 @@ func t_packets() -> bool:
 	Controls.script_input = null
 	Game.flags = {}
 	return report("packets", res.ok, res.info)
+
+# ---- MVB0-10: the boss kit, proved on the sparring dummy in Z06 ----
+func kit_room() -> Room:
+	Game.persist = false
+	Game.flags = {}
+	Game.diff = "normal"
+	var room := new_room("Z06")
+	return room
+
+func kit_dummy(room: Room) -> KitDummy:
+	for e in room.ents:
+		if e is KitDummy:
+			return e
+	return null
+
+func fake_partner(room: Room, px: float, py: float) -> RemotePlayer:
+	var rp := RemotePlayer.new(room)
+	room.add_child(rp)
+	room.remote_players.append(rp)
+	rp.x = px
+	rp.y = py
+	return rp
+
+# one fixed step of the whole room; the fake guest acknowledges every plan at once (as a good line would)
+func kit_step(room: Room, d: KitDummy, ack := true) -> void:
+	room.step(Game.STEP)
+	if ack and not d.plan.is_empty():
+		d.plan_seen(int(d.plan.seq))
+
+func t_bosskit() -> bool:
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	# 1. timings of every family on normal and easy
+	for diff in ["normal", "easy"]:
+		var room := kit_room()
+		Game.diff = diff
+		var d := kit_dummy(room)
+		var tm := float(Game.dv("telegraph_mult"))
+		var pm := float(Game.dv("punish_mult"))
+		for fam in Boss.FAMILY:
+			var f: Array = Boss.FAMILY[fam]
+			d.plan = {}
+			d.plan_start("x", fam, "p1", [0.0, 0.0, 0.0, 0.0])
+			chk.call("%s %s cue" % [diff, fam], absf(d.plan.t - f[0] * tm) < 0.0001)
+			var ev := ""
+			var n := 0
+			while ev != "active" and n < 1000:
+				ev = d.plan_step(Game.STEP)
+				n += 1
+			chk.call("%s %s active" % [diff, fam], ev == "active" and absf(d.plan.t - f[1]) < 0.0001 and absf(n * Game.STEP - f[0] * tm) < 0.03)
+			ev = ""
+			while ev != "recover" and n < 2000:
+				ev = d.plan_step(Game.STEP)
+				n += 1
+			chk.call("%s %s recover" % [diff, fam], ev == "recover" and absf(d.plan.t - maxf(0.4, f[2] * pm)) < 0.0001)
+			while d.plan_step(Game.STEP) != "done" and n < 3000:
+				n += 1
+			chk.call("%s %s done" % [diff, fam], d.plan.is_empty())
+		room.queue_free()
+	Game.diff = "normal"
+	# 2. gating on the guest's acknowledgement
+	var room2 := kit_room()
+	var d2 := kit_dummy(room2)
+	var rp2 := fake_partner(room2, 200.0, 160.0)
+	d2.plan_start("lunge", "lunge", "p1", [0.0, 0.0, 0.0, 0.0])
+	var held := 0
+	var harmed := false
+	var ev2 := ""
+	for f in range(240):
+		ev2 = d2.plan_step(Game.STEP)
+		if d2.plan_phase() == "cue" and d2.plan.t <= 0.0:
+			held += 1
+		if not d2.harmboxes().is_empty():
+			harmed = true
+		if ev2 == "recover" or ev2 == "active":
+			break
+	chk.call("unseen: cancelled, not active", ev2 == "recover" and not harmed)
+	chk.call("unseen: held about HOLD_MAX", held >= int(Boss.HOLD_MAX / Game.STEP) - 2 and held <= int(Boss.HOLD_MAX / Game.STEP) + 3)
+	d2.plan = {}
+	d2.plan_start("lunge", "lunge", "p1", [0.0, 0.0, 0.0, 0.0])
+	var past := 0.0
+	var seen_after := -1.0
+	var became := -1.0
+	for f in range(400):
+		var was_hold: bool = d2.plan_phase() == "cue" and d2.plan.t <= 0.0
+		ev2 = d2.plan_step(Game.STEP)
+		if d2.plan_phase() == "cue" and d2.plan.t <= 0.0:
+			past += Game.STEP
+			if seen_after < 0.0 and past >= 0.2:
+				seen_after = past
+				d2.plan_seen(int(d2.plan.seq))
+		if ev2 == "active":
+			became = past
+			break
+	chk.call("seen 0.2 s after the cue: active at >= 0.2 + SEEN_MIN (%.2f)" % became, became >= 0.2 + Boss.SEEN_MIN - 0.02 and became <= Boss.HOLD_MAX + 0.05)
+	room2.remote_players.erase(rp2)
+	rp2.queue_free()
+	d2.plan = {}
+	d2.plan_start("lunge", "lunge", "p1", [0.0, 0.0, 0.0, 0.0])
+	var solo_ok := false
+	for f in range(200):
+		ev2 = d2.plan_step(Game.STEP)
+		if ev2 == "active":
+			solo_ok = absf(f * Game.STEP - 1.0) < 0.05
+			break
+	chk.call("solo: no wait", solo_ok)
+	room2.queue_free()
+	# 3. targets over 40 s of fight with both players
+	var room3 := kit_room()
+	var d3 := kit_dummy(room3)
+	var p3 = room3.player
+	p3.x = 120.0
+	p3.y = 150.0
+	var rp3 := fake_partner(room3, 260.0, 150.0)
+	var seq_tgt := {}
+	var order: Array = []
+	var changed := false
+	var counts := {"p1": 0, "p2": 0}
+	for f in range(60 * 40):
+		p3.inv = 99.0
+		p3.hp = p3.max_hp
+		p3.x = 120.0 + float((f / 90) % 3) * 4.0
+		rp3.x = 260.0
+		rp3.y = 150.0
+		kit_step(room3, d3)
+		if not d3.plan.is_empty():
+			var sq: int = d3.plan.seq
+			if not seq_tgt.has(sq):
+				seq_tgt[sq] = d3.plan.tgt
+				order.append(d3.plan.tgt)
+				counts[d3.plan.tgt] += 1
+			elif seq_tgt[sq] != d3.plan.tgt:
+				changed = true
+	var three := false
+	for i in range(2, order.size()):
+		if order[i] == order[i - 1] and order[i] == order[i - 2]:
+			three = true
+	res.info += " attacks %d p1 %d p2 %d" % [order.size(), counts.p1, counts.p2]
+	chk.call("target never changes inside an attack", not changed)
+	chk.call("no three in a row", not three)
+	chk.call("both targeted at least four times", counts.p1 >= 4 and counts.p2 >= 4)
+	room3.queue_free()
+	# 4. rule 8: three close swipes by p2 -> guard on p2; a swipe into the guard is blocked and answered by a riposte
+	var room4 := kit_room()
+	var d4 := kit_dummy(room4)
+	var p4 = room4.player
+	p4.x = 60.0
+	p4.y = 150.0
+	var rp4 := fake_partner(room4, d4.cx - 40.0, d4.y)
+	d4.active = true
+	d4.passive = false
+	d4.idle_t = 0.3
+	for f in range(3):
+		d4.read.note_hit("p2", "swipe")
+	var got_guard := false
+	var n4 := 0
+	while d4.plan.is_empty() and n4 < 200:
+		p4.inv = 99.0
+		kit_step(room4, d4)
+		n4 += 1
+	got_guard = not d4.plan.is_empty() and d4.plan.id == "guard" and d4.plan.tgt == "p2"
+	chk.call("greedy p2 -> guard on p2 (%s)" % str(d4.plan.get("id")), got_guard)
+	n4 = 0
+	while d4.plan_phase() != "active" and n4 < 200:
+		p4.inv = 99.0
+		kit_step(room4, d4)
+		n4 += 1
+	room4.attacker = rp4
+	var blocked: String = d4.hit(1, 1.0, 0.0, "swipe", d4)
+	chk.call("a swipe into the guard is blocked", blocked == "block")
+	n4 = 0
+	while (d4.plan.is_empty() or d4.plan.id == "guard") and n4 < 400:
+		p4.inv = 99.0
+		kit_step(room4, d4)
+		n4 += 1
+	chk.call("then a riposte on the hitter (%s on %s)" % [str(d4.plan.get("id")), str(d4.plan.get("tgt"))], not d4.plan.is_empty() and d4.plan.id == "riposte" and d4.plan.tgt == "p2")
+	chk.call("riposte cue is 0.8 s x telegraph", absf(float(d4.plan.t) - 0.8) < 0.1 or d4.plan.ph != "cue")
+	room4.queue_free()
+	# 5. parity: the puppet shows the same harmboxes mid-cue and mid-active
+	var room5 := kit_room()
+	var d5 := kit_dummy(room5)
+	var p5 = room5.player
+	p5.x = d5.x - 60.0
+	p5.y = 150.0
+	var pup = NetClasses.make(25, room5)
+	var cue_ok := false
+	var act_ok := false
+	for f in range(60 * 12):
+		p5.inv = 99.0
+		p5.hp = p5.max_hp
+		kit_step(room5, d5)
+		if d5.plan.is_empty():
+			continue
+		if d5.plan.id == "lunge" and (d5.plan.ph == "cue" or d5.plan.ph == "active"):
+			NetClasses.apply(pup, JSON.parse_string(JSON.stringify(NetClasses.record(d5))))
+			pup.x = d5.x
+			pup.y = d5.y
+			var same := _near_boxes(_boxes(d5.harmboxes()), _boxes(pup.harmboxes()))
+			if d5.plan.ph == "cue":
+				cue_ok = same
+			elif same and not d5.harmboxes().is_empty():
+				act_ok = true
+				break
+	chk.call("parity mid-cue", cue_ok)
+	chk.call("parity mid-active (with boxes)", act_ok)
+	pup.free()
+	room5.queue_free()
+	Game.diff = "normal"
+	return report("bosskit", res.ok, res.info)
