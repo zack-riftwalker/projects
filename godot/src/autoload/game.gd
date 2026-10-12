@@ -212,7 +212,7 @@ func memories_found() -> Array:
 	return out
 
 # ---- obstacles (MVB1-07): what the map marks with an unnamed `?` until the player has passed it ----
-const OBSTACLES := {"%": "bash", "!": "catch", "&": "agents", "k": "agents", "@": "curl", "N": "ssh"}
+const OBSTACLES := {"%": "bash", "!": "catch", "&": "agents", "k": "agents", "@": "curl", "c": "curl", "N": "ssh"}
 const CHANGELOG_WORDS := {"bash": "gives way to bash", "catch": "answers to catch", "agents": "waits for agents", "curl": "answers to curl", "ssh": "lets ssh through"}
 var _obst_cache := {}
 

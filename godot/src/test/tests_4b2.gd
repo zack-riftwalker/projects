@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler", "firewall", "reviewer2", "plugins4b"]
+const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler", "firewall", "reviewer2", "plugins4b", "net4b1"]
 
 func _init(m) -> void:
 	main = m
@@ -25,6 +25,7 @@ func run(name: String):
 		"firewall": return t_firewall()
 		"reviewer2": return t_reviewer2()
 		"plugins4b": return t_plugins4b()
+		"net4b1": return t_net4b1()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -1304,3 +1305,116 @@ func t_plugins4b() -> bool:
 	mv.free()
 	Game.fresh()
 	return report("plugins4b", res.ok, res.info)
+
+# MVB2-11: the 4B-1 systems in THE NETWORK
+func t_net4b1() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	# every N room is in the zone
+	for id in Game.rooms_meta.rooms:
+		if id.begins_with("N") and Game.zone_of(id) != "net":
+			fail(res, "%s is in zone %s" % [id, Game.zone_of(id)])
+	# `tree` in N06 sells map:net
+	var menu := IndexMenu.new()
+	main.add_child(menu)
+	var r6 := new_room("N06")
+	if r6.npcs.size() != 1 or r6.npcs[0].zone != "net" or r6.npcs[0].price != 40 or r6.npcs[0].kind != "tree":
+		fail(res, "N06 npc: %s" % str(r6.npcs))
+	else:
+		Game.tokens = 40
+		menu.open(r6, r6.npcs[0])
+		if menu.rows()[0] != "index /net — 40 tokens":
+			fail(res, "row: %s" % str(menu.rows()))
+		if not menu.buy() or not Game.owns_map("net") or Game.tokens != 0:
+			fail(res, "buying the net index")
+		menu.close()
+	menu.queue_free()
+	r6.queue_free()
+	# N20's agent frees with a swipe
+	var r20 := new_room("N20")
+	if r20.jars.size() != 1:
+		fail(res, "N20 has %d jars" % r20.jars.size())
+	else:
+		for e in r20.ents:
+			e.queue_free()
+		r20.ents.clear()
+		var jar: Dictionary = r20.jars[0]
+		var p = r20.player
+		p.x = float(jar.x) - 22.0
+		p.y = float(jar.y) - p.h
+		p.vx = 0.0
+		p.vy = 0.0
+		p.face = 1.0
+		for f in range(16):
+			Controls.script_input = {"attack": f < 2}
+			Controls.poll()
+			r20.step(Game.STEP)
+		Controls.script_input = {}
+		if not Game.flag("agent:N20"):
+			fail(res, "a swipe did not free N20's agent")
+	# N19: the page and the fragment
+	var r19 := new_room("N19")
+	var page_item: Dictionary = {}
+	var spark_n := 0
+	for it in r19.items:
+		if it.kind == "page":
+			page_item = it
+		if it.kind == "spark":
+			spark_n += 1
+	if page_item.is_empty() or String(page_item.id) != "page:2":
+		fail(res, "N19 page: %s" % str(page_item))
+	else:
+		r19.collect(page_item)
+		if not Game.flag("page:2"):
+			fail(res, "page:2 not set")
+	if spark_n != 1:
+		fail(res, "N19 has %d fragments" % spark_n)
+	else:
+		for it in r19.items:
+			if it.kind == "spark":
+				r19.collect(it)
+		if String(r19.memory.get("text", "")) != "04:47 — the backup still had last week's working build.":
+			fail(res, "memory: %s" % str(r19.memory))
+	r19.queue_free()
+	# N20 is on no map
+	Game.flags["room:N20:visited"] = true
+	var v := Game.map_view("net")
+	if v.outline.has("N20") or v.filled.has("N20"):
+		fail(res, "N20 is on the map")
+	if not Game.is_offmap("N20") or Game.commit_rooms(["N20"]) != 0:
+		fail(res, "N20 can be committed")
+	if Game.zone_counts("net")[1] != v.outline.size() or v.outline.has("N19") or v.outline.has("N21"):
+		fail(res, "the net outline shows a secret: %s" % str(v.outline))
+	r20.queue_free()
+	# N03: a terminal with a bench, nothing near it
+	var r3 := new_room("N03")
+	if not bool(r3.def.get("terminal", false)) or r3.cps.is_empty():
+		fail(res, "N03 is no terminal")
+	for c in r3.cps:
+		for e in r3.ents:
+			var d := Vector2(float(e.x) + float(e.w) / 2.0 - float(c.x), float(e.y) + float(e.h) / 2.0 - float(c.y)).length() / 16.0
+			if d < 10.0:
+				fail(res, "N03: a %s %.1f tiles from the bench" % [e.get_class(), d])
+	r3.queue_free()
+	# hooks are curl obstacles; the changelog names /proc/heap and /net after curl
+	if Game.OBSTACLES.get("c", "") != "curl":
+		fail(res, "c is not a curl obstacle")
+	if Game.obstacle_marks("N08").is_empty():
+		fail(res, "N08's hooks are not marked")
+	Game.flags["map:heap"] = true
+	Game.flags["mapped:H01"] = true
+	Game.flags["mapped:N08"] = true
+	Game.flags["mapped:N05"] = true
+	Game.tools["curl"] = true
+	var mgr := new_manager()
+	mgr.swap_to("N03")
+	mgr.rest(mgr.room, 0)
+	var said := " | ".join(mgr.changelog_shown)
+	if not said.contains("/proc/heap answers to curl") or not said.contains("/net answers to curl"):
+		fail(res, "changelog: %s" % said)
+	mgr.queue_free()
+	Game.fresh()
+	return report("net4b1", res.ok, res.info)
