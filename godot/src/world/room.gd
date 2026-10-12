@@ -343,6 +343,22 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 	return b
 
 # closed doors are solid; recomputed every step (a fight, a boss flag)
+# `until:<flag>` or `until:<k>of:<f1>,<f2>,...` (at least k of the flags are set)
+var _until_cache := {}
+func _until_open(spec: String) -> bool:
+	var p = _until_cache.get(spec)
+	if p == null:
+		p = [1, [spec]]
+		var of_at := spec.find("of:")
+		if of_at > 0 and spec.substr(0, of_at).is_valid_int():
+			p = [int(spec.substr(0, of_at)), Array(spec.substr(of_at + 3).split(",", false))]
+		_until_cache[spec] = p
+	var n := 0
+	for f in p[1]:
+		if Game.flag(String(f)):
+			n += 1
+	return n >= int(p[0])
+
 func update_doors() -> void:
 	grid.gates_open.catch = Game.flag("gate:%s:catch" % id)
 	grid.gates_open.agents = Game.flag("gate:%s:agents" % id)
@@ -354,7 +370,7 @@ func update_doors() -> void:
 		elif lock == "fight":
 			open = not fight_active
 		elif lock.begins_with("until:"):
-			open = Game.flag(lock.substr(6))
+			open = _until_open(lock.substr(6))
 		elif lock.begins_with("flood:"):
 			open = Game.heap_flood() <= int(lock.substr(6))
 		if d.has("was") and d.was != open and time > 0.5:

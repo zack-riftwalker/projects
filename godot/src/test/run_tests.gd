@@ -78,6 +78,7 @@ func run(name: String) -> bool:
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 		"lab": return t_lab()
+		"locks4b": return t_locks4b()
 	return report(name, false, "unknown test")
 
 class Box:
@@ -3079,3 +3080,68 @@ func t_lab() -> bool:
 	chk.call("R01 is not lab", not Game.is_lab("R01"))
 	Game.flags = {}
 	return report("lab", res.ok, res.info)
+
+# MVB0-03: k-of-n locks, and a one-way lid over a floor hole (Z01 up into Z02)
+func t_locks4b() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var z := new_room("Z01")
+	chk.call("none: closed", z.grid.tile(15, -1) == TileGrid.SOLID)
+	Game.flags["lab:a"] = true
+	z.update_doors()
+	chk.call("a only: closed", z.grid.tile(15, -1) == TileGrid.SOLID)
+	Game.flags["lab:c"] = true
+	z.update_doors()
+	chk.call("a+c: open", z.grid.tile(15, -1) == TileGrid.E)
+	var rd: Dictionary = z.grid.doors[0]
+	rd.lock = "until:1of:lab:b"
+	Game.flags = {}
+	z.update_doors()
+	chk.call("1of b: closed without b", z.grid.tile(15, -1) == TileGrid.SOLID)
+	Game.flags["lab:b"] = true
+	z.update_doors()
+	chk.call("1of b: open with b", z.grid.tile(15, -1) == TileGrid.E)
+	z.queue_free()
+	# the lid
+	Game.flags = {"lab:a": true, "lab:b": true}
+	Game.tools.sudo = true
+	var m := new_manager()
+	m.swap_to("Z01", Vector2(9 * 16 + 3.0, 4 * 16 - 10.0))
+	for f in range(20):
+		m.tick(Game.STEP)
+	m.player.x = 15 * 16 + 3.0
+	m.player.y = 4 * 16 - 10.0
+	for f in range(10):
+		m.tick(Game.STEP)
+	m.player.vx = 0.0
+	for f in range(240):
+		Controls.script_input = {"jump": f <= 12 or f >= 20}
+		m.tick(Game.STEP)
+		if m.room.id == "Z02" and not m.trans.on:
+			break
+	chk.call("up: in Z02", m.room.id == "Z02")
+	for f in range(60):
+		Controls.script_input = {"jump": f < 30}        # (a player keeps [jump] held through the hatch)
+		m.tick(Game.STEP)
+	chk.call("up: on the lid", m.player.on_ground and m.player.y + m.player.h <= 15 * 16 + 0.01)
+	res.info += " lid y=%.0f" % m.player.y
+	for f in range(60):
+		Controls.script_input = {"left": f < 30, "right": f >= 30}
+		m.tick(Game.STEP)
+	res.info += " room=%s x=%.0f y=%.0f" % [m.room.id, m.player.x, m.player.y]
+	chk.call("lid: stays in Z02", m.room.id == "Z02")
+	for f in range(120):
+		Controls.script_input = {"down": f < 4, "jump": f == 1}
+		m.tick(Game.STEP)
+		if m.room.id == "Z01" and not m.trans.on:
+			break
+	Controls.script_input = {}
+	chk.call("drop: back in Z01", m.room.id == "Z01")
+	Game.flags = {}
+	Game.tools.sudo = false
+	return report("locks4b", res.ok, res.info)
