@@ -38,16 +38,16 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MVB3-01 | room data in (14 rooms redrawn, N21 waves, N12 packet loss, N17 chase); letters `j u r y`; checker | Sonnet | todo |
-| MVB3-02 | engine: kit `rec`, arena hazards + watchdog `arena-tell`, bouncing shots, body effects (slow, jam), tags | Sonnet | todo |
-| MVB3-03 | new enemies: SNIFFER, MITM, BOTNET, PINGER | Sonnet | todo |
-| MVB3-04 | reworked enemies: SCRAPER, WORM, DDOS, SPYWARE | Sonnet | todo |
-| MVB3-05 | room mechanics: packet loss, the RST chase, typed waves | Sonnet | todo |
-| MVB3-06 | WEB CRAWLER v2 | Sonnet | todo |
-| MVB3-07 | THE FIREWALL v2 | Sonnet | todo |
-| MVB3-08 | THE REVIEWER #2 v2 | Sonnet | todo |
-| MVB3-09 | co-op scenarios, bad line, difficulty presets check | Sonnet | todo |
-| MVB3-10 | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MVB3-01 | room data in (14 rooms redrawn, N21 waves, N12 packet loss, N17 chase); letters `j u r y`; checker | Sonnet | done |
+| MVB3-02 | engine: kit `rec`, arena hazards + watchdog `arena-tell`, bouncing shots, body effects (slow, jam), tags | Sonnet | done |
+| MVB3-03 | new enemies: SNIFFER, MITM, BOTNET, PINGER | Sonnet | done |
+| MVB3-04 | reworked enemies: SCRAPER, WORM, DDOS, SPYWARE | Sonnet | done |
+| MVB3-05 | room mechanics: packet loss, the RST chase, typed waves | Sonnet | done |
+| MVB3-06 | WEB CRAWLER v2 | Sonnet | done |
+| MVB3-07 | THE FIREWALL v2 | Sonnet | done |
+| MVB3-08 | THE REVIEWER #2 v2 | Sonnet | done |
+| MVB3-09 | co-op scenarios, bad line, difficulty presets check | Sonnet | done |
+| MVB3-10 | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ---
 
