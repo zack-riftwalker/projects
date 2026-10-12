@@ -12,6 +12,7 @@
 | [`../PLAN-metroidvania-phase3.md`](../PLAN-metroidvania-phase3.md) | فاز ۳: ۳A بقیه‌ی SOURCE TREE (THE REVIEWER، catch، پلاگین‌ها)، ۳B منطقه‌ی DEPENDENCY DEPTHS (MERGE CONFLICT، agents، فروشگاه) | انجام شد (۳A و ۳B) |
 | [`../PLAN-metroidvania-phase4a.md`](../PLAN-metroidvania-phase4a.md) | فاز ۴A: منطقه‌ی THE HEAP (۱۶ اتاق، درهای بالا و پایین، سیل سه‌مرحله‌ای، dead code، THE LEAK → sudo، سفر فقط از ترمینال، سه راز تازه در SOURCE TREE). داده‌ی اتاق‌ها: [`phase4a-data/`](phase4a-data/). گزارش: [`../reports/metroidvania-phase4a.md`](../reports/metroidvania-phase4a.md) | انجام شد (۴A) |
 | [`../PLAN-metroidvania-phase4b0.md`](../PLAN-metroidvania-phase4b0.md) | فاز ۴B-0 (گام ۱ و ۲ پلن کلی): زیرساخت موتور (فلگ‌های دنیا در co-op، قفل «k از n»، تابلو و کاشی وابسته به فلگ، درِ symlink، بسته و پورت) و کیت باس‌ها با یه باس تمرینی؛ شش اتاق آزمایشگاه. داده: [`phase4b0-data/`](phase4b0-data/) | در صف Sonnet |
+| [`../PLAN-metroidvania-phase4b1.md`](../PLAN-metroidvania-phase4b1.md) | فاز ۴B-1 (گام ۳ و ۴ پلن کلی): نقشهٔ جدید (نقشه‌کش `tree`، صفحهٔ نقشه، نقشهٔ روی بازی، پین و پینگ، خط سفر به P2)، وضعیت دنیا با digest، صفحهٔ Logs، agentهای گمشده، صفحه‌های logbook، دکور و تغییرات اتاق‌های ساخته‌شده، ترمینال‌ها و نشانه‌ها | بعد از 4B-0، در صف Sonnet |
 
 ## سندها
 
