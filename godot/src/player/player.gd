@@ -93,6 +93,15 @@ var focus_t := -1.0              # < 0: not focusing
 var focus_ring := 0.0
 var downed := false              # co-op: lying there, the partner can bring Clawd back
 var down_t := -1.0
+var zip := -1                    # curl (MVB2-03): the anchor Clawd is zipping to (-1: not zipping)
+var zip_dx := 0.0                # the horizontal direction of the zip (for the exit speed)
+var zip_blocked := 0
+var curl_last := -1              # the anchor used last: not again before landing
+var ssh_t := 0.0                 # ssh (MVB2-04): seconds of tunnelling left
+var ssh_dir := 0.0
+var push_t := 0.0
+var phase_fire := false
+var spec_used := false           # this [special] press was spent on curl: no agents on release, no focus
 
 func _init(r: Room, px: float, py: float) -> void:
 	room = r
@@ -171,7 +180,7 @@ func update(dt: float) -> void:
 		y = ride.y - h
 
 	# --- focus: hold [special] on the ground to turn context into hit points (rooted while it runs) ---
-	var can_focus: bool = down.get("special", false) and on_ground and atk_t <= 0.0 and dash_t <= 0.0 and hurt_t <= 0.0 and hp < max_hp and meter >= Game.FOCUS_COST and not frozen
+	var can_focus: bool = down.get("special", false) and not spec_used and on_ground and atk_t <= 0.0 and dash_t <= 0.0 and hurt_t <= 0.0 and hp < max_hp and meter >= Game.FOCUS_COST and not frozen
 	if can_focus:
 		focus_hold += dt
 		if focus_hold >= Game.FOCUS_HOLD:
@@ -208,7 +217,7 @@ func update(dt: float) -> void:
 	if not frozen and not in_menu and Controls.down.get("special", false):          # (Controls, not `down`: a running focus empties `down`)
 		special_t += dt
 	elif not frozen and not in_menu and Controls.released.get("special", false):
-		if special_t < Game.FOCUS_HOLD and tools.get("agents", false):
+		if special_t < Game.FOCUS_HOLD and tools.get("agents", false) and not spec_used:
 			if meter >= Game.METER_MAX and agents_t <= 0.0:
 				meter = 0.0
 				agents_t = 11.0
@@ -221,6 +230,25 @@ func update(dt: float) -> void:
 	else:
 		special_t = 0.0
 
+	if not Controls.down.get("special", false) or frozen or in_menu:
+		spec_used = false
+	# --- curl: [special] near a GET ring zips to it (MVB2-03) ---
+	if zip < 0 and tools.get("curl", false) and not frozen and not in_menu and hurt_t <= 0.0 and focus_t < 0.0 and Controls.pressed.get("special", false):
+		var cmx := (1.0 if down.get("right", false) else 0.0) - (1.0 if down.get("left", false) else 0.0)
+		var ai := room.pick_anchor(self, cmx)
+		if ai >= 0:
+			var anc: Dictionary = room.anchors()[ai]
+			zip = ai
+			zip_dx = float(anc.x) - (x + w / 2.0)
+			zip_blocked = 0
+			dash_t = 0.0
+			spec_used = true
+			special_t = 0.0
+			Audio.sfx("dash")
+			room.ring(float(anc.x), float(anc.y), 2, 12, "#7cc4ff", 0.2)
+	if zip >= 0:
+		if _zip_step(dt, pressed):
+			return
 	var mx := (1.0 if down.get("right", false) else 0.0) - (1.0 if down.get("left", false) else 0.0)
 	var my := (1.0 if down.get("down", false) else 0.0) - (1.0 if down.get("up", false) else 0.0)
 	if hurt_t > 0.0:
@@ -423,6 +451,7 @@ func update(dt: float) -> void:
 		vy = 0.0
 		can_dash = true
 		can_double = true
+		curl_last = -1
 		# unstable ground
 		var ty := floori((y + h + 1) / T)
 		for tx in range(floori(x / T), floori((x + w - 0.01) / T) + 1):
@@ -451,6 +480,57 @@ func update(dt: float) -> void:
 			wall_dir = 1
 		elif grid.box_hits_solid(x - 2, y + 2, 2, h - 4):
 			wall_dir = -1
+
+# the zip to a GET ring (curl): CURL_SPEED toward its centre, collisions apply; true when this step is the zip's (the normal physics is skipped)
+func _zip_step(dt: float, pressed: Dictionary) -> bool:
+	var list := room.anchors()
+	if zip >= list.size() or hurt_t > 0.0:
+		zip = -1
+		return false
+	if pressed.get("dash", false) and tools.bash:        # [dash] ends the zip and starts the dash
+		zip = -1
+		return false
+	var a: Dictionary = list[zip]
+	var d := Vector2(float(a.x) - (x + w / 2.0), float(a.y) - (y + h / 2.0))
+	var dist := d.length()
+	on_ground = false
+	wall_dir = 0
+	prev_bottom = y + h
+	ghost_t -= dt
+	if ghost_t <= 0.0:
+		ghost_t = 0.03
+		ghosts.append({"x": x, "y": y, "life": 0.16, "face": face, "sx": 1.0, "sy": 1.0})
+	if dist <= Game.CURL_SPEED * dt + 0.5:
+		var nx := float(a.x) - w / 2.0
+		var ny := float(a.y) - h / 2.0
+		if not room.grid.box_hits_solid(nx, ny, w, h):
+			x = nx
+			y = ny
+		vy = -Game.CURL_POP
+		vx = Game.sign_of(zip_dx) * Game.CURL_EXIT_VX if absf(zip_dx) > 4.0 else 0.0
+		can_double = true
+		can_dash = true
+		jumping = false
+		curl_last = zip
+		zip = -1
+		room.ring(float(a.x), float(a.y), 2, 14, "#d6f6ff", 0.25)
+		Audio.sfx("spring")
+		return true
+	vx = d.x / dist * Game.CURL_SPEED
+	vy = d.y / dist * Game.CURL_SPEED
+	var hx := room.grid.move_x(self, vx * dt)
+	var hy := room.grid.move_y(self, vy * dt, false)
+	if hx != 0 or hy != 0:
+		zip_blocked += 1
+		if zip_blocked >= 2:
+			vx = 0.0
+			vy = 0.0
+			zip = -1
+	else:
+		zip_blocked = 0
+	if vx != 0.0:
+		face = Game.sign_of(vx)
+	return true
 
 func on_oneway() -> bool:
 	var grid := room.grid

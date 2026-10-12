@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets"]
+const NAMES := ["rooms4b", "w6assets", "curl"]
 
 func _init(m) -> void:
 	main = m
@@ -17,6 +17,7 @@ func run(name: String):
 	match name:
 		"rooms4b": return await t_rooms4b()
 		"w6assets": return await t_w6assets()
+		"curl": return t_curl()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -129,3 +130,158 @@ func t_w6assets() -> bool:
 	n05.queue_free()
 	Game.fresh()
 	return report("w6assets", res.ok, res.info)
+
+func step_keys(room: Room, keys: Dictionary) -> void:
+	Controls.script_input = keys
+	Controls.poll()
+	room.step(Game.STEP)
+
+# MVB2-03: curl. N10's three trenches, the pick rules, no zip without the ability, the tap that zips does not cast agents, H01 -> H14
+func t_curl() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	Game.tools.curl = true
+	var r := new_room("N10")
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	var p = r.player
+	p.x = 81.0 * 16.0
+	p.y = 19.0 * 16.0 - 10.0
+	p.vx = 0.0
+	p.vy = 0.0
+	var hp0: int = p.hp
+	# each of the three trenches can be crossed by a jump and a curl chain (some press timing works), without touching a spike
+	var trenches := [[80, 70], [62, 46], [36, 14]]       # [first floor column on the right edge, first spike column] per trench
+	for tr in trenches:
+		var ok := false
+		for off in range(6, 44, 2):
+			var rr := new_room("N10")
+			rr.ents.clear()
+			var pp = rr.player
+			pp.x = float(tr[0]) * 16.0 + 3.0
+			pp.y = 19.0 * 16.0 - 10.0
+			pp.vx = 0.0
+			pp.vy = 0.0
+			pp.hp = pp.max_hp
+			for f in range(260):
+				var keys := {"left": true}
+				if f < 14 or (f > 40 and pp.on_ground):
+					keys["jump"] = true
+				if f >= off and (f - off) % 12 == 0:
+					keys["special"] = true
+				step_keys(rr, keys)
+				if pp.hp < pp.max_hp:
+					break
+				if f > 20 and pp.on_ground and pp.x < float(tr[1]) * 16.0 - 14.0:
+					ok = true
+					break
+			rr.queue_free()
+			if ok:
+				break
+		if not ok:
+			fail(res, "N10: the trench right of column %d cannot be crossed" % tr[1])
+	Controls.script_input = null
+	# pick rules: from (78*16, 15*16) facing left the nearest ring on that side is the one at (74, 14)
+	var r2 := new_room("N10")
+	var q = r2.player
+	q.x = 78.0 * 16.0
+	q.y = 15.0 * 16.0
+	q.curl_last = -1
+	var i1: int = r2.pick_anchor(q, -1.0)
+	var want := -1
+	var list := r2.anchors()
+	for i in range(list.size()):
+		if int(list[i].x) == 74 * 16 + 8 and int(list[i].y) == 14 * 16 + 8:
+			want = i
+	if want < 0 or i1 != want:
+		fail(res, "pick: %d, want %d (%d anchors)" % [i1, want, list.size()])
+	q.curl_last = want
+	if r2.pick_anchor(q, -1.0) == want:
+		fail(res, "the ring just used was picked again")
+	q.curl_last = -1
+	# a wall between: none
+	var ring: Dictionary = list[want]
+	var mid_tx := floori((float(ring.x) + q.x + 5.0) / 2.0 / 16.0)
+	var mid_ty := floori((float(ring.y) + q.y + 5.0) / 2.0 / 16.0)
+	var old: int = r2.grid.tiles[mid_ty * r2.w + mid_tx]
+	r2.grid.tiles[mid_ty * r2.w + mid_tx] = TileGrid.SOLID
+	if r2.pick_anchor(q, -1.0) == want:
+		fail(res, "a wall did not block the line")
+	r2.grid.tiles[mid_ty * r2.w + mid_tx] = old
+	r.queue_free()
+	r2.queue_free()
+	# without curl: [special] near a ring does nothing new
+	Game.tools.curl = false
+	var r3 := new_room("N10")
+	var w3 = r3.player
+	w3.x = 78.0 * 16.0
+	w3.y = 15.0 * 16.0
+	for f in range(10):
+		step_keys(r3, {"special": f == 2})
+	if w3.zip >= 0:
+		fail(res, "zipped without curl")
+	# agents: a full meter and no ring in range: the tap casts them; with a ring in range the tap zips and casts nothing
+	Game.tools.curl = true
+	Game.tools.agents = true
+	var r4 := new_room("R01")
+	r4.ents.clear()
+	var a4 = r4.player
+	a4.meter = float(Game.METER_MAX)
+	for f in range(12):
+		step_keys(r4, {"special": f < 3})
+	if a4.agents_t <= 0.0:
+		fail(res, "the tap did not cast agents with no ring around")
+	var r5 := new_room("N10")
+	r5.ents.clear()
+	var a5 = r5.player
+	a5.x = 78.0 * 16.0
+	a5.y = 15.0 * 16.0
+	a5.meter = float(Game.METER_MAX)
+	for f in range(12):
+		step_keys(r5, {"special": f < 3})
+	if a5.agents_t > 0.0 or a5.meter < float(Game.METER_MAX):
+		fail(res, "a zipping tap cast the agents")
+	r3.queue_free()
+	r4.queue_free()
+	r5.queue_free()
+	# H01 -> H14 with curl and bash, no sudo: the ring, then a dash up
+	Game.tools.agents = false
+	Game.tools.bash = true
+	Game.tools.sudo = false
+	var h1_door_ok := false
+	for off in range(4, 24, 2):
+		var h1 := new_room("H01")
+		h1.ents.clear()
+		var hp = h1.player
+		hp.x = 16.0 * 16.0 + 3.0
+		hp.y = 12.0 * 16.0 - 10.0
+		for f in range(200):
+			var k := {}
+			if f < 30:
+				k["jump"] = true
+			if f == off:
+				k["special"] = true
+			if hp.curl_last >= 0:                                   # (after the zip: steer over the hole, dash up at the top of the pop)
+				if hp.x > 284.0:
+					k["left"] = true
+				elif hp.x < 266.0:
+					k["right"] = true
+				if hp.vy < 0.0 and hp.vy > -70.0 and absf(hp.vx) < 30.0:
+					k["dash"] = true
+					k["up"] = true
+			step_keys(h1, k)
+			if hp.y < 0.0 or h1.id != "H01":
+				h1_door_ok = true
+				break
+		h1.queue_free()
+		if h1_door_ok:
+			break
+	Controls.script_input = null
+	if not h1_door_ok:
+		fail(res, "H01: curl then a dash up did not reach the top")
+	Game.fresh()
+	return report("curl", res.ok, res.info)

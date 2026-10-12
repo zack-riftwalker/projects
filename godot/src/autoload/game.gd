@@ -374,6 +374,7 @@ func world_digest() -> int:
 
 # where the other player is ({room, x, y} while a partner is connected, else {}); Coop keeps it, the map and travel read it
 var partner := {}
+var curl_hint := false            # the local player has a GET ring in reach (the touch SPEC button reads GET)
 
 # ---- pins on the map (MVB1-08): shared, at most PIN_MAX; the host owns the list (a guest asks, snapshots carry it) ----
 const PIN_KINDS := ["TODO", "?", "HELP", "ability"]
@@ -549,6 +550,15 @@ func boss_hp(b: Dictionary) -> int:
 	return maxi(1, roundi(float(b.T) * R_PLAYER * float(b.u) * float(dv("boss_hp_mult"))))
 
 # ---- plugins (MV3-06): like the charms of Hollow Knight. Owned = flag plugin:<id> (shared by both players); equipped = this player's own list ----
+# curl and ssh (MVB2-03, MVB2-04)
+const CURL_RANGE := 104.0         # px, player centre to ring centre
+const CURL_SPEED := 400.0         # px/s, the zip
+const CURL_POP := 300.0           # px/s up on arrival (= JUMP)
+const CURL_EXIT_VX := 210.0       # px/s along the zip's horizontal direction on arrival (0 if the zip was within 4 px of vertical)
+const SSH_HOLD := 0.30            # s of pushing into a firewall brick
+const SSH_SPEED := 280.0          # px/s through the bricks
+const SSH_BRICKS := 2             # at most this many bricks in a row (a thicker wall does not open)
+
 const NOTCHES := 3                    # the "context window" at the start; Game.notches() adds one at 4 freed lost agents and one more at 8 (D47)
 const PLUGINS := [
 	{"id": "async_await", "name": "async/await", "cost": 2, "price": 0, "desc": "dash recharges twice as fast"},
@@ -697,7 +707,7 @@ var fights: Array = []
 func fresh() -> void:
 	flags = {}
 	flood_net = -1
-	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false}
+	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
 	equipped = []
 	bench = ""
 	tokens = 0
@@ -803,7 +813,7 @@ func bench_spawn(room_id: String):
 	return Vector2(b[0][0] * 16 + 3, b[0][1] * 16 + 6)
 
 # the tools Clawd owns (phase 1 test build: bash only)
-var tools := {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false}
+var tools := {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
 var shake_opt := 1.0
 var low_fx := false          # G.save.data.opt.min
 

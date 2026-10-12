@@ -432,6 +432,8 @@ func _host_msg(t: String, m: Dictionary) -> void:
 	remote.inv = float(m.get("inv", 0.0))
 	remote.focusing = int(m.get("fo", 0)) == 1
 	remote.mapping = int(m.get("mn", 0)) == 1
+	remote.cz = int(m.get("cz", -1))
+	remote.ss = int(m.get("ss", 0)) == 1
 	var sa := int(m.get("sa", 0))
 	if not plan_snaps.is_empty():                  # the guest applied snapshot `sa`: every boss-kit plan those snapshots carried has been seen
 		var keep: Array = []
@@ -1049,7 +1051,7 @@ func _send_snapshot() -> void:
 	for z in r.zones:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
-	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn, 1 if _map_open() else 0]
+	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn, 1 if _map_open() else 0, hp_.zip, 1 if hp_.ssh_t > 0.0 else 0]
 	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
@@ -1182,7 +1184,7 @@ func _guest_tick(dt: float) -> void:
 		st_acc = 0.0
 		var d := {"room": r.id, "x4": NetClasses.x4(p.x), "y4": NetClasses.x4(p.y), "vx": roundi(p.vx), "vy": roundi(p.vy), "face": int(p.face), "pose": 0, "hp": p.hp, "maxhp": p.max_hp,
 			"dead": 1 if p.dead else 0, "dn": guest_dn, "atk": [p.atk_id, p.atk_dir, p.atk_t > 0.0 and p.atk_live], "dash": [p.dash_id, roundi(p.dash_dx * 100.0), roundi(p.dash_dy * 100.0), roundi(maxf(p.dash_t, 0.0) * 100.0)],
-			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0, "mn": 1 if _map_open() else 0}
+			"gt": hms(), "sa": last_snap_n, "inv": p.inv, "fo": 1 if p.focus_t >= 0.0 else 0, "mn": 1 if _map_open() else 0, "cz": p.zip, "ss": 1 if p.ssh_t > 0.0 else 0}
 		st_n += 1
 		var gwh := Game.world_digest()
 		if gwh != st_wh_sent or st_n % 10 == 1:       # the digest rides on every 10th report, at once when it changes
@@ -1392,6 +1394,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 		host_body.dead = int(p1[8]) == 1
 		host_body.dn = int(p1[9])
 		host_body.mapping = p1.size() > 10 and int(p1[10]) == 1
+		host_body.cz = int(p1[11]) if p1.size() > 11 else -1
+		host_body.ss = p1.size() > 12 and int(p1[12]) == 1
 	elif host_body != null:
 		r.remote_players.erase(host_body)
 		host_body.queue_free()

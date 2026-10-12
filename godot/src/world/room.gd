@@ -115,6 +115,7 @@ var dead_cells: Array = []     # [tx, ty] of the dead code (`;`): wall to look a
 var dead_groups: Array = []    # the pixel centres of its 4-connected groups (moths, the reveal burst)
 var fire_cells: Array = []     # firewall bricks (`N`) and bulkheads (`0`), drawn by the furniture layer
 var thick_cells: Array = []
+var hooks: Array = []          # `c`: {x, y} centres; a SCRAPER hangs from each until boss:CRAWLER, then it is a GET ring (MVB2-05)
 var rings: Array = []          # GET rings (`@`): decoration in 4A
 var gate_cells: Array = []     # [tx, ty, "catch"|"agents"]: where a gate tile stands (drawn while it is closed)
 signal door_crossed(door: Dictionary)
@@ -459,6 +460,48 @@ func sign_text(s: Dictionary) -> String:
 		if Game.cond(String(a["if"])):
 			return String(a.text)
 	return String(s.text)
+
+# curl (MVB2-03): what [special] can zip to. Rings, and the crawler's hooks once it is beaten. The same list on both pages.
+func anchors() -> Array:
+	var out: Array = rings.duplicate()
+	if Game.flag("boss:CRAWLER"):
+		out.append_array(hooks)
+	return out
+
+# the anchor a [special] press would take: within CURL_RANGE of the body centre, not the one just used, a clear line (sampled every 8 px);
+# with a direction held only those on that side (when any exist); the nearest wins. -1 = none.
+func pick_anchor(q, mx: float) -> int:
+	var list := anchors()
+	var cx: float = q.x + q.w / 2.0
+	var cy: float = q.y + q.h / 2.0
+	var cand: Array = []
+	for i in range(list.size()):
+		if i == int(q.get("curl_last")):
+			continue
+		var a: Dictionary = list[i]
+		var d := Vector2(float(a.x) - cx, float(a.y) - cy)
+		if d.length() > Game.CURL_RANGE:
+			continue
+		var clear := true
+		var steps := maxi(1, ceili(d.length() / 8.0))
+		for s in range(1, steps):
+			var p := Vector2(cx, cy) + d * (float(s) / float(steps))
+			if grid.solid_at(p.x, p.y):
+				clear = false
+				break
+		if clear:
+			cand.append([i, d])
+	if cand.is_empty():
+		return -1
+	if mx != 0.0:
+		var side: Array = cand.filter(func(c): return c[1].x * mx > 0.0 or absf(c[1].x) < 12.0)
+		if not side.is_empty():
+			cand = side
+	var best: Array = cand[0]
+	for c in cand:
+		if c[1].length() < best[1].length():
+			best = c
+	return int(best[0])
 
 func update_doors() -> void:
 	grid.gates_open.catch = Game.flag("gate:%s:catch" % id)
@@ -1837,6 +1880,38 @@ func plugin_bought(pid: String, by: String) -> void:
 	pop(player.x + 5.0 if player != null else sx_default(), (player.y - 14.0) if player != null else 40.0, "npm install " + String(Game.plugin_def(pid).get("name", pid)), "#58f0c8", true)
 	plugin_got.emit(pid, by)
 
+# curl (MVB2-03): the cable while zipping (ours and the partner's), and a bracket round the ring a [special] press would take
+func _draw_curl(ci: CanvasItem) -> void:
+	var list := anchors()
+	var cable := func(from: Vector2, a: Dictionary) -> void:
+		var to := Vector2(float(a.x), float(a.y))
+		ci.draw_line(from, to, Color("#7cc4ff"), 1.0)
+		ci.draw_rect(Rect2(from.x - 1, from.y - 1, 3, 3), Color("#d6f6ff"))
+	for rp in remote_players:
+		var cz: int = int(rp.get("cz")) if rp.get("cz") != null else -1
+		if cz >= 0 and cz < list.size():
+			cable.call(Vector2(rp.x + 5.0, rp.y + 5.0), list[cz])
+	var p = player
+	if p == null or p.dead:
+		return
+	if p.zip >= 0 and p.zip < list.size():
+		cable.call(Vector2(p.x + 5.0, p.y + 5.0), list[p.zip])
+		return
+	if mode != "guest" or true:
+		Game.curl_hint = false
+	if bool(p.tools.get("curl", false)) and not list.is_empty():
+		var mxh := (1.0 if Controls.down.get("right", false) else 0.0) - (1.0 if Controls.down.get("left", false) else 0.0)
+		var ai := pick_anchor(p, mxh)
+		if ai >= 0:
+			Game.curl_hint = true
+			var a: Dictionary = list[ai]
+			var bc := Color("#d6f6ff")
+			var bx := floorf(float(a.x)) - 9.0
+			var by := floorf(float(a.y)) - 9.0
+			for c in [[0, 0, 1, 1], [18, 0, -1, 1], [0, 18, 1, -1], [18, 18, -1, -1]]:
+				ci.draw_rect(Rect2(bx + c[0], by + c[1], 1, 4) if c[2] > 0 else Rect2(bx + c[0], by + c[1], 1, 4), bc)
+				ci.draw_rect(Rect2(bx + c[0] + (0 if c[2] > 0 else -3), by + c[1] + (0 if c[3] > 0 else 3), 4, 1), bc)
+
 func jar_rect(j: Dictionary) -> Dictionary:
 	return Decor.jar_rect(j)
 
@@ -2283,6 +2358,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					if int(time * 3.0) % 2 == 0:
 						ci.draw_rect(Rect2(ix - 1, iy - 1, 2, 2), Color("#58f0c8"))
 	elif kind == "top":
+		_draw_curl(ci)
 		for a in agents:
 			a.draw(ci)
 		for av in agent_view:

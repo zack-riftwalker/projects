@@ -37,6 +37,8 @@ var away := false
 var lagging := false
 var t := 0.0
 var inv := 0.0
+var cz := -1                     # the GET ring it is zipping to (curl; -1 = none): the room draws its cable
+var ss := false                  # it is tunnelling through a firewall (ssh)
 var mapping := false             # it has its map overlay open (the partner sees a folded map above its head: the world does not wait for it)
 var focusing := false            # host: the partner is turning context into hit points (its `fo` report): the boss kit reads it
 var samples: Array = []          # [time, x, y] reported positions

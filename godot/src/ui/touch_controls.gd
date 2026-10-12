@@ -229,8 +229,9 @@ func _draw() -> void:
 		var r: float = b.r * (0.9 if on else 1.0)
 		draw_circle(c, r, clawd if on else fill)
 		draw_arc(c, r - kc, 0.0, TAU, 48, Color("#ffe3d6") if on else border, 2.0 * kc, true)
-		var tw := PixelText.text_width(b.label, {"tiny": true, "scale": lbl})
-		PixelText.draw_text(self, b.label, c.x - tw / 2.0, c.y - 2.5 * lbl, Game.COL.ink if on else Color(1, 0.97, 0.93, 0.92), {"tiny": true, "scale": lbl})
+		var label: String = "GET" if (a == "special" and Game.curl_hint) else String(b.label)
+		var tw := PixelText.text_width(label, {"tiny": true, "scale": lbl})
+		PixelText.draw_text(self, label, c.x - tw / 2.0, c.y - 2.5 * lbl, Game.COL.ink if on else Color(1, 0.97, 0.93, 0.92), {"tiny": true, "scale": lbl})
 	# pause
 	var pon: bool = held.get("pause", 0) > 0 or pending.has("pause")
 	draw_rect(pause_rect, clawd if pon else fill)
