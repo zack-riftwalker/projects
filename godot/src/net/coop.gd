@@ -1473,6 +1473,7 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				Game.flags["crack:%s:%d:%d" % [d.room, int(d.tx), int(d.ty)]] = true
 		"ability":
 			Game.tools[String(d.name)] = true
+			Game.flags["ability:" + String(d.name)] = true        # (the flag a boss reward sets on the host; doors and the chair of N22 read it)
 		"flag":
 			Game.flags[String(d.k)] = bool(d.v)
 		"boss":

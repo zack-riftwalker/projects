@@ -1896,3 +1896,463 @@ func sc_co_lostagent() -> Array:
 	var got2 := await wait_until(func(): return Game.flag("agent:H13") and mgr().room.jars.size() == 1 and mgr().room.jars[0].broken, 8.0)
 	await wait_secs(2.0)
 	return [jar_ok and got2, "guest: jar was there %s, freed and broken %s" % [jar_ok, got2]]
+
+# ---------------------------------------------------------------- THE NETWORK (MVB2-13)
+# the guest's bot for one trench of N10: walk left from the east edge, jump, tap [special] every 12 frames from frame `off`; hurt: back to the edge, next offset
+func curl_trench(tr: Array) -> bool:
+	for off in [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32]:
+		var p = mgr().player
+		p.x = float(tr[0]) * 16.0 + 3.0
+		p.y = 19.0 * 16.0 - 10.0
+		p.vx = 0.0
+		p.vy = 0.0
+		p.hp = p.max_hp
+		p.inv = 0.0
+		for f in range(260):
+			p = mgr().player
+			var keys := {"left": true}
+			if f < 14 or (f > 40 and p.on_ground):
+				keys["jump"] = true
+			if f >= off and (f - off) % 12 == 0:
+				keys["special"] = true
+			Controls.script_input = keys
+			await get_tree().physics_frame
+			if p.hp < p.max_hp:
+				break
+			if f > 20 and p.on_ground and p.x < float(tr[1]) * 16.0 - 14.0:
+				Controls.script_input = {}
+				return true
+	Controls.script_input = {}
+	return false
+
+# both in N10 with curl: the guest crosses the three trenches by curl; the host sees its body get past column 12 and its cable at least once
+func sc_co_curl() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.curl = true
+		await wait_secs(1.0)
+		mgr().swap_to("N10", Vector2(90.0 * 16.0, 19.0 * 16.0 - 10.0))
+		var seen_cable := false
+		var past := false
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 60000.0 * slow and not (past and seen_cable):
+			mgr().player.inv = 999.0
+			var rem = coop().remote
+			if rem != null and coop()._remote_room() != null and coop()._remote_room().id == "N10":
+				if rem.cz >= 0:
+					seen_cable = true
+				if rem.x < 12.0 * 16.0:
+					past = true
+			await get_tree().physics_frame
+		await wait_secs(1.0)
+		return [past and seen_cable, "host: the guest got past column 12 %s, its cable seen %s" % [past, seen_cable]]
+	var has := await wait_until(func(): return Game.tools.get("curl", false), 10.0)
+	mgr().swap_to("N10", Vector2(81.0 * 16.0 + 3.0, 19.0 * 16.0 - 10.0))
+	await wait_secs(1.0)
+	var crossed := 0
+	for tr in [[80, 70], [62, 46], [36, 14]]:
+		if await curl_trench(tr):
+			crossed += 1
+	for k in range(60):                                  # on, to the west end
+		Controls.script_input = {"left": true}
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	await wait_secs(2.0)
+	return [has and crossed == 3, "guest: curl %s, trenches crossed %d of 3" % [has, crossed]]
+
+# the guest's walk through N16 and N17 with ssh: right (jumping now and then) until `to`, `dir` keys
+func walk_until(dir: String, to: String, secs: float) -> bool:
+	var t0 := Time.get_ticks_msec()
+	var f := 0
+	while Time.get_ticks_msec() - t0 < secs * 1000.0 * slow:
+		var keys := {dir: true}
+		if f % 40 < 14:
+			keys["jump"] = true
+		f += 1
+		Controls.script_input = keys
+		mgr().player.hp = mgr().player.max_hp
+		await get_tree().physics_frame
+		if mgr().room.id == to and not mgr().trans.on:
+			Controls.script_input = {}
+			return true
+	Controls.script_input = {}
+	return false
+
+func sc_co_ssh() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.ssh = true
+		await wait_secs(1.0)
+		mgr().swap_to("N16", Vector2(24.0, 15.0 * 16.0 - 10.0))
+		var order: Array = []
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 70000.0 * slow:
+			mgr().player.inv = 999.0
+			var rr = coop()._remote_room()
+			if rr != null and (order.is_empty() or order[order.size() - 1] != rr.id):
+				order.append(rr.id)
+			if order.has("N17") and order.size() >= 3 and order[order.size() - 1] == "N16":
+				break
+			await get_tree().physics_frame
+		await wait_secs(1.0)
+		var ok: bool = order.has("N17") and order.find("N17") < order.rfind("N16")
+		return [ok, "host saw the guest in rooms %s" % str(order)]
+	var has := await wait_until(func(): return Game.tools.get("ssh", false), 10.0)
+	mgr().swap_to("N16", Vector2(24.0, 15.0 * 16.0 - 10.0))
+	await wait_secs(2.0)
+	var there := await walk_until("right", "N17", 40.0)
+	await wait_secs(1.5)
+	mgr().swap_to("N17", Vector2(6.0 * 16.0, 11.0 * 16.0 - 10.0)) if not there else null
+	var back := await walk_until("left", "N16", 40.0)
+	await wait_secs(1.5)
+	return [has and there and back, "guest: ssh %s, N16 -> N17 %s, back %s" % [has, there, back]]
+
+# ---- the three bosses of the NETWORK as kit bosses on a shared scenario skeleton
+# the guest's bot: stand where it is, swing at a catchable packet that comes close, otherwise at the boss when it is next to it
+func boss_guest_keys(g, boss, melee: bool, st: Dictionary) -> Dictionary:
+	var press := false
+	var r2: Room = mgr().room
+	for q in r2.projs:
+		if q.get("catchable", false) and not q.get("friendly", false) and not q.dead:
+			var d := Vector2(q.x - (g.x + 5.0), q.y - (g.y + 5.0))
+			if d.length() < 30.0:
+				g.face = 1.0 if d.x >= 0.0 else -1.0
+				press = true
+	var keys := {}
+	if not press and melee and boss != null:
+		var dx: float = boss.cx - (g.x + 5.0)
+		if absf(dx) > 28.0:
+			keys["right" if dx > 0.0 else "left"] = true
+		else:
+			g.face = 1.0 if dx > 0.0 else -1.0
+			press = st.f % 12 < 2
+	keys["attack"] = press and g.atk_cd <= 0.0
+	if press and g.atk_cd <= 0.0:
+		st.swings += 1
+	return keys
+
+func boss_arena(room_id: String, host_x: float, guest_x: float) -> Room:
+	var x: float = host_x if role == "host" else guest_x
+	mgr().swap_to(room_id, Vector2(x, 100.0))
+	var p = mgr().player
+	p.x = x
+	p.y = floor_y(mgr().room, x, 8)
+	return mgr().room
+
+func plan_stats(b, seen: Dictionary) -> void:
+	if b != null and not b.plan.is_empty() and not seen.has(b.plan.seq):
+		seen[b.plan.seq] = b.plan.tgt
+
+func sc_co_crawler() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var secs := 32.0 * slow
+	if role == "host":
+		Game.tools.catch = true
+		await wait_secs(1.0)
+		var r := boss_arena("N09", 230.0, 270.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		var b: CrawlerBoss = r.boss
+		var seen := {}
+		var forced := 0
+		var next_force := 8.0
+		var caught_hits := 0
+		var prev_hp := b.hpf
+		var prev_caught := int(r.stats.get("caught", 0))
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		while Time.get_ticks_msec() - t0 < secs * 1000.0:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			Controls.script_input = {"attack": f % 50 < 3}
+			f += 1
+			plan_stats(b, seen)
+			var el := float(Time.get_ticks_msec() - t0) / 1000.0
+			if b.plan.is_empty() and forced < 3 and el > next_force and b.active and not b.dying:
+				b._start("volley", "p2")                                  # (scripted: the volleys the guest catches)
+				forced += 1
+				next_force = el + 9.0
+			var caught := int(r.stats.get("caught", 0))
+			if caught > prev_caught and prev_hp - b.hpf >= 1.9:
+				caught_hits += 1
+			prev_caught = caught
+			prev_hp = b.hpf
+			if b.hpf < float(b.max_hp) * 0.4:
+				b.hpf = float(b.max_hp)
+				b.hp = b.max_hp
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		var tg := {"p1": 0, "p2": 0}
+		for sq in seen:
+			tg[seen[sq]] += 1
+		await wait_secs(1.0)
+		return [started and seen.size() >= 5 and tg.p1 >= 1 and tg.p2 >= 1 and caught_hits >= 1, "host: started %s, %d plans (p1 %d, p2 %d), packets caught back into the core %d (2 hp each)" % [started, seen.size(), tg.p1, tg.p2, caught_hits]]
+	var has := await wait_until(func(): return Game.tools.get("catch", false), 10.0)
+	var r2 := boss_arena("N09", 230.0, 270.0)
+	var pup: CrawlerBoss = null
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is CrawlerBoss:
+				pup = e
+		return pup != null, 15.0)
+	if pup == null:
+		return [false, "no crawler puppet"]
+	var st := {"f": 0, "swings": 0}
+	var seen2 := {}
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+		var g = mgr().player
+		g.inv = 999.0
+		g.hp = g.max_hp
+		st.f += 1
+		plan_stats(pup, seen2)
+		Controls.script_input = boss_guest_keys(g, pup, false, st)
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	var mine := 0
+	for sq in seen2:
+		if seen2[sq] == "p2":
+			mine += 1
+	await wait_secs(1.0)
+	return [has and seen2.size() >= 5 and short == 0 and mine >= 1 and pup.kit_violation == "", "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, swings %d, violation '%s'" % [seen2.size(), short, mine, st.swings, pup.kit_violation]]
+
+func sc_co_firewall() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var secs := 32.0 * slow
+	if role == "host":
+		await wait_secs(1.0)
+		var r := boss_arena("N15", 150.0, 330.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		var fw: FirewallBoss = r.boss
+		var seen := {}
+		var turned := 0
+		var wrong := 0
+		var was_plan := false
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		while Time.get_ticks_msec() - t0 < secs * 1000.0:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			Controls.script_input = {"attack": f % 50 < 3}
+			f += 1
+			plan_stats(fw, seen)
+			var idle: bool = fw.plan.is_empty()
+			if idle and was_plan and fw.read.last_key == "p2" and coop().remote != null:
+				var hs: Array = fw.read.hits.get("p2", [])
+				if not hs.is_empty() and fw.read.clock - float(hs[hs.size() - 1].t) <= 2.0:
+					var want: float = Game.sign_of(fw.kit_aim("p2").x - fw.cx)
+					if want == fw.face:
+						turned += 1
+					else:
+						wrong += 1
+			was_plan = not idle
+			if fw.hpf < float(fw.max_hp) * 0.5:
+				fw.hpf = float(fw.max_hp)
+				fw.hp = fw.max_hp
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		var tg := {"p1": 0, "p2": 0}
+		for sq in seen:
+			tg[seen[sq]] += 1
+		await wait_secs(1.0)
+		return [started and seen.size() >= 5 and tg.p1 >= 1 and tg.p2 >= 1 and turned >= 1 and wrong == 0, "host: started %s, %d plans (p1 %d, p2 %d), shield turned to the guest %d times, wrong %d" % [started, seen.size(), tg.p1, tg.p2, turned, wrong]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := boss_arena("N15", 150.0, 330.0)
+	var pup: FirewallBoss = null
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is FirewallBoss:
+				pup = e
+		return pup != null, 15.0)
+	if pup == null:
+		return [false, "no firewall puppet"]
+	var st := {"f": 0, "swings": 0}
+	var seen2 := {}
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+		var g = mgr().player
+		g.inv = 999.0
+		g.hp = g.max_hp
+		st.f += 1
+		plan_stats(pup, seen2)
+		Controls.script_input = boss_guest_keys(g, pup, true, st)
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	var mine := 0
+	for sq in seen2:
+		if seen2[sq] == "p2":
+			mine += 1
+	await wait_secs(1.0)
+	return [seen2.size() >= 5 and short == 0 and mine >= 1 and pup.kit_violation == "", "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, swings %d, violation '%s'" % [seen2.size(), short, mine, st.swings, pup.kit_violation]]
+
+# the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 20 s of fight, nobody is lost
+func sc_co_reviewer2() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.ssh = true
+		Game.flags["ability:ssh"] = true
+		await wait_secs(1.0)
+		var r := boss_arena("N22", 60.0, 60.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "intro" or mgr().room.fight.state == "active", 60.0)
+		var active := await wait_until(func(): return mgr().room.fight.state == "active", 15.0)
+		var seen := {}
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 20000.0 * slow:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			var b = r.boss
+			plan_stats(b, seen)
+			if b != null and b.hpf < float(b.max_hp) * 0.5:
+				b.hpf = float(b.max_hp)
+			await get_tree().physics_frame
+		var shut: bool = r.fight_active
+		return [started and active and seen.size() >= 3 and shut, "host: intro %s, active %s, %d plans, doors shut %s" % [started, active, seen.size(), shut]]
+	var has := await wait_until(func(): return Game.flag("ability:ssh"), 10.0)
+	mgr().swap_to("N22", Vector2(11.0 * 16.0 + 3.0, 100.0))
+	var g = mgr().player
+	g.x = 11.0 * 16.0 + 3.0
+	g.y = 176.0 - g.h
+	await wait_secs(2.0)
+	for k in range(5):
+		g = mgr().player
+		g.x = 11.0 * 16.0 + 3.0
+		g.y = 176.0 - g.h
+		g.vx = 0.0
+		Controls.script_input = {"up": true}
+		await get_tree().physics_frame
+		Controls.script_input = {}
+		await wait_secs(0.4)
+		if mgr().room.fight.state != "none":
+			break
+	var intro := await wait_until(func(): return mgr().room.fight.state == "intro" or mgr().room.fight.state == "active", 15.0)
+	var pup: Reviewer2 = null
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is Reviewer2:
+				pup = e
+		return pup != null, 10.0)
+	var seen2 := {}
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 22000.0 * slow:
+		var g2 = mgr().player
+		g2.inv = 999.0
+		g2.hp = g2.max_hp
+		plan_stats(pup, seen2)
+		await get_tree().physics_frame
+	var viol: String = pup.kit_violation if pup != null else "no puppet"
+	return [has and intro and pup != null and seen2.size() >= 3 and viol == "", "guest: ssh flag %s, intro %s, saw %d plans, violation '%s'" % [has, intro, seen2.size(), viol]]
+
+# both drop into N21: the swarms are fought off, wave:N21 reaches both, the guest takes rate_limit out of the glass case
+func sc_co_honeypot() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var spawn := Vector2(21.0 * 16.0, 3.0 * 16.0)
+	if role == "host":
+		Game.tools.bash = true
+		await wait_secs(1.0)
+		mgr().swap_to("N21", spawn)
+		var cleared := false
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		while Time.get_ticks_msec() - t0 < 100000.0 * slow:
+			var p = mgr().player
+			p.inv = 999.0
+			p.hp = p.max_hp
+			f += 1
+			var keys := {"attack": f % 14 < 2, ("left" if (f / 70) % 2 == 0 else "right"): f % 70 < 20}
+			Controls.script_input = keys
+			if Game.flag("wave:N21"):
+				cleared = true
+				break
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		var owned := await wait_until(func(): return Game.flag("plugin:rate_limit"), 40.0)
+		await wait_secs(1.0)
+		return [cleared and owned, "host: waves cleared %s, rate_limit owned %s" % [cleared, owned]]
+	await wait_secs(1.0)
+	mgr().swap_to("N21", spawn + Vector2(60.0, 0.0))
+	var flag := false
+	var t1 := Time.get_ticks_msec()
+	var g := 0
+	while Time.get_ticks_msec() - t1 < 100000.0 * slow:
+		var p2 = mgr().player
+		p2.inv = 999.0
+		p2.hp = p2.max_hp
+		g += 1
+		Controls.script_input = {"attack": g % 14 < 2, ("right" if (g / 70) % 2 == 0 else "left"): g % 70 < 20}
+		if Game.flag("wave:N21"):
+			flag = true
+			break
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	await wait_secs(1.5)
+	var r: Room = mgr().room
+	var dn = r.grid.door_at("N", 21)
+	var door_open: bool = dn != null and dn.open
+	var chip: Dictionary = {}
+	for it in r.items:
+		if it.kind == "plugin":
+			chip = it
+	var took := false
+	if not chip.is_empty():
+		for k in range(20):
+			var p3 = mgr().player
+			p3.x = float(chip.x) - 5.0
+			p3.y = float(chip.y) - 6.0
+			p3.vx = 0.0
+			p3.vy = 0.0
+			await wait_secs(0.3)
+			if Game.owns_plugin("rate_limit"):
+				took = true
+				break
+	return [flag and door_open and took, "guest: wave flag %s, N door open %s, chip %s taken %s" % [flag, door_open, str(not chip.is_empty()), took]]
+
+# the guest pulls N02's lever: the host has lever:D06 and D06's slot gate is open
+func sc_co_lever() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		var got := await wait_until(func(): return Game.flag("lever:D06"), 30.0)
+		var t_flag := Time.get_ticks_msec()
+		mgr().swap_to("D06", Vector2(60.0, 100.0))
+		await wait_secs(1.0)
+		var open: bool = mgr().room.grid.gates_open.agents
+		return [got and open, "host: lever:D06 %s, D06's slot gate open %s" % [got, open]]
+	await wait_secs(1.5)
+	mgr().swap_to("N02", Vector2(4.0 * 16.0 - 14.0, 12.0 * 16.0 + 6.0))
+	var r: Room = mgr().room
+	var lv: Dictionary = r.levers[0] if not r.levers.is_empty() else {}
+	if lv.is_empty():
+		return [false, "no lever in N02"]
+	for k in range(12):
+		var p = mgr().player
+		p.x = float(lv.x) - 14.0
+		p.y = float(lv.y) + 16.0 - p.h
+		p.vx = 0.0
+		p.face = 1.0
+		p.inv = 999.0
+		Controls.script_input = {"attack": true}
+		await get_tree().physics_frame
+		Controls.script_input = {}
+		await wait_secs(0.4)
+		if Game.flag("lever:D06"):
+			break
+	var mine := await wait_until(func(): return Game.flag("lever:D06"), 10.0)
+	await wait_secs(2.5)
+	return [mine, "guest: lever:D06 %s" % mine]

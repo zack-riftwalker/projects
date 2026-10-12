@@ -87,6 +87,10 @@ func _host(b: Dictionary) -> void:
 	# the guest's world flags equal the host's (MVB1-01): a guest-only world flag the host never learns, or a list that never arrives
 	if rem != null and coop.guest_ready and coop.guest_wh >= 0 and not rem.lagging and Net.is_open and coop.guest_wh != Game.world_digest():
 		b["world-digest"] = [5.0, "the guest's world digest %d differs from the host's %d" % [coop.guest_wh, Game.world_digest()]]
+	# the honeypot's door: the host has wave:N21, the guest stands against that door and still does not have the flag (MVB2-13)
+	if rem != null and Game.flag("wave:N21") and coop._remote_room() != null and coop._remote_room().id == "N21" and coop.guest_wh >= 0 and coop.guest_wh != Game.world_digest() \
+			and rem.x > 20.0 * 16.0 - 24.0 and rem.x < 24.0 * 16.0 + 8.0 and rem.y < 5.0 * 16.0:
+		b["wave-door"] = [3.0, "wave:N21 is set here, the guest stands at the shut door without it"]
 	# a room is kept only while somebody is in it (a stale room comes back later with frozen creatures: G6)
 	for r in mgr.rooms.values():
 		if r != mgr.room and r.remote_players.is_empty():
@@ -109,6 +113,21 @@ func _guest(b: Dictionary) -> void:
 		var kv = e.get("kit_violation")
 		if e.puppet and kv != null and kv != "":
 			b["boss-cue"] = [0.0, kv]
+			break
+	# the FIREWALL's scan leaves exactly the lane its fields name open (MVB2-13): the boxes the guest builds are the host's
+	for e in mgr.room.ents:
+		if e.puppet and e is FirewallBoss and e.plan_active() and String(e.plan.id) == "scan":
+			var free: Array = []
+			for i in range(3):
+				var l: Array = FirewallBoss.LANES[i]
+				var covered := false
+				for hb in e.harmboxes():
+					if hb.x < l[1] and hb.x + hb.w > l[0]:
+						covered = true
+				if not covered:
+					free.append(i)
+			if free != [e.open_lane]:
+				b["scan-lane"] = [0.3, "scan burns so that lanes %s stay open, the host says lane %d" % [str(free), e.open_lane]]
 			break
 	if _bodies() > 1:
 		b["one-host-body"] = [1.0, "%d host bodies" % _bodies()]
