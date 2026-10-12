@@ -78,6 +78,7 @@ func run(name: String) -> bool:
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 		"lab": return t_lab()
+		"symlink": return t_symlink()
 		"variants4b": return t_variants4b()
 		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
@@ -3219,3 +3220,47 @@ func t_variants4b() -> bool:
 	z.queue_free()
 	Game.flags = {}
 	return report("variants4b", res.ok, res.info)
+
+# MVB0-06: a door pair whose rooms do not touch (Z03:E <-> Z04:W): the height above the door's bottom row is kept
+func t_symlink() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var z3 := new_room("Z03")
+	chk.call("Z03:E closed", z3.grid.tile(24, 10) == TileGrid.SOLID)
+	z3.queue_free()
+	var m := new_manager()
+	m.swap_to("Z04", Vector2(4 * 16.0, 9 * 16.0 - 10.0))
+	for f in range(20):
+		m.tick(Game.STEP)
+	for f in range(240):
+		Controls.script_input = {"left": true}
+		m.tick(Game.STEP)
+		if m.room.id == "Z03" and not m.trans.on:
+			break
+	Controls.script_input = {}
+	chk.call("west: in Z03", m.room.id == "Z03")
+	chk.call("link:lab set", Game.flag("link:lab"))
+	for f in range(30):
+		m.tick(Game.STEP)
+	res.info += " Z03 arrival x=%.0f y=%.0f ground=%s" % [m.player.x, m.player.y, m.player.on_ground]
+	chk.call("on Z03's floor", m.player.on_ground and absf(m.player.y + m.player.h - 13 * 16) < 0.01 and m.player.x > 20 * 16)
+	m.room.update_doors()
+	chk.call("Z03:E open now", m.room.grid.tile(24, 10) == TileGrid.E)
+	for f in range(240):
+		Controls.script_input = {"right": true}
+		m.tick(Game.STEP)
+		if m.room.id == "Z04" and not m.trans.on:
+			break
+	Controls.script_input = {}
+	chk.call("east: in Z04", m.room.id == "Z04")
+	for f in range(40):
+		m.tick(Game.STEP)
+	res.info += " Z04 arrival x=%.0f y=%.0f ground=%s" % [m.player.x, m.player.y, m.player.on_ground]
+	chk.call("on Z04's ledge", m.player.on_ground and absf(m.player.y + m.player.h - 9 * 16) < 0.01)
+	Game.flags = {}
+	return report("symlink", res.ok, res.info)
