@@ -4,7 +4,7 @@ class_name Tests4b2
 
 var main
 
-const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies"]
+const NAMES := ["rooms4b", "w6assets", "curl", "ssh", "net4b", "w6enemies", "crawler"]
 
 func _init(m) -> void:
 	main = m
@@ -21,6 +21,7 @@ func run(name: String):
 		"ssh": return t_ssh()
 		"net4b": return t_net4b()
 		"w6enemies": return t_w6enemies()
+		"crawler": return t_crawler()
 	return report(name, false, "unknown test")
 
 func checker() -> Dictionary:
@@ -638,3 +639,159 @@ func t_w6enemies() -> bool:
 	rs.queue_free()
 	Game.fresh()
 	return report("w6enemies", res.ok, res.info)
+
+func box_key(arr: Array) -> Array:
+	var o: Array = []
+	for b in arr:
+		o.append([roundi(b.x), roundi(b.y), roundi(b.w), roundi(b.h)])
+	return o
+
+func same_boxes(a: Array, b: Array) -> bool:
+	var ka := box_key(a)
+	var kb := box_key(b)
+	if ka.size() != kb.size():
+		return false
+	for i in range(ka.size()):
+		for j in range(4):
+			if absi(ka[i][j] - kb[i][j]) > 2:
+				return false
+	return true
+
+# MVB2-07: WEB CRAWLER
+func t_crawler() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var r := new_room("N09")
+	var cb: CrawlerBoss = null
+	for e in r.ents:
+		if e is CrawlerBoss:
+			cb = e
+	if cb == null or r.boss != cb:
+		fail(res, "N09 has no CrawlerBoss")
+		r.queue_free()
+		return report("crawler", false, res.info)
+	if cb.max_hp != 56:
+		fail(res, "hp %d" % cb.max_hp)
+	# intro only when a centre is below x 304
+	r.player.x = 340.0
+	r.player.y = 150.0
+	r.player.inv = 99.0
+	for f in range(30):
+		r.step(Game.STEP)
+	if r.fight.state != "none":
+		fail(res, "intro started with the player east of 304")
+	r.player.x = 250.0
+	r.step(Game.STEP)
+	if r.fight.state != "intro":
+		fail(res, "intro did not start below 304 (%s)" % r.fight.state)
+	var n := 0
+	while r.fight.state != "active" and n < 400:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never became active")
+	# harm only in an active phase; the core is out of reach until a recovery; rule 8 picks the node above who stood under it
+	var harm_bad := false
+	var saw := {}
+	var pup = NetClasses.make(30, r)
+	var cue_ok := false
+	var act_ok := false
+	var hurt_in_recover := false
+	for f in range(60 * 60):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		r.player.x = 80.0 if (f / 240) % 2 == 0 else 250.0
+		r.step(Game.STEP)
+		if not cb.plan.is_empty():
+			saw[String(cb.plan.id)] = true
+			cb.plan_seen(int(cb.plan.seq))
+		if not cb.harmboxes().is_empty() and not cb.plan_active():
+			harm_bad = true
+		if not cb.plan.is_empty() and (cb.plan.ph == "cue" or cb.plan.ph == "active") and cb.plan.id in ["drop", "sweep", "back"]:
+			NetClasses.apply(pup, JSON.parse_string(JSON.stringify(NetClasses.record(cb))))
+			var same := same_boxes(cb.harmboxes(), pup.harmboxes())
+			if cb.plan.ph == "cue":
+				cue_ok = same or cue_ok
+			elif same and not cb.harmboxes().is_empty():
+				act_ok = true
+		if cb.plan_phase() == "recover" and cb.plan.id == "drop":
+			hurt_in_recover = hurt_in_recover or cb.hurtboxes().size() >= 1
+		if act_ok and cue_ok and saw.has("move") and saw.has("drop") and saw.has("volley"):
+			break
+	pup.free()
+	if harm_bad:
+		fail(res, "harm outside the active phase")
+	if not cue_ok or not act_ok:
+		fail(res, "parity cue %s active %s" % [str(cue_ok), str(act_ok)])
+	if not (saw.has("move") and saw.has("drop") and saw.has("volley")):
+		fail(res, "attacks seen: %s" % str(saw.keys()))
+	# rule 8: a long stay under the core makes `move` go to the node above that player
+	cb.read.samples = cb.read.samples
+	cb.plan = {}
+	cb.node = 0
+	cb.idle_t = 5.0
+	var q = cb.kit_body("p1")
+	r.player.x = float(CrawlerBoss.NODES[2].x) - r.player.w / 2.0
+	r.player.y = 100.0
+	for f in range(70):
+		r.player.inv = 99.0
+		r.player.vy = 0.0
+		r.player.y = 100.0
+		cb.read.update(Game.STEP)
+		r.step(Game.STEP)
+		cb.idle_t = 5.0
+	var picked := cb._pick_node()
+	if picked == 0:
+		fail(res, "rule 8: picked the node the core is on")
+	# a jump and an up-swipe hit the core in a drop recovery; a caught packet takes 2 and brings the core down
+	cb.plan = {}
+	cb.idle_t = 5.0
+	cb.hpf = float(cb.max_hp)
+	cb.hp = cb.max_hp
+	cb.down_t = 0.0
+	cb.core_y = float(Boss.FLOOR - 70.0)
+	var hp0 := cb.hpf
+	r.attacker = r.player
+	cb.hit(1, 0.0, -1.0, "swipe", cb)
+	if cb.hpf >= hp0:
+		fail(res, "a swipe did no damage to the core")
+	hp0 = cb.hpf
+	cb.hit(2, 0.0, 0.0, "catch", cb)
+	if cb.hpf > hp0 - 2.0 + 0.01 or cb.down_t <= 0.0:
+		fail(res, "a caught packet: hp %.1f -> %.1f, down %.1f" % [hp0, cb.hpf, cb.down_t])
+	# phases at 60% and 25%
+	cb.hpf = float(cb.max_hp) * 0.59
+	cb.on_damage()
+	if cb._phase_now() != 2 or cb.phase != 2:
+		fail(res, "no phase 2 at 59%")
+	cb.hpf = float(cb.max_hp) * 0.24
+	cb.on_damage()
+	if cb.phase != 3:
+		fail(res, "no phase 3 at 24%")
+	# the kill: curl, boss flag, N09:W opens
+	Game.flags = {}
+	Game.tools = {}
+	if not r.skip_boss():
+		fail(res, "skip boss refused")
+	n = 0
+	while r.fight.state != "done" and n < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if not Game.flag("ability:curl") or not Game.flag("boss:CRAWLER") or not Game.tools.get("curl", false):
+		fail(res, "reward missing (state %s)" % r.fight.state)
+	var w_open := true
+	r.update_doors()
+	for d in r.grid.doors:
+		if String(d.to).begins_with("N08") or String(d.get("side", "")) == "W":
+			w_open = w_open and bool(d.open)
+	if not w_open:
+		fail(res, "N09:W stayed shut")
+	r.queue_free()
+	Game.fresh()
+	return report("crawler", res.ok, res.info)

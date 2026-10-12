@@ -466,6 +466,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 		"Reviewer": b = Reviewer.new(self, bx, by, hp_)
 		"MergeBoss": b = MergeBoss.new(self, bx, by, hp_)
 		"LeakBoss": b = LeakBoss.new(self, bx, by, hp_)
+		"CrawlerBoss": b = CrawlerBoss.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))
