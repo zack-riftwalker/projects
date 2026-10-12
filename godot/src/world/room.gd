@@ -37,6 +37,8 @@ var kills := 0
 var hits := 0
 var cp_index := -1
 var sign_now = null
+var variants_on := {}               # variant index -> true once its flag was seen (its cells are queued)
+var variant_q: Array = []           # cells still to change: {tx, ty, t} (a tile must never appear inside a body or vanish under one)
 var auto_step := false
 var rng := RandomNumberGenerator.new()
 var cam := {"x": 0.0, "y": 0.0, "ty": 0.0, "look": 0.0, "lock": null}
@@ -254,7 +256,59 @@ func load_room(room_id: String, snap = null) -> void:
 	_group_dead()
 	if def.has("flood"):
 		liquid_y = flood_target()
+	_step_variants(true)                # (variants whose flag is already set are part of the room from the start)
 	rng.seed = 1
+
+# `variants` (rooms.json): while a flag is set, the cells of a rect that the room file has as `from` are `to`.
+# At load they apply at once; later each cell waits until it is safe (never a wall inside a body, never a floor vanishing under one).
+func _step_variants(at_load := false) -> void:
+	var vs: Array = def.get("variants", [])
+	if vs.is_empty():
+		return
+	for vi in range(vs.size()):
+		if variants_on.has(vi) or not Game.flag(String(vs[vi]["if"])):
+			continue
+		variants_on[vi] = true
+		var v: Dictionary = vs[vi]
+		var to_t: int = TileGrid.CHARS.get(String(v.to), TileGrid.E)
+		for ty in range(int(v.rect[1]), int(v.rect[1]) + int(v.rect[3])):
+			for tx in range(int(v.rect[0]), int(v.rect[0]) + int(v.rect[2])):
+				if ty < h and tx < rows[ty].length() and rows[ty][tx] == String(v.from):
+					variant_q.append({"tx": tx, "ty": ty, "t": to_t})
+	if variant_q.is_empty():
+		return
+	var bodies: Array = []
+	if not at_load:
+		if player != null:
+			bodies.append(player)
+		bodies.append_array(remote_players)
+		for e in ents:
+			if not e.dead:
+				bodies.append(e)
+	var left: Array = []
+	for c in variant_q:
+		if _variant_safe(c, bodies):
+			grid.tiles[c.ty * w + c.tx] = c.t
+			grid.blink_hold.erase(c.ty * w + c.tx)
+			if view != null:
+				view.refresh_tile(c.tx, c.ty)
+		else:
+			left.append(c)
+	variant_q = left
+
+func _variant_safe(c: Dictionary, bodies: Array) -> bool:
+	var old := grid.tiles[c.ty * w + c.tx]
+	var top: float = c.ty * T
+	var blocks: bool = c.t != TileGrid.E and c.t != TileGrid.ONEWAY and c.t != TileGrid.CRUMBLE
+	for b in bodies:
+		var over: bool = b.x < c.tx * T + T and b.x + b.w > c.tx * T
+		if not over:
+			continue
+		if blocks and b.y < top + T and b.y + b.h > top:
+			return false
+		if not blocks and (old == TileGrid.SOLID or old == TileGrid.ONEWAY) and absf(b.y + b.h - top) <= 2.0:
+			return false
+	return true
 
 # THE HEAP's water: the surface row of this room at the current flood level (null = dry). Pixel y = row * 16 + 6
 func flood_target():
@@ -780,6 +834,7 @@ func step_guest(dt: float) -> void:
 		hitstop -= dt
 		return
 	time += dt
+	_step_variants()
 	_move_platforms()
 	var p = player
 	if p != null:
@@ -996,6 +1051,7 @@ func step(dt: float) -> void:
 		for i in grid.blink_hold.keys():
 			if not grid.any_on(live, i % w, i / w):
 				grid.blink_hold.erase(i)
+	_step_variants()
 	_step_crumble(dt, live)
 	if not break_q.is_empty():
 		for q in break_q:

@@ -78,6 +78,7 @@ func run(name: String) -> bool:
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 		"lab": return t_lab()
+		"variants4b": return t_variants4b()
 		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
 	return report(name, false, "unknown test")
@@ -3170,3 +3171,51 @@ func t_signs4b() -> bool:
 	r8.queue_free()
 	Game.flags = {}
 	return report("signs4b", res.ok, res.info)
+
+# MVB0-05: tiles that change with a flag, never inside a body and never under one
+func t_variants4b() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	Game.flags["lab:solid"] = true
+	var z := new_room("Z01")
+	for tx in range(17, 21):
+		chk.call("preset solid %d" % tx, z.grid.tiles[10 * z.w + tx] == TileGrid.SOLID)
+	z.queue_free()
+	Game.flags = {}
+	z = new_room("Z01")
+	clear_ents(z)
+	for tx in range(17, 21):
+		chk.call("blink before %d" % tx, z.grid.tiles[10 * z.w + tx] == TileGrid.BLINK_A)
+	z.player.x = 18 * 16 + 3.0
+	z.player.y = 10 * 16 + 3.0
+	Game.flags["lab:solid"] = true
+	z._step_variants()
+	chk.call("17 solid", z.grid.tiles[10 * z.w + 17] == TileGrid.SOLID)
+	chk.call("19 solid", z.grid.tiles[10 * z.w + 19] == TileGrid.SOLID)
+	chk.call("20 solid", z.grid.tiles[10 * z.w + 20] == TileGrid.SOLID)
+	chk.call("18 waits", z.grid.tiles[10 * z.w + 18] == TileGrid.BLINK_A)
+	z.player.x = 5 * 16.0
+	z._step_variants()
+	chk.call("18 solid after", z.grid.tiles[10 * z.w + 18] == TileGrid.SOLID)
+	chk.call("view shows 18", z.view.tiles.get_cell_source_id(Vector2i(18, 10)) >= 0)
+	# opening a floor under a body
+	z.player.x = 25 * 16 + 3.0
+	z.player.y = 13 * 16 - 10.0
+	Game.flags["lab:open"] = true
+	z._step_variants()
+	chk.call("24 open", z.grid.tiles[13 * z.w + 24] == TileGrid.E)
+	chk.call("26 open", z.grid.tiles[13 * z.w + 26] == TileGrid.E)
+	chk.call("27 open", z.grid.tiles[13 * z.w + 27] == TileGrid.E)
+	chk.call("25 waits", z.grid.tiles[13 * z.w + 25] == TileGrid.SOLID)
+	z.player.x = 5 * 16.0
+	z._step_variants()
+	chk.call("25 open after", z.grid.tiles[13 * z.w + 25] == TileGrid.E)
+	chk.call("view erased 25", z.view.tiles.get_cell_source_id(Vector2i(25, 13)) < 0)
+	z.queue_free()
+	Game.flags = {}
+	return report("variants4b", res.ok, res.info)

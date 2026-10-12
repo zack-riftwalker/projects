@@ -1542,7 +1542,8 @@ func sc_co_leak() -> Array:
 	await wait_secs(2.0)
 	return [fight and lv and diff < 10.0 and hurt and seen_gc and popped, "guest: fight %s, level 1 %s, water off by %.1f, wet floor hurt %s, drone seen %s, hit it %s" % [fight, lv, diff, hurt, seen_gc, popped]]
 
-# MVB0-01: a world flag the host sets (a one-way hatch it fell through) reaches the guest while it plays, and opens the guest's door
+# MVB0-01: a world flag the host sets (a one-way hatch it fell through, a lab door) reaches the guest while it plays: it opens the
+# guest's door, and a tile variant changes under the guest's feet-free cells. MVB0-06: the guest's crossing of a symlink door sets the host's flag
 func sc_co_flags() -> Array:
 	Game.tools.sudo = true
 	if not await wait_joined():
@@ -1554,8 +1555,18 @@ func sc_co_flags() -> Array:
 		Controls.script_input = {"down": true, "jump": true}
 		var went := await wait_until(func(): return Game.flag("hatch:H10S"), 10.0)
 		Controls.script_input = {}
-		await wait_secs(6.0 * slow)
-		return [went, "host crossed the hatch %s" % went]
+		await wait_secs(2.0)
+		# the lab door Z01:E sets lab:a
+		mgr().swap_to("Z01", Vector2(29.0 * 16.0, 12.0 * 16.0 - 10.0))
+		await wait_secs(0.6)
+		Controls.script_input = {"right": true}
+		var lab_a := await wait_until(func(): return Game.flag("lab:a"), 8.0)
+		Controls.script_input = {}
+		await wait_secs(4.0 * slow)
+		Game.flags["lab:solid"] = true      # (set by the host's world: the guest must follow)
+		var link := await wait_until(func(): return Game.flag("link:lab"), 40.0)
+		await wait_secs(1.0)
+		return [went and lab_a and link, "host: hatch %s, lab:a %s, link:lab (from the guest's crossing) %s" % [went, lab_a, link]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	await wait_secs(1.0)
 	mgr().swap_to("H04", Vector2(107.0 * 16.0, 18.0 * 16.0))
@@ -1563,4 +1574,13 @@ func sc_co_flags() -> Array:
 	await wait_secs(0.3)
 	var d = mgr().room.grid.door_at("N", 107)
 	var open: bool = d != null and d.open
-	return [flag_ok and open, "guest has hatch:H10S %s, H04:N open %s" % [flag_ok, open]]
+	mgr().swap_to("Z01", Vector2(3.0 * 16.0, 12.0 * 16.0 - 10.0))
+	var lab_a := await wait_until(func(): return Game.flag("lab:a"), 20.0)
+	var solid := await wait_until(func(): return mgr().room.id == "Z01" and mgr().room.grid.tile(17, 10) == TileGrid.SOLID and mgr().room.grid.tile(20, 10) == TileGrid.SOLID, 8.0)
+	mgr().swap_to("Z04", Vector2(4.0 * 16.0, 9.0 * 16.0 - 10.0))
+	await wait_secs(0.6)
+	Controls.script_input = {"left": true}
+	var crossed := await wait_until(func(): return mgr().room.id == "Z03", 6.0)
+	Controls.script_input = {}
+	await wait_secs(2.0)
+	return [flag_ok and open and lab_a and solid and crossed, "guest: hatch %s, H04:N open %s, lab:a %s, variant solid %s, crossed the symlink %s" % [flag_ok, open, lab_a, solid, crossed]]
