@@ -97,7 +97,8 @@ var downed := false              # co-op: lying there, the partner can bring Cla
 var down_t := -1.0
 var slow_t := 0.0                # SCRAPER's thread (MVB3-02): RUN and air acceleration halved while > 0
 var jam := false                 # DDOS bits round the body (set by the room each frame): RUN x 0.6, no dash start
-var zip_t := 0.0                 # how long the current zip has run (a tapped ring cuts it at 0.25 s)
+var zip_t := 0.0                 # how long the current zip has run
+var zip_cut := 0.25              # a tapped ring cuts the zip at this age: 0.25 s, or 60 % of the way when the zip is shorter than that (CURL_RANGE 104 px at 400 px/s never lasts 0.25 s)
 var zip := -1                    # curl (MVB2-03): the anchor Clawd is zipping to (-1: not zipping)
 var zip_dx := 0.0                # the horizontal direction of the zip (for the exit speed)
 var zip_blocked := 0
@@ -249,6 +250,7 @@ func update(dt: float) -> void:
 			var anc: Dictionary = room.anchors()[ai]
 			zip = ai
 			zip_t = 0.0
+			zip_cut = clampf(0.6 * Vector2(float(anc.x) - (x + w / 2.0), float(anc.y) - (y + h / 2.0)).length() / Game.CURL_SPEED, 0.04, 0.25)
 			zip_dx = float(anc.x) - (x + w / 2.0)
 			zip_blocked = 0
 			dash_t = 0.0
@@ -605,7 +607,7 @@ func _zip_step(dt: float, pressed: Dictionary) -> bool:
 		zip = -1
 		return false
 	zip_t += dt
-	if zip_t >= 0.25 and room.ring_tapped(zip):          # a SNIFFER taps this ring: the zip is cut half way and Clawd falls (MVB3-03)
+	if zip_t >= zip_cut and room.ring_tapped(zip):          # a SNIFFER taps this ring: the zip is cut on the way and Clawd falls (MVB3-03)
 		zip = -1
 		vx = 0.0
 		vy = 0.0

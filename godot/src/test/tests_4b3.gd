@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3"]
+const NAMES3 := ["kit4b3", "w6enemies2"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -20,6 +20,7 @@ class HzBoss extends Boss:
 func run(name: String):
 	match name:
 		"kit4b3": return t_kit4b3()
+		"w6enemies2": return t_w6enemies2()
 	return await super.run(name)
 
 func partner(room: Room, px: float, py: float) -> RemotePlayer:
@@ -185,3 +186,270 @@ func t_kit4b3() -> bool:
 	rt.queue_free()
 	Game.fresh()
 	return report("kit4b3", res.ok, res.info)
+
+# a closed box of tiles (inclusive tile rect) in a bare room: walls on the border, air inside
+func closed_box(r: Room, x0: int, y0: int, x1: int, y1: int) -> void:
+	for ty in range(y0, y1 + 1):
+		for tx in range(x0, x1 + 1):
+			r.grid.tiles[ty * r.w + tx] = TileGrid.SOLID if (ty == y0 or ty == y1 or tx == x0 or tx == x1) else TileGrid.E
+
+func zip_from(r: Room, frames_n: int) -> Dictionary:
+	var p = r.player
+	var cut_at := -1
+	var min_d := 1e9
+	var ring: Dictionary = r.rings[0]
+	for f in range(frames_n):
+		step_keys(r, {"special": true} if f == 0 else {})
+		p.inv = 99.0
+		min_d = minf(min_d, Vector2(p.x + 5.0 - float(ring.x), p.y + 5.0 - float(ring.y)).length())
+		if cut_at < 0 and f > 0 and p.zip < 0:
+			cut_at = f
+			break
+	return {"cut_at": cut_at, "min_d": min_d}
+
+# MVB3-03: SNIFFER, MITM, BOTNET, PINGER
+func t_w6enemies2() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	Game.tools.curl = true
+	# SNIFFER: a zip to a tapped ring is cut on the way and Clawd falls; a dead sniffer leaves a normal ring
+	var cases: Array = []
+	for variant in ["tapped", "killed"]:
+		var r := bare_room("R01", 100.0, 150.0)
+		r.player.tools.curl = true
+		r.rings.append({"x": 175, "y": 128})
+		var sn := Sniffer.new(r, 167, 120, 0)
+		r.add_entity(sn)
+		sn.probe_cd = 99.0
+		sn.hop_cd = 99.0
+		if variant == "killed":
+			sn.hit(5, 0.0, 0.0, "swipe", sn)
+			if not sn.dead:
+				fail(res, "a sniffer survived 5 damage")
+		if variant == "tapped" and not r.ring_tapped(0):
+			fail(res, "the ring is not tapped")
+		var z := zip_from(r, 40)
+		cases.append(z)
+		if variant == "tapped":
+			if z.cut_at < 0 or z.min_d < 18.0:
+				fail(res, "tapped zip: %s" % str(z))
+			var vy_seen := false
+			for f in range(20):
+				step_keys(r, {})
+				r.player.inv = 99.0
+				if r.player.vy > 60.0:
+					vy_seen = true
+			if not vy_seen:
+				fail(res, "Clawd did not fall after the cut")
+		else:
+			var ring_close := false
+			for f in range(40):
+				step_keys(r, {})
+				r.player.inv = 99.0
+			if z.min_d > 12.0 and z.cut_at >= 0:
+				fail(res, "the zip to a clean ring was cut: %s" % str(z))
+		r.queue_free()
+	# a probe: yellow and catchable; caught back it kills the sniffer
+	var rp := bare_room("R01", 100.0, 190.0)
+	rp.rings.append({"x": 175, "y": 190})
+	var sp := Sniffer.new(rp, 167, 182, 0)
+	rp.add_entity(sp)
+	sp.hop_cd = 99.0
+	var pr = null
+	for f in range(240):
+		step_keys(rp, {})
+		rp.player.inv = 99.0
+		rp.player.x = 100.0
+		for q in rp.projs:
+			if not q.dead and q.catchable and pr == null:
+				pr = q
+		if pr != null:
+			break
+	if pr == null:
+		fail(res, "the sniffer never probed")
+	else:
+		rp.catch_proj(pr, rp.player)
+		for f in range(90):
+			step_keys(rp, {})
+			rp.player.inv = 99.0
+			rp.player.x = 100.0
+			if sp.dead:
+				break
+		if not sp.dead:
+			fail(res, "a caught probe did not kill the sniffer (hp %d)" % sp.hp)
+	rp.queue_free()
+	# hop: nobody near, a free ring within 80 px: it moves there within 4.5 s and taps it
+	var rh := bare_room("R01", 20.0, 190.0)
+	rh.rings.append({"x": 300, "y": 170})
+	rh.rings.append({"x": 350, "y": 170})
+	var sh := Sniffer.new(rh, 292, 162, 0)
+	rh.add_entity(sh)
+	var hopped := false
+	for f in range(270):
+		step_keys(rh, {})
+		rh.player.inv = 99.0
+		rh.player.x = 20.0
+		if sh.state == "hop":
+			hopped = true
+	if not hopped or sh.ring_i != 1 or sh.state != "tap" or rh.ring_tapped(0) or not rh.ring_tapped(1):
+		fail(res, "hop: hopped %s ring %d state %s" % [str(hopped), sh.ring_i, sh.state])
+	rh.queue_free()
+	# MITM: a side swipe from the front is blocked and echoed 0.5 s later as a slash toward the player
+	var rm := bare_room("R01", 100.0, 198.0)
+	rm.player.tools.opus = false
+	var mm := Mitm.new(rm, 14 * 16, 12 * 16)
+	rm.add_entity(mm)
+	mm.x = 150.0
+	mm.face = -1.0
+	var hp_m := mm.hp
+	rm.player.x = 110.0
+	rm.player.y = 198.0
+	var rec_at := -1.0
+	var echo_at := -1.0
+	var slash_left := false
+	var blocked := false
+	var t_att := 0.0
+	for f in range(120):
+		var keys := {"attack": true} if f == 2 else {}
+		rm.player.inv = 99.0
+		step_keys(rm, keys)
+		rm.player.x = 110.0
+		rm.player.vx = 0.0
+		if f == 2:
+			t_att = float(f) * Game.STEP
+		if mm.state == "record" and rec_at < 0.0:
+			rec_at = float(f) * Game.STEP
+		if mm.state == "echo" and echo_at < 0.0:
+			echo_at = float(f) * Game.STEP
+			for hb in mm.harmboxes():
+				if hb is Dictionary and hb.w == 28.0 and hb.x + hb.w <= mm.x + 1.0:
+					slash_left = true
+		if mm.hp < hp_m:
+			blocked = false
+			break
+		else:
+			blocked = true
+	if rec_at < 0.0 or echo_at < 0.0 or absf((echo_at - rec_at) - 0.5) > 0.06 or not slash_left or not blocked:
+		fail(res, "mitm: record %.2f echo %.2f slash toward player %s blocked %s hp %d/%d" % [rec_at, echo_at, str(slash_left), str(blocked), mm.hp, hp_m])
+	# open: a swipe lands from any side; listen: a swipe from behind lands, from the front not
+	mm.set_state("open", 1.0)
+	if mm.hit(1, -1.0, 0.0, "swipe", mm) != "hit":
+		fail(res, "a swipe in `open` was blocked")
+	mm.set_state("listen")
+	mm.face = -1.0
+	if mm.hit(1, 1.0, 0.0, "swipe", mm) != "block":
+		fail(res, "a swipe from the front in `listen` landed")
+	if mm.hit(1, -1.0, 0.0, "swipe", mm) != "hit":
+		fail(res, "a swipe from behind in `listen` was blocked")
+	rm.queue_free()
+	# BOTNET: shielded while a bit lives, hittable in the countdown, a new swarm 4 s after the last bit died, its death kills its bits
+	var rb := bare_room("R01", 100.0, 190.0)
+	var bn := Botnet.new(rb, 20 * 16, 11 * 16)
+	rb.add_entity(bn)
+	bn.settle()
+	var t_up := -1.0
+	for f in range(60 * 6):
+		rb.player.inv = 99.0
+		rb.player.x = 100.0
+		step_keys(rb, {})
+		if bn.bits_alive() > 0:
+			t_up = float(f) * Game.STEP
+			break
+	if t_up < 3.8 or t_up > 4.3 or bn.bits_alive() != 5 or not bn.shielded:
+		fail(res, "botnet: first swarm after %.2f s, %d bits, shield %s" % [t_up, bn.bits_alive(), str(bn.shielded)])
+	if bn.hit(1, 1.0, 0.0, "swipe", bn) != "block":
+		fail(res, "a shielded botnet took a hit")
+	for b in bn.bits:
+		b.loot = 0
+		b.dead = true
+	rb.step(Game.STEP)
+	rb.player.inv = 99.0
+	if bn.shielded:
+		fail(res, "still shielded with no bits")
+	var hp_b := bn.hp
+	if bn.hit(1, 1.0, 0.0, "swipe", bn) != "hit" or bn.hp != hp_b - 1:
+		fail(res, "the botnet took no hit in its countdown")
+	var t_new := -1.0
+	for f in range(60 * 6):
+		rb.player.inv = 99.0
+		rb.player.x = 100.0
+		step_keys(rb, {})
+		if bn.bits_alive() > 0:
+			t_new = float(f) * Game.STEP
+			break
+	if t_new < 3.8 or t_new > 4.3:
+		fail(res, "botnet: the next swarm came after %.2f s" % t_new)
+	var some_bits: Array = bn.bits.duplicate()
+	var guard := 0
+	while not bn.dead and guard < 40:
+		bn.shielded = false
+		bn.hit(1, 1.0, 0.0, "swipe", bn)
+		guard += 1
+	if not bn.dead:
+		fail(res, "the botnet cannot be killed")
+	for b in some_bits:
+		if is_instance_valid(b) and not b.dead:
+			fail(res, "a bit outlived its botnet")
+			break
+	rb.queue_free()
+	# PINGER: the ball bounces 4 times and dies; the third ball is catchable and kills the pinger when caught
+	var rpi := bare_room("R01", 300.0, 190.0)
+	closed_box(rpi, 10, 4, 24, 11)
+	rpi.player.x = 22.0 * 16.0
+	rpi.player.y = 10.0 * 16.0 - 10.0
+	var pg := Pinger.new(rpi, 11 * 16, 7 * 16)
+	rpi.add_entity(pg)
+	pg.settle()
+	if pg._side() != "l":
+		fail(res, "the pinger did not attach to the left wall (%s)" % pg._side())
+	var first = null
+	var bounce_seen := 0
+	var last_b := 4
+	var died_at := -1.0
+	var balls := 0
+	var third = null
+	var known := {}
+	for f in range(60 * 30):
+		rpi.player.inv = 99.0
+		rpi.player.x = 22.0 * 16.0
+		rpi.player.y = 10.0 * 16.0 - 10.0
+		rpi.player.vx = 0.0
+		rpi.player.vy = 0.0
+		step_keys(rpi, {})
+		for q in rpi.projs:
+			if not known.has(q.id) and not q.dead and q.get("bounce", 0) > 0:
+				known[q.id] = true
+				balls += 1
+				if balls == 1:
+					first = q
+				if balls == 3:
+					third = q
+		if first != null and first.dead and died_at < 0.0:
+			died_at = float(f) * Game.STEP
+		if first != null and not first.dead and first.bounce != last_b:
+			bounce_seen += 1
+			last_b = first.bounce
+		if third != null:
+			break
+	if first == null or not first.dead or first.bounce != 0 or (last_b - 0 > 1 and bounce_seen < 3):
+		fail(res, "the first ball: bounce left %s, dead %s" % [str(first.bounce) if first != null else "-", str(first.dead) if first != null else "-"])
+	if third == null or not third.catchable:
+		fail(res, "the third ball is not catchable")
+	else:
+		rpi.catch_proj(third, rpi.player)
+		for f in range(200):
+			rpi.player.inv = 99.0
+			rpi.player.x = 22.0 * 16.0
+			rpi.player.y = 10.0 * 16.0 - 10.0
+			step_keys(rpi, {})
+			if pg.dead:
+				break
+		if not pg.dead:
+			fail(res, "a caught ball did not kill the pinger (hp %d)" % pg.hp)
+	rpi.queue_free()
+	Game.fresh()
+	return report("w6enemies2", res.ok, res.info)

@@ -229,6 +229,12 @@ func load_room(room_id: String, snap = null) -> void:
 					switch_n += 1
 				"@", "j":
 					rings.append({"x": x + 8, "y": y + 8})
+					if ch == "j" and mode != "guest":                 # a SNIFFER taps this ring
+						var sn := Sniffer.new(self, x, y, rings.size() - 1)
+						Game.scale_enemy(sn)
+						sn.nid = next_nid
+						next_nid += 1
+						ents.append(sn)
 				"c":
 					hooks.append({"x": x + 8, "y": y + 8})
 					var sce = spawn_enemy("c", x, y)
@@ -288,6 +294,9 @@ func load_room(room_id: String, snap = null) -> void:
 						e.nid = next_nid
 						next_nid += 1
 						ents.append(e)
+	for se in ents:
+		if se.has_method("settle"):
+			se.settle()
 	if def.has("lab_boss") and mode != "guest" and boss_spawn != null:     # the sparring dummy: an entity, not the room's boss fight
 		var kd := KitDummy.new(self, boss_spawn.x, boss_spawn.y)
 		kd.nid = next_nid
@@ -715,16 +724,23 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"c": return Scraper.new(self, x, y)
 		"W": return Worm.new(self, x, y)
 		"e": return Spyware.new(self, x, y)
+		"u": return Mitm.new(self, x, y)
+		"r": return Botnet.new(self, x, y)
+		"y": return Pinger.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 
 # the five bits of a DDOS swarm at a cell (px); returns them (MVB2-06 gives the class)
-func spawn_ddos(px: float, py: float) -> Array:
+func spawn_ddos(px: float, py: float, owner_rack = null) -> Array:
 	var out: Array = []
 	if mode == "guest":
 		return out
 	for i in range(5):
 		var b = DdosBit.new(self, px + 4.0 + float(i) * 5.0, py + 4.0 + float((i * 7) % 3) * 4.0, i)
+		if owner_rack != null:
+			b.owner_ref = owner_rack
+			b.speed_k = 1.2
+			b.awake = true
 		add_entity(b)
 		out.append(b)
 	return out

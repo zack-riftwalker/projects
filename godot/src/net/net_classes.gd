@@ -2,7 +2,7 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger"]
 
 static func cls_of(e) -> int:
 	if e is NullBoss:
@@ -15,6 +15,14 @@ static func cls_of(e) -> int:
 		return 31
 	if e is Reviewer2:
 		return 32
+	if e is Sniffer:
+		return 33
+	if e is Mitm:
+		return 34
+	if e is Botnet:
+		return 35
+	if e is Pinger:
+		return 36
 	if e is Scraper:
 		return 26
 	if e is Worm:
@@ -103,6 +111,10 @@ static func make(cls: int, room: Room):
 		30: e = CrawlerBoss.new(room, 0, 0)
 		31: e = FirewallBoss.new(room, 0, 0)
 		32: e = Reviewer2.new(room, 0, 0)
+		33: e = Sniffer.new(room, 0, 0)
+		34: e = Mitm.new(room, 0, 0)
+		35: e = Botnet.new(room, 0, 0)
+		36: e = Pinger.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

@@ -6,6 +6,8 @@ extends Enemy
 var idx := 0
 var tvx := 0.0
 var awake := false
+var owner_ref = null              # a BOTNET's bits: the rack that raised them (it knows when the swarm is gone)
+var speed_k := 1.0                # a BOTNET's bits move 20 % faster (MVB3-03)
 
 func _init(r: Room, px: float, py: float, i := 0) -> void:
 	super(r, px, py, 6, 6)
@@ -40,8 +42,8 @@ func update(dt: float) -> void:
 			vx += a.x
 			vy += a.y
 		var sp := Vector2(vx, vy)
-		if sp.length() > 90.0:
-			sp = sp.normalized() * 90.0
+		if sp.length() > 90.0 * speed_k:
+			sp = sp.normalized() * 90.0 * speed_k
 			vx = sp.x
 			vy = sp.y
 		for e in room.ents:                       # the bits push each other apart
