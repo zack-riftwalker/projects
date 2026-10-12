@@ -786,6 +786,10 @@ func t_w6enemies() -> bool:
 		fail(res, "a player off the locked line was hurt")
 	rs.queue_free()
 	Game.fresh()
+	return finish_w6enemies(res)
+
+# (4B-3 adds its checks for the reworked enemies here)
+func finish_w6enemies(res: Dictionary) -> bool:
 	return report("w6enemies", res.ok, res.info)
 
 func box_key(arr: Array) -> Array:

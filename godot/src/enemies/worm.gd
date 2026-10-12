@@ -4,18 +4,22 @@ extends EnemySM
 # when somebody stands at the brick face it hisses, puts its head out for a bite, and goes back in. Inside the bricks nothing can touch it.
 
 const STATES := ["crawl", "tell", "out", "back"]
+const STEP_T := 0.4              # one cell per 0.4 s (MVB3-04), toward the closest player
+const MAX_PER_GROUP := 3         # worms + eggs in one firewall group
+const EGG_T := 5.0
 
 var cells: Array = []             # the 4-connected firewall group (lazily found)
 var ci := 0                       # which cell it is in
 var dir := 1
 var side := 1.0                   # the face the head sticks out of (-1 / 1)
-var step_t := 0.8
+var step_t := STEP_T
+var hurt_out := false            # it was hit while its head was out (a bite that ends unhurt lays an egg)
 
 func _init(r: Room, px: float, py: float) -> void:
 	super(r, px, py, 16, 16)
 	x = px
 	y = py
-	hp = 2
+	hp = 3
 	loot = 2
 	col = "#ff4f6d"
 	stompable = false
@@ -60,10 +64,8 @@ func update(dt: float) -> void:
 		"crawl":
 			step_t -= dt
 			if step_t <= 0.0:
-				step_t = 0.8
-				if ci + dir < 0 or ci + dir >= cells.size():
-					dir = -dir
-				ci = clampi(ci + dir, 0, cells.size() - 1)
+				step_t = STEP_T
+				ci = _next_cell()
 			var cp := _cell_px(ci)
 			x = cp.x
 			y = cp.y
@@ -81,13 +83,91 @@ func update(dt: float) -> void:
 					break
 		"tell":
 			if state_t <= 0.0:
+				hurt_out = false
 				set_state("out", 0.35)
 		"out":
 			if state_t <= 0.0:
+				if not hurt_out:
+					_lay_egg()
 				set_state("back", 0.4)
 		"back":
 			if state_t <= 0.0:
 				set_state("crawl")
+
+# one step toward the group's cell nearest to the closest player: a breadth-first path over the 4-connected cells (it stays put when it is there)
+func _next_cell() -> int:
+	var tp := to_player()
+	if tp.p == null or cells.size() < 2:
+		return ci
+	var pc := Vector2(tp.p.x + 5.0, tp.p.y + 5.0)
+	var goal := ci
+	var bd := 1e18
+	for i in range(cells.size()):
+		var c: Vector2i = cells[i]
+		var d := Vector2(c.x * 16.0 + 8.0, c.y * 16.0 + 8.0).distance_squared_to(pc)
+		if d < bd - 0.01:
+			bd = d
+			goal = i
+	if goal == ci:
+		return ci
+	var prev := {ci: -1}
+	var queue := [ci]
+	var found := false
+	while not queue.is_empty() and not found:
+		var cur: int = queue.pop_front()
+		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var ni := cells.find((cells[cur] as Vector2i) + o)
+			if ni >= 0 and not prev.has(ni):
+				prev[ni] = cur
+				if ni == goal:
+					found = true
+					break
+				queue.append(ni)
+	if not found:
+		return ci
+	var step := goal
+	while int(prev[step]) != ci:
+		step = int(prev[step])
+	return step
+
+func group_key() -> Vector2i:
+	return cells[0] if not cells.is_empty() else Vector2i(-1, -1)
+
+# the group's worms and eggs in this room
+func _group_count() -> int:
+	var n := 0
+	for e in room.ents:
+		if e.dead:
+			continue
+		if (e is Worm and e.group_key() == group_key()) or (e is WormEgg and e.group == group_key()):
+			n += 1
+	return n
+
+# a bite that ends without the worm being hit: an egg in a free cell of its group (a pulsing brick); 5 s later it is a worm
+func _lay_egg() -> void:
+	if puppet or cells.is_empty() or _group_count() >= MAX_PER_GROUP:
+		return
+	var taken := {}
+	for e in room.ents:
+		if e.dead:
+			continue
+		if e is Worm and e.group_key() == group_key():
+			taken[(cells[e.ci] as Vector2i)] = true
+		elif e is WormEgg and e.group == group_key():
+			taken[e.cell] = true
+	var free: Array = cells.filter(func(c): return not taken.has(c))
+	if free.is_empty():
+		return
+	var c: Vector2i = free[room.rng.randi() % free.size()]
+	var egg := WormEgg.new(room, c.x * 16, c.y * 16)
+	egg.cell = c
+	egg.group = group_key()
+	room.add_entity(egg)
+	room.pop(c.x * 16 + 8.0, c.y * 16.0 - 2.0, "egg", "#ffb0c0")
+
+func on_hurt(_how: String) -> void:
+	if state == "out":
+		hurt_out = true
 
 func _head() -> Dictionary:
 	var fx_ := face_x(side)

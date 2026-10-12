@@ -11,10 +11,11 @@ var hx := 0.0                     # the hook (px)
 var hy := 0.0
 var len := MIN_LEN
 var tgt_y := 0.0                  # the height it drops to (locked when the drop starts)
+var drop_for = null               # the player it dropped for (it throws its thread at that one)
 
 func _init(r: Room, px: float, py: float) -> void:
 	super(r, px, py, 12, 10)
-	hp = 2
+	hp = 3
 	loot = 2
 	col = "#8d8798"
 	hx = px + 8.0
@@ -40,12 +41,14 @@ func update(dt: float) -> void:
 			if state_t <= 0.0:
 				var tp2 := to_player()
 				tgt_y = tp2.p.y + 5.0 if tp2.p != null else cy + 40.0
+				drop_for = tp2.p
 				set_state("drop", 3.0)
 		"drop":
 			len = minf(len + 260.0 * dt, MAX_LEN)
 			_place()
 			if cy >= tgt_y or room.grid.solid_at(cx, y + h + 2.0) or len >= MAX_LEN:
 				set_state("wait", 0.8)
+				_throw_thread()
 		"wait":
 			if state_t <= 0.0:
 				set_state("climb")
@@ -54,6 +57,18 @@ func update(dt: float) -> void:
 			if len <= MIN_LEN:
 				set_state("hang")
 	_place()
+
+# at the bottom of its drop: one grey sticky thread at the player it dropped for (not catchable; a hit slows that body for 0.8 s)
+func _throw_thread() -> void:
+	var q = drop_for if (drop_for != null and is_instance_valid(drop_for) and not drop_for.dead) else to_player().p
+	if q == null:
+		return
+	var d := Vector2(q.x + 5.0 - cx, q.y + 5.0 - cy)
+	if d.length() < 2.0:
+		d = Vector2(0, 1)
+	d = d.normalized() * 160.0
+	room.shoot(cx, cy, d.x, d.y, {"kind": "thread", "col": "#c3bccd", "r": 3.0, "catchable": false, "cut": true, "life": 2.0, "dmg": 1, "slow": 0.8, "hgt": float(nid), "by_boss": true})
+	Audio.sfx("shoot", {"vol": 0.5})
 
 func harmboxes() -> Array:
 	return [] if state == "hang" else [self]

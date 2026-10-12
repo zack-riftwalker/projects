@@ -64,6 +64,7 @@ var zones: Array = []                      # short-lived damage areas the guest 
 var next_zone := 1
 var next_pid := 1
 var next_lid := 1
+var next_swarm := 0                        # DDOS swarms made in this room (host): their round robin runs inside each
 var summon_ok := true
 var pending_cracks := {}                   # guest: tiles hidden before the host confirmed them
 var zones_hit := {}
@@ -735,8 +736,10 @@ func spawn_ddos(px: float, py: float, owner_rack = null) -> Array:
 	var out: Array = []
 	if mode == "guest":
 		return out
+	next_swarm += 1
 	for i in range(5):
 		var b = DdosBit.new(self, px + 4.0 + float(i) * 5.0, py + 4.0 + float((i * 7) % 3) * 4.0, i)
+		b.swarm = next_swarm
 		if owner_rack != null:
 			b.owner_ref = owner_rack
 			b.speed_k = 1.2
@@ -2357,6 +2360,16 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px - 2, py, 5, 1), col)
 			if not minus:
 				ci.draw_rect(Rect2(px, py - 2, 1, 5), col)
+		"thread":                                 # a SCRAPER's sticky thread: a 1-px line from the scraper to the shot (hgt = its network id)
+			var src = null
+			for e in ents:
+				if e.nid == int(q.get("hgt", -1)) and not e.dead:
+					src = e
+					break
+			var from := Vector2(q.x - q.vx * 0.12, q.y - q.vy * 0.12) if src == null else Vector2(src.cx, src.cy)
+			ci.draw_line(from, Vector2(q.x, q.y), Color("#c3bccd"), 1.0)
+			ci.draw_rect(Rect2(px - 1, py - 1, 3, 3), ink)
+			ci.draw_rect(Rect2(px, py, 1, 1), Color("#ffffff"))
 		"wave":
 			var hg := int(q.get("hgt", 10.0))
 			ci.draw_rect(Rect2(px - 3, py - hg, 6, hg), col)

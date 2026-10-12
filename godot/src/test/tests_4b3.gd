@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -21,6 +21,7 @@ func run(name: String):
 	match name:
 		"kit4b3": return t_kit4b3()
 		"w6enemies2": return t_w6enemies2()
+		"w6enemies": return t_w6enemies()
 	return await super.run(name)
 
 func partner(room: Room, px: float, py: float) -> RemotePlayer:
@@ -453,3 +454,175 @@ func t_w6enemies2() -> bool:
 	rpi.queue_free()
 	Game.fresh()
 	return report("w6enemies2", res.ok, res.info)
+
+# MVB3-04: the reworked SCRAPER, WORM, DDOS and SPYWARE (on top of the 4B-2 checks)
+func finish_w6enemies(res: Dictionary) -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.diff = "normal"
+	# SCRAPER: hp 3; at the bottom of its drop it throws a thread; a hit slows the body for 0.8 s (and the thread is a 1-px line, not catchable)
+	var r := bare_room("R01", 100.0, 190.0)
+	var sc := Scraper.new(r, 96, 112)
+	r.add_entity(sc)
+	if sc.hp != 3:
+		fail(res, "scraper hp %d" % sc.hp)
+	var thread = null
+	var slowed := 0.0
+	var hp0: int = r.player.hp
+	for f in range(240):
+		r.player.x = 100.0 if sc.state in ["hang", "tell"] else 190.0          # (it steps away once the scraper drops)
+		r.player.y = 190.0
+		r.player.vy = 0.0
+		r.player.inv = 0.0 if r.player.slow_t <= 0.0 else 99.0
+		step_keys(r, {})
+		for q in r.projs:
+			if q.kind == "thread" and thread == null:
+				thread = q
+				if q.catchable:
+					fail(res, "the thread is catchable")
+		if r.player.slow_t > slowed:
+			slowed = r.player.slow_t
+		if slowed > 0.0:
+			break
+	if thread == null or slowed < 0.7 or slowed > 0.81:
+		fail(res, "scraper thread: seen %s, slow_t %.2f" % [str(thread != null), slowed])
+	if r.player.hp >= hp0 and thread != null:
+		pass
+	r.queue_free()
+	# WORM: a bite that ends unhurt lays an egg; it hatches in 5 s; a group holds three worms or eggs at most
+	var rw := new_room("N13")
+	var worms: Array = []
+	for e in rw.ents:
+		if e is Worm:
+			worms.append(e)
+	if worms.is_empty() or worms[0].hp != 3:
+		fail(res, "worm hp / none in N13")
+	else:
+		var wm: Worm = worms[0]
+		wm.group_key()
+		wm._find_group()
+		var key: Vector2i = wm.group_key()
+		var in_group := 0
+		for w2 in worms:
+			w2._find_group()
+			if w2.group_key() == key:
+				in_group += 1
+		for w3 in worms:
+			if w3 != wm:
+				w3.dead = true
+		wm.hurt_out = false
+		wm.set_state("out", 0.0)
+		wm.update(Game.STEP)                              # the bite ends unhurt
+		var eggs := 0
+		var egg = null
+		for e in rw.ents:
+			if e is WormEgg:
+				eggs += 1
+				egg = e
+		if eggs != 1:
+			fail(res, "no egg after an unhurt bite (%d)" % eggs)
+		else:
+			rw.player.inv = 99.0
+			var n_w := 0
+			var secs := 0.0
+			while egg != null and not egg.dead and secs < 6.0:
+				step_keys(rw, {})
+				rw.player.inv = 99.0
+				secs += Game.STEP
+			n_w = rw.ents.filter(func(e): return e is Worm and not e.dead).size()
+			if secs < 4.9 or secs > 5.2 or n_w < 2:
+				fail(res, "the egg hatched after %.2f s, %d worms" % [secs, n_w])
+		# a hurt bite lays nothing; at three worms + eggs nothing more
+		for e in rw.ents.filter(func(e): return e is WormEgg):
+			e.dead = true
+		wm.hurt_out = true
+		wm.set_state("out", 0.0)
+		wm.update(Game.STEP)
+		if rw.ents.any(func(e): return e is WormEgg and not e.dead):
+			fail(res, "a bite that was hit laid an egg")
+		var live: Array = rw.ents.filter(func(e): return e is Worm and not e.dead and e.group_key() == key)
+		for k in range(4):
+			var wx: Worm = live[0]
+			wx.hurt_out = false
+			wx.set_state("out", 0.0)
+			wx.update(Game.STEP)
+		var total := rw.ents.filter(func(e): return not e.dead and ((e is Worm and e.group_key() == key) or (e is WormEgg and e.group == key))).size()
+		if total > 3:
+			fail(res, "a group holds %d worms and eggs" % total)
+		# crawl: one cell per 0.4 s toward the player
+		wm.set_state("crawl")
+		wm.step_t = 0.4
+		var far_i := 0
+		var far_d := -1.0
+		for i in range(wm.cells.size()):
+			var dd := Vector2(wm.cells[i].x * 16.0, wm.cells[i].y * 16.0).distance_to(Vector2(wm.x, wm.y))
+			if dd > far_d:
+				far_d = dd
+				far_i = i
+		var moves := 0
+		var prev_ci: int = wm.ci
+		rw.player.x = wm.cells[far_i].x * 16.0 + 3.0
+		rw.player.y = wm.cells[far_i].y * 16.0 + 3.0
+		for f in range(120):
+			rw.player.inv = 99.0
+			wm.update(Game.STEP)
+			if wm.ci != prev_ci:
+				moves += 1
+				prev_ci = wm.ci
+		if moves < 2 or moves > 6:
+			fail(res, "the worm moved %d cells in 2 s" % moves)
+	rw.queue_free()
+	# DDOS: one bit at a time darts, at 220 px/s straight at the player; contact still kills the bit
+	var rd := bare_room("R01", 160.0, 190.0)
+	rd.player.inv = 99.0
+	var bits := rd.spawn_ddos(150.0, 170.0)
+	var darting_max := 0
+	var darts := {}
+	var dart_speed := 0.0
+	for f in range(60 * 6):
+		rd.player.inv = 99.0
+		rd.player.x = 160.0
+		rd.player.y = 190.0
+		rd.player.vy = 0.0
+		step_keys(rd, {})
+		var in_dart := 0
+		for b in bits:
+			if is_instance_valid(b) and not b.dead and b.state == "dart":
+				in_dart += 1
+				darts[b.idx] = true
+				dart_speed = maxf(dart_speed, Vector2(b.vx, b.vy).length())
+		darting_max = maxi(darting_max, in_dart)
+	if darting_max != 1 or darts.size() < 3 or absf(dart_speed - 220.0) > 1.0:
+		fail(res, "ddos: %d darting at once, %d different bits darted, top speed %.0f" % [darting_max, darts.size(), dart_speed])
+	rd.queue_free()
+	# SPYWARE: a player kept in view for the whole track is tagged for 4 s; one who steps behind a wall during the track is not
+	var results: Array = []
+	var tag_left := 0.0
+	for variant in ["seen", "hidden"]:
+		var rs := bare_room("R01", 160.0, 190.0)
+		var sw := Spyware.new(rs, 96, 176)
+		rs.add_entity(sw)
+		if sw.hp != 4:
+			fail(res, "spyware hp %d" % sw.hp)
+		var tagged_at := -1.0
+		for f in range(60 * 3):
+			rs.player.inv = 99.0
+			if variant == "hidden" and sw.state == "track" and sw.state_t < 0.6:
+				for wy in range(9, 13):                              # a wall drops between the eye and the player during the track
+					rs.grid.tiles[wy * rs.w + 8] = TileGrid.SOLID
+			rs.player.x = 160.0
+			rs.player.y = 190.0
+			step_keys(rs, {})
+			if rs.is_tagged(rs.player) and tagged_at < 0.0:
+				tagged_at = float(f) * Game.STEP
+				tag_left = float(rs.tags.p1)
+		results.append(tagged_at)
+		if variant == "seen" and (tag_left < 3.9 or tag_left > 4.0):
+			fail(res, "tag time at the moment it was set: %.2f" % tag_left)
+		rs.queue_free()
+	if results[0] < 0.0:
+		fail(res, "a player in view for the whole track was not tagged")
+	if results[1] >= 0.0:
+		fail(res, "a player behind a wall during the track was tagged")
+	Game.fresh()
+	return report("w6enemies", res.ok, res.info)
