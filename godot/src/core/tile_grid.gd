@@ -18,9 +18,10 @@ const GATE_A := 11         # `&`: solid until the room's slot keys are all press
 const DEAD := 12           # `;`: dead code: looks like wall, walked through; revealed for good once touched
 const FIRE := 13           # `N`: firewall brick: solid (ssh passes it in 4B)
 const THICK := 14          # `0`: bulkhead: solid; only Room.blast breaks it
+const PORT := 15           # `3`: solid while closed, empty while open (the room computes `port_open` from its packets)
 const T := 16
 
-const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK}
+const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT}
 
 var w := 0
 var h := 0
@@ -28,6 +29,7 @@ var tiles := PackedByteArray()
 var crumble := {}          # index -> {s, t}
 var blink_hold := {}       # index -> true
 var blink_phase := 0
+var port_open := {}        # index -> true while that port cell is open
 var gates_open := {"catch": false, "agents": false}        # the room sets them from its flags every step
 var doors: Array = []      # {side: "W"|"E"|"N"|"S", a, b, open}: rows (W/E) or columns (N/S) a..b of the edge are walkable while open
 
@@ -68,6 +70,8 @@ func solid(tx: int, ty: int) -> bool:
 		return not gates_open.catch
 	if t == GATE_A:
 		return not gates_open.agents
+	if t == PORT:
+		return not port_open.has(ty * w + tx)
 	if t < CRUMBLE or t == LIQ:
 		return false
 	var i := ty * w + tx
@@ -149,6 +153,8 @@ func grounded(e) -> bool:
 # plats: the room's moving platforms (dictionaries with x y w h dx dy)
 func plat_under(e, prev_bottom: float, plats: Array):
 	for p in plats:
+		if p.get("off", false):
+			continue
 		if e.x + e.w > p.x and e.x < p.x + p.w and prev_bottom <= p.y + 2 + absf(p.dy) and e.y + e.h >= p.y:
 			return p
 	return null

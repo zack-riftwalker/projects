@@ -37,6 +37,8 @@ var kills := 0
 var hits := 0
 var cp_index := -1
 var sign_now = null
+var packet_paths: Array = []        # per `J`: {xa, xb, y, n, every, speed, w} (packets are platforms in `plats`, flagged `packet`)
+var port_cols: Array = []           # per port column: {tx, ty0, ty1, idx} (idx = its number in the column order)
 var variants_on := {}               # variant index -> true once its flag was seen (its cells are queued)
 var variant_q: Array = []           # cells still to change: {tx, ty, t} (a tile must never appear inside a body or vanish under one)
 var auto_step := false
@@ -232,6 +234,8 @@ func load_room(room_id: String, snap = null) -> void:
 					sign_n += 1
 				"M", "V":
 					_add_platform(ch, tx, ty, rows)
+				"J":
+					_add_packets(tx, ty, rows)
 				"E", "B", "D":
 					if ch == "D":
 						end_door = {"x": x + 8, "y": y + T}
@@ -256,6 +260,8 @@ func load_room(room_id: String, snap = null) -> void:
 	_group_dead()
 	if def.has("flood"):
 		liquid_y = flood_target()
+	_find_ports()
+	_move_platforms()                   # (packets and ports at time 0)
 	_step_variants(true)                # (variants whose flag is already set are part of the room from the start)
 	rng.seed = 1
 
@@ -277,17 +283,10 @@ func _step_variants(at_load := false) -> void:
 					variant_q.append({"tx": tx, "ty": ty, "t": to_t})
 	if variant_q.is_empty():
 		return
-	var bodies: Array = []
-	if not at_load:
-		if player != null:
-			bodies.append(player)
-		bodies.append_array(remote_players)
-		for e in ents:
-			if not e.dead:
-				bodies.append(e)
+	var bds: Array = bodies() if not at_load else []
 	var left: Array = []
 	for c in variant_q:
-		if _variant_safe(c, bodies):
+		if _variant_safe(c, bds):
 			grid.tiles[c.ty * w + c.tx] = c.t
 			grid.blink_hold.erase(c.ty * w + c.tx)
 			if view != null:
@@ -443,6 +442,92 @@ func update_doors() -> void:
 			Audio.sfx("gate" if open else "thud")
 		d.was = open
 		d.open = open
+
+# packets (letter `J`): looping platforms along the row to the next `|`, a pure function of the room's clock (the guest computes the same)
+func _add_packets(tx: int, ty: int, prow: PackedStringArray) -> void:
+	var pk: Dictionary = def.get("packets", {})
+	var pw_t := int(pk.get("w", 4))
+	var speed := float(pk.get("speed", 64.0))
+	var every := float(pk.get("every", 4.0))
+	var xa := float(tx * T)
+	var xb := xa
+	var row := prow[ty]
+	for i in range(tx + 1, row.length()):
+		if row[i] == "|":
+			xb = float((i + 1) * T - pw_t * T)
+			break
+	if xb <= xa:
+		return
+	var n := ceili((xb - xa) / (speed * every)) + 1
+	var path := {"xa": xa, "xb": xb, "n": n, "every": every, "speed": speed, "w": pw_t * T}
+	packet_paths.append(path)
+	for j in range(n):
+		plats.append({"x": xa, "y": float(ty * T + 2), "w": float(pw_t * T), "h": 6.0, "dx": 0.0, "dy": 0.0, "packet": true, "j": j, "path": path, "off": true, "ax": true, "a": 0.0, "b": 0.0, "ph": 0.0, "speed": speed})
+
+# ports (letter `3`): a column of port cells is one port; numbered in column order (22, 80, 443, 8080)
+func _find_ports() -> void:
+	var cols := {}
+	for ty in range(h):
+		for tx in range(w):
+			if grid.tiles[ty * w + tx] == TileGrid.PORT:
+				if not cols.has(tx):
+					cols[tx] = [ty, ty]
+				cols[tx][1] = ty
+	var keys := cols.keys()
+	keys.sort()
+	for i in range(keys.size()):
+		port_cols.append({"tx": keys[i], "ty0": cols[keys[i]][0], "ty1": cols[keys[i]][1], "idx": i})
+
+func _move_packets() -> void:
+	for m in plats:
+		if not m.get("packet", false):
+			continue
+		var pa: Dictionary = m.path
+		var span: float = float(pa.n) * float(pa.every)
+		var u := fposmod(time + float(m.j) * float(pa.every), span)
+		var nx: float = float(pa.xa) + u * float(pa.speed)
+		var was_off: bool = m.off
+		m.off = nx > float(pa.xb)
+		m.dx = 0.0 if (m.off or was_off) else nx - m.x
+		m.x = nx if not m.off else float(pa.xa)
+
+# a port is open while a packet's front is close enough (the lead) and its back has not left yet (the lag); it never closes on a body
+func _update_ports(bodies: Array) -> void:
+	if port_cols.is_empty():
+		return
+	var pk: Dictionary = def.get("packets", {})
+	var lead := float(pk.get("lead", 32.0))
+	var lag := float(pk.get("lag", 16.0))
+	for pc in port_cols:
+		var px: float = pc.tx * T
+		var want := false
+		for m in plats:
+			if m.get("packet", false) and not m.off and m.x + m.w >= px - lead and m.x <= px + T + lag:
+				want = true
+				break
+		for ty in range(pc.ty0, pc.ty1 + 1):
+			var i: int = ty * w + pc.tx
+			if want:
+				grid.port_open[i] = true
+			elif grid.port_open.has(i) and not _box_over_cell(bodies, pc.tx, ty):
+				grid.port_open.erase(i)
+
+func _box_over_cell(bodies: Array, tx: int, ty: int) -> bool:
+	for b in bodies:
+		if b.x < tx * T + T and b.x + b.w > tx * T and b.y < ty * T + T and b.y + b.h > ty * T:
+			return true
+	return false
+
+# everything that has a body in this room: the local player, the partner's body, creatures (and a guest's puppets of them)
+func bodies() -> Array:
+	var out: Array = []
+	if player != null:
+		out.append(player)
+	out.append_array(remote_players)
+	for e in ents:
+		if not e.dead:
+			out.append(e)
+	return out
 
 func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> void:
 	var x := tx * T
@@ -977,7 +1062,11 @@ func apply_tile(tx: int, ty: int) -> void:
 
 # ---------------------------------------------------------------- simulation (js: Level.update, same order)
 func _move_platforms() -> void:
+	_move_packets()
+	_update_ports(bodies())
 	for m in plats:
+		if m.get("packet", false):
+			continue
 		var span := absf(m.b - m.a)
 		if span < 1.0:
 			m.dx = 0.0
@@ -1808,6 +1897,37 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 
 # ---------------------------------------------------------------- drawing of what is not an entity
 # the npm registry booth: 24 x 24, wood, a pale top, a red `npm` sign and a vendor
+# a packet of light: a two-tone bar with a bright front edge (the front is the +x end)
+func _draw_packet(ci: CanvasItem, m: Dictionary) -> void:
+	if m.off:
+		return
+	var x := floori(m.x + 0.5)
+	var y := floori(m.y + 0.5) - 1
+	var wd := int(m.w)
+	ci.draw_rect(Rect2(x - 1, y - 1, wd + 2, 8), Color(Game.COL.ink))
+	ci.draw_rect(Rect2(x, y, wd, 6), Color("#2a8f86"))
+	ci.draw_rect(Rect2(x, y, wd, 2), Color("#58f0c8"))
+	ci.draw_rect(Rect2(x + wd - 4, y, 4, 6), Color("#e8fff9"))
+
+const PORT_NUMBERS := ["22", "80", "443", "8080"]
+
+# a closed port is a red bar with its number on the middle cell; an open one is a faint outline
+func _draw_port(ci: CanvasItem, pc: Dictionary) -> void:
+	var x: int = pc.tx * T
+	var mid: int = (pc.ty0 + pc.ty1) / 2
+	for ty in range(pc.ty0, pc.ty1 + 1):
+		var open: bool = grid.port_open.has(ty * w + pc.tx)
+		if open:
+			ci.draw_rect(Rect2(x, ty * T, T, T), Color(1, 1, 1, 0.12), false)
+			continue
+		ci.draw_rect(Rect2(x + 1, ty * T, T - 2, T), Color(Game.COL.ink))
+		ci.draw_rect(Rect2(x + 3, ty * T, T - 6, T), Color("#ff4f6d"))
+		ci.draw_rect(Rect2(x + 3, ty * T, 2, T), Color("#ff8fa3"))
+		if ty == mid:
+			var label: String = PORT_NUMBERS[mini(int(pc.idx), PORT_NUMBERS.size() - 1)]
+			ci.draw_rect(Rect2(x - 8, ty * T + 3, T + 16, 10), Color(Game.COL.ink))
+			PixelText.draw_text(ci, label, x + 8 - PixelText.text_width(label) / 2, ty * T + 5, "#ffffff", {"tiny": true})
+
 func _draw_stall(ci: CanvasItem, sh: Dictionary) -> void:
 	var bx: float = sh.x - 12.0
 	var by: float = sh.y - 24.0
@@ -1979,6 +2099,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 					ci.draw_rect(Rect2(tx * T, hy, T, 4), Color(Game.COL.ink))
 					ci.draw_rect(Rect2(tx * T + 1, hy + 1, 14, 2), Color("#8d8798"))
 					ci.draw_rect(Rect2(tx * T + 7, hy + 1, 1, 1), Color("#c3bccd"))
+		for pc in port_cols:
+			_draw_port(ci, pc)
 		for gc in gate_cells:
 			if not grid.gates_open[gc[2]]:
 				ci.draw_texture_rect_region(gate, Rect2(gc[0] * T, gc[1] * T, T, T), Rect2(7, 12, 16, 16))
@@ -2023,6 +2145,9 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 				Fx._disc(ci, sxp, syp, 5, swc)
 				PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
+			if m.get("packet", false):
+				_draw_packet(ci, m)
+				continue
 			ci.draw_texture(Gfx.tex("platform_48" if world == 1 else "platform_w%d" % world), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
 		for c in cps:
 			ci.draw_texture(Gfx.tex("checkpoint_%d" % (1 if c.on else 0)), Vector2(c.x - 8, c.y - 28))

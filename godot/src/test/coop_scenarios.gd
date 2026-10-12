@@ -1584,3 +1584,59 @@ func sc_co_flags() -> Array:
 	Controls.script_input = {}
 	await wait_secs(2.0)
 	return [flag_ok and open and lab_a and solid and crossed, "guest: hatch %s, H04:N open %s, lab:a %s, variant solid %s, crossed the symlink %s" % [flag_ok, open, lab_a, solid, crossed]]
+
+# MVB0-07: the guest rides a packet (a platform that is a pure function of the room clock) through the two ports; the host sees it get there
+func sc_co_packet() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		mgr().swap_to("Z05", Vector2(3.0 * 16.0 + 3.0, 12.0 * 16.0 - 10.0))
+		var seen_x := 0.0
+		var t0 := Time.get_ticks_msec()
+		var past := false
+		while Time.get_ticks_msec() - t0 < 40000.0 * slow:
+			var rr = coop()._remote_room()
+			if rr != null and rr.id == "Z05" and not rr.remote_players.is_empty():
+				seen_x = maxf(seen_x, rr.remote_players[0].x)
+			elif mgr().room.id == "Z05" and not mgr().room.remote_players.is_empty():
+				seen_x = maxf(seen_x, mgr().room.remote_players[0].x)
+			if seen_x >= 50.0 * 16.0:
+				past = true
+				break
+			await get_tree().physics_frame
+		await wait_secs(1.0)
+		return [past, "host saw the guest as far as x=%.0f (want >= 800)" % seen_x]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	await wait_secs(1.5)
+	mgr().swap_to("Z05", Vector2(3.0 * 16.0 + 3.0, 12.0 * 16.0 - 10.0))
+	var r: Room = mgr().room
+	var boarded = null
+	var t_wait := Time.get_ticks_msec()
+	while boarded == null and Time.get_ticks_msec() - t_wait < 15000.0 * slow:
+		for m in r.plats:
+			if m.get("packet", false) and not m.off and m.x >= 100.0 and m.x <= 260.0:
+				boarded = m
+				break
+		if boarded == null:
+			await get_tree().physics_frame
+	if boarded == null:
+		return [false, "no packet came by"]
+	var p = mgr().player
+	p.x = boarded.x + 8.0
+	p.y = boarded.y - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	var t0 := Time.get_ticks_msec()
+	var inside := false
+	var on_packet := false
+	while Time.get_ticks_msec() - t0 < 16000.0 * slow:
+		if r.grid.box_hits_solid(p.x, p.y, p.w, p.h):
+			inside = true
+		if p.x >= 50.0 * 16.0:
+			on_packet = p.ride != null
+			break
+		await get_tree().physics_frame
+	var secs := (Time.get_ticks_msec() - t0) / 1000.0
+	await wait_secs(1.5)
+	return [p.x >= 50.0 * 16.0 and not inside, "guest rode to x=%.0f in %.1f s, inside a solid cell %s, on a packet at column 50 %s" % [p.x, secs, inside, on_packet]]

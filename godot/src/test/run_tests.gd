@@ -78,6 +78,7 @@ func run(name: String) -> bool:
 		"stackover": return t_stackover()
 		"rise": return t_rise()
 		"lab": return t_lab()
+		"packets": return t_packets()
 		"symlink": return t_symlink()
 		"variants4b": return t_variants4b()
 		"signs4b": return t_signs4b()
@@ -3264,3 +3265,97 @@ func t_symlink() -> bool:
 	chk.call("on Z04's ledge", m.player.on_ground and absf(m.player.y + m.player.h - 9 * 16) < 0.01)
 	Game.flags = {}
 	return report("symlink", res.ok, res.info)
+
+func port_states(r: Room) -> String:
+	var out := ""
+	for pc in r.port_cols:
+		out += "%d:%s " % [pc.tx, str(r.grid.solid(pc.tx, 5))]
+	return out
+
+func packet_xs(r: Room) -> Array:
+	var out: Array = []
+	for m in r.plats:
+		if m.get("packet", false):
+			out.append([snappedf(m.x, 0.001), m.off])
+	return out
+
+# MVB0-07: packets (looping platforms) and ports (open while a packet is near, never closing on a body)
+func t_packets() -> bool:
+	Game.persist = false
+	Game.flags = {}
+	var res := {"ok": true, "info": ""}
+	var chk := func(label: String, cond: bool) -> void:
+		if not cond:
+			res.ok = false
+			res.info += " BAD:" + label
+	var a := new_room("Z05")
+	clear_ents(a)
+	for f in range(37):
+		step_with(a, {})
+	var b := new_room("Z05")
+	var g := Room.new()
+	g.mode = "guest"
+	main.world.add_child(g)
+	g.load_room("Z05")
+	g.build_nodes()
+	chk.call("5 packets", a.plats.size() == 5 and a.packet_paths.size() == 1)
+	chk.call("2 port columns", a.port_cols.size() == 2 and a.port_cols[0].tx == 20 and a.port_cols[1].tx == 36)
+	for t in [2.5, 3.25, 7.0, 13.9]:
+		for r in [a, b, g]:
+			r.time = t
+			r._move_platforms()
+		chk.call("same packets at %s" % str(t), packet_xs(a) == packet_xs(b) and packet_xs(a) == packet_xs(g))
+		chk.call("same ports at %s" % str(t), port_states(a) == port_states(b) and port_states(a) == port_states(g))
+	for r in [a, b, g]:
+		r.time = 2.5
+		r._move_platforms()
+	chk.call("closed at 2.5", a.grid.solid(20, 5) and a.grid.solid(36, 5))
+	for r in [a, b, g]:
+		r.time = 3.25
+		r._move_platforms()
+	chk.call("open at 3.25 (front 16 px before)", not a.grid.solid(20, 5))
+	# never closes on a body
+	a.time = 4.9
+	a._move_platforms()
+	chk.call("still open at 4.9", not a.grid.solid(20, 6))
+	a.player.x = 20 * 16 + 3.0
+	a.player.y = 6 * 16.0
+	a.time = 5.5
+	a._move_platforms()
+	chk.call("held open by the player", not a.grid.solid(20, 6))
+	chk.call("others closed", a.grid.solid(20, 2))
+	a.player.x = 5 * 16.0
+	a._move_platforms()
+	chk.call("closes when the player leaves", a.grid.solid(20, 6))
+	a.queue_free()
+	b.queue_free()
+	g.queue_free()
+	# riding: from the start of the first packet through both ports to column 50
+	var r2 := new_room("Z05")
+	clear_ents(r2)
+	r2.time = 0.0
+	r2._move_platforms()
+	var pl = r2.player
+	pl.x = 40.0
+	pl.y = 130.0 - pl.h
+	pl.vx = 0.0
+	pl.vy = 0.0
+	var inside := false
+	var passed := false
+	var on_packet := false
+	for f in range(60 * 20):
+		step_with(r2, {})
+		if r2.grid.box_hits_solid(pl.x, pl.y, pl.w, pl.h):
+			inside = true
+		if pl.x >= 50 * 16 and not passed:
+			passed = true
+			on_packet = pl.ride != null and pl.ride.get("packet", false)
+			break
+	chk.call("reached column 50 in time", passed)
+	chk.call("never inside a solid cell", not inside)
+	chk.call("on a packet at column 50", on_packet)
+	res.info += " x=%.0f t=%.1f" % [pl.x, r2.time]
+	r2.queue_free()
+	Controls.script_input = null
+	Game.flags = {}
+	return report("packets", res.ok, res.info)
