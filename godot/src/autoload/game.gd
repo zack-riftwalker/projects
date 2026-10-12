@@ -94,6 +94,67 @@ func map_rooms() -> Array:
 			out.append(id)
 	return out
 
+# ---- the map (MVB1-03). Staged = walked by this player (room:<id>:visited); committed = a world flag mapped:<id>, set when somebody rests
+# at a bench; owned = map:<zone>, bought from the cartographer `tree`. What may be drawn is one function, map_view().
+func is_mapped(room_id: String) -> bool:
+	return flag("mapped:" + room_id)
+
+func _mappable(room_id: String) -> bool:
+	return rooms_meta.rooms.has(room_id) and not is_lab(room_id) and not is_offmap(room_id)
+
+func staged_rooms() -> Array:
+	var out: Array = []
+	for id in rooms_meta.rooms:
+		if flag("room:%s:visited" % id) and _mappable(id) and not is_mapped(id):
+			out.append(id)
+	return out
+
+# commits the listed rooms (and returns how many were new)
+func commit_rooms(ids: Array) -> int:
+	var n := 0
+	for id in ids:
+		if _mappable(String(id)) and not is_mapped(String(id)):
+			flags["mapped:" + String(id)] = true
+			n += 1
+	return n
+
+func owns_map(zone_id: String) -> bool:
+	return flag("map:" + zone_id)
+
+# {outline: every room the index lists, filled: the committed rooms}; nothing at all for a zone whose index is not owned
+func map_view(zone_id: String) -> Dictionary:
+	var out := {"outline": [], "filled": []}
+	if not owns_map(zone_id):
+		return out
+	for id in rooms_meta.rooms:
+		var m: Dictionary = rooms_meta.rooms[id]
+		if String(m.get("zone", "")) != zone_id or not _mappable(id):
+			continue
+		if not bool(m.get("secret", false)):
+			out.outline.append(id)
+		if is_mapped(id):
+			out.filled.append(id)
+	return out
+
+# "rooms n/N" of a zone: committed rooms that count (a secret never does) over the rooms its index lists
+func zone_counts(zone_id: String) -> Array:
+	var v := map_view(zone_id)
+	var n := 0
+	for id in v.filled:
+		if not is_secret(id):
+			n += 1
+	return [n, v.outline.size()]
+
+# an old save (before the map had to be bought): what it had walked is committed and its zones are indexed, once
+func migrate_map() -> void:
+	if flag("map:migrated"):
+		return
+	for id in rooms_meta.rooms:
+		if flag("room:%s:visited" % id) and _mappable(id):
+			flags["mapped:" + id] = true
+			flags["map:" + zone_of(id)] = true
+	flags["map:migrated"] = true
+
 func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
@@ -352,6 +413,7 @@ func new_game() -> void:
 func write_save() -> void:
 	if not persist:
 		return
+	flags["map:migrated"] = true                # (a save written by this build never needs migrating)
 	var d := {"version": 1, "flags": flags, "tools": tools, "bench": bench, "tokens": tokens, "max_hp": max_hp, "fragments": fragments,
 		"diff": diff, "coop_hp_pct": coop_hp_pct, "time": play_time, "deaths": deaths, "fights": fights, "equipped": equipped}
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
@@ -366,6 +428,8 @@ func load_save() -> bool:
 		return false
 	fresh()
 	flags = d.get("flags", {})
+	load_meta()
+	migrate_map()
 	for k in d.get("tools", {}):
 		tools[k] = d.tools[k]
 	bench = String(d.get("bench", ""))

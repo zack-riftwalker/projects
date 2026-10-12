@@ -1739,3 +1739,33 @@ func sc_co_worldsync() -> Array:
 		return true, 9.0)
 	await wait_secs(12.0)
 	return [all, "guest: has all 200 flags %s" % all]
+
+# MVB1-03: the host keeps a staged list for the guest. The guest walks R08 -> R09 -> D01, the host rests at R08: both have the guest's rooms committed.
+func sc_co_commit() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.flags["map:src"] = true
+		Game.flags["map:dep"] = true
+		var there := await wait_until(func(): return coop()._remote_room() != null and coop()._remote_room().id == "D01", 20.0)
+		await wait_secs(0.5)
+		var staged_ok: bool = coop().guest_staged.has("R09") and coop().guest_staged.has("D01") and not Game.is_mapped("D01")
+		mgr().swap_to("R08", Game.bench_spawn("R08"))
+		await wait_secs(0.5)
+		mgr().rest(mgr().room, 0)
+		var mine: bool = Game.is_mapped("R09") and Game.is_mapped("D01") and Game.is_mapped("R01")
+		var cleared: bool = coop().guest_staged.is_empty()
+		await wait_secs(3.0)
+		return [there and staged_ok and mine and cleared, "host: guest reached D01 %s, staged before the rest %s, committed %s, list cleared %s" % [there, staged_ok, mine, cleared]]
+	await wait_secs(1.0)
+	mgr().player.inv = 999.0
+	for rid in ["R08", "R09", "D01"]:
+		mgr().swap_to(rid, Game.bench_spawn(rid) if rid == "R08" else Vector2(60.0, 100.0))
+		mgr().player.inv = 999.0
+		await wait_secs(1.0)
+	var got := await wait_until(func(): return Game.is_mapped("R09") and Game.is_mapped("D01"), 20.0)
+	await wait_secs(0.5)
+	var src_v: Dictionary = Game.map_view("src")
+	var dep_v: Dictionary = Game.map_view("dep")
+	var listed: bool = src_v.filled.has("R09") and dep_v.filled.has("D01")
+	return [got and listed, "guest: R09 and D01 committed %s, in the map view %s" % [got, listed]]

@@ -144,16 +144,24 @@ func respawn(count_death := true) -> void:
 		hud.fade = 0.0
 
 # Rest at a bench: heal, make it the respawn point, save
+var commit_extra: Callable = Callable()   # co-op host: the rooms the guest walked (they are committed by the same rest)
+
 func rest(r: Room, index: int) -> void:
 	var c: Dictionary = r.cps[index]
 	var first: bool = not Game.flag("bench:" + r.id)
+	var committed := 0
+	if mode != "guest":                         # (the guest's rooms are committed by the host, which tells it how many)
+		var staged: Array = Game.staged_rooms()
+		if commit_extra.is_valid():
+			staged.append_array(commit_extra.call())
+		committed = Game.commit_rooms(staged)
 	Game.flags["bench:" + r.id] = true
 	c.on = true
 	Game.bench = r.id
 	player.hp = player.max_hp
 	player.meter = player.meter
-	if first:
-		r.pop(c.x, c.y - 36, "committed ✓", Game.COL.okHi, true)
+	if first or committed > 0:
+		r.pop(c.x, c.y - 36, "committed ✓" + (" +%d rooms" % committed if committed > 0 else ""), Game.COL.okHi, true)
 		r.ring(c.x, c.y - 22, 3, 26, Game.COL.ok, 0.4)
 		r.burst(c.x, c.y - 22, 14, [Game.COL.ok, Game.COL.okHi, "#ffffff"], 100.0, 100.0, {"glow": 1})
 	Audio.sfx("checkpoint")

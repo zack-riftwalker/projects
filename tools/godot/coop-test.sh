@@ -35,7 +35,7 @@ one() { # scenario [env...]
   grep -q "COOP $s host PASS" "$TMP/$s.host.log" && grep -q "COOP $s guest PASS" "$TMP/$s.guest.log"
 }
 
-ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-bench co-lostdie co-coffee co-restart co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-solo co-badline co-pauserestart co-bossdmg co-stomp co-home co-log co-fx co-watchdog co-pausestate co-soak co-catch co-reviewer co-plugins co-crumble co-merge co-agents co-shop co-menutick co-nsdoor co-deadcode co-flood co-segfault co-leak co-flags co-packet co-bosskit co-worldsync"
+ALL="co-connect co-hit co-rooms co-summon co-revive co-wipe co-bench co-lostdie co-coffee co-restart co-crack co-resume co-rejoin co-hostgone co-hostdown co-joinfight co-return co-netfields co-solo co-badline co-pauserestart co-bossdmg co-stomp co-home co-log co-fx co-watchdog co-pausestate co-soak co-catch co-reviewer co-plugins co-crumble co-merge co-agents co-shop co-menutick co-nsdoor co-deadcode co-flood co-segfault co-leak co-flags co-packet co-bosskit co-worldsync co-commit"
 list=${*:-all}; [ "$list" = all ] && list=$ALL
 bad=0
 for s in $list; do

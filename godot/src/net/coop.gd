@@ -27,6 +27,7 @@ var guest_ready := false
 var guest_bench := ""
 var snap_n := 0
 var plan_snaps: Array = []             # host: [nid, plan seq, snapshot number] of the first snapshot that carried each boss-kit plan
+var guest_staged := {}                  # host: the rooms the guest walked and nobody has rested since (committed with the next rest, MVB1-03)
 var guest_wh := -1                      # host: the world digest the guest last reported (MVB1-01)
 var wf_t := -10.0                       # host: when the last full `wf` went out (at most one per second)
 var wf_count := 0                       # host: how many full `wf` lists were sent (the tests count them)
@@ -88,7 +89,10 @@ func setup(m) -> void:
 	mgr.room_built.connect(_on_room_built)
 	mgr.room_changed.connect(_on_room_changed)
 	Game.loadout_changed.connect(func(): if role == "guest" and started: Net.rel("loadout", {"ids": Game.equipped}))
+	mgr.commit_extra = func(): return guest_staged.keys()
 	mgr.rested.connect(func(id):
+		if role == "host":
+			guest_staged.clear()                # (the rest just committed them)
 		if role == "guest":
 			Net.rel("bench", {"room": id})
 			Game.save_profile())               # (the guest's tokens and loadout live in its own file)      # the host respawns the guest there after a wipe
@@ -346,6 +350,7 @@ func _guest_joined() -> void:
 	remote.max_hp = Game.max_hp
 	place_room.remote_players.append(remote)
 	place_room.add_child(remote)
+	guest_staged[place_room.id] = true
 	var you := {"room": place_room.id, "x4": NetClasses.x4(px), "y4": NetClasses.x4(py), "hp": Game.max_hp, "max_hp": Game.max_hp}
 	Net.send_msg("start", {"save": {"tools": Game.tools, "flags": Game.flags, "diff": Game.diff, "coop_hp_pct": Game.coop_hp_pct, "fragments": Game.fragments}, "you": you, "tm": hms(), "build": Game.build_text})
 	if arena_door != null:
@@ -499,6 +504,10 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"bench":
 			guest_bench = String(d.room)
 			Game.flags["bench:" + guest_bench] = true
+			var cn := Game.commit_rooms(Game.staged_rooms() + guest_staged.keys())      # either player's rest commits both lists
+			guest_staged.clear()
+			if cn > 0:
+				Net.rel("committed", {"n": cn})
 			var br := _remote_room()
 			if br != null and br.id == guest_bench:
 				for c in br.cps:
@@ -560,6 +569,7 @@ func _host_remote_to_room(to_id: String) -> void:
 	remote.room = target
 	target.add_child(remote)
 	remote.samples.clear()
+	guest_staged[to_id] = true
 	log_("host: guest moved to %s" % to_id)
 	if old != null:
 		mgr.release_if_empty(old)
@@ -1401,6 +1411,9 @@ func _guest_rel(k: String, d: Dictionary) -> void:
 				r.show_plugin_banner(String(d.id))
 		"pause":
 			main.set_paused(bool(d.on), true)
+		"committed":
+			if r != null and p != null and int(d.n) > 0:
+				r.pop(p.x + 5.0, p.y - 30.0, "+%d rooms" % int(d.n), Game.COL.okHi, true)
 
 func _guest_died() -> void:
 	var p = mgr.player
