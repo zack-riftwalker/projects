@@ -3170,9 +3170,9 @@ func t_signs4b() -> bool:
 	Game.flags["lab:c"] = true
 	chk.call("a+c", z.sign_text(s) == "lab: c joined.")
 	z.queue_free()
-	var r8 := new_room("R08")
+	var r8 := new_room("R01")             # (R08's first sign has an alt since MVB1-13: R01's are plain strings)
 	var plain: Dictionary = r8.signs[0]
-	chk.call("plain sign reads as before", r8.sign_text(plain) == String(Game.rooms_meta.rooms.R08.signs[0]))
+	chk.call("plain sign reads as before", r8.sign_text(plain) == String(Game.rooms_meta.rooms.R01.signs[0]))
 	r8.queue_free()
 	Game.flags = {}
 	return report("signs4b", res.ok, res.info)

@@ -290,6 +290,11 @@ func load_room(room_id: String, snap = null) -> void:
 			fy += 1
 		di["fall_y"] = float(fy * T)
 		decor_items.append(di)
+	for di in decor_items:                             # a drip that has a bucket under it falls into the bucket
+		if String(di.kind) == "drip":
+			for bk in decor_items:
+				if String(bk.kind) == "bucket" and absf(float(bk.x) - float(di.x)) < 1.0:
+					di["fall_y"] = minf(float(di.fall_y), float(bk.y) - 9.0)
 	if def.has("flood"):
 		liquid_y = flood_target()
 	_find_ports()

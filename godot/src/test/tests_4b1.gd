@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs", "lostagents"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage", "mapoverlay", "changelog", "travelp2", "logs", "lostagents", "decor"]
 
 func _init(m) -> void:
 	main = m
@@ -24,6 +24,7 @@ func run(name: String) -> bool:
 		"travelp2": return t_travelp2()
 		"logs": return t_logs()
 		"lostagents": return t_lostagents()
+		"decor": return await t_decor()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -761,3 +762,118 @@ func t_lostagents() -> bool:
 	room.queue_free()
 	room2.queue_free()
 	return report("lostagents", res.ok, res.info)
+
+# MVB1-13: the decor and the changes to the built rooms
+func t_decor() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	# every room: its signs match its `T` letters, its decor kinds are known, its decor and agents cells are inside the room
+	var kinds := ["scrap", "drip", "bucket", "lamp", "chair", "package", "contributors"]
+	for id in Game.rooms_meta.rooms:
+		var m: Dictionary = Game.rooms_meta.rooms[id]
+		var rows := FileAccess.get_file_as_string("res://src/world/rooms/" + String(m.file)).split("\n")
+		var ts := 0
+		for ln in rows:
+			ts += ln.count("T")
+		if ts != m.get("signs", []).size():
+			fail(res, "%s: %d T letters, %d signs" % [id, ts, m.get("signs", []).size()])
+		for d in m.get("decor", []):
+			if not kinds.has(String(d.kind)):
+				fail(res, "%s: decor kind %s" % [id, d.kind])
+			if int(d.x) < 0 or int(d.x) >= int(m.size[0]) or int(d.y) < 0 or int(d.y) >= int(m.size[1]):
+				fail(res, "%s: decor outside" % id)
+			elif String(rows[int(d.y)][int(d.x)]) in "#=":
+				fail(res, "%s: decor %s inside a wall" % [id, d.kind])
+	# D04: the drip exists only while the heap is flooded; the sign and the bucket
+	var d04 := new_room("D04")
+	var drip: Dictionary = {}
+	var bucket: Dictionary = {}
+	for d in d04.decor_items:
+		if d.kind == "drip":
+			drip = d
+		elif d.kind == "bucket":
+			bucket = d
+	if drip.is_empty() or bucket.is_empty():
+		fail(res, "D04 drip or bucket missing")
+	else:
+		if not Game.cond(String(drip["if"])) or Game.heap_flood() != 2:
+			fail(res, "the drip is missing at flood 2")
+		Game.flags["gate:H07:catch"] = true
+		if not Game.cond(String(drip["if"])):
+			fail(res, "the drip at flood 1")
+		Game.flags["boss:LEAK"] = true
+		if Game.cond(String(drip["if"])):
+			fail(res, "the drip after THE LEAK")
+		if float(drip.fall_y) > float(bucket.y) - 8.0:
+			fail(res, "the drip does not end in the bucket")
+	if d04.signs.size() != 2 or d04.sign_text(d04.signs[1]) != "leak fixed. keeping the bucket, just in case.":
+		fail(res, "D04 sign 2 after the leak: " + d04.sign_text(d04.signs[1]))
+	Game.flags.erase("boss:LEAK")
+	Game.flags.erase("gate:H07:catch")
+	if d04.sign_text(d04.signs[1]) != "leak detected: please bring a bucket":
+		fail(res, "D04 sign 2 before the leak")
+	await frames(2)                                        # (the furniture layer draws every kind without an error)
+	d04.queue_free()
+	# R06: the lamp, the third sign, the closed west door
+	var r6 := new_room("R06")
+	var lamp: Dictionary = {}
+	for d in r6.decor_items:
+		if d.kind == "lamp":
+			lamp = d
+	if lamp.is_empty() or Game.cond(String(lamp.lit)):
+		fail(res, "the lamp is lit without THE MONOLITH")
+	Game.flags["boss:MONOLITH"] = true
+	if lamp.is_empty() or not Game.cond(String(lamp.lit)):
+		fail(res, "the lamp is not lit after THE MONOLITH")
+	if r6.signs.size() != 3 or r6.sign_text(r6.signs[2]) != "// TODO: remove this room. — Not tonight.":
+		fail(res, "R06 sign 3 reads " + (r6.sign_text(r6.signs[2]) if r6.signs.size() > 2 else "nothing"))
+	Game.flags.erase("boss:MONOLITH")
+	if r6.sign_text(r6.signs[2]) != "// TODO: remove this room.":
+		fail(res, "R06 sign 3 before")
+	if r6.sign_text(r6.signs[0]) != "ln: ../.git/old: broken symlink":
+		fail(res, "R06 sign 1")
+	var wd = r6.grid.door_at("W", 10)
+	if wd == null or wd.open:
+		fail(res, "R06's west door is not closed")
+	for ty in range(9, 13):
+		if r6.grid.tiles[ty * r6.w + 0] != TileGrid.E:
+			fail(res, "R06 (0,%d) is not open" % ty)
+	var chairs := 0
+	for d in r6.decor_items:
+		if d.kind == "chair":
+			chairs += 1
+	if chairs != 2:
+		fail(res, "chairs %d" % chairs)
+	await frames(2)
+	r6.queue_free()
+	# the others: D07's package and sign, H03's third sign, R08's sign after the boss, the scraps near the cartographers
+	var d07 := new_room("D07")
+	if d07.signs.size() != 2 or d07.sign_text(d07.signs[1]) != "abandoned does not mean unloved":
+		fail(res, "D07 signs")
+	await frames(2)
+	d07.queue_free()
+	var h3 := new_room("H03")
+	if h3.signs.size() != 3 or h3.sign_text(h3.signs[2]) != "free() is not the same as goodbye.":
+		fail(res, "H03 signs")
+	h3.queue_free()
+	var r8 := new_room("R08")
+	Game.flags["boss:MONOLITH"] = true
+	if r8.sign_text(r8.signs[0]) != "README: shipped at 06:00. keep the little orange one.":
+		fail(res, "R08 sign after the boss")
+	Game.flags.erase("boss:MONOLITH")
+	await frames(2)
+	r8.queue_free()
+	for rid in ["R08", "D01", "H04"]:
+		var rm := new_room(rid)
+		var scraps := 0
+		for d in rm.decor_items:
+			if d.kind == "scrap":
+				scraps += 1
+		if scraps < 2:
+			fail(res, "%s has %d scraps" % [rid, scraps])
+		rm.queue_free()
+	Game.fresh()
+	return report("decor", res.ok, res.info)

@@ -2,9 +2,11 @@
   "start": { "room": "R01", "spawn": "P" },
   "rooms": {
     "R06": { "file": "R06.txt", "zone": "src", "secret": true, "title": ".secret", "size": [24, 16], "origin": [-24, 0], "music": "w1",
-             "signs": ["A hidden file! Cracked walls like that one hide things all over ~/src."],
+             "signs": ["ln: ../.git/old: broken symlink", "A hidden file! Cracked walls like that one hide things all over ~/src.", {"text": "// TODO: remove this room.", "alt": [{"if": "boss:MONOLITH", "text": "// TODO: remove this room. — Not tonight."}]}],
+             "decor": [{"kind": "lamp", "x": 19, "y": 12, "lit": "boss:MONOLITH"}, {"kind": "chair", "x": 20, "y": 12}, {"kind": "chair", "x": 21, "y": 12}],
              "doors": [
-                 {"id": "R06:E", "side": "E", "a": 9, "b": 12, "to": "R01:W"}
+                 {"id": "R06:E", "side": "E", "a": 9, "b": 12, "to": "R01:W"},
+                 {"id": "R06:W", "side": "W", "a": 9, "b": 12, "to": "G16:E", "lock": "until:link:src", "symlink": true}
              ] },
     "R01": { "file": "R01.txt", "zone": "src", "title": "hello_world.py", "size": [202, 16], "origin": [0, 0], "music": "w1",
              "signs": ["MOVE with the [move] and JUMP with [jump] - hold it to go higher.", "Bugs. Swipe them with [attack] - or simply land on them.", "Between two walls? Jump at one, then jump again. Clawd has grippy legs.", "ZOMBIE PROCESS gets back up. Finish it off with [down] + [attack] in mid-air: kill -9."],
@@ -46,8 +48,8 @@
                  {"id": "R07:W", "side": "W", "a": 9, "b": 12, "to": "R05:E"},
                  {"id": "R07:E", "side": "E", "a": 9, "b": 12, "to": "R08:W"}
              ] },
-    "R08": { "file": "R08.txt", "decor": [{"kind": "contributors", "x": 3, "y": 9}], "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}], "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
-             "signs": ["Next door: the ledges go up to a code review; the low door goes down to ~/node_modules."],
+    "R08": { "file": "R08.txt", "decor": [{"kind": "contributors", "x": 3, "y": 9}, {"kind": "scrap", "x": 12, "y": 12}, {"kind": "scrap", "x": 13, "y": 12}], "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}], "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
+             "signs": [{"text": "Next door: the ledges go up to a code review; the low door goes down to ~/node_modules.", "alt": [{"if": "boss:MONOLITH", "text": "README: shipped at 06:00. keep the little orange one."}]}],
              "doors": [
                  {"id": "R08:W", "side": "W", "a": 9, "b": 12, "to": "R07:E"},
                  {"id": "R08:E", "side": "E", "a": 9, "b": 12, "to": "R09:W"}
@@ -73,7 +75,7 @@
                  {"id": "R11:W", "side": "W", "a": 9, "b": 12, "to": "R10:E"},
                  {"id": "R11:E", "side": "E", "a": 9, "b": 12, "to": "H01:W"}
              ] },
-    "D01": { "file": "D01.txt", "npc": [{"kind": "tree", "x": 19, "y": 4, "zone": "dep", "price": 40}], "zone": "dep", "title": "npm_install.sh", "size": [186, 22], "origin": [712, 4], "world": 2, "music": "w2",
+    "D01": { "file": "D01.txt", "npc": [{"kind": "tree", "x": 19, "y": 4, "zone": "dep", "price": 40}], "decor": [{"kind": "scrap", "x": 9, "y": 8}, {"kind": "scrap", "x": 11, "y": 8}, {"kind": "scrap", "x": 14, "y": 4}, {"kind": "scrap", "x": 16, "y": 4}], "zone": "dep", "title": "npm_install.sh", "size": [186, 22], "origin": [712, 4], "world": 2, "music": "w2",
              "signs": ["~/node_modules: 1,042 packages, and each one needs three more. Keep your bash ready.", "BASH works in mid-air too. Jump, then bash across."],
              "doors": [
                  {"id": "D01:W", "side": "W", "a": 5, "b": 8, "to": "R09:E"},
@@ -92,8 +94,8 @@
                  {"id": "D03:E", "side": "E", "a": 45, "b": 49, "to": "D04:W"},
                  {"id": "D03:E2", "side": "E", "a": 30, "b": 33, "to": "H03:SW"}
              ] },
-    "D04": { "file": "D04.txt", "zone": "dep", "title": "package.json", "size": [32, 16], "origin": [1116, 45], "world": 2, "music": "w2", "terminal": true,
-             "signs": ["Rest here. The npm registry sells plugins for tokens: stand at the stall and press [up]."],
+    "D04": { "file": "D04.txt", "decor": [{"kind": "drip", "x": 15, "y": 2, "if": "flood>0"}, {"kind": "bucket", "x": 15, "y": 12}], "zone": "dep", "title": "package.json", "size": [32, 16], "origin": [1116, 45], "world": 2, "music": "w2", "terminal": true,
+             "signs": ["Rest here. The npm registry sells plugins for tokens: stand at the stall and press [up].", {"text": "leak detected: please bring a bucket", "alt": [{"if": "boss:LEAK", "text": "leak fixed. keeping the bucket, just in case."}]}],
              "doors": [
                  {"id": "D04:W", "side": "W", "a": 9, "b": 12, "to": "D03:E"},
                  {"id": "D04:E", "side": "E", "a": 9, "b": 12, "to": "D05:W"},
@@ -112,8 +114,8 @@
                  {"id": "D06:W", "side": "W", "a": 9, "b": 12, "to": "D05:E"},
                  {"id": "D06:E", "side": "E", "a": 9, "b": 12, "to": "D07:W"}
              ] },
-    "D07": { "file": "D07.txt", "agents": [[21, 12]], "zone": "dep", "secret": true, "title": ".npmrc", "size": [24, 16], "origin": [1212, 45], "world": 2, "music": "w2",
-             "signs": ["A hidden .npmrc. Someone left a plugin here."],
+    "D07": { "file": "D07.txt", "agents": [[21, 12]], "decor": [{"kind": "package", "x": 9, "y": 12}], "zone": "dep", "secret": true, "title": ".npmrc", "size": [24, 16], "origin": [1212, 45], "world": 2, "music": "w2",
+             "signs": ["A hidden .npmrc. Someone left a plugin here.", "abandoned does not mean unloved"],
              "plugins": ["cache"],
              "doors": [
                  {"id": "D07:W", "side": "W", "a": 9, "b": 12, "to": "D06:E"}
@@ -132,7 +134,7 @@
                  {"id": "H02:E", "side": "E", "a": 9, "b": 12, "to": "H04:W"},
                  {"id": "H02:N", "side": "N", "a": 130, "b": 133, "to": "H12:S"}
              ] },
-    "H04": { "file": "H04.txt", "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}], "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
+    "H04": { "file": "H04.txt", "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}], "decor": [{"kind": "scrap", "x": 40, "y": 8}, {"kind": "scrap", "x": 42, "y": 8}, {"kind": "scrap", "x": 27, "y": 14}], "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
              "signs": [],
              "doors": [
                  {"id": "H04:W", "side": "W", "a": 9, "b": 12, "to": "H02:E"},
@@ -140,7 +142,7 @@
                  {"id": "H04:N", "side": "N", "a": 106, "b": 109, "to": "H10:S", "lock": "until:hatch:H10S"}
              ] },
     "H03": { "file": "H03.txt", "zone": "heap", "title": "free_list.h", "size": [32, 60], "origin": [1116, -15], "world": 3, "music": "w3", "terminal": true,
-             "signs": ["free_list.h: a terminal. Rest, and travel between terminals. The heap floods below; something deeper keeps it full.", "A red firewall brick. ssh could tunnel through it (later)."],
+             "signs": ["free_list.h: a terminal. Rest, and travel between terminals. The heap floods below; something deeper keeps it full.", "A red firewall brick. ssh could tunnel through it (later).", "free() is not the same as goodbye."],
              "flood": [23, 45, null],
              "doors": [
                  {"id": "H03:W", "side": "W", "a": 4, "b": 7, "to": "H04:E"},
