@@ -10,9 +10,12 @@ WJ_X, WJ_Y, WJ_LOCK = 165.0, 285.0, 0.15
 DASH_SPEED, DASH_T, DJUMP = 320.0, 0.15, 272.0
 DT = 1.0 / 60.0
 
-E, SOLID, ONEWAY, SPU, SPD, CRACK, CRUMBLE, BA, BB, LIQ, GC, GA, DEAD, FIRE, THICK = range(15)
+E, SOLID, ONEWAY, SPU, SPD, CRACK, CRUMBLE, BA, BB, LIQ, GC, GA, DEAD, FIRE, THICK, PORT, WEB = range(17)
 CH = {"#": SOLID, "=": ONEWAY, "^": SPU, "v": SPD, "%": CRACK, "~": CRUMBLE, "1": BA, "2": BB, "w": LIQ,
-      "!": GC, "&": GA, ";": DEAD, "N": FIRE, "0": THICK}
+      "!": GC, "&": GA, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT, "h": WEB}
+# phase 4B (design values, see PLAN-metroidvania-phase4b2.md)
+CURL_RANGE, CURL_SPEED, CURL_POP, CURL_EXIT_VX = 104.0, 400.0, 300.0, 210.0
+SSH_HOLD, SSH_MAX = 0.3, 2
 
 
 class Room:
@@ -29,19 +32,25 @@ class Room:
         self.gate_a = o.get("gate_a", False)
         self.fire_open = o.get("fire_open", False)
         self.liquid_y = o.get("liquid_y")                # px, or None
+        self.ports_open = o.get("ports_open", True)      # optimistic: ports open (riding is checked by its own timed sim)
+        self.webs_off = o.get("webs_off", False)
+        self.hooks_rings = o.get("hooks_rings", False)   # boss:CRAWLER: scraper hooks `c` are GET rings
         self.t = [[CH.get(c, E) for c in r] for r in self.rows]
         self.springs = []
         self.plats = []      # treated as one-way floors along their path (optimistic)
+        self.rings = []
         for ty, r in enumerate(self.rows):
             for tx, c in enumerate(r):
+                if c == "@" or (c == "c" and self.hooks_rings):
+                    self.rings.append((tx * T + 8.0, ty * T + 8.0))
                 if c == "S":
                     self.springs.append((tx * T + 2, ty * T + 9, 12, 7))
-                if c in "MV":
+                if c in "MVJ":
                     self.plats.append((tx, ty, c))
         self.extra_oneway = set()
         for tx, ty, c in self.plats:
             r = self.rows[ty]
-            if c == "M":
+            if c in "MJ":
                 end = None
                 for i in range(tx + 1, len(r)):
                     if r[i] == "|":
@@ -100,6 +109,8 @@ class Room:
             return not self.gate_a
         if v in (CRUMBLE, BA, BB):
             return True
+        if v == PORT:
+            return not self.ports_open
         return False
 
     def box_hits(self, x, y, w, h):
@@ -112,7 +123,8 @@ class Room:
 
 class P:
     __slots__ = ("x", "y", "w", "h", "vx", "vy", "on_ground", "coyote", "jump_buf", "jumping", "wall_dir", "wall_coy",
-                 "last_wall", "lock", "dash_t", "dash_cd", "can_dash", "dash_dx", "dash_dy", "can_double", "drop_t", "face")
+                 "last_wall", "lock", "dash_t", "dash_cd", "can_dash", "dash_dx", "dash_dy", "can_double", "drop_t", "face",
+                 "zip", "zip_dx", "reuse", "push_t", "blocked")
 
     def __init__(self, x, y):
         self.x, self.y, self.w, self.h = x, y, 10.0, 10.0
@@ -128,6 +140,11 @@ class P:
         self.can_double = True
         self.drop_t = 0.0
         self.face = 1.0
+        self.zip = None
+        self.zip_dx = 0.0
+        self.reuse = {}
+        self.push_t = 0.0
+        self.blocked = 0
 
 
 def approach(v, t, s):
@@ -187,6 +204,8 @@ def hazard(rm, p):
                 return "spike"
             if t == LIQ and p.y + p.h > ty * T + 6:
                 return "liq"
+            if t == WEB and not rm.webs_off and p.x + p.w > tx * T + 3 and p.x < tx * T + 13 and p.y + p.h > ty * T + 3 and p.y < ty * T + 13:
+                return "web"
     if rm.liquid_y is not None and p.y + p.h > rm.liquid_y + 5:
         return "liq"
     if p.y > rm.h * T + 24:
@@ -194,9 +213,114 @@ def hazard(rm, p):
     return ""
 
 
+def line_clear(rm, x0, y0, x1, y1):
+    n = max(1, int(math.ceil(max(abs(x1 - x0), abs(y1 - y0)) / 8.0)))
+    for i in range(1, n):
+        k = i / n
+        if rm.solid(math.floor((x0 + (x1 - x0) * k) / T), math.floor((y0 + (y1 - y0) * k) / T)):
+            return False
+    return True
+
+
+def pick_ring(rm, p, mx):
+    cx, cy = p.x + p.w / 2, p.y + p.h / 2
+    cands = []
+    for i, (rx, ry) in enumerate(rm.rings):
+        if p.reuse.get("last") == i:          # the ring just used: not again until Clawd lands or uses another
+            continue
+        dx, dy = rx - cx, ry - cy
+        dist = math.hypot(dx, dy)
+        if dist > CURL_RANGE or not line_clear(rm, cx, cy, rx, ry):
+            continue
+        cands.append((dist, i, dx))
+    if not cands:
+        return None
+    side = [c for c in cands if mx == 0 or c[2] * mx > 0 or abs(c[2]) < 12]
+    pool = side if side else cands
+    return min(pool)[1]
+
+
+def curl_step(rm, p):
+    rx, ry = rm.rings[p.zip]
+    cx, cy = p.x + p.w / 2, p.y + p.h / 2
+    dx, dy = rx - cx, ry - cy
+    dist = math.hypot(dx, dy)
+    if dist <= CURL_SPEED * DT + 0.5:
+        hx = move_x(rm, p, dx)
+        hy = move_y(rm, p, dy, True)
+        p.vy = -CURL_POP
+        p.vx = (1 if p.zip_dx > 0 else -1) * CURL_EXIT_VX if abs(p.zip_dx) > 4 else 0.0
+        p.can_double = True
+        p.can_dash = True
+        p.jumping = False
+        p.reuse["last"] = p.zip
+        p.zip = None
+        p.on_ground = False
+        return
+    vx, vy = dx / dist * CURL_SPEED, dy / dist * CURL_SPEED
+    bx = move_x(rm, p, vx * DT)
+    by = move_y(rm, p, vy * DT, True)
+    if bx or by:
+        p.blocked += 1
+        if p.blocked >= 2:
+            p.zip = None
+            p.vx, p.vy = 0.0, 0.0
+    else:
+        p.blocked = 0
+
+
+def fire_ahead(rm, p, d):
+    """the body touches FIRE cells on side d (all of its rows that are blocked are FIRE)"""
+    x = p.x + p.w + 0.5 if d > 0 else p.x - 0.5
+    tx = math.floor(x / T)
+    rows = range(math.floor(p.y / T), math.floor((p.y + p.h - 0.001) / T) + 1)
+    kinds = [rm.tile(tx, ty) for ty in rows]
+    return any(k == FIRE for k in kinds) and all(k in (FIRE, E, DEAD, WEB) for k in kinds)
+
+
+def ssh_tunnel(rm, p, d):
+    x0 = p.x
+    for k in range(1, SSH_MAX + 2):
+        if d > 0:
+            nx = (math.floor((p.x + p.w + 0.5) / T) + k) * T + 1
+        else:
+            nx = (math.floor((p.x - 0.5) / T) - k + 1) * T - p.w - 1
+        rows = range(math.floor(p.y / T), math.floor((p.y + p.h - 0.001) / T) + 1)
+        span = range(math.floor(min(x0, nx) / T), math.floor((max(x0, nx) + p.w) / T) + 1)
+        if any(rm.tile(tx, ty) == SOLID for tx in span for ty in rows):
+            return False
+        if not rm.box_hits(nx, p.y, p.w, p.h) and not any(rm.tile(tx, ty) == FIRE for tx in range(math.floor(nx / T), math.floor((nx + p.w - 0.001) / T) + 1) for ty in rows):
+            p.x = nx
+            return True
+    return False
+
+
 def step(rm, p, inp, ab):
-    """inp: dict mx (-1/0/1), my (-1 up / 1 down), jump (held), jp (pressed), dash (pressed). ab: set of abilities."""
+    """inp: dict mx (-1/0/1), my (-1 up / 1 down), jump (held), jp (pressed), dash (pressed), sp (special pressed). ab: set of abilities."""
     mx, my = inp.get("mx", 0), inp.get("my", 0)
+    if p.on_ground:
+        p.reuse.pop("last", None)
+    if inp.get("sp") and "curl" in ab and p.zip is None:
+        i = pick_ring(rm, p, mx)
+        if i is not None:
+            p.zip = i
+            p.zip_dx = rm.rings[i][0] - (p.x + p.w / 2)
+            p.blocked = 0
+            p.dash_t = 0
+    if p.zip is not None:
+        if inp.get("dash"):
+            p.zip = None
+        else:
+            curl_step(rm, p)
+            p.wall_dir = 0
+            return
+    if "ssh" in ab and mx != 0 and p.dash_t <= 0 and fire_ahead(rm, p, mx):
+        p.push_t += DT
+        if p.push_t >= SSH_HOLD - 1e-6:
+            p.push_t = 0
+            ssh_tunnel(rm, p, mx)
+    else:
+        p.push_t = 0
     p.lock = max(0.0, p.lock - DT)
     if p.dash_cd > 0:
         p.dash_cd -= DT

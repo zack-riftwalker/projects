@@ -251,7 +251,7 @@ GATES = {"", "catch", "bash", "agents", "sudo", "curl", "ssh", "breakpoint", "re
          "flood0", "flood1", "fight", "boss", "drop", "lever", "mutex", "wrap", "break", "merge",
          "symlink", "join", "checkout",
          "until:boss:NULL", "until:boss:REVIEWER1", "until:boss:MERGE", "until:boss:LEAK", "flood:0", "flood:1",
-         "until:hatch:H10S", "until:hatch:H10N", "until:link:lab", "until:2of:lab:a,lab:b,lab:c"}
+         "oneway", "until:boss:CRAWLER", "until:boss:FIREWALL", "until:wave:N21", "until:lever:CDN", "until:hatch:H10S", "until:hatch:H10N", "until:link:lab", "until:2of:lab:a,lab:b,lab:c"}
 for l in links:
     if l["gate"] not in GATES:
         err("%s %s %s: unknown gate %r" % (l["a"], l["side"], l["b"], l["gate"]))

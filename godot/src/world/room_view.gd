@@ -12,7 +12,7 @@ static func make_tileset(world := 1) -> TileSet:
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(T, T)
 	var src := TileSetAtlasSource.new()
-	src.texture = load("res://assets/tiles/w%d_tiles.png" % world)
+	src.texture = load("res://assets/tiles/w%d_tiles.png" % Game.vis_world(world))
 	src.texture_region_size = Vector2i(T, T)
 	for r in range(7):
 		for c in range(16):
@@ -36,7 +36,7 @@ func build(rm: Room) -> void:
 	bg.scroll_scale = Vector2(0.25, 0.1)
 	bg.repeat_size = Vector2(384, 0)
 	var spr := Sprite2D.new()
-	spr.texture = load("res://assets/bg/w%d.png" % world)
+	spr.texture = load("res://assets/bg/w%d.png" % Game.vis_world(world))
 	spr.centered = false
 	bg.add_child(spr)
 	add_child(bg)

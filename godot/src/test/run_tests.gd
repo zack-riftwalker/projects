@@ -84,6 +84,8 @@ func run(name: String) -> bool:
 		"variants4b": return t_variants4b()
 		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
+	if Tests4b2.NAMES.has(name):
+		return await Tests4b2.new(main).run(name)
 	if Tests4b1.NAMES.has(name):
 		return await Tests4b1.new(main).run(name)
 	return report(name, false, "unknown test")
@@ -499,7 +501,7 @@ func t_end() -> bool:
 	Game.persist = false
 	Game.flags = {}
 	var m := new_manager()
-	m.swap_to("H11")
+	m.swap_to("N11")
 	var room := m.room
 	var p = m.player
 	var ev := [0]
@@ -2903,7 +2905,7 @@ func t_rooms4() -> bool:
 			continue
 		for d in rooms[rid].doors:
 			var to_room := String(d.to).get_slice(":", 0)
-			if not rooms.has(to_room) or _door_fired(rid, d) or _door_fired(to_room, _find_door(rooms[to_room], String(d.to))):
+			if not rooms.has(to_room) or String(d.get("lock", "")) == "oneway" or _door_fired(rid, d) or _door_fired(to_room, _find_door(rooms[to_room], String(d.to))):
 				continue
 			var pw: float = int(rooms[rid].size[0]) * 16.0
 			var ph: float = int(rooms[rid].size[1]) * 16.0
@@ -3007,8 +3009,7 @@ func t_rooms4() -> bool:
 	Game.flags = {}
 	var m2 := new_manager()
 	m2.swap_to("H11")
-	chk.call("H11 end text", String(m2.room.def.get("end", "")) == "to be continued in /net")
-	chk.call("H11 has the end door", m2.room.end_door != null)
+	chk.call("H11 has no end door any more (4B-2: the way on is the airgap)", String(m2.room.def.get("end", "")) == "" and m2.room.end_door == null)
 	Controls.script_input = null
 	Game.flags = {}
 	m2.queue_free()

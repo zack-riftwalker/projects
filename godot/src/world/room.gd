@@ -468,6 +468,8 @@ func update_doors() -> void:
 		var open: bool = Game.rooms_meta.rooms.has(String(d.to).get_slice(":", 0))      # a door to a room that does not exist (yet) never opens
 		if not open:
 			pass
+		elif lock == "oneway":
+			open = false                           # never opens from this side: the other side is a drop into this room
 		elif lock == "fight":
 			open = not fight_active
 		elif lock.begins_with("until:"):
@@ -1268,7 +1270,7 @@ func step(dt: float) -> void:
 func _step_fight(dt: float) -> void:
 	if boss == null and fight.state != "reward":      # (the dead boss is freed by the room: the reward timer must not depend on it)
 		return
-	var trigger: float = float(def.boss.trigger_x)
+	var trigger: float = float(def.boss.get("trigger_x", 1e9))          # (a pad boss has none: MVB2-09 starts it from its pad)
 	match String(fight.state):
 		"none":
 			var from_east: bool = String(def.boss.get("trigger_side", "W")) == "E"        # an arena entered from the east starts below trigger_x
@@ -2248,7 +2250,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 			if m.get("packet", false):
 				_draw_packet(ci, m)
 				continue
-			ci.draw_texture(Gfx.tex("platform_48" if world == 1 else "platform_w%d" % world), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
+			ci.draw_texture(Gfx.tex("platform_48" if world == 1 else "platform_w%d" % Game.vis_world(world)), Vector2(floori(m.x + 0.5), floori(m.y + 0.5) - 1))
 		for c in cps:
 			ci.draw_texture(Gfx.tex("checkpoint_%d" % (1 if c.on else 0)), Vector2(c.x - 8, c.y - 28))
 		for s in signs:

@@ -95,7 +95,7 @@ func t_mapdata() -> bool:
 		if Game.is_lab(id) and Game.zone_of(id) == "src":
 			fail(res, "lab room in src " + id)
 	secrets.sort()
-	if secrets != ["D07", "H12", "H13", "H14", "H15", "H16", "R06", "R12", "R13", "R15"]:
+	if secrets != ["D07", "H12", "H13", "H14", "H15", "H16", "N19", "N21", "R06", "R12", "R13", "R15"]:
 		fail(res, "secrets " + str(secrets))
 	# staged vs committed
 	var mgr := new_manager()
@@ -772,7 +772,7 @@ func t_decor() -> bool:
 	Game.load_meta()
 	var res := checker()
 	# every room: its signs match its `T` letters, its decor kinds are known, its decor and agents cells are inside the room
-	var kinds := ["scrap", "drip", "bucket", "lamp", "chair", "package", "contributors"]
+	var kinds := ["scrap", "drip", "bucket", "lamp", "chair", "package", "contributors", "fiber", "window"]
 	for id in Game.rooms_meta.rooms:
 		var m: Dictionary = Game.rooms_meta.rooms[id]
 		var rows := FileAccess.get_file_as_string("res://src/world/rooms/" + String(m.file)).split("\n")
@@ -786,7 +786,7 @@ func t_decor() -> bool:
 				fail(res, "%s: decor kind %s" % [id, d.kind])
 			if int(d.x) < 0 or int(d.x) >= int(m.size[0]) or int(d.y) < 0 or int(d.y) >= int(m.size[1]):
 				fail(res, "%s: decor outside" % id)
-			elif String(rows[int(d.y)][int(d.x)]) in "#=":
+			elif String(d.kind) not in ["fiber", "window"] and String(rows[int(d.y)][int(d.x)]) in "#=":
 				fail(res, "%s: decor %s inside a wall" % [id, d.kind])
 	# D04: the drip exists only while the heap is flooded; the sign and the bucket
 	var d04 := new_room("D04")

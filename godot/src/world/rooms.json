@@ -48,20 +48,24 @@
                  {"id": "R07:W", "side": "W", "a": 9, "b": 12, "to": "R05:E"},
                  {"id": "R07:E", "side": "E", "a": 9, "b": 12, "to": "R08:W"}
              ] },
-    "R08": { "file": "R08.txt", "decor": [{"kind": "contributors", "x": 3, "y": 9}, {"kind": "scrap", "x": 12, "y": 12}, {"kind": "scrap", "x": 13, "y": 12}], "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}], "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
+    "R08": { "file": "R08.txt", "zone": "src", "title": "README.md", "size": [24, 16], "origin": [664, 0], "world": 1, "music": "w1", "terminal": true,
+             "decor": [{"kind": "contributors", "x": 3, "y": 9}, {"kind": "scrap", "x": 12, "y": 12}, {"kind": "scrap", "x": 13, "y": 12}],
+             "npc": [{"kind": "tree", "x": 15, "y": 12, "zone": "src", "price": 0}],
              "signs": [{"text": "Next door: the ledges go up to a code review; the low door goes down to ~/node_modules.", "alt": [{"if": "boss:MONOLITH", "text": "README: shipped at 06:00. keep the little orange one."}]}],
              "doors": [
                  {"id": "R08:W", "side": "W", "a": 9, "b": 12, "to": "R07:E"},
                  {"id": "R08:E", "side": "E", "a": 9, "b": 12, "to": "R09:W"}
              ] },
-    "R09": { "file": "R09.txt", "landmarks": ["horizon"], "zone": "src", "title": "Makefile", "size": [24, 32], "origin": [688, -16], "world": 1, "music": "w1",
+    "R09": { "file": "R09.txt", "zone": "src", "title": "Makefile", "size": [24, 32], "origin": [688, -16], "world": 1, "music": "w1",
+             "landmarks": ["horizon"],
              "signs": ["make review: climb the ledges. make install: the low door on the right."],
              "doors": [
                  {"id": "R09:W", "side": "W", "a": 25, "b": 28, "to": "R08:E"},
                  {"id": "R09:NE", "side": "E", "a": 5, "b": 8, "to": "R10:W"},
                  {"id": "R09:E", "side": "E", "a": 25, "b": 28, "to": "D01:W"}
              ] },
-    "R10": { "file": "R10.txt", "landmarks": ["horizon"], "zone": "src", "title": "code_review.md", "size": [24, 14], "origin": [712, -18], "world": 1, "music": "",
+    "R10": { "file": "R10.txt", "zone": "src", "title": "code_review.md", "size": [24, 14], "origin": [712, -18], "world": 1, "music": "",
+             "landmarks": ["horizon"],
              "signs": [],
              "boss": {"id": "REVIEWER1", "class": "Reviewer", "name": "THE REVIEWER", "sub": "changes requested", "trigger_x": 80, "T": 70, "u": 0.7, "reward": "catch", "banner": "catch", "banner_sub": "swipe a yellow attack just as it hits you: it flies back", "music": "tension", "drop": 30},
              "doors": [
@@ -75,7 +79,9 @@
                  {"id": "R11:W", "side": "W", "a": 9, "b": 12, "to": "R10:E"},
                  {"id": "R11:E", "side": "E", "a": 9, "b": 12, "to": "H01:W"}
              ] },
-    "D01": { "file": "D01.txt", "npc": [{"kind": "tree", "x": 19, "y": 4, "zone": "dep", "price": 40}], "decor": [{"kind": "scrap", "x": 9, "y": 8}, {"kind": "scrap", "x": 11, "y": 8}, {"kind": "scrap", "x": 14, "y": 4}, {"kind": "scrap", "x": 16, "y": 4}], "zone": "dep", "title": "npm_install.sh", "size": [186, 22], "origin": [712, 4], "world": 2, "music": "w2",
+    "D01": { "file": "D01.txt", "zone": "dep", "title": "npm_install.sh", "size": [186, 22], "origin": [712, 4], "world": 2, "music": "w2",
+             "npc": [{"kind": "tree", "x": 19, "y": 4, "zone": "dep", "price": 40}],
+             "decor": [{"kind": "scrap", "x": 9, "y": 8}, {"kind": "scrap", "x": 11, "y": 8}, {"kind": "scrap", "x": 14, "y": 4}, {"kind": "scrap", "x": 16, "y": 4}],
              "signs": ["~/node_modules: 1,042 packages, and each one needs three more. Keep your bash ready.", "BASH works in mid-air too. Jump, then bash across."],
              "doors": [
                  {"id": "D01:W", "side": "W", "a": 5, "b": 8, "to": "R09:E"},
@@ -94,7 +100,8 @@
                  {"id": "D03:E", "side": "E", "a": 45, "b": 49, "to": "D04:W"},
                  {"id": "D03:E2", "side": "E", "a": 30, "b": 33, "to": "H03:SW"}
              ] },
-    "D04": { "file": "D04.txt", "decor": [{"kind": "drip", "x": 15, "y": 2, "if": "flood>0"}, {"kind": "bucket", "x": 15, "y": 12}], "zone": "dep", "title": "package.json", "size": [32, 16], "origin": [1116, 45], "world": 2, "music": "w2", "terminal": true,
+    "D04": { "file": "D04.txt", "zone": "dep", "title": "package.json", "size": [32, 16], "origin": [1116, 45], "world": 2, "music": "w2", "terminal": true,
+             "decor": [{"kind": "drip", "x": 15, "y": 2, "if": "flood>0"}, {"kind": "bucket", "x": 15, "y": 12}],
              "signs": ["Rest here. The npm registry sells plugins for tokens: stand at the stall and press [up].", {"text": "leak detected: please bring a bucket", "alt": [{"if": "boss:LEAK", "text": "leak fixed. keeping the bucket, just in case."}]}],
              "doors": [
                  {"id": "D04:W", "side": "W", "a": 9, "b": 12, "to": "D03:E"},
@@ -108,33 +115,42 @@
                  {"id": "D05:W", "side": "W", "a": 7, "b": 10, "to": "D04:E", "lock": "fight"},
                  {"id": "D05:E", "side": "E", "a": 7, "b": 10, "to": "D06:W", "lock": "until:boss:MERGE"}
              ] },
-    "D06": { "file": "D06.txt", "zone": "dep", "title": "symlink.sh", "size": [40, 16], "origin": [1172, 45], "world": 2, "music": "w2", "end": "to be continued in /net",
+    "D06": { "file": "D06.txt", "zone": "dep", "title": "symlink.sh", "size": [40, 16], "origin": [1172, 45], "world": 2, "music": "w2",
              "signs": ["A slot too small for you. With a full context meter, tap [special]: your agents fly in and press it. The cache server refills the meter."],
+             "gate_lever": "lever:D06",
              "doors": [
                  {"id": "D06:W", "side": "W", "a": 9, "b": 12, "to": "D05:E"},
                  {"id": "D06:E", "side": "E", "a": 9, "b": 12, "to": "D07:W"}
              ] },
-    "D07": { "file": "D07.txt", "agents": [[21, 12]], "decor": [{"kind": "package", "x": 9, "y": 12}], "zone": "dep", "secret": true, "title": ".npmrc", "size": [24, 16], "origin": [1212, 45], "world": 2, "music": "w2",
+    "D07": { "file": "D07.txt", "zone": "dep", "secret": true, "title": ".npmrc", "size": [24, 16], "origin": [1212, 45], "world": 2, "music": "w2",
+             "agents": [[21, 12]],
+             "decor": [{"kind": "package", "x": 9, "y": 12}],
              "signs": ["A hidden .npmrc. Someone left a plugin here.", "abandoned does not mean unloved"],
              "plugins": ["cache"],
              "doors": [
-                 {"id": "D07:W", "side": "W", "a": 9, "b": 12, "to": "D06:E"}
+                 {"id": "D07:W", "side": "W", "a": 9, "b": 12, "to": "D06:E"},
+                 {"id": "D07:E", "side": "E", "a": 9, "b": 12, "to": "N02:W"}
              ] },
-    "H01": { "file": "H01.txt", "landmarks": ["tower"], "zone": "heap", "title": "brk.c", "size": [32, 16], "origin": [768, -20], "world": 3, "music": "w3",
+    "H01": { "file": "H01.txt", "zone": "heap", "title": "brk.c", "size": [32, 16], "origin": [768, -20], "world": 3, "music": "w3",
+             "landmarks": ["tower"],
              "signs": ["/proc/heap. Memory that was taken and never given back. Do not touch the green."],
              "doors": [
                  {"id": "H01:W", "side": "W", "a": 9, "b": 12, "to": "R11:E"},
                  {"id": "H01:E", "side": "E", "a": 9, "b": 12, "to": "H02:W"},
                  {"id": "H01:N", "side": "N", "a": 16, "b": 19, "to": "H14:S"}
              ] },
-    "H02": { "file": "H02.txt", "landmarks": ["lantern"], "zone": "heap", "title": "malloc.c", "size": [194, 16], "origin": [800, -20], "world": 3, "music": "w3",
+    "H02": { "file": "H02.txt", "zone": "heap", "title": "malloc.c", "size": [194, 16], "origin": [800, -20], "world": 3, "music": "w3",
+             "landmarks": ["lantern"],
              "signs": ["malloc(): every blob you pop splits in two. Something down here allocates and never frees."],
              "doors": [
                  {"id": "H02:W", "side": "W", "a": 9, "b": 12, "to": "H01:E"},
                  {"id": "H02:E", "side": "E", "a": 9, "b": 12, "to": "H04:W"},
                  {"id": "H02:N", "side": "N", "a": 130, "b": 133, "to": "H12:S"}
              ] },
-    "H04": { "file": "H04.txt", "landmarks": ["lantern"], "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}], "decor": [{"kind": "scrap", "x": 40, "y": 8}, {"kind": "scrap", "x": 42, "y": 8}, {"kind": "scrap", "x": 27, "y": 14}], "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
+    "H04": { "file": "H04.txt", "zone": "heap", "title": "dangling_ptr.c", "size": [122, 20], "origin": [994, -20], "world": 3, "music": "w3",
+             "landmarks": ["lantern"],
+             "npc": [{"kind": "tree", "x": 45, "y": 8, "zone": "heap", "price": 40}],
+             "decor": [{"kind": "scrap", "x": 40, "y": 8}, {"kind": "scrap", "x": 42, "y": 8}, {"kind": "scrap", "x": 27, "y": 14}],
              "signs": [],
              "doors": [
                  {"id": "H04:W", "side": "W", "a": 9, "b": 12, "to": "H02:E"},
@@ -153,12 +169,14 @@
                  {"id": "H03:SW", "side": "W", "a": 53, "b": 56, "to": "D03:E2"},
                  {"id": "H03:S", "side": "S", "a": 14, "b": 17, "to": "D04:N", "lock": "flood:0"}
              ] },
-    "H13": { "file": "H13.txt", "agents": [[52, 12]], "zone": "heap", "secret": true, "title": "use_after_free.c", "size": [64, 14], "origin": [1148, -20], "world": 3, "music": "w3",
+    "H13": { "file": "H13.txt", "zone": "heap", "secret": true, "title": "use_after_free.c", "size": [64, 14], "origin": [1148, -20], "world": 3, "music": "w3",
+             "agents": [[52, 12]],
              "signs": ["I was freed. Why can I still hear you?", "use after free: anything can happen here. Nothing does.", "// TODO: remove this room"],
              "doors": [
                  {"id": "H13:W", "side": "W", "a": 9, "b": 12, "to": "H03:NE"}
              ] },
-    "H07": { "file": "H07.txt", "zone": "heap", "title": "free.c", "size": [64, 16], "origin": [1148, -6], "world": 3, "music": "w3", "valve": true,
+    "H07": { "file": "H07.txt", "zone": "heap", "title": "free.c", "size": [64, 16], "origin": [1148, -6], "world": 3, "music": "w3",
+             "valve": true,
              "signs": ["free(): the valve takes a pointer. Catch one and give it back."],
              "flood": [14, null, null],
              "doors": [
@@ -172,7 +190,8 @@
                  {"id": "H05:W", "side": "W", "a": 9, "b": 12, "to": "H03:E2"},
                  {"id": "H05:E", "side": "E", "a": 9, "b": 12, "to": "H06:W"}
              ] },
-    "H15": { "file": "H15.txt", "pages": [[24, 12, 1]], "zone": "heap", "secret": true, "title": "core_dump", "size": [64, 16], "origin": [1148, 29], "world": 3, "music": "w3",
+    "H15": { "file": "H15.txt", "zone": "heap", "secret": true, "title": "core_dump", "size": [64, 16], "origin": [1148, 29], "world": 3, "music": "w3",
+             "pages": [[24, 12, 1]],
              "signs": ["Segmentation fault (core dumped). It stopped right here, mid-sentence.", "Killed: out of memory. It was holding 3 GB of cat pictures.", "panic: runtime error: index out of range [5] with length 5", "PID 1 is locked behind this door. fork() never returns. (later)"],
              "flood": [0, 1, null],
              "doors": [
@@ -208,12 +227,14 @@
                  {"id": "H10:S", "side": "S", "a": 40, "b": 43, "to": "H04:N", "sets": "hatch:H10S"},
                  {"id": "H10:N", "side": "N", "a": 50, "b": 53, "to": "H11:S", "sets": "hatch:H10N"}
              ] },
-    "H11": { "file": "H11.txt", "landmarks": ["tower"], "zone": "heap", "title": "mmap.c", "size": [200, 16], "origin": [1060, -52], "world": 3, "music": "w3", "end": "to be continued in /net",
-             "signs": ["mmap.c: the whole heap is under your feet. The cable goes on to /net.", "/net: connection refused (for now)."],
+    "H11": { "file": "H11.txt", "zone": "heap", "title": "mmap.c", "size": [200, 16], "origin": [1060, -52], "world": 3, "music": "w3",
+             "landmarks": ["tower"],
+             "signs": ["mmap.c: the whole heap is under your feet. The cable goes on to /net.", "/net: connection established. eth0 is up."],
              "doors": [
                  {"id": "H11:S", "side": "S", "a": 50, "b": 53, "to": "H10:N", "lock": "until:hatch:H10N"},
                  {"id": "H11:E", "side": "E", "a": 9, "b": 12, "to": "N01:W"},
-                 {"id": "H11:N", "side": "N", "a": 60, "b": 63, "to": "T02:S"}
+                 {"id": "H11:N", "side": "N", "a": 60, "b": 63, "to": "T02:S"},
+                 {"id": "H11:N2", "side": "N", "a": 190, "b": 198, "to": "N11:S1", "lock": "oneway"}
              ] },
     "H12": { "file": "H12.txt", "zone": "heap", "secret": true, "title": "alloca.h", "size": [24, 14], "origin": [920, -34], "world": 3, "music": "w3",
              "signs": [],
@@ -250,9 +271,8 @@
              "doors": [
                  {"id": "R15:S", "side": "S", "a": 16, "b": 19, "to": "R03:N"}
              ] },
-    "Z01": { "file": "Z01.txt", "zone": "lab", "title": "lab_locks", "size": [32, 16], "origin": [3000, 1000], "world": 1, "music": "", "lab": true, "variants": [
-                 {"if": "lab:solid", "rect": [17, 10, 4, 1], "from": "1", "to": "#"},
-                 {"if": "lab:open", "rect": [24, 13, 4, 1], "from": "#", "to": " "}],
+    "Z01": { "file": "Z01.txt", "zone": "lab", "title": "lab_locks", "size": [32, 16], "origin": [3000, 1000], "world": 1, "music": "", "lab": true,
+             "variants": [{"if": "lab:solid", "rect": [17, 10, 4, 1], "from": "1", "to": "#"}, {"if": "lab:open", "rect": [24, 13, 4, 1], "from": "#", "to": " "}],
              "signs": [{"text": "lab: nothing joined yet.", "alt": [{"if": "lab:c", "text": "lab: c joined."}, {"if": "!lab:a", "text": "lab: waiting for a."}]}],
              "doors": [
                  {"id": "Z01:N", "side": "N", "a": 14, "b": 17, "to": "Z02:S", "lock": "until:2of:lab:a,lab:b,lab:c"},
@@ -274,15 +294,185 @@
              "doors": [
                  {"id": "Z04:W", "side": "W", "a": 5, "b": 8, "to": "Z03:E", "sets": "link:lab", "symlink": true}
              ] },
-    "Z05": { "file": "Z05.txt", "zone": "lab", "title": "lab_ports", "size": [64, 16], "origin": [3000, 1100], "world": 1, "music": "", "lab": true, "packets": {"every": 4.0, "speed": 64.0, "w": 4, "lead": 32, "lag": 16},
+    "Z05": { "file": "Z05.txt", "zone": "lab", "title": "lab_ports", "size": [64, 16], "origin": [3000, 1100], "world": 1, "music": "", "lab": true,
+             "packets": {"every": 4.0, "speed": 64.0, "w": 4, "lead": 32, "lag": 16},
              "signs": ["lab: ride a packet through the ports, or time them on foot."],
              "doors": [
                  {"id": "Z05:E", "side": "E", "a": 9, "b": 12, "to": "Z06:W"}
              ] },
-    "Z06": { "file": "Z06.txt", "zone": "lab", "title": "lab_arena", "size": [24, 14], "origin": [3064, 1102], "world": 1, "music": "", "lab": true, "lab_boss": "KitDummy",
+    "Z06": { "file": "Z06.txt", "zone": "lab", "title": "lab_arena", "size": [24, 14], "origin": [3064, 1102], "world": 1, "music": "", "lab": true,
+             "lab_boss": "KitDummy",
              "signs": [],
              "doors": [
                  {"id": "Z06:W", "side": "W", "a": 7, "b": 10, "to": "Z05:E"}
+             ] },
+    "N01": { "file": "N01.txt", "title": "eth0", "size": [48, 16], "origin": [1260, -52], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["PING /net (eth0): 64 bytes from /proc/heap: icmp_seq=1 ttl=64 time=4.20 ms. Someone is listening."],
+             "landmarks": ["tower"],
+             "decor": [{"kind": "fiber", "x": 1, "y": 13, "w": 46}],
+             "doors": [
+                 {"id": "N01:W", "side": "W", "a": 9, "b": 12, "to": "H11:E"},
+                 {"id": "N01:E", "side": "E", "a": 9, "b": 12, "to": "N04:W"},
+                 {"id": "N01:S", "side": "S", "a": 34, "b": 37, "to": "N03:N"},
+                 {"id": "N01:N", "side": "N", "a": 1, "b": 46, "to": "N11:S2", "lock": "oneway"}
+             ] },
+    "N04": { "file": "N04.txt", "title": "robots.txt", "size": [32, 16], "origin": [1308, -52], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["robots.txt\nUser-agent: *\nDisallow: /backup"],
+             "doors": [
+                 {"id": "N04:W", "side": "W", "a": 9, "b": 12, "to": "N01:E"},
+                 {"id": "N04:E", "side": "E", "a": 9, "b": 12, "to": "N05:W"},
+                 {"id": "N04:N", "side": "N", "a": 1, "b": 30, "to": "N11:S3", "lock": "oneway"}
+             ] },
+    "N05": { "file": "N05.txt", "title": "sitemap.xml", "size": [120, 20], "origin": [1340, -58], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["sitemap.xml: every page the crawler found. It is still crawling.", "<url><loc>/net/crawl_queue</loc><priority>1.0</priority></url>"],
+             "landmarks": ["ci"],
+             "dead_quiet": [[70, 0]],
+             "variants": [{"if": "boss:CRAWLER", "rect": [0, 0, 120, 20], "from": "h", "to": " "}],
+             "doors": [
+                 {"id": "N05:W", "side": "W", "a": 15, "b": 18, "to": "N04:E"},
+                 {"id": "N05:E", "side": "E", "a": 15, "b": 18, "to": "N08:W"},
+                 {"id": "N05:N", "side": "N", "a": 70, "b": 73, "to": "N19:S"},
+                 {"id": "N05:S", "side": "S", "a": 52, "b": 55, "to": "N20:N"}
+             ] },
+    "N08": { "file": "N08.txt", "title": "crawl_queue", "size": [26, 72], "origin": [1460, -110], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["crawl_queue: 1,042 URLs waiting. The crawler takes them from the top.", "Disallow: /. (it did not listen.)"],
+             "landmarks": ["ci"],
+             "sighting": {"kind": "crawler", "row": 30},
+             "variants": [{"if": "boss:CRAWLER", "rect": [0, 0, 26, 72], "from": "h", "to": " "}],
+             "doors": [
+                 {"id": "N08:W", "side": "W", "a": 67, "b": 70, "to": "N05:E"},
+                 {"id": "N08:W2", "side": "W", "a": 13, "b": 16, "to": "N09:E", "lock": "fight"},
+                 {"id": "N08:E", "side": "E", "a": 50, "b": 53, "to": "N18:W"}
+             ] },
+    "N09": { "file": "N09.txt", "title": "WEB CRAWLER", "size": [24, 14], "origin": [1436, -104], "world": 6, "music": "w6", "zone": "net",
+             "signs": [],
+             "boss": {"id": "CRAWLER", "class": "CrawlerBoss", "name": "WEB CRAWLER", "sub": "it follows every link", "trigger_x": 304, "trigger_side": "E", "T": 80, "u": 0.7, "reward": "curl", "banner": "curl", "banner_sub": "near a GET ring, press [special]: you zip to it", "music": "boss", "drop": 40},
+             "doors": [
+                 {"id": "N09:E", "side": "E", "a": 7, "b": 10, "to": "N08:W2", "lock": "fight"},
+                 {"id": "N09:W", "side": "W", "a": 7, "b": 10, "to": "N10:E", "lock": "until:boss:CRAWLER"}
+             ] },
+    "N10": { "file": "N10.txt", "title": "GET.http", "size": [96, 20], "origin": [1340, -112], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["GET /curl HTTP/1.1\n200 OK\nNear a blue GET ring, press [special]: you zip to it and pop up. Chain them.", "GET /airgap: 301 Moved. Mind the gap."],
+             "landmarks": ["ci"],
+             "doors": [
+                 {"id": "N10:E", "side": "E", "a": 15, "b": 18, "to": "N09:W"},
+                 {"id": "N10:W", "side": "W", "a": 15, "b": 18, "to": "N11:E"}
+             ] },
+    "N11": { "file": "N11.txt", "title": "airgap", "size": [100, 52], "origin": [1240, -104], "world": 6, "music": "w6", "zone": "net", "end": "to be continued in /dev/threads",
+             "signs": ["airgap: no cable between these machines. GET your way across. (fall, and eth0 catches you.)", "/dev/threads: the tower is closed tonight."],
+             "landmarks": ["tower"],
+             "doors": [
+                 {"id": "N11:E", "side": "E", "a": 7, "b": 10, "to": "N10:W"},
+                 {"id": "N11:W", "side": "W", "a": 41, "b": 44, "to": "T01:E"},
+                 {"id": "N11:N", "side": "N", "a": 40, "b": 43, "to": "T16:S"},
+                 {"id": "N11:S1", "side": "S", "a": 10, "b": 18, "to": "H11:N2"},
+                 {"id": "N11:S2", "side": "S", "a": 21, "b": 66, "to": "N01:N"},
+                 {"id": "N11:S3", "side": "S", "a": 69, "b": 98, "to": "N04:N"}
+             ] },
+    "N03": { "file": "N03.txt", "title": "core_router", "size": [24, 34], "origin": [1290, -36], "world": 6, "music": "w6", "zone": "net", "terminal": true,
+             "signs": ["core_router: every route comes through here. Rest, and travel between terminals."],
+             "doors": [
+                 {"id": "N03:N", "side": "N", "a": 4, "b": 7, "to": "N01:S"},
+                 {"id": "N03:S", "side": "S", "a": 10, "b": 13, "to": "N22:N"}
+             ] },
+    "N22": { "file": "N22.txt", "title": "review_queue", "size": [24, 14], "origin": [1290, -2], "world": 6, "music": "w6", "zone": "net",
+             "signs": [{"text": "2nd review: pending. (sit, when you have something new to show.)", "alt": [{"if": "boss:REVIEWER2", "text": "2nd review: approved. LGTM."}]}],
+             "boss": {"id": "REVIEWER2", "class": "Reviewer2", "name": "THE REVIEWER #2", "sub": "second review", "trigger": "pad", "pad": [11, 10], "pad_needs": "1of:ability:curl,ability:ssh", "T": 70, "u": 0.84, "reward": "plugin:review_cache", "banner": "review cache", "banner_sub": "plugin - after a catch, your next claw hits harder", "music": "tension", "drop": 30},
+             "decor": [{"kind": "chair", "x": 11, "y": 10}],
+             "doors": [
+                 {"id": "N22:N", "side": "N", "a": 10, "b": 13, "to": "N03:S", "lock": "fight"},
+                 {"id": "N22:W", "side": "W", "a": 7, "b": 10, "to": "N06:E", "lock": "fight"},
+                 {"id": "N22:E", "side": "E", "a": 7, "b": 10, "to": "N12:W", "lock": "fight"}
+             ] },
+    "N06": { "file": "N06.txt", "title": "traceroute", "size": [52, 16], "origin": [1238, -3], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["traceroute to 127.0.0.1 (loopback), 64 hops max", " 1  core_router  0.42 ms", " 2  * * *", " 3  ttl  (down the shaft)  ...  loopback"],
+             "npc": [{"kind": "tree", "x": 38, "y": 8, "zone": "net", "price": 40}],
+             "decor": [{"kind": "scrap", "x": 33, "y": 11}, {"kind": "scrap", "x": 34, "y": 10}, {"kind": "scrap", "x": 35, "y": 9}],
+             "doors": [
+                 {"id": "N06:E", "side": "E", "a": 8, "b": 11, "to": "N22:W"},
+                 {"id": "N06:S", "side": "S", "a": 26, "b": 29, "to": "N07:N"}
+             ] },
+    "N07": { "file": "N07.txt", "title": "ttl", "size": [24, 32], "origin": [1260, 13], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["ttl=64. Every hop takes one. At zero the packet is dropped."],
+             "doors": [
+                 {"id": "N07:N", "side": "N", "a": 4, "b": 7, "to": "N06:S"},
+                 {"id": "N07:S", "side": "S", "a": 4, "b": 7, "to": "N02:N"}
+             ] },
+    "N02": { "file": "N02.txt", "title": "loopback", "size": [48, 16], "origin": [1236, 45], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["loopback: 127.0.0.1. Home is a short way back. (the lever opens the slot gate in symlink.sh)"],
+             "levers": [{"x": 4, "y": 12, "flag": "lever:D06"}],
+             "doors": [
+                 {"id": "N02:N", "side": "N", "a": 28, "b": 31, "to": "N07:S"},
+                 {"id": "N02:W", "side": "W", "a": 9, "b": 12, "to": "D07:E"}
+             ] },
+    "N12": { "file": "N12.txt", "title": "port_scan", "size": [72, 16], "origin": [1314, -2], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["nmap -p 22,80,443 /net: the ports open for packets. Ride one, or time them on foot."],
+             "packets": {"every": 4.0, "speed": 64.0, "w": 4, "lead": 32, "lag": 16},
+             "variants": [{"if": "boss:FIREWALL", "rect": [0, 0, 72, 16], "from": "3", "to": " "}],
+             "doors": [
+                 {"id": "N12:W", "side": "W", "a": 7, "b": 10, "to": "N22:E"},
+                 {"id": "N12:E", "side": "E", "a": 7, "b": 10, "to": "N13:W"}
+             ] },
+    "N13": { "file": "N13.txt", "title": "iptables", "size": [80, 24], "origin": [1386, -12], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["iptables -P INPUT DROP. Red bricks: thin firewall. Something lives in them.", "iptables -A INPUT --dport 31337 -j HONEYPOT  # nothing to see here"],
+             "decor": [{"kind": "window", "x": 60, "y": 13, "w": 4, "h": 3, "shadow": "firewall"}],
+             "doors": [
+                 {"id": "N13:W", "side": "W", "a": 17, "b": 20, "to": "N12:E"},
+                 {"id": "N13:E", "side": "E", "a": 17, "b": 20, "to": "N14:W"},
+                 {"id": "N13:S", "side": "S", "a": 34, "b": 37, "to": "N21:N"}
+             ] },
+    "N21": { "file": "N21.txt", "title": "honeypot", "size": [48, 16], "origin": [1400, 12], "world": 6, "music": "w6", "zone": "net", "secret": true,
+             "signs": ["honeypot: you were not supposed to find this. (you were.)"],
+             "plugins": ["rate_limit"],
+             "wave": {"flag": "wave:N21", "waves": [[[10, 6], [38, 6]], [[8, 6], [24, 4], [40, 6]], [[6, 6], [18, 4], [30, 4], [42, 6]]]},
+             "doors": [
+                 {"id": "N21:N", "side": "N", "a": 20, "b": 23, "to": "N13:S", "lock": "until:wave:N21"}
+             ] },
+    "N14": { "file": "N14.txt", "title": "dmz", "size": [32, 16], "origin": [1466, -4], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["dmz: the last bench before the firewall.", "unsent: I could use a hand"],
+             "doors": [
+                 {"id": "N14:W", "side": "W", "a": 9, "b": 12, "to": "N13:E"},
+                 {"id": "N14:E", "side": "E", "a": 9, "b": 12, "to": "N15:W", "lock": "fight"},
+                 {"id": "N14:N", "side": "N", "a": 24, "b": 27, "to": "N18:S"}
+             ] },
+    "N15": { "file": "N15.txt", "title": "FIREWALL", "size": [24, 14], "origin": [1498, -2], "world": 6, "music": "w6", "zone": "net",
+             "signs": [],
+             "boss": {"id": "FIREWALL", "class": "FirewallBoss", "name": "THE FIREWALL", "sub": "deny by default", "trigger_x": 80, "T": 85, "u": 0.7, "reward": "ssh", "banner": "ssh", "banner_sub": "keep pushing into a thin red firewall: you tunnel through", "music": "boss", "drop": 40},
+             "doors": [
+                 {"id": "N15:W", "side": "W", "a": 7, "b": 10, "to": "N14:E", "lock": "fight"},
+                 {"id": "N15:E", "side": "E", "a": 7, "b": 10, "to": "N16:W", "lock": "until:boss:FIREWALL"}
+             ] },
+    "N16": { "file": "N16.txt", "title": "ssh_tunnel", "size": [40, 16], "origin": [1522, -6], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["ssh: walk into a thin red firewall and keep pushing. 0.3 s. You are through. (2 bricks at most.)"],
+             "doors": [
+                 {"id": "N16:W", "side": "W", "a": 11, "b": 14, "to": "N15:E"},
+                 {"id": "N16:E", "side": "E", "a": 7, "b": 10, "to": "N17:W"}
+             ] },
+    "N17": { "file": "N17.txt", "title": "22/tcp", "size": [26, 82], "origin": [1562, -6], "world": 6, "music": "w6", "zone": "net", "end": "to be continued in .git",
+             "signs": ["22/tcp: open. ssh all the way down to .git.", "This door has no handle. It opens from the other side.", "200 OK. I missed you too."],
+             "doors": [
+                 {"id": "N17:W", "side": "W", "a": 7, "b": 10, "to": "N16:E"},
+                 {"id": "N17:E", "side": "E", "a": 33, "b": 36, "to": "P15:W", "lock": "until:lever:CDN"},
+                 {"id": "N17:S", "side": "S", "a": 4, "b": 7, "to": "G01:N"}
+             ] },
+    "N18": { "file": "N18.txt", "title": "token_ring", "size": [24, 76], "origin": [1486, -80], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["token_ring: only the one holding the token may speak. Pass it on."],
+             "packets": {"every": 3.0, "speed": 56.0, "w": 3, "lead": 0, "lag": 0},
+             "doors": [
+                 {"id": "N18:W", "side": "W", "a": 20, "b": 23, "to": "N08:E"},
+                 {"id": "N18:S", "side": "S", "a": 4, "b": 7, "to": "N14:N"}
+             ] },
+    "N19": { "file": "N19.txt", "title": "/backup", "size": [32, 14], "origin": [1400, -72], "world": 6, "music": "w6", "zone": "net", "secret": true,
+             "signs": ["README.md.bak (last week): keep the little orange one."],
+             "pages": [[5, 11, 2]],
+             "doors": [
+                 {"id": "N19:S", "side": "S", "a": 10, "b": 13, "to": "N05:N"}
+             ] },
+    "N20": { "file": "N20.txt", "title": "404", "size": [32, 14], "origin": [1380, -38], "world": 6, "music": "w6", "zone": "net", "offmap": true,
+             "signs": ["404 Not Found. This room is on no map. You are not here."],
+             "agents": [[24, 11]],
+             "doors": [
+                 {"id": "N20:N", "side": "N", "a": 12, "b": 15, "to": "N05:S"}
              ] }
   }
 }

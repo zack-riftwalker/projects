@@ -66,6 +66,17 @@ def programs(ab):
                     progs.append(("djdash", d, 40, dd))
         progs.append(("wall", d, 40, "toward"))
         progs.append(("wall", d, 40, "away"))
+        if "curl" in ab:
+            for k1 in (0, 8, 16, 24):
+                for k2 in (10, 22):
+                    progs.append(("curl", d, 40, (k1, k2)))
+            progs.append(("curlstand", d, 0, (0, 12)))
+            if "bash" in ab:
+                for k1 in (4, 8):
+                    for kd in (10, 17):
+                        progs.append(("curldash", d, 40, (k1, kd)))
+            if "sudo" in ab:
+                progs.append(("curldj", d, 40, (34, 12)))
     return progs
 
 
@@ -76,6 +87,31 @@ def policy_for(prog):
     def pol(f, p):
         inp = {"mx": d}
         if kind == "walk":
+            return inp
+        if kind == "curlstand":
+            k1, k2 = extra
+            inp["sp"] = f >= k1 and (f - k1) % k2 == 0
+            return inp
+        if kind == "curldash":
+            k1, kd = extra
+            inp["jump"] = f < hold
+            inp["jp"] = f == 0
+            inp["sp"] = f == k1
+            if p.zip is not None:
+                state["wd"] = 1
+            elif state["wd"] == 1 and state["last"] < 0:
+                state["last"] = f
+            if state["last"] >= 0 and f == state["last"] + kd:
+                inp["dash"] = True
+                inp["mx"], inp["my"] = d, -1
+            return inp
+        if kind in ("curl", "curldj"):
+            k1, k2 = extra
+            inp["jump"] = f < hold
+            inp["jp"] = f == 0
+            if kind == "curldj" and f == 20:
+                inp["jp"] = True
+            inp["sp"] = f >= k1 and (f - k1) % k2 == 0
             return inp
         if kind == "drop":
             inp["my"] = 1 if f < 4 else 0
@@ -121,12 +157,18 @@ def explore(rm, ab, starts, max_states=4000):
     doors = set()
     hazards = 0
     # the entry flight itself
+    flights = [lambda f, p, d=d: {"mx": d, "jump": True} for d in (0, -1, 1)]
+    for d in (-1, 1):
+        for how in ("toward", "away"):
+            flights.append(policy_for(("wall", d, 999, how)))
+        if "curl" in ab:
+            flights.append(lambda f, p, d=d: {"mx": d, "jump": True, "sp": f % 10 == 3})
     for (x, y, vx, vy) in starts:
-        for d in (0, -1, 1):
+        for pol in flights:
             p = P(x, y)
             p.vx, p.vy = vx, vy
-            for f in range(MAXF):
-                step(rm, p, {"mx": d, "jump": True}, ab)
+            for f in range(MAXF * 2):
+                step(rm, p, pol(f, p), ab)
                 de = door_exit(rm, p)
                 if de and f > 2:
                     doors.add((de[0], de[1]["a"]))
@@ -159,13 +201,16 @@ def explore(rm, ab, starts, max_states=4000):
                 if not p.on_ground:
                     res = run(rm, ab, p.x, p.y, p.vx, p.vy, lambda f2, q, d=d: {"mx": d})
                     _take(res, seen, queue, doors)
+                    if "curl" in ab:
+                        res = run(rm, ab, p.x, p.y, p.vx, p.vy, lambda f2, q, d=d: {"mx": d, "sp": f2 % 10 == 2, "jump": True})
+                        _take(res, seen, queue, doors)
                     break
                 k = key(p)
                 if k not in seen:
                     seen[k] = (p.x, p.y)
                     if k[0] % 2 == 0:
                         queue.append((p.x, p.y))
-                if p.vx == 0 and f > 5:
+                if p.vx == 0 and f > (30 if "ssh" in ab else 5):
                     break
     return doors, seen
 

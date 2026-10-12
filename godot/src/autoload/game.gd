@@ -37,10 +37,16 @@ func load_meta() -> void:
 
 var _themes := {}
 
+# the world whose art a room uses: world 6 (THE NETWORK) falls back to world 3's until its own tiles and theme exist
+func vis_world(w: int) -> int:
+	if w == 6 and not FileAccess.file_exists("res://assets/theme/w6.json"):
+		return 3
+	return w
+
 # G.THEME[w] captured as JSON (tools/godot/capture: theme): liquid, platform and accent colours of a world
 func theme(w: int) -> Dictionary:
 	if not _themes.has(w):
-		_themes[w] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/theme/w%d.json" % w))
+		_themes[w] = JSON.parse_string(FileAccess.get_file_as_string("res://assets/theme/w%d.json" % vis_world(w)))
 	return _themes[w]
 
 # a lab room is a test room: never on the map, never in Travel, never counted
