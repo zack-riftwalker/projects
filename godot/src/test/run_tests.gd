@@ -85,7 +85,7 @@ func run(name: String) -> bool:
 		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
 	if Tests4b1.NAMES.has(name):
-		return Tests4b1.new(main).run(name)
+		return await Tests4b1.new(main).run(name)
 	return report(name, false, "unknown test")
 
 class Box:

@@ -11,7 +11,12 @@ signal fullscreen_requested
 var active := false
 var sel := 0
 var page := "menu"            # "menu" or "map"
-var manager: RoomManager
+var manager: RoomManager:
+	set(v):
+		manager = v
+		if map_view != null:
+			map_view.manager = v
+var map_view: MapView
 var blink_t := 0.0
 var log_msg := ""
 var refight_msg := ""
@@ -36,6 +41,8 @@ func open() -> void:
 	log_msg = ""
 	refight_msg = ""
 	page = "menu"
+	if map_view != null:
+		map_view.close()
 	visible = true
 	Audio.sfx("pause")
 	Audio.duck(-10.0)
@@ -44,17 +51,30 @@ func open() -> void:
 func close() -> void:
 	active = false
 	visible = false
+	if map_view != null:
+		map_view.close()
 	Audio.duck(0.0)
 
 func _ready() -> void:
 	visible = false
+	map_view = MapView.new()
+	map_view.dim = false
+	map_view.manager = manager
+	map_view.back_requested.connect(func():
+		page = "menu"
+		map_view.close())
+	add_child(map_view)
 
 # called every fixed step while paused (Main polls the controls itself then)
 func update() -> void:
 	if not active:
 		return
 	blink_t += Game.STEP
-	if page == "map" or page == "fights":
+	if page == "map":
+		map_view.update()
+		queue_redraw()
+		return
+	if page == "fights":
 		if Controls.pressed.get("pause", false) or Controls.pressed.get("jump", false) or Controls.pressed.get("attack", false) or Controls.pressed.get("dash", false) or Controls.pressed.get("start", false):
 			page = "menu"
 			Audio.sfx("uiBack")
@@ -83,7 +103,9 @@ func choose(i: int) -> void:
 		return
 	match i:
 		0: resume_requested.emit()
-		1: page = "map"
+		1:
+			page = "map"
+			map_view.open()
 		2: page = "fights"
 		3: restart_requested.emit()
 		4:
@@ -98,6 +120,9 @@ func choose(i: int) -> void:
 func tap(p: Vector2) -> void:
 	if not active:
 		return
+	if page == "map":
+		map_view.tap(p)
+		return
 	if page != "menu":
 		page = "menu"
 		return
@@ -110,8 +135,7 @@ func _draw() -> void:
 		return
 	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.04, 0.07, 0.6))
 	if page == "map":
-		_draw_map()
-		return
+		return                                    # (the map view is a child node and draws itself)
 	if page == "fights":
 		_draw_fights()
 		return
@@ -172,36 +196,3 @@ func _draw_fights() -> void:
 		PixelText.draw_text(self, fight_line(fs[fs.size() - 1 - i]), 24, 44 + i * 12, Game.COL.paper, {"tiny": true})
 	PixelText.draw_text(self, fight_average(fs), 24, 44 + 10 * 12 + 6, Game.COL.gold, {"tiny": true})
 	PixelText.draw_text(self, "press any button to go back", W / 2.0, H - 22, Game.COL.dim, {"align": "c", "tiny": true})
-
-# MAP page: the visited rooms as rectangles, scaled so that their bounding box fits 360 x 170 px (at most 0.5 px per tile), benches green
-func _draw_map() -> void:
-	PixelText.draw_text(self, "MAP", W / 2.0, 14, Game.COL.paper, {"align": "c", "scale": 2, "outline": Game.COL.ink})
-	var rooms: Dictionary = Game.rooms_meta.rooms
-	var x0 := 1e9
-	var x1 := -1e9
-	var y0 := 1e9
-	var y1 := -1e9
-	for id in Game.map_rooms():
-		var m: Dictionary = rooms[id]
-		x0 = minf(x0, m.origin[0])
-		x1 = maxf(x1, m.origin[0] + m.size[0])
-		y0 = minf(y0, m.origin[1])
-		y1 = maxf(y1, m.origin[1] + m.size[1])
-	if x1 < x0:
-		x0 = 0.0; x1 = 1.0; y0 = 0.0; y1 = 1.0
-	var sc := minf(minf(360.0 / (x1 - x0), 170.0 / (y1 - y0)), 0.5)
-	var ox: float = floorf(W / 2.0 - (x1 - x0) * sc / 2.0 - x0 * sc)
-	var oy: float = floorf(114.0 - (y1 - y0) * sc / 2.0 - y0 * sc)
-	for id in Game.map_rooms():
-		var m: Dictionary = rooms[id]
-		var r := Rect2(ox + m.origin[0] * sc, oy + m.origin[1] * sc, m.size[0] * sc, m.size[1] * sc)
-		var here: bool = manager != null and manager.room != null and manager.room.id == id
-		draw_rect(r, Color("#17131f"))
-		draw_rect(r, Color("#f0a184") if here else Color("#8d8798"), false, 1.0)
-		for b in m.benches:
-			draw_rect(Rect2(r.position.x + b[0] * sc - 1, r.position.y + b[1] * sc, 2, 2), Color("#7fd08a"))
-	if manager != null and manager.player != null and manager.room != null and int(blink_t * 3.0) % 2 == 0:
-		var m2: Dictionary = rooms[manager.room.id]
-		var p = manager.player
-		draw_rect(Rect2(floorf(ox + m2.origin[0] * sc + p.x / 16.0 * sc), floorf(oy + m2.origin[1] * sc + p.y / 16.0 * sc), 2, 2), Color.WHITE)
-	PixelText.draw_text(self, "press any button to go back", W / 2.0, H - 12, Game.COL.dim, {"align": "c", "tiny": true})

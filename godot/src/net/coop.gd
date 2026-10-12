@@ -239,6 +239,8 @@ func _host_tick(dt: float) -> void:
 	for r in mgr.rooms.values():
 		_host_watch_room(r)
 	_hud(mgr.player)
+	var prm := _remote_room()
+	Game.partner = {"room": prm.id, "x": remote.x, "y": remote.y} if (guest_here and remote != null and prm != null) else {}
 	if not guest_here or remote == null:
 		_host_down_logic(dt)
 		return
@@ -360,6 +362,7 @@ func _guest_joined() -> void:
 
 func _guest_left() -> void:
 	log_("host: guest left")
+	Game.partner = {}
 	guest_here = false
 	guest_ready = false
 	if remote != null:
@@ -1040,6 +1043,7 @@ func _on_host(on: bool, lag: bool, _resume: bool) -> void:
 		Controls.locked = false         # a host that comes back (or a new one) releases the "host left" lock
 	else:
 		host_present = false
+		Game.partner = {}
 		notice_set("Host left", 9999.0)
 		log_("guest: host left")
 		main.on_host_left()
@@ -1169,6 +1173,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 	if r == null or String(m.room) != r.id:
 		return
 	var n := int(m.sn)
+	var hb: Array = m.p1
+	Game.partner = {"room": String(hb[0]), "x": hb[1] / 4.0, "y": hb[2] / 4.0}
 	var rx := hms()
 	if last_snap_rx > 0.0:
 		snap_interval = lerpf(snap_interval, clampf(rx - last_snap_rx, 0.02, 0.5), 0.2)

@@ -60,7 +60,7 @@ func _ready() -> void:
 			print("TEST ", Game.test_name, " FAIL could not load run_tests.gd")
 			get_tree().quit(1)
 			return
-		var ok: bool = script.new(self).run(Game.test_name)
+		var ok: bool = await script.new(self).run(Game.test_name)
 		get_tree().quit(0 if ok else 1)
 		return
 	hud_layer = CanvasLayer.new()
@@ -251,14 +251,19 @@ func _ready() -> void:
 				Game.tokens = 41
 				Game.fights = [{"boss": "NULL", "secs": 72.4, "hits": [41, 22], "dmg_taken": [3, 2], "won": true, "diff": "normal", "coop": true}]
 				end_screen.open()
-		elif Game.scene == "map":                      # screenshot helper: the pause map with every room visited
+		elif Game.scene in ["map", "mapworld", "mapheap"]:     # screenshot helper: the map page with every room committed and every zone indexed (mapworld: the world view)
 			for id in Game.rooms_meta.rooms:
 				if not Game.is_lab(id):
-					Game.flags["room:%s:visited" % id] = true
-			manager.swap_to("R03")
-			manager.player.x = 1200.0
+					Game.flags["mapped:" + id] = true
+					Game.flags["map:" + Game.zone_of(id)] = true
+			manager.swap_to("H05" if Game.scene == "mapheap" else "R03")
+			manager.player.x = 1200.0 if Game.scene != "mapheap" else 300.0
+			Game.partner = {"room": "D04", "x": 200.0, "y": 100.0}
 			set_paused(true)
 			pause_menu.page = "map"
+			pause_menu.map_view.open()
+			if Game.scene == "mapworld":
+				pause_menu.map_view.set_world(true)
 		_shot_after(Game.shot_wait)
 
 

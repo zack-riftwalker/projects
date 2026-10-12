@@ -4,7 +4,7 @@ class_name Tests4b1
 
 var main
 
-const NAMES := ["worlddigest", "mapdata", "tree"]
+const NAMES := ["worlddigest", "mapdata", "tree", "mappage"]
 
 func _init(m) -> void:
 	main = m
@@ -18,6 +18,7 @@ func run(name: String) -> bool:
 		"worlddigest": return t_worlddigest()
 		"mapdata": return t_mapdata()
 		"tree": return t_tree()
+		"mappage": return await t_mappage()
 	return report(name, false, "unknown test")
 
 # one small checker: chk.call(label, cond)
@@ -238,3 +239,105 @@ func t_tree() -> bool:
 		fail(res, "the strip did not grow (%d)" % n.strip)
 	menu.queue_free()
 	return report("tree", res.ok, res.info)
+
+# the draw of a node happens when the frame ends: wait for it
+func frames(n := 2) -> void:
+	for i in range(n):
+		await main.get_tree().process_frame
+
+# MVB1-05: the map page. Every zone, zone and world view, with everything committed and indexed: it draws, every room is inside the map area,
+# zoom and pan move the transform, a secret room appears only once committed, lab rooms never, no index means a line that says so.
+func t_mappage() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.partner = {}
+	var res := checker()
+	var mv := MapView.new()
+	main.add_child(mv)
+	await frames(1)
+	# nothing indexed: the line that says so
+	mv.open("heap")
+	if not mv.rooms_in_view().is_empty() or mv.empty_text() != "no index for /proc/heap":
+		fail(res, "no index text: " + mv.empty_text())
+	# a committed room of a zone without its index is not shown (the map has to be found)
+	Game.flags["mapped:H01"] = true
+	if not mv.rooms_in_view().is_empty():
+		fail(res, "committed without the index")
+	for id in Game.rooms_meta.rooms:
+		if not Game.is_lab(id):
+			Game.flags["map:" + Game.zone_of(id)] = true
+	# a secret room: only after mapped:
+	mv.open("src")
+	if mv.rooms_in_view().has("R06"):
+		fail(res, "uncommitted secret in view")
+	Game.flags["mapped:R06"] = true
+	if not mv.rooms_in_view().has("R06"):
+		fail(res, "committed secret not in view")
+	Game.flags.erase("mapped:R06")
+	for id in Game.rooms_meta.rooms:
+		if not Game.is_lab(id):
+			Game.flags["mapped:" + id] = true
+	var area := MapView.AREA.grow(1.0)
+	for world in [false, true]:
+		for z in Game.ZONES:
+			if z.id == "lab":
+				continue
+			mv.open(z.id)
+			mv.set_world(world)
+			var ids: Array = mv.rooms_in_view()
+			for id in ids:
+				if Game.is_lab(id):
+					fail(res, "lab room in view " + id)
+				if Game.zone_of(id) != z.id and not world:
+					fail(res, "foreign room in the zone view " + id)
+				var rr := mv.rect_of(id)
+				if not area.encloses(rr):
+					fail(res, "%s/%s room %s outside: %s" % [z.id, "world" if world else "zone", id, str(rr)])
+			var d0: int = mv.draws
+			mv.queue_redraw()
+			mv.canvas.queue_redraw()
+			await frames(2)
+			if ids.size() > 0 and mv.draws <= d0:
+				fail(res, "did not draw " + z.id)
+	# zoom and pan, by calls and by script input
+	mv.open("heap")
+	var s0: float = mv.scale_px
+	mv.zoom(1.5)
+	if absf(mv.scale_px - s0 * 1.5) > 0.001 and mv.scale_px < 4.0:
+		fail(res, "zoom in")
+	mv.zoom(1.0 / 1.5)
+	var c0: Vector2 = mv.center
+	mv.pan_px(Vector2(24, 0))
+	if mv.center == c0:
+		fail(res, "pan")
+	mv.open("heap")
+	c0 = mv.center
+	Controls.script_input = {"right": true}
+	Controls.poll()
+	mv.update()
+	Controls.script_input = null
+	Controls.poll()
+	if mv.center.x <= c0.x:
+		fail(res, "pan by the arrow key")
+	var wcount: int = mv.rooms_in_view().size()
+	Controls.script_input = {"jump": true}
+	Controls.poll()
+	mv.update()
+	Controls.script_input = null
+	Controls.poll()
+	if not mv.world or mv.rooms_in_view().size() <= wcount:
+		fail(res, "[jump] switches to the world view")
+	# the partner's line and doors that must not be drawn
+	if MapView.door_visible("R01", {"id": "x", "side": "W", "a": 9, "b": 12, "to": "G16:E"}):
+		fail(res, "a door to a room that does not exist")
+	Game.flags.erase("mapped:R06")
+	if MapView.door_visible("R01", Game.rooms_meta.rooms.R01.doors[0]):
+		fail(res, "a door into an uncommitted secret room")
+	Game.flags["mapped:R06"] = true
+	if not MapView.door_visible("R01", Game.rooms_meta.rooms.R01.doors[0]):
+		fail(res, "a door into a committed secret room")
+	mv.queue_free()
+	Game.fresh()
+	return report("mappage", res.ok, res.info)

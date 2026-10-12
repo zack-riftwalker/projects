@@ -185,6 +185,9 @@ func world_digest() -> int:
 				acc = (acc + (ks.hash() * 2654435761 & 0xFFFFFFFF)) & 0xFFFFFFFF
 	return (acc + pins_digest()) & 0xFFFFFFFF
 
+# where the other player is ({room, x, y} while a partner is connected, else {}); Coop keeps it, the map and travel read it
+var partner := {}
+
 func pins_digest() -> int:
 	return 0
 
