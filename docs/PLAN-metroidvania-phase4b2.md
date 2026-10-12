@@ -73,20 +73,20 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MVB2-01 | room data in (22 rooms, built-room edits); `oneway` lock; end doors; world 6 placeholders; checkers updated | Sonnet | todo |
-| MVB2-02 | world 6 look: theme and tiles (captured with an injected theme), the NETWORK backdrop, music `w6`, landmark `ci` | Sonnet | todo |
-| MVB2-03 | curl: rings, hooks, the zip and pop, the target marker, co-op | Sonnet | todo |
-| MVB2-04 | ssh: the tunnel through firewall bricks, across doors too, co-op | Sonnet | todo |
-| MVB2-05 | room features: webs `h`, hooks `c`, lever `I` and `gate_lever`, `dead_quiet`, the honeypot wave, sightings, decor | Sonnet | todo |
-| MVB2-06 | enemies: SCRAPER, WORM, DDOS, SPYWARE | Sonnet | todo |
-| MVB2-07 | WEB CRAWLER → curl | Sonnet | todo |
-| MVB2-08 | THE FIREWALL → ssh | Sonnet | todo |
-| MVB2-09 | THE REVIEWER #2 (pad-triggered, optional) → plugin review cache | Sonnet | todo |
-| MVB2-10 | plugins: gzip, sourcemap, rate_limit, review_cache | Sonnet | todo |
-| MVB2-11 | the 4B-1 systems in NETWORK: zone, `tree`, agent, page, fragment, 404, terminal, changelog | Sonnet | todo |
-| MVB2-12 | NETWORK walk-through tests; the HEAP secrets that open now; the DEPTHS loop | Sonnet | todo |
-| MVB2-13 | co-op: scenarios, watchdog rules, bad-line runs | Sonnet | todo |
-| MVB2-14 | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MVB2-01 | room data in (22 rooms, built-room edits); `oneway` lock; end doors; world 6 placeholders; checkers updated | Sonnet | done |
+| MVB2-02 | world 6 look: theme and tiles (captured with an injected theme), the NETWORK backdrop, music `w6`, landmark `ci` | Sonnet | done |
+| MVB2-03 | curl: rings, hooks, the zip and pop, the target marker, co-op | Sonnet | done |
+| MVB2-04 | ssh: the tunnel through firewall bricks, across doors too, co-op | Sonnet | done |
+| MVB2-05 | room features: webs `h`, hooks `c`, lever `I` and `gate_lever`, `dead_quiet`, the honeypot wave, sightings, decor | Sonnet | done |
+| MVB2-06 | enemies: SCRAPER, WORM, DDOS, SPYWARE | Sonnet | done |
+| MVB2-07 | WEB CRAWLER → curl | Sonnet | done |
+| MVB2-08 | THE FIREWALL → ssh | Sonnet | done |
+| MVB2-09 | THE REVIEWER #2 (pad-triggered, optional) → plugin review cache | Sonnet | done |
+| MVB2-10 | plugins: gzip, sourcemap, rate_limit, review_cache | Sonnet | done |
+| MVB2-11 | the 4B-1 systems in NETWORK: zone, `tree`, agent, page, fragment, 404, terminal, changelog | Sonnet | done |
+| MVB2-12 | NETWORK walk-through tests; the HEAP secrets that open now; the DEPTHS loop | Sonnet | done |
+| MVB2-13 | co-op: scenarios, watchdog rules, bad-line runs | Sonnet | done |
+| MVB2-14 | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ---
 
