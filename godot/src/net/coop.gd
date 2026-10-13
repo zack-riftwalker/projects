@@ -204,12 +204,16 @@ func _on_room_built(r: Room) -> void:
 		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
 		r.net_lqhit.connect(func(): Net.rel("lqhit", {"room": r.id}))
 
+var _last_room_node = null             # guest: the room node of the last room change (the loop room's wrap door "changes" to the same node)
+
 func _on_room_changed(r: Room) -> void:
 	if role == "guest":
-		puppets.clear()
-		fx_q.clear()                   # (effects of the room just left must not play in the new one)
-		host_body = null
-		zones_seen.clear()
+		if r != _last_room_node:           # a new room node: its puppets and the host's body are made again from the next snapshot
+			puppets.clear()
+			fx_q.clear()                   # (effects of the room just left must not play in the new one)
+			host_body = null
+			zones_seen.clear()
+		_last_room_node = r
 		if started:
 			Net.rel("room", {"to": r.id, "door": mgr.last_door_id})
 

@@ -3381,7 +3381,7 @@ func sc_co_loopboss() -> Array:
 		if seen2[sq] == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [seen2.size() >= 4 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and wraps >= 1 and modes.has("rest"), "guest: saw %d plans, %d shown < 0.30 s, targeted %d times, wrapped through the portal %d times, modes %s, violations '%s' '%s'" % [seen2.size(), short, mine, wraps, str(modes.keys()), pup.kit_violation, pup.arena_violation]]
+	return [seen2.size() >= 4 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and wraps >= 1 and modes.has("recursion"), "guest: saw %d plans, %d shown < 0.30 s, targeted %d times, wrapped through the portal %d times, modes %s, violations '%s' '%s'" % [seen2.size(), short, mine, wraps, str(modes.keys()), pup.kit_violation, pup.arena_violation]]
 
 func sc_co_deadlock() -> Array:
 	if not await wait_joined():
