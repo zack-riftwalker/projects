@@ -54,6 +54,8 @@ var last_gf: Array = []                  # guest: the switch / key / gate flags 
 var last_gf_room := ""
 var last_lq := -1                 # guest: the host's liquid_y x4 for the room of the last snapshot (-1 = dry)
 var last_lq_room := ""
+var last_rt := 0.0                      # guest: the room time in the newest snapshot, and when it came (tick-desync reads them)
+var last_rt_at := 0.0
 var last_cr := {}                       # guest: the crumbling blocks the host listed (tile index -> true)
 var abilities_sent := {}                # tool name -> true once the guest was told (boss rewards: bash, catch, ...)
 
@@ -1301,6 +1303,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 		r.time = float(m.rt)
 	else:
 		r.time = lerpf(r.time, float(m.rt), 0.15)
+	last_rt = float(m.rt)
+	last_rt_at = hms()
 	r.ch_t0 = float(m.get("ch", -1.0))
 	r.tags = {"p1": 0.0, "p2": 0.0}
 	for tgr in m.get("tg", []):

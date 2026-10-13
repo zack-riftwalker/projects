@@ -2999,3 +2999,481 @@ func sc_co_loss() -> Array:
 		await get_tree().physics_frame
 	await wait_secs(1.0)
 	return [rode >= 10 and fell and st.events.size() >= 3, "guest: rode a lossy packet for %d frames, fell with it when it was lost %s, saw %d losses %s" % [rode, fell, st.events.size(), str(st.events)]]
+
+# ================================================================ phase 5A: THREAD TOWER
+# both pages go to the same tower room and stand on a spot of their own (a pinned, immortal body)
+func tower_room(room_id: String, hx: float, hy: float, gx: float, gy: float) -> Room:
+	var x: float = hx if role == "host" else gx
+	var y: float = hy if role == "host" else gy
+	mgr().swap_to(room_id, Vector2(x, y))
+	var p = mgr().player
+	p.x = x
+	p.y = y
+	p.vx = 0.0
+	p.vy = 0.0
+	return mgr().room
+
+func pin(p, x: float, y: float) -> void:
+	p.inv = 999.0
+	p.hp = p.max_hp
+	p.x = x
+	p.y = y
+	p.vx = 0.0
+	p.vy = 0.0
+
+# the clock, the blink blocks, the gears and the pistons agree on both pages (T02, TC1, TC2): the guest compares its machines with what the host's clock implies
+func sc_co_tick() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var worst := 0.0
+	var bad := 0
+	var checked := 0
+	var seen_groups := 0
+	var seen_gears := 0
+	var seen_pistons := 0
+	for rid in ["T02", "TC1", "TC2"]:
+		await wait_secs(1.0)
+		var r := tower_room(rid, 5.0 * 16.0 + 3.0, 5.0 * 16.0, 5.0 * 16.0 + 3.0, 5.0 * 16.0)
+		clear_creatures(r)
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		while Time.get_ticks_msec() - t0 < 7000.0 * slow:
+			var p = mgr().player
+			pin(p, 5.0 * 16.0 + 3.0 + (0.0 if role == "host" else 2.0), 5.0 * 16.0)
+			f += 1
+			if role == "guest" and coop().last_rt_at > 0.0 and f > 90:
+				var rr: Room = mgr().room
+				if rr.id == rid and rr.tower != null:
+					var host_t: float = coop().last_rt + (coop().hms() - coop().last_rt_at)
+					worst = maxf(worst, absf(rr.time - host_t))
+					seen_groups = maxi(seen_groups, rr.tower.bgroups.size())
+					seen_gears = maxi(seen_gears, rr.tower.gears.size())
+					seen_pistons = maxi(seen_pistons, rr.tower.pistons.size())
+					checked += 1
+					if rr.tower.mismatch(host_t) != "":
+						bad += 1
+			await get_tree().physics_frame
+	await wait_secs(1.0)
+	if role == "host":
+		return [true, "host: walked T02, TC1, TC2"]
+	return [checked > 300 and bad <= 5 and worst < 0.6 and seen_groups > 0 and seen_gears > 0 and seen_pistons > 0, "guest: %d checks, %d mismatches, clock off by at most %.2f s, %d blink groups, %d gears, %d pistons" % [checked, bad, worst, seen_groups, seen_gears, seen_pistons]]
+
+# the guest freezes a busy piston of TC2; the host sees it frozen, and the guest stands in the shaft for 2.5 s without a scratch
+func sc_co_breakpoint() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var px := 11.0 * 16.0 + 19.0
+	var py := 37.0 * 16.0 - 10.0
+	if role == "host":
+		Game.tools.breakpoint = true
+		await wait_secs(1.0)
+		var r := tower_room("TC2", 3.0 * 16.0, 58.0 * 16.0 - 10.0, px, py)
+		clear_creatures(r)
+		var pz: Dictionary = r.tower.pistons[0]
+		var total := 0.7 * Tower.TICK
+		var t_wait := 0.0
+		while not (r.tower.piston_rows_at(pz, t_wait) == 0 and r.tower.piston_rows_at(pz, t_wait + 0.04) == 0 and r.tower.piston_rows_at(pz, t_wait - 0.04) != 0):
+			t_wait += 0.001
+		var base := t_wait + total * 40.0
+		var t0 := Time.get_ticks_msec()
+		var seen_frozen := -1.0
+		var open_after := 0
+		var still := 0
+		while Time.get_ticks_msec() - t0 < 14000.0 * slow:
+			pin(mgr().player, 3.0 * 16.0, 58.0 * 16.0 - 10.0)
+			if not r.tower.is_frozen("p0"):
+				r.time = base                                 # the clock waits (the piston stays retracted) until the guest's press arrives
+			elif seen_frozen < 0.0:
+				seen_frozen = float(Time.get_ticks_msec() - t0) / 1000.0
+			else:
+				still += 1
+				if pz.rows == 0:
+					open_after += 1
+			await get_tree().physics_frame
+		await wait_secs(1.0)
+		return [seen_frozen >= 0.0 and still > 60 and open_after >= still - 2, "host: frozen after %.1f s, %d frames after it, the shaft open in %d of them" % [seen_frozen, still, open_after]]
+	Game.tools.breakpoint = true
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := tower_room("TC2", 3.0 * 16.0, 58.0 * 16.0 - 10.0, px, py)
+	await wait_secs(1.5)
+	var g = mgr().player
+	var press_at := 0.0
+	var frozen_at := -1.0
+	var hp0: int = g.hp
+	var t1 := Time.get_ticks_msec()
+	var f := 0
+	var inside_f := 0
+	var hurt := 0
+	while Time.get_ticks_msec() - t1 < 14000.0 * slow:
+		f += 1
+		if frozen_at < 0.0:
+			g.x = px
+			g.y = py
+			g.vx = 0.0
+			g.vy = 0.0
+			g.face = 1.0
+			g.inv = 999.0
+			g.bp_cd = 0.0 if f < 400 else g.bp_cd
+			Controls.script_input = {"special": f > 30 and (f % 90) < 3}
+			if f > 30 and (f % 90) == 1 and press_at == 0.0:
+				press_at = float(Time.get_ticks_msec()) / 1000.0
+			if r2.tower != null and r2.tower.is_frozen("p0"):
+				frozen_at = float(Time.get_ticks_msec()) / 1000.0
+				Controls.script_input = {}
+		else:
+			Controls.script_input = {}
+			g.inv = 0.0
+			g.x = 11.0 * 16.0 + 19.0
+			g.y = 42.0 * 16.0 - 10.0
+			g.vx = 0.0
+			g.vy = 0.0
+			if float(Time.get_ticks_msec()) / 1000.0 - frozen_at < 2.5 * slow:
+				inside_f += 1
+				if g.hp < hp0:
+					hurt += 1
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	return [frozen_at > 0.0 and frozen_at - press_at < 3.0 * slow and inside_f > 60 and hurt == 0, "guest: pressed at %.1f, saw the freeze after %.2f s, %d frames in the shaft, hurt %d" % [press_at, frozen_at - press_at, inside_f, hurt]]
+
+# the guest stands on TB2's first key; the host sees the gate open and a body can pass; when the guest steps off, it closes again
+func sc_co_mutex() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var kx := 3.0 * 16.0 + 3.0
+	var ky := 58.0 * 16.0 + 4.0
+	if role == "host":
+		await wait_secs(1.0)
+		var r := tower_room("TB2", 12.0 * 16.0, 40.0 * 16.0, kx, ky)
+		clear_creatures(r)
+		var gate_idx: int = r.tower.mutex[0].cells[0]
+		var gtx: int = gate_idx % r.w
+		var gty: int = gate_idx / r.w
+		var closed_first: bool = r.grid.solid(gtx, gty) or r.tower.mutex[0].t > 0.0       # (the guest may already stand on the key)
+		var opened := false
+		var open_held := 0
+		var closed_again := false
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 16000.0 * slow:
+			pin(mgr().player, 12.0 * 16.0, 40.0 * 16.0)
+			var guest_on: bool = r.tower.mutex[0].t > 0.0
+			if guest_on and not r.grid.solid(gtx, gty):
+				opened = true
+				open_held += 1
+			if opened and r.tower.mutex[0].t <= 0.0 and r.grid.solid(gtx, gty):
+				closed_again = true
+				break
+			await get_tree().physics_frame
+		return [closed_first and opened and open_held > 60 and closed_again, "host: closed at first %s, opened %s (%d frames), closed again %s" % [closed_first, opened, open_held, closed_again]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := tower_room("TB2", 12.0 * 16.0, 40.0 * 16.0, kx, ky)
+	var gate2: int = r2.tower.mutex[0].cells[0]
+	var open_seen := false
+	var closed_seen := false
+	var t1 := Time.get_ticks_msec()
+	var f := 0
+	while Time.get_ticks_msec() - t1 < 16000.0 * slow:
+		f += 1
+		var on_key: bool = float(Time.get_ticks_msec() - t1) < 5000.0 * slow
+		if on_key:
+			pin(mgr().player, kx, ky)
+		else:
+			pin(mgr().player, 12.0 * 16.0, 40.0 * 16.0)
+		if on_key and not r2.grid.solid(gate2 % r2.w, gate2 / r2.w):
+			open_seen = true
+		if open_seen and not on_key and r2.grid.solid(gate2 % r2.w, gate2 / r2.w):
+			closed_seen = true
+		await get_tree().physics_frame
+	return [open_seen and closed_seen, "guest: gate open on its page %s, closed again %s" % [open_seen, closed_seen]]
+
+# the guest wraps T09 three times: both pages show i = 3 and the `break;` key
+func sc_co_loop() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var hx := 14.0 * 16.0
+	var fy := 15.0 * 16.0 - 10.0
+	if role == "host":
+		await wait_secs(1.0)
+		var r := tower_room("T09", hx, fy, 60.0 * 16.0, fy)
+		var ok := false
+		var t0 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < 40000.0 * slow:
+			if mgr().room.id == "T09":
+				clear_creatures(mgr().room)
+				pin(mgr().player, hx, fy)
+				if mgr().room.iter >= 3 and mgr().room.loop_key_on():
+					ok = true
+					break
+			await get_tree().physics_frame
+		await wait_secs(2.0)
+		return [ok, "host: i = %d, key shown %s" % [mgr().room.iter, str(mgr().room.loop_key_on())]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := tower_room("T09", hx, fy, 60.0 * 16.0, fy)
+	var t1 := Time.get_ticks_msec()
+	var ok2 := false
+	while Time.get_ticks_msec() - t1 < 40000.0 * slow:
+		var g = mgr().player
+		if mgr().room.id == "T09" and not mgr().trans.on:
+			var rm: Room = mgr().room
+			if rm.iter >= 3 and rm.loop_key_on():
+				ok2 = true
+				break
+			g.inv = 999.0
+			g.hp = g.max_hp
+			if g.x < 900.0 or g.y > 236.0:                        # just arrived at the west door: back onto the ledge at the east door, and push through it again
+				g.x = 1006.0
+				g.y = fy
+				g.vx = 0.0
+				g.vy = 0.0
+			Controls.script_input = {"right": true}
+		else:
+			Controls.script_input = {}
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	await wait_secs(1.0)
+	return [ok2, "guest: i = %d, key shown %s" % [mgr().room.iter, str(mgr().room.loop_key_on())]]
+
+# the shared fight: 30 s, the host forces attacks at set times; the guest swings at a thread, the kit's rules must hold (no boss-cue, no arena-tell)
+func tower_fight_host(room_id: String, host_x: float, guest_x: float, forced: Array, marks: Array, extra: Callable) -> Array:
+	await wait_secs(1.0)
+	var secs := (42.0 if room_id == "T10" else 32.0) * slow
+	var r := boss_arena(room_id, host_x, guest_x)
+	var p = mgr().player
+	var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+	var b = r.boss
+	var seen := {}
+	var st := {}
+	var t0 := Time.get_ticks_msec()
+	var f := 0
+	while Time.get_ticks_msec() - t0 < secs * 1000.0:
+		p.inv = 999.0
+		p.hp = p.max_hp
+		Controls.script_input = {"attack": f % 50 < 3}
+		f += 1
+		plan_stats(b, seen)
+		var el := float(Time.get_ticks_msec() - t0) / 1000.0 / slow
+		boss_phase_script(b, el, st, forced, marks)
+		extra.call(b, st, el)
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var tg := {"p1": 0, "p2": 0}
+	for sq in seen:
+		tg[seen[sq]] += 1
+	await wait_secs(1.0)
+	return [started, seen.size(), tg, st]
+
+func sc_co_race() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var forced := [[3.0, "rw", "p2"], [8.0, "rw", "p1"], [13.0, "switch", "p2"], [18.0, "rw", "p2"], [23.0, "contend", "p2"], [28.0, "rw", "p2"]]
+		var marks := [[9.0, 0.55], [20.0, 0.2]]
+		var res: Array = await tower_fight_host("T06", 150.0, 270.0, forced, marks, func(b, st, el): st["corrupt"] = maxi(int(st.get("corrupt", 0)), b.hz.size()))
+		return [res[0] and res[1] >= 5 and res[2].p2 >= 1, "host: started %s, %d plans (p1 %d, p2 %d), corrupt segments at most %d" % [res[0], res[1], res[2].p1, res[2].p2, int(res[3].get("corrupt", 0))]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := boss_arena("T06", 150.0, 270.0)
+	var found := {"b": null}
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is RaceBoss:
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: RaceBoss = found.b
+	if pup == null:
+		return [false, "no RaceBoss puppet"]
+	var st2 := {"f": 0, "swings": 0}
+	var seen2 := {}
+	var stale := 0
+	var writes := 0
+	var secs := 32.0 * slow
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+		var g = mgr().player
+		st2.f += 1
+		if not is_instance_valid(pup):
+			break
+		plan_stats(pup, seen2)
+		# a thread is something to hit: walk up to the nearer living one and swing
+		var near = null
+		for q in pup.th:
+			if not q.dead and (near == null or absf(q.x - (g.x + 5.0)) < absf(near.x - (g.x + 5.0))):
+				near = q
+		var keys := {}
+		if near != null:
+			var dx: float = near.x - (g.x + 5.0)
+			if absf(dx) > 26.0:
+				keys["right" if dx > 0.0 else "left"] = true
+			else:
+				g.face = 1.0 if dx > 0.0 else -1.0
+				keys["attack"] = st2.f % 14 < 2 and g.atk_cd <= 0.0
+		Controls.script_input = keys
+		hazard_probe(g, pup, st2)
+		# the write lands where the guest was when the thread read it: while a write box is live on this page, the guest has usually walked on
+		if pup.plan_active() and String(pup.plan.id) == "rw":
+			for hb in pup.harmboxes():
+				if hb.get("dmg", 0) >= 1 and hb.h >= 39.0:
+					writes += 1
+					if absf((float(hb.x) + 16.0) - (g.x + 5.0)) > 20.0:
+						stale += 1
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	var mine := 0
+	for sq in seen2:
+		if seen2[sq] == "p2":
+			mine += 1
+	await wait_secs(1.0)
+	return [seen2.size() >= 5 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and writes > 0, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, %d write frames (%d off the guest), violations '%s' '%s'" % [seen2.size(), short, mine, writes, stale, pup.kit_violation, pup.arena_violation]]
+
+func sc_co_loopboss() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		var forced := [[2.0, "lap", "p2"], [15.0, "nested", "p2"], [23.0, "recursion", "p2"], [31.0, "rest", "p2"]]
+		var marks := [[16.0, 0.5], [24.0, 0.2]]
+		var res: Array = await tower_fight_host("T10", 120.0, 280.0, forced, marks, func(b, st, el): st["strips"] = bool(st.get("strips", false)) or b.strips_on)
+		return [res[0] and res[1] >= 4 and res[2].p2 >= 1, "host: started %s, %d plans (p1 %d, p2 %d), strips %s" % [res[0], res[1], res[2].p1, res[2].p2, str(res[3].get("strips", false))]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := boss_arena("T10", 120.0, 280.0)
+	var found := {"b": null}
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is LoopBoss:
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: LoopBoss = found.b
+	if pup == null:
+		return [false, "no LoopBoss puppet"]
+	var st2 := {"f": 0, "swings": 0}
+	var seen2 := {}
+	var wraps := 0
+	var last_x := 0.0
+	var modes := {}
+	var secs := 42.0 * slow
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+		var g = mgr().player
+		st2.f += 1
+		if not is_instance_valid(pup):
+			break
+		plan_stats(pup, seen2)
+		modes[pup.mode] = true
+		# walk left through the portal again and again, hitting the tail whenever it is close
+		var keys := {"left": true}
+		var tp: Vector2 = pup.tail_point()
+		if pup.mode != "idle" and tp.x > 0.0 and absf(tp.x - (g.x + 5.0)) < 26.0 and absf(tp.y - (g.y + 5.0)) < 20.0:
+			keys["attack"] = st2.f % 10 < 2
+		Controls.script_input = keys
+		hazard_probe(g, pup, st2)
+		if st2.f > 1 and absf(g.x - last_x) > 250.0:
+			wraps += 1
+		last_x = g.x
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	var mine := 0
+	for sq in seen2:
+		if seen2[sq] == "p2":
+			mine += 1
+	await wait_secs(1.0)
+	return [seen2.size() >= 4 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and wraps >= 1 and modes.has("rest"), "guest: saw %d plans, %d shown < 0.30 s, targeted %d times, wrapped through the portal %d times, modes %s, violations '%s' '%s'" % [seen2.size(), short, mine, wraps, str(modes.keys()), pup.kit_violation, pup.arena_violation]]
+
+func sc_co_deadlock() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var secs := 30.0 * slow
+	if role == "host":
+		await wait_secs(1.0)
+		var r := boss_arena("T18", 90.0, 300.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		var b: DeadlockBoss = r.boss
+		var seen := {}
+		var st := {}
+		var committed := false
+		var rolled := false
+		var forced := [[4.0, "chain", "p2"], [10.0, "grab", "p2"], [20.0, "swap", "p2"]]
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		var hit_a_at := -1.0
+		while Time.get_ticks_msec() - t0 < secs * 1000.0:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			Controls.script_input = {}
+			f += 1
+			plan_stats(b, seen)
+			var el := float(Time.get_ticks_msec() - t0) / 1000.0 / slow
+			boss_phase_script(b, el, st, forced, [])
+			if b != null and b.active and not b.dying:
+				# the guest's swings land on half B; when B has a pending hit, the host hits A inside the window: both must commit
+				if b.halves[1].pend > 0.0 and hit_a_at < 0.0 and el > 12.0:
+					r.attacker = p
+					var a_hp: float = b.halves[0].hp
+					var b_hp: float = b.halves[1].hp
+					b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0])
+					hit_a_at = el
+					st["a_before"] = a_hp
+					st["b_before"] = b_hp
+				if hit_a_at > 0.0 and el > hit_a_at + 0.3 and not committed:
+					committed = b.halves[0].hp < float(st.get("a_before", 99.0)) and b.halves[1].hp < float(st.get("b_before", 99.0))
+				if b.hpf < float(b.max_hp) * 0.12:
+					b.halves[0].hp = maxf(b.halves[0].hp, 6.0)
+					b.halves[1].hp = maxf(b.halves[1].hp, 6.0)
+					b._sums()
+				# park half B next to the guest so its swings reach it (outside the scripted attacks)
+				if b.plan.is_empty() and not b.halves[1].dead:
+					b.halves[1].home_x = 270.0
+					b.halves[0].home_x = 90.0
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		var tg := {"p1": 0, "p2": 0}
+		for sq in seen:
+			tg[seen[sq]] += 1
+		await wait_secs(1.0)
+		return [started and seen.size() >= 3 and committed, "host: started %s, %d plans (p1 %d, p2 %d), the host hit and the guest's pending hit committed: %s" % [started, seen.size(), tg.p1, tg.p2, committed]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := boss_arena("T18", 90.0, 300.0)
+	var found := {"b": null}
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is DeadlockBoss:
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: DeadlockBoss = found.b
+	if pup == null:
+		return [false, "no DeadlockBoss puppet"]
+	var st2 := {"f": 0, "swings": 0}
+	var seen2 := {}
+	var pend_seen := false
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+		var g = mgr().player
+		st2.f += 1
+		if not is_instance_valid(pup):
+			break
+		plan_stats(pup, seen2)
+		var hb = pup.halves[1]
+		var keys := {}
+		var dx: float = hb.x - (g.x + 5.0)
+		if not hb.dead:
+			if absf(dx) > 24.0:
+				keys["right" if dx > 0.0 else "left"] = true
+			else:
+				g.face = 1.0 if dx > 0.0 else -1.0
+				keys["attack"] = st2.f % 14 < 2 and g.atk_cd <= 0.0
+		Controls.script_input = keys
+		hazard_probe(g, pup, st2)
+		pend_seen = pend_seen or float(hb.pend) > 0.0
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	await wait_secs(1.0)
+	return [seen2.size() >= 3 and short == 0 and pup.kit_violation == "" and pup.arena_violation == "" and pend_seen, "guest: saw %d plans, %d shown < 0.30 s, a pending hit shown %s, violations '%s' '%s'" % [seen2.size(), short, pend_seen, pup.kit_violation, pup.arena_violation]]

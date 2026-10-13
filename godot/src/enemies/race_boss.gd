@@ -354,8 +354,8 @@ func _choose() -> void:
 	else:
 		idle_t = 0.3
 
-func _start(id: String) -> void:
-	var tgt := _least_moved()
+func _start(id: String, force_tgt := "") -> void:
+	var tgt := _least_moved() if force_tgt == "" else force_tgt
 	match id:
 		"rw":
 			gx = [-1.0, -1.0]

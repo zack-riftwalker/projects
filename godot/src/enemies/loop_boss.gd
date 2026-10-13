@@ -360,8 +360,8 @@ func _choose() -> void:
 	cycle += 1
 	_start(id)
 
-func _start(id: String) -> void:
-	var tgt := kit_pick_target()
+func _start(id: String, force_tgt := "") -> void:
+	var tgt := kit_pick_target() if force_tgt == "" else force_tgt
 	var cue := 0.8
 	var rec := 0.6
 	var fam := "sweep"

@@ -121,6 +121,11 @@ func _guest(b: Dictionary) -> void:
 		if e.puppet and av != null and av != "":
 			b["arena-tell"] = [0.0, av + " s"]
 			break
+	# the tick: a blink block, a gear or a piston shows what the host's clock gives (a stuck or drifted clock on this page shows here)
+	if mgr.room.tower != null and mgr.room.id == coop.last_gf_room and coop.last_rt_at > 0.0 and coop.hms() - coop.last_rt_at < 1.0 and not coop.host_lagging:
+		var why: String = mgr.room.tower.mismatch(coop.last_rt + (coop.hms() - coop.last_rt_at))
+		if why != "":
+			b["tick-desync"] = [0.3, why]
 	# breakpoint: what the host's last snapshot says is frozen does not move on this page (MV5A-04)
 	var seen_now := {}
 	for e in mgr.room.ents:

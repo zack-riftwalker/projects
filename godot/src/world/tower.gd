@@ -366,6 +366,37 @@ func bp_targets(cx: float, cy: float) -> Array:
 		out.append({"kind": r[0], "id": r[1], "rect": rc, "nx": nx, "ny": ny, "d": Vector2(nx - cx, ny - cy).length()})
 	return out
 
+# ---------------------------------------------------------------- the watchdog rule tick-desync (guest)
+# what the host's clock implies for the machines, with the line's lag allowed for: a state this page shows is fine when the pure function gave it at
+# any time in [host_t - 0.3, host_t + 0.05]; "" = all agree, else the first object that does not
+func mismatch(host_t: float) -> String:
+	var times: Array = []
+	for k in range(8):
+		times.append(host_t - 0.3 + float(k) * 0.05)
+	for g in bgroups:
+		var ok := false
+		for tc in times:
+			if floori(maxf(0.0, float(tc) - float(offs.get(g.key, 0.0))) / TICK) % 2 == int(g.ph) or int(g.ph) < 0:
+				ok = true
+		if not ok:
+			return "blink group %s shows phase %d" % [g.key, g.ph]
+	for g in gears:
+		var ok2 := false
+		for tc in times:
+			var pos := gear_pos(g, 0, maxf(0.0, float(tc) - float(offs.get(g.key, 0.0))))
+			if Vector2(pos.x - 24.0, pos.y - 3.0).distance_to(Vector2(g.plats[0].x, g.plats[0].y)) < 6.0:
+				ok2 = true
+		if not ok2:
+			return "gear %s is off its angle" % g.key
+	for pz in pistons:
+		var ok3 := false
+		for tc in times:
+			if piston_rows_at(pz, maxf(0.0, float(tc) - float(offs.get(pz.key, 0.0)))) == int(pz.rows):
+				ok3 = true
+		if not ok3:
+			return "piston %s covers %d rows" % [pz.key, pz.rows]
+	return ""
+
 # ---------------------------------------------------------------- the snapshot (host writes, guest applies)
 func net_pack() -> Dictionary:
 	var mx: Array = []

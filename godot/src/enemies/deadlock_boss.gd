@@ -313,8 +313,8 @@ func _choose() -> void:
 		id = "grab"
 	_start(id)
 
-func _start(id: String) -> void:
-	var tgt := kit_pick_target()
+func _start(id: String, force_tgt := "") -> void:
+	var tgt := kit_pick_target() if force_tgt == "" else force_tgt
 	match id:
 		"chain":
 			chain_n += 1

@@ -78,8 +78,156 @@ func t_rooms5a() -> bool:
 	if dh2 == null or not dh2.open:
 		fail(res, "H11:N stays closed with the lever")
 	h11b.queue_free()
+	await walk5a(res)
 	Game.fresh()
 	return report("rooms5a", res.ok, "%d tower rooms%s" % [ids.size(), res.info])
+
+# MV5A-10 (1): through every tower door that can open, the way a player goes: the next room, a body on free ground; the fork/join, the yield chute, the goto drop
+func walk5a(res: Dictionary) -> void:
+	Game.flags = {}
+	for f in ["lever:T02", "thread:0", "thread:1", "thread:2", "boss:RACE", "boss:LOOP", "break:T09", "boss:DEADLOCK"]:
+		Game.flags[f] = true
+	Game.tools = {"bash": true, "catch": true, "sudo": true, "agents": true, "opus": true, "curl": true, "ssh": true, "breakpoint": true}
+	var crows := FileAccess.get_file_as_string("res://src/world/rooms/TB1.txt").split("\n")
+	for cy in range(crows.size()):                               # TB1's cracked wall to heisenbug.log is bashed through
+		for cx in range(crows[cy].length()):
+			if crows[cy][cx] == "%":
+				Game.flags["crack:TB1:%d:%d" % [cx, cy]] = true
+	var m := new_manager()
+	var crossed := 0
+	var ids: Array = tower_ids()
+	ids.append("H11")
+	ids.append("N11")
+	for rid in ids:
+		var def: Dictionary = Game.rooms_meta.rooms[rid]
+		for d in def.doors:
+			var to_room := String(d.to).get_slice(":", 0)
+			var lock := String(d.get("lock", ""))
+			if not Game.rooms_meta.rooms.has(to_room) or lock == "oneway" or bool(d.get("wrap", false)):
+				continue
+			if rid == "H11" and d.id != "H11:N":
+				continue
+			if rid == "N11" and d.id != "N11:W":
+				continue
+			var pw: float = float(def.size[0]) * 16.0
+			var ph: float = float(def.size[1]) * 16.0
+			var wait := 0
+			while m.trans.on and wait < 60:
+				m.tick(Game.STEP)
+				wait += 1
+			m.swap_to(rid, Vector2(pw / 2.0, ph / 2.0), null, true)
+			m.room.ents.clear()
+			m.room.update_doors()
+			for ty in range(int(d.a), int(d.b) + 1):                 # (a cracked wall at the door: the player has bashed it by now)
+				for tx in range(m.room.w):
+					if (String(d.side) == "W" or String(d.side) == "E") and m.room.grid.tile(tx, ty) == TileGrid.CRACK:
+						m.room.grid.tiles[ty * m.room.w + tx] = TileGrid.E
+			var q = m.player
+			var side := String(d.side)
+			var mid_row := float(int(d.a) + int(d.b) + 1) * 8.0
+			var keys := {}
+			q.vx = 0.0
+			q.vy = 0.0
+			match side:
+				"W":
+					q.x = 2.0
+					q.y = float(int(d.b) + 1) * 16.0 - q.h
+					keys = {"left": true}
+				"E":
+					q.x = pw - q.w - 2.0
+					q.y = float(int(d.b) + 1) * 16.0 - q.h
+					keys = {"right": true}
+				"N":
+					q.x = mid_row - q.w / 2.0
+					q.y = 2.0
+					q.vy = -300.0
+				"S":
+					q.x = mid_row - q.w / 2.0
+					q.y = ph - q.h - 2.0
+					q.vy = 200.0
+			var got := -1
+			var trail := ""
+			for f in range(60):
+				Controls.script_input = keys
+				m.player.hp = m.player.max_hp
+				m.player.inv = 99.0
+				m.tick(Game.STEP)
+				if trail.get_slice(" ", trail.count(" ")) != m.room.id:
+					trail += " " + m.room.id
+				if m.room.id == to_room and not m.trans.on:
+					got = f
+					break
+			Controls.script_input = null
+			if got < 0:
+				fail(res, "door %s: still in %s after 60 frames (player %.0f,%.0f, in %s -> %s, trans %s, trail%s)" % [d.id, m.room.id, m.player.x, m.player.y, rid, to_room, str(m.trans.on), trail])
+				continue
+			crossed += 1
+			m.player.vx = 0.0
+			for f in range(4):
+				m.tick(Game.STEP)
+			var b = m.player
+			var inside := false
+			for ty in range(floori(b.y / 16.0), floori((b.y + b.h - 0.01) / 16.0) + 1):
+				for tx in range(floori(b.x / 16.0), floori((b.x + b.w - 0.01) / 16.0) + 1):
+					if m.room.grid.solid(tx, ty):
+						inside = true
+			if inside or (m.room.hazard_at(b) != "" and m.room.hazard_at(b) != "pit"):
+				fail(res, "door %s: the body arrived in a wall or a hazard (%s)" % [d.id, m.room.hazard_at(b)])
+	res.info += " doors %d" % crossed
+	if crossed < 30:
+		fail(res, "only %d tower doors crossed" % crossed)
+	# the fork/join: two of the three threads open T04's way up, one does not
+	Game.flags = {"thread:0": true}
+	var t04 := new_room("T04")
+	var dn = t04.grid.door_at("N", 59)
+	if dn == null or dn.open:
+		fail(res, "T04:N2 is open with one thread")
+	t04.queue_free()
+	Game.flags = {"thread:0": true, "thread:1": true}
+	var t04b := new_room("T04")
+	var dn2 = t04b.grid.door_at("N", 59)
+	if dn2 == null or not dn2.open:
+		fail(res, "T04:N2 is shut with two threads")
+	t04b.queue_free()
+	Game.flags = {"thread:0": true, "thread:2": true}
+	var t04c := new_room("T04")
+	var dn3 = t04c.grid.door_at("N", 11)
+	if dn3 == null or not dn3.open:
+		fail(res, "T04:N is shut with threads 0 and 2")
+	t04c.queue_free()
+	# the yield chute: a body in T04's yield shaft ends up in T02, standing
+	Game.flags = {}
+	m.swap_to("T04", Vector2(41.0 * 16.0 + 3.0, 14.0 * 16.0), null, true)
+	m.room.ents.clear()
+	var landed := false
+	for f in range(1800):
+		m.player.inv = 99.0
+		m.player.hp = m.player.max_hp
+		if m.room.id == "T17":
+			m.room.ents.clear()
+		m.tick(Game.STEP)
+		if m.room.id == "T02" and not m.trans.on and m.player.on_ground:
+			landed = true
+			break
+	if not landed:
+		fail(res, "the yield chute: ended in %s (on ground %s)" % [m.room.id, str(m.player.on_ground)])
+	# the goto drop: T16 -> N11 -> the airgap fall -> N01
+	m.swap_to("T16", Vector2(11.0 * 16.0 + 3.0, 88.0 * 16.0), null, true)
+	m.room.ents.clear()
+	var ended := false
+	for f in range(3000):
+		m.player.inv = 99.0
+		m.player.hp = m.player.max_hp
+		if m.room.id == "T16" or m.room.id == "N11":
+			m.room.ents.clear()
+		m.tick(Game.STEP)
+		if m.room.id == "N11" and not m.trans.on and m.player.on_ground:
+			ended = true                                          # (from there it is the airgap fall: rooms4b walks it)
+			break
+	if not ended:
+		fail(res, "the goto drop: ended in %s" % m.room.id)
+	m.queue_free()
+	await frames(1)
 
 # MV5A-02: world 4's art, theme and music exist and a tower room builds its view from them
 func t_w4assets() -> bool:
