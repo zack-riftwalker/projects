@@ -3262,7 +3262,12 @@ func sc_co_race() -> Array:
 	if role == "host":
 		var forced := [[3.0, "rw", "p2"], [8.0, "rw", "p1"], [13.0, "switch", "p2"], [18.0, "rw", "p2"], [23.0, "contend", "p2"], [28.0, "rw", "p2"]]
 		var marks := [[9.0, 0.55], [20.0, 0.2]]
-		var res: Array = await tower_fight_host("T06", 150.0, 270.0, forced, marks, func(b, st, el): st["corrupt"] = maxi(int(st.get("corrupt", 0)), b.hz.size()))
+		var res: Array = await tower_fight_host("T06", 150.0, 270.0, forced, marks, func(b, st, el):
+			st["corrupt"] = maxi(int(st.get("corrupt", 0)), b.hz.size())
+			for q in b.th:                                        # (the guest's swings must not finish the fight: the rules are the test)
+				if not q.dead and q.hp < 8.0:
+					q.hp = 8.0
+			b._sums())
 		return [res[0] and res[1] >= 5 and res[2].p2 >= 1, "host: started %s, %d plans (p1 %d, p2 %d), corrupt segments at most %d" % [res[0], res[1], res[2].p1, res[2].p2, int(res[3].get("corrupt", 0))]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("T06", 150.0, 270.0)
