@@ -236,6 +236,8 @@ func obstacle_groups(room_id: String) -> Array:
 			var ch: String = rows[ty][tx]
 			if not OBSTACLES.has(ch) or seen.has(Vector2i(tx, ty)):
 				continue
+			if ch == "A" and not _busy_piston_at(room_id, tx, ty):
+				continue                                         # (only the busy pistons are an obstacle: breakpoint gets past them)
 			var cells: Array = []
 			var stack := [Vector2i(tx, ty)]
 			seen[Vector2i(tx, ty)] = true
@@ -263,6 +265,13 @@ func obstacle_groups(room_id: String) -> Array:
 	_obst_cache[room_id] = out
 	return out
 
+# is the `A` cell the casing of a piston that never rests (rooms.json `pistons`, busy: true)?
+func _busy_piston_at(room_id: String, tx: int, ty: int) -> bool:
+	for pz in rooms_meta.rooms[room_id].get("pistons", []):
+		if bool(pz.get("busy", false)) and ty == int(pz.y) and tx >= int(pz.x) and tx < int(pz.x) + int(pz.get("w", 1)):
+			return true
+	return false
+
 # a crack broken, a gate opened, a slot key pressed
 func obstacle_passed(room_id: String, g: Dictionary) -> bool:
 	match String(g.letter):
@@ -273,6 +282,11 @@ func obstacle_passed(room_id: String, g: Dictionary) -> bool:
 			return false
 		"!": return flag("gate:%s:catch" % room_id)
 		"&": return flag("gate:%s:agents" % room_id)
+		"5":
+			for c in g.cells:
+				if flag("cable:%s:%d:%d" % [room_id, c[0], c[1]]):
+					return true
+			return false
 		"k":
 			for i in g.keys:
 				if not flag("key:%s:%d" % [room_id, i]):

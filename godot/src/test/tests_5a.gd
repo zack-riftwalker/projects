@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss", "loopboss", "deadlockboss", "plugins5a"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss", "loopboss", "deadlockboss", "plugins5a", "tower4b1"]
 
 func run(name: String):
 	match name:
@@ -15,6 +15,7 @@ func run(name: String):
 		"loopboss": return await t_loopboss()
 		"deadlockboss": return await t_deadlockboss()
 		"plugins5a": return await t_plugins5a()
+		"tower4b1": return await t_tower4b1()
 	return await super.run(name)
 
 func tower_ids() -> Array:
@@ -1269,3 +1270,146 @@ func t_plugins5a() -> bool:
 	Controls.script_input = null
 	Game.fresh()
 	return report("plugins5a", res.ok, res.info)
+
+func logs_text5(lv: LogsView) -> String:
+	var out := ""
+	for l in lv.lines:
+		out += String(l.text) + "\n"
+	return out
+
+# MV5A-09: the 4B-1 systems in the tower
+func t_tower4b1() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	# the cartographer in T01 sells the index of /dev/threads for 40 tokens
+	var menu := IndexMenu.new()
+	main.add_child(menu)
+	var t01 := new_room("T01")
+	if t01.npcs.size() != 1 or t01.npcs[0].zone != "tower" or t01.npcs[0].price != 40:
+		fail(res, "T01 npc")
+	else:
+		menu.open(t01, t01.npcs[0])
+		if menu.rows()[0] != "index /dev/threads — 40 tokens":
+			fail(res, "offer " + str(menu.rows()))
+		Game.tokens = 40
+		if not menu.buy() or not Game.owns_map("tower") or Game.tokens != 0:
+			fail(res, "buying map:tower")
+		menu.close()
+	var scraps := 0
+	for d in t01.decor_items:
+		if String(d.kind) == "scrap":
+			scraps += 1
+	if scraps != 3:
+		fail(res, "%d paper scraps lead to the tree, want 3" % scraps)
+	t01.queue_free()
+	menu.queue_free()
+	# T15: the lost agent in its jar is freed by a swipe
+	var t15 := new_room("T15")
+	for e in t15.ents:
+		e.queue_free()
+	t15.ents.clear()
+	if t15.jars.size() != 1:
+		fail(res, "T15 has no jar")
+	else:
+		var jar: Dictionary = t15.jars[0]
+		var p = t15.player
+		p.x = float(jar.x) + 12.0                                  # (the spikes are to the left of the jar: swipe from the right)
+		p.y = float(jar.y) - p.h
+		p.vx = 0.0
+		p.vy = 0.0
+		p.face = -1.0
+		for f in range(12):
+			Controls.script_input = {"attack": f < 2}
+			Controls.poll()
+			t15.step(Game.STEP)
+		Controls.script_input = {}
+		for f in range(4):
+			Controls.poll()
+			t15.step(Game.STEP)
+		if not Game.flag("agent:T15"):
+			fail(res, "a swipe did not free T15's agent")
+	t15.queue_free()
+	# T14: logbook page 3 and the memory fragment
+	var t14 := new_room("T14")
+	for e in t14.ents:
+		e.queue_free()
+	t14.ents.clear()
+	var page_it = null
+	var spark = null
+	for it in t14.items:
+		if it.kind == "page":
+			page_it = it
+		if it.kind == "spark":
+			spark = it
+	if page_it == null or int(String(page_it.id).get_slice(":", 1)) != 3:
+		fail(res, "T14 has no page 3")
+	else:
+		var pp = t14.player
+		pp.x = float(page_it.x) - 5.0
+		pp.y = float(page_it.y) - 5.0
+		pp.vx = 0.0
+		pp.vy = 0.0
+		Controls.script_input = {}
+		Controls.poll()
+		t14.step(Game.STEP)
+		if not Game.flag("page:3"):
+			fail(res, "touching the page did not collect it")
+	if spark == null:
+		fail(res, "T14 has no fragment")
+	else:
+		t14.collect(spark)
+		if t14.memory.text != "05:12 — two threads wrote the same line at once.":
+			fail(res, "memory line " + str(t14.memory.text))
+	t14.queue_free()
+	# the terminal: no creature within 10 tiles of T08's bench; secrets
+	var t08 := new_room("T08")
+	if t08.cps.is_empty() or not bool(Game.rooms_meta.rooms.T08.get("terminal", false)):
+		fail(res, "T08 is no terminal")
+	for c in t08.cps:
+		for e in t08.ents:
+			var d := Vector2(float(e.x) + float(e.w) / 2.0 - float(c.x), float(e.y) + float(e.h) / 2.0 - float(c.y)).length() / 16.0
+			if d < 10.0:
+				fail(res, "T08: a %s %.1f tiles from the bench" % [e.get_class(), d])
+	t08.queue_free()
+	for id in ["T14", "T15"]:
+		if not Game.is_secret(id):
+			fail(res, "%s is not a secret" % id)
+	# the tower's signs are listed under THREAD TOWER
+	var lv := LogsView.new()
+	main.add_child(lv)
+	var t04 := new_room("T04")
+	if t04.signs.is_empty():
+		fail(res, "T04 has no sign")
+	else:
+		var sg: Dictionary = t04.signs[0]
+		var p4 = t04.player
+		p4.x = float(sg.x) - p4.w / 2.0
+		p4.y = float(sg.y) - p4.h
+		Controls.script_input = {}
+		Controls.poll()
+		t04.step(Game.STEP)
+		lv.open()
+		if not logs_text5(lv).contains("THREAD TOWER"):
+			fail(res, "the tower's sign is not under THREAD TOWER: " + logs_text5(lv).left(200))
+	t04.queue_free()
+	lv.queue_free()
+	# the changelog: busy pistons and cables are obstacles (breakpoint, opus), an ordinary piston is not
+	var busy := 0
+	for g in Game.obstacle_groups("TC2"):
+		if g.ability == "breakpoint":
+			busy += 1
+	var plain := 0
+	for g in Game.obstacle_groups("TA2"):
+		if g.ability == "breakpoint":
+			plain += 1
+	var cab := 0
+	for g in Game.obstacle_groups("T11"):
+		if g.ability == "opus":
+			cab += 1
+	if busy != 3 or plain != 0 or cab < 1:
+		fail(res, "obstacles: %d busy pistons in TC2, %d in TA2, %d cables in T11" % [busy, plain, cab])
+	Game.fresh()
+	return report("tower4b1", res.ok, res.info)
