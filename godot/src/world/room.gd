@@ -544,6 +544,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 		"Reviewer2": b = Reviewer2.new(self, bx, by, hp_)
 		"RaceBoss": b = RaceBoss.new(self, bx, by, hp_)
 		"LoopBoss": b = LoopBoss.new(self, bx, by, hp_)
+		"DeadlockBoss": b = DeadlockBoss.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))
@@ -647,6 +648,15 @@ func _bp_ok(cx: float, cy: float, face: float, nx: float, ny: float) -> bool:
 			return false
 	return true
 
+# lock_free: the claw and dash of the one who is hitting go through the front guard of ordinary creatures (never a boss's)
+func lock_free_attacker() -> bool:
+	var a = attacker
+	if a == null:
+		return false
+	if a.get("is_remote") == true:
+		return Game.mod_lock_free(a.loadout)
+	return Game.mod_lock_free()
+
 # what a [special] press would stop: the nearest creature, piston, gear, platform or blink group in front of the body. {} = nothing
 func bp_pick(q) -> Dictionary:
 	if q == null or q.dead:
@@ -657,7 +667,16 @@ func bp_pick(q) -> Dictionary:
 	var best := {}
 	var bd := 1e9
 	for e in ents:
-		if e.dead or e.bp_t > 0.0 or e.passive or (e.get("is_boss") == true and e.get("bp") != true):
+		if e.dead:
+			continue
+		if e.has_method("bp_halves"):                       # a boss with two bodies: each half can be stopped on its own
+			for hv in e.bp_halves():
+				var hd := Vector2(float(hv.nx) - cx, float(hv.ny) - cy).length()
+				if hd < bd and _bp_ok(cx, cy, face, float(hv.nx), float(hv.ny)):
+					bd = hd
+					best = {"kind": "h", "id": e.nid * 2 + int(hv.i), "nx": hv.nx, "ny": hv.ny}
+			continue
+		if e.bp_t > 0.0 or e.passive or (e.get("is_boss") == true and e.get("bp") != true):
 			continue
 		var d := Vector2(e.cx - cx, e.cy - cy).length()
 		if d < bd and _bp_ok(cx, cy, face, e.cx, e.cy):
@@ -688,6 +707,13 @@ func bp_press(q) -> bool:
 func bp_valid(kind: String, id, q) -> bool:
 	var cx: float = q.x + q.w / 2.0
 	var cy: float = q.y + q.h / 2.0
+	if kind == "h":
+		for e in ents:
+			if e.has_method("bp_halves") and e.nid == int(id) / 2:
+				for hv in e.bp_halves():
+					if int(hv.i) == int(id) % 2:
+						return Vector2(float(hv.nx) - cx, float(hv.ny) - cy).length() <= Game.BP_RANGE + 64.0
+		return false
 	if kind == "c":
 		for e in ents:
 			if e.nid == int(id):
@@ -702,7 +728,15 @@ func bp_valid(kind: String, id, q) -> bool:
 # host / solo: stop the target for BP_TIME
 func bp_apply(kind: String, id) -> bool:
 	var at := Vector2.ZERO
-	if kind == "c":
+	if kind == "h":
+		var hboss = null
+		for e in ents:
+			if e.has_method("bp_halves") and e.nid == int(id) / 2 and not e.dead:
+				hboss = e
+		if hboss == null or not hboss.bp_freeze(int(id) % 2):
+			return false
+		at = hboss.bp_half_pos(int(id) % 2)
+	elif kind == "c":
 		var hit_e = null
 		for e in ents:
 			if e.nid == int(id) and not e.dead and e.bp_t <= 0.0 and (e.get("is_boss") != true or e.get("bp") == true):
@@ -2178,6 +2212,9 @@ func interact_combat(p) -> void:
 					if res2 != "":
 						stop(0.05)
 						shake(0.2)
+					if res2 != "" and res2 != "block" and Game.mod_hot_path():
+						p.can_dash = true                 # hot_path: a dash that landed on a creature is ready again
+						p.dash_cd = 0.0
 					if res2 != "kill":                 # a dash is no shield: unless it has i-frames (easy), the contact hurts
 						p.hurt(e.dmg, b.x + b.w / 2.0)
 

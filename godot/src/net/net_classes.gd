@@ -2,9 +2,11 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger", "wormegg", "heisenbug", "datarace", "deadlockguard", "spinlock", "ticker", "orphan", "orphanchild", "priority", "raceboss", "loopboss"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger", "wormegg", "heisenbug", "datarace", "deadlockguard", "spinlock", "ticker", "orphan", "orphanchild", "priority", "raceboss", "loopboss", "deadlockboss"]
 
 static func cls_of(e) -> int:
+	if e is DeadlockBoss:
+		return 48
 	if e is LoopBoss:
 		return 47
 	if e is RaceBoss:
@@ -148,6 +150,7 @@ static func make(cls: int, room: Room):
 		45: e = PriorityInversion.new(room, 0, 0)
 		46: e = RaceBoss.new(room, 0, 0)
 		47: e = LoopBoss.new(room, 0, 0)
+		48: e = DeadlockBoss.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

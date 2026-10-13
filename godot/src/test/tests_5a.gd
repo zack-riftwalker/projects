@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss", "loopboss"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss", "loopboss", "deadlockboss", "plugins5a"]
 
 func run(name: String):
 	match name:
@@ -13,6 +13,8 @@ func run(name: String):
 		"w4enemies": return await t_w4enemies()
 		"raceboss": return await t_raceboss()
 		"loopboss": return await t_loopboss()
+		"deadlockboss": return await t_deadlockboss()
+		"plugins5a": return await t_plugins5a()
 	return await super.run(name)
 
 func tower_ids() -> Array:
@@ -1047,3 +1049,223 @@ func t_loopboss() -> bool:
 	Controls.script_input = null
 	Game.fresh()
 	return report("loopboss", res.ok, res.info)
+
+# MV5A-08: DEADLOCK
+func t_deadlockboss() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var r := new_room("T18")
+	var b: DeadlockBoss = r.boss as DeadlockBoss
+	if b == null:
+		fail(res, "T18 has no DeadlockBoss")
+		r.queue_free()
+		return report("deadlockboss", false, res.info)
+	if b.max_hp != 96 or b.halves[0].hp != 48.0 or b.halves[1].hp != 48.0:
+		fail(res, "hp %d, want 48 + 48" % b.max_hp)
+	# the land trigger: nothing on the lid, the fight starts after 0.5 s on the floor
+	r.player.x = 11.0 * 16.0
+	r.player.y = 11.0 * 16.0 - 10.0
+	for f in range(60):
+		r.player.x = 11.0 * 16.0 + 4.0
+		r.player.y = 11.0 * 16.0 - 10.0
+		r.player.vx = 0.0
+		r.player.vy = 0.0
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+	if r.fight.state != "none":
+		fail(res, "the fight started with the player on the lid of the hole (%s)" % r.fight.state)
+	var n := 0
+	while r.fight.state == "none" and n < 120:
+		r.player.x = 4.0 * 16.0
+		r.player.y = 11.0 * 16.0 - 10.0 - (0.0 if n > 0 else 20.0)
+		r.player.vx = 0.0
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state == "none" or n < 25 or n > 80:
+		fail(res, "the land trigger: state %s after %d frames (want about 30)" % [r.fight.state, n])
+	n = 0
+	while r.fight.state != "active" and n < 400:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	if r.fight.state != "active":
+		fail(res, "the fight never became active")
+	b.plan = {}
+	b.idle_t = 999.0
+	r.attacker = r.player
+	# the commit rule: one hit alone rolls back after 2 s; the other half hit inside the window commits both
+	var hp_a: float = b.halves[0].hp
+	b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0])
+	if b.halves[0].hp != hp_a or b.halves[0].pend <= 0.0:
+		fail(res, "a lone hit changed hp at once (%.1f, pending %.1f)" % [b.halves[0].hp, b.halves[0].pend])
+	for f in range(int(2.2 * 60.0)):
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		b.idle_t = 999.0
+	if b.halves[0].hp != hp_a or b.halves[0].pend != 0.0:
+		fail(res, "the pending hit did not roll back (hp %.1f, pending %.1f)" % [b.halves[0].hp, b.halves[0].pend])
+	b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0])
+	for f in range(60):
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		b.idle_t = 999.0
+	b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[1])
+	if b.halves[0].hp != hp_a - 1.0 or b.halves[1].hp != 47.0:
+		fail(res, "the pair did not commit (%.1f / %.1f)" % [b.halves[0].hp, b.halves[1].hp])
+	# swap: invulnerable for 1.5 s, hits are blocked
+	b._start("swap")
+	if not rb_until(r, b, "swap", "active", Vector2(192.0, 150.0)):
+		fail(res, "the swap never became active")
+	if b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0]) != "block":
+		fail(res, "a half took a hit during the swap")
+	b.plan = {}
+	b.inv_t = 0.0
+	# breakpoint freezes one half: it does not move, the other does
+	Game.tools.breakpoint = true
+	b.halves[0].x = 100.0
+	b.halves[1].x = 250.0
+	b.halves[0].home_x = 60.0
+	b.halves[1].home_x = 320.0
+	r.player.x = 40.0
+	r.player.y = 150.0
+	r.player.face = 1.0
+	if not r.bp_apply("h", b.nid * 2):
+		fail(res, "breakpoint could not stop half A")
+	var ax: float = b.halves[0].x
+	var bx0: float = b.halves[1].x
+	for f in range(60):
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		b.idle_t = 999.0
+	if absf(b.halves[0].x - ax) > 0.01 or absf(b.halves[1].x - bx0) < 5.0:
+		fail(res, "the stopped half moved or the free one did not (A %.1f -> %.1f, B %.1f -> %.1f)" % [ax, b.halves[0].x, bx0, b.halves[1].x])
+	b.halves[0].bpt = 0.0
+	# the chain sweeps: boxes along the line, a grab hurts for 2
+	b._start("chain")
+	if not rb_until(r, b, "chain", "active", Vector2(192.0, 150.0)):
+		fail(res, "the chain never became active")
+	if b.harmboxes().size() < 10:
+		fail(res, "the chain has %d boxes" % b.harmboxes().size())
+	b.plan = {}
+	b.hz.clear()
+	b.halves[0].y = Boss.FLOOR
+	b.halves[1].y = Boss.FLOOR
+	b._start("grab")
+	if absf(float(b.plan.t) - 0.75) > 0.001:
+		fail(res, "grab cue %.2f" % float(b.plan.t))
+	if not rb_until(r, b, "grab", "active", Vector2(192.0, 150.0)):
+		fail(res, "the grab never became active")
+	var gdmg := 0
+	for hb in b.harmboxes():
+		gdmg = maxi(gdmg, int(hb.get("dmg", 1)))
+	if gdmg != 2:
+		fail(res, "a grab does %d" % gdmg)
+	b.plan = {}
+	# a puppet from the record has the same boxes and fields
+	var rec: Array = JSON.parse_string(JSON.stringify(NetClasses.record(b)))
+	var pup = NetClasses.make(NetClasses.cls_of(b), r)
+	NetClasses.apply(pup, rec)
+	pup.hz_gate = 0.0
+	if not same_boxes(b.hurtboxes(), pup.hurtboxes()):
+		fail(res, "the puppet's hurtboxes differ")
+	var fa: Array = JSON.parse_string(JSON.stringify(pup.net_fields()))
+	var fb: Array = JSON.parse_string(JSON.stringify(b.net_fields()))
+	if JSON.stringify(fa) != JSON.stringify(fb):
+		fail(res, "the puppet's fields differ")
+	pup.free()
+	# the kill gives lock_free
+	r.attacker = r.player
+	if not r.skip_boss():
+		fail(res, "skip boss did not work")
+	var guard := 0
+	while r.fight.state != "done" and guard < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		guard += 1
+	if r.fight.state != "done" or not Game.flag("plugin:lock_free") or not Game.flag("boss:DEADLOCK"):
+		fail(res, "the reward: state %s, lock_free %s" % [r.fight.state, str(Game.flag("plugin:lock_free"))])
+	r.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("deadlockboss", res.ok, res.info)
+
+# MV5A-08: the plugins hot_path and lock_free
+func t_plugins5a() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	for pid in ["hot_path", "lock_free"]:
+		if Game.plugin_def(pid).is_empty():
+			fail(res, "no plugin " + pid)
+	Game.flags["plugin:hot_path"] = true
+	Game.flags["plugin:lock_free"] = true
+	Game.tools.bash = true
+	# hot_path: a dash that hits a creature is ready again at once
+	Game.equipped = ["hot_path"]
+	var r := bare_room("R01", 100.0, 192.0)
+	var bug := add_bug(r, 130.0, 192.0, -1.0)
+	bug.hp = 5
+	var p = r.player
+	p.inv = 99.0
+	p.face = 1.0
+	step_keys(r, {})
+	step_keys(r, {"dash": true, "right": true})
+	var recharged := false
+	for f in range(20):
+		step_keys(r, {"right": true})
+		p.inv = 99.0
+		if p.dash_t > 0.0 and p.can_dash and p.dash_cd <= 0.0 and bug.hp < 5:
+			recharged = true
+	if not recharged:
+		fail(res, "hot_path: the dash was not recharged by a hit (hp %d, can %s)" % [bug.hp, str(p.can_dash)])
+	Game.equipped = []
+	# lock_free: the claw goes through a Guard's front, not a boss's shield
+	var r2 := bare_room("R01", 100.0, 192.0)
+	var gd := Guard.new(r2, 7 * 16, 11 * 16)
+	r2.add_entity(gd)
+	gd.face = -1.0
+	r2.attacker = r2.player
+	if gd.hit(1, 1.0, 0.0, "swipe", gd) != "block":
+		fail(res, "a guard's front did not block without the plugin")
+	Game.equipped = ["lock_free"]
+	r2.attacker = r2.player
+	if gd.hit(1, 1.0, 0.0, "swipe", gd) == "block":
+		fail(res, "lock_free: a guard's front still blocks a claw")
+	if gd.hit(1, 1.0, 0.0, "agent", gd) != "block":
+		fail(res, "lock_free let an agent through")
+	var r3 := new_room("N15")
+	var fw: FirewallBoss = null
+	for e in r3.ents:
+		if e is FirewallBoss:
+			fw = e
+	if fw != null:
+		var guard := 0
+		r3.player.x = 100.0
+		while r3.fight.state != "active" and guard < 400:
+			r3.player.inv = 99.0
+			r3.step(Game.STEP)
+			guard += 1
+		fw.face = -1.0
+		fw.shield_on = true
+		fw.shield_t = 0.0
+		fw.turn_t = 0.0
+		r3.attacker = r3.player
+		if not fw.blocks(1.0, 0.0, "swipe"):
+			fail(res, "lock_free went through a boss's shield")
+	else:
+		fail(res, "no FirewallBoss in N15")
+	r3.queue_free()
+	Game.equipped = []
+	r.queue_free()
+	r2.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("plugins5a", res.ok, res.info)

@@ -43,6 +43,8 @@ func chain_whole() -> bool:
 func blocks(_dx: float, _dy: float, how: String) -> bool:
 	if how == "stomp":
 		return false
+	if (how == "swipe" or how == "dash") and room.lock_free_attacker():
+		return false
 	return linked
 
 func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:

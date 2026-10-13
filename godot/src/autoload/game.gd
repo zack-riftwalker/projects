@@ -585,6 +585,8 @@ const PLUGINS := [
 	{"id": "sourcemap", "name": "sourcemap", "cost": 1, "price": 0, "desc": "the map marks what you left behind in rooms you have mapped"},
 	{"id": "rate_limit", "name": "rate_limit", "cost": 2, "price": 0, "desc": "429: you take at most one hit every 3 s"},
 	{"id": "review_cache", "name": "review cache", "cost": 1, "price": 0, "desc": "after a catch, your next claw hit deals +1"},
+	{"id": "hot_path", "name": "hot path", "cost": 1, "price": 0, "desc": "a dash that hits a creature recharges the dash"},
+	{"id": "lock_free", "name": "lock_free", "cost": 2, "price": 0, "desc": "your claw and dash go through the front guard of ordinary creatures"},
 ]
 var equipped: Array = []              # plugin ids (saved; the guest keeps its own in user://profile.json)
 signal loadout_changed
@@ -674,6 +676,12 @@ func mod_sourcemap(list = null) -> bool:
 
 func mod_rate_limit(list = null) -> bool:
 	return (equipped if list == null else list).has("rate_limit")
+
+func mod_hot_path(list = null) -> bool:
+	return (equipped if list == null else list).has("hot_path")
+
+func mod_lock_free(list = null) -> bool:
+	return (equipped if list == null else list).has("lock_free")
 
 func mod_review_cache(list = null) -> bool:
 	return (equipped if list == null else list).has("review_cache")

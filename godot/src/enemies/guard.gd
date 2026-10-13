@@ -17,6 +17,8 @@ func _init(r: Room, px: float, py: float) -> void:
 
 func blocks(dx: float, dy: float, how: String) -> bool:
 	# the side, not the exact value: a diagonal dash from the front is blocked too (a swipe up or down has dx 0 and still lands)
+	if (how == "swipe" or how == "dash") and room.lock_free_attacker():
+		return false                                  # the lock_free plugin: claw and dash go through
 	return (how == "swipe" or how == "agent" or how == "dash") and Game.sign_of(dx) == -face
 
 func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:

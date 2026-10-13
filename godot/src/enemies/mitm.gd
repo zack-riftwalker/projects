@@ -32,6 +32,8 @@ func guard_up() -> bool:
 
 # the front is the side it faces; a hit from behind or from above/below (dx == 0) lands
 func blocks(dx: float, _dy: float, how: String) -> bool:
+	if (how == "swipe" or how == "dash") and room.lock_free_attacker():
+		return false
 	return guard_up() and (how == "swipe" or how == "agent" or how == "dash") and Game.sign_of(dx) == -face
 
 func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
