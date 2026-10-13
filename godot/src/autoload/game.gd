@@ -213,8 +213,8 @@ func memories_found() -> Array:
 	return out
 
 # ---- obstacles (MVB1-07): what the map marks with an unnamed `?` until the player has passed it ----
-const OBSTACLES := {"%": "bash", "!": "catch", "&": "agents", "k": "agents", "@": "curl", "c": "curl", "N": "ssh"}
-const CHANGELOG_WORDS := {"bash": "gives way to bash", "catch": "answers to catch", "agents": "waits for agents", "curl": "answers to curl", "ssh": "lets ssh through"}
+const OBSTACLES := {"%": "bash", "!": "catch", "&": "agents", "k": "agents", "@": "curl", "c": "curl", "N": "ssh", "A": "breakpoint", "5": "opus"}
+const CHANGELOG_WORDS := {"bash": "gives way to bash", "catch": "answers to catch", "agents": "waits for agents", "curl": "answers to curl", "ssh": "lets ssh through", "breakpoint": "stops under breakpoint", "opus": "gives way to opus"}
 var _obst_cache := {}
 
 # the groups of obstacle cells of a room, from its file (one group = 4-connected cells of one letter): {letter, ability, cells, mid, keys}
@@ -382,6 +382,10 @@ func world_digest() -> int:
 
 # where the other player is ({room, x, y} while a partner is connected, else {}); Coop keeps it, the map and travel read it
 var partner := {}
+const BP_RANGE := 112.0          # breakpoint (MV5A-04): px from the body centre to the target
+const BP_TIME := 3.5            # s a target stays frozen
+const BP_COOLDOWN := 6.0        # s before the same player can freeze again
+var bp_hint := false             # the local player has a breakpoint target in reach (the touch SPEC button reads BRK)
 var curl_hint := false            # the local player has a GET ring in reach (the touch SPEC button reads GET)
 
 # ---- pins on the map (MVB1-08): shared, at most PIN_MAX; the host owns the list (a guest asks, snapshots carry it) ----
@@ -796,7 +800,7 @@ func fresh() -> void:
 	flags = {}
 	loop_iter = {}
 	flood_net = -1
-	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
+	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false, "breakpoint": false}
 	equipped = []
 	bench = ""
 	tokens = 0
@@ -903,7 +907,7 @@ func bench_spawn(room_id: String):
 	return Vector2(b[0][0] * 16 + 3, b[0][1] * 16 + 6)
 
 # the tools Clawd owns (phase 1 test build: bash only)
-var tools := {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
+var tools := {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false, "breakpoint": false}
 var shake_opt := 1.0
 var low_fx := false          # G.save.data.opt.min
 

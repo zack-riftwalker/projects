@@ -196,6 +196,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id, "gz": 1 if Game.mod_gzip() else 0}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
+		r.net_bp.connect(func(kind, id): Net.rel("bp", {"room": r.id, "kind": kind, "bid": id}))
 		r.net_mutex.connect(func(ki): Net.rel("mutex", {"room": r.id, "n": ki}))
 		r.net_cable.connect(func(tx, ty): Net.rel("cable", {"room": r.id, "tx": tx, "ty": ty}))
 		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
@@ -543,6 +544,12 @@ func _host_rel(k: String, d: Dictionary) -> void:
 			_host_loop_cross(String(d.get("door", "")))
 			_host_remote_to_room(String(d.to))
 		"crack": _host_crack(d)
+		"bp":
+			var brm := _remote_room()
+			if brm != null and brm.id == String(d.room) and not brm.remote_players.is_empty() and brm.bp_valid(String(d.kind), d.bid, brm.remote_players[0]):
+				_as_p2(brm, func(): brm.bp_apply(String(d.kind), d.bid))
+			else:
+				log_("host: P2 breakpoint refused (%s %s)" % [String(d.kind), str(d.bid)])
 		"mutex":
 			var mrm := _remote_room()
 			if mrm != null and mrm.id == String(d.room) and mrm.tower != null:
@@ -1098,7 +1105,7 @@ func _send_snapshot() -> void:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn, 1 if _map_open() else 0, hp_.zip, 1 if hp_.ssh_t > 0.0 else 0]
-	var tw: Dictionary = r.tower.net_pack() if r.tower != null else {}
+	var tw: Dictionary = r.tower.net_pack() if r.tower != null and (r.world == 4 or not r.tower.fz.is_empty() or not r.tower.offs.is_empty()) else {}
 	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "ch": r.ch_t0, "tg": tg, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1, "tw": tw,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}

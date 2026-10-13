@@ -102,6 +102,7 @@ var zip_cut := 0.25              # a tapped ring cuts the zip at this age: 0.25 
 var zip := -1                    # curl (MVB2-03): the anchor Clawd is zipping to (-1: not zipping)
 var zip_dx := 0.0                # the horizontal direction of the zip (for the exit speed)
 var zip_blocked := 0
+var bp_cd := 0.0                 # breakpoint: seconds until the next press (Game.BP_COOLDOWN)
 var curl_last := -1              # the anchor used last: not again before landing
 var push_warned := false
 var ssh_x0 := 0.0
@@ -224,6 +225,8 @@ func update(dt: float) -> void:
 		agents_t -= dt
 	if cache_cool > 0.0:
 		cache_cool -= dt
+	if bp_cd > 0.0:
+		bp_cd -= dt
 	if not frozen and not in_menu and Controls.down.get("special", false):          # (Controls, not `down`: a running focus empties `down`)
 		special_t += dt
 	elif not frozen and not in_menu and Controls.released.get("special", false):
@@ -258,6 +261,12 @@ func update(dt: float) -> void:
 			special_t = 0.0
 			Audio.sfx("dash")
 			room.ring(float(anc.x), float(anc.y), 2, 12, "#7cc4ff", 0.2)
+	# --- breakpoint: [special] facing a machine or a creature stops it for 3.5 s (a curl anchor in reach comes first) ---
+	if zip < 0 and not spec_used and tools.get("breakpoint", false) and bp_cd <= 0.0 and not frozen and not in_menu and hurt_t <= 0.0 and focus_t < 0.0 and Controls.pressed.get("special", false):
+		if room.bp_press(self):
+			bp_cd = Game.BP_COOLDOWN
+			spec_used = true
+			special_t = 0.0
 	if zip >= 0:
 		if _zip_step(dt, pressed):
 			return
@@ -457,7 +466,7 @@ func update(dt: float) -> void:
 	var hy := grid.move_y(self, vy * dt, drop_t > 0.0)
 	ride = null
 	if hy == 0 and vy >= 0.0 and drop_t <= 0.0:
-		var pl = grid.plat_under(self, prev_bottom, room.plats)
+		var pl = grid.plat_under(self, prev_bottom, room.ride_list())
 		if pl != null:
 			y = pl.y - h
 			hy = 1

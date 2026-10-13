@@ -57,7 +57,7 @@ func _draw() -> void:
 		draw_rect(Rect2(6, meter_y, int(p.meter), 3), Color("#ffe2c4"))
 	draw_rect(Rect2(6 + 33, meter_y, 1, 3), Color(Game.COL.ink))
 	draw_rect(Rect2(6 + 66, meter_y, 1, 3), Color(Game.COL.ink))
-	if room.tower != null:                    # THREAD TOWER: a small pendulum at the top centre swings on the tick (the extremes are the ticks)
+	if room.world == 4:                       # THREAD TOWER: a small pendulum at the top centre swings on the tick (the extremes are the ticks)
 		var pa: float = 0.5 * cos(PI * room.time / Tower.TICK)
 		var piv := Vector2(W / 2.0, 1.0)
 		var bob := piv + Vector2(sin(pa), cos(pa)) * 10.0

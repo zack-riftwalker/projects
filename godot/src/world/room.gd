@@ -55,6 +55,7 @@ var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the ti
 var blink_period := 1.5
 var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
 var iter := 0                              # T09's loop room: which pass this is (0..3)
+var bp_plats: Array = []                    # frozen creatures as one-way platforms (rebuilt every step)
 var loop_key = null                        # T09: the `break;` key cell {x, y, w, h} (null in other rooms)
 var land_t := 0.0                          # boss trigger "land": how long somebody has stood on the arena floor
 var last_tick := -1                        # world 4: the tick the last sound was made for
@@ -99,6 +100,7 @@ signal shop_requested
 signal index_requested(npc_index: int)
 signal net_lever(lever_index: int)
 signal net_mutex(key_index: int)
+signal net_bp(kind: String, id)
 signal net_cable(tx: int, ty: int)
 signal net_pad()
 signal net_freejar(jar_index: int)
@@ -310,9 +312,8 @@ func load_room(room_id: String, snap = null) -> void:
 						e.nid = next_nid
 						next_nid += 1
 						ents.append(e)
-	if world == 4:
-		tower = Tower.new(self)
-		tower.load_all()
+	tower = Tower.new(self)                                  # (every room: a breakpoint can stop its platforms)
+	tower.load_all()
 	if def.has("loop"):
 		iter = clampi(int(Game.loop_iter.get(id, 0)), 0, 3)
 		if mode != "guest" and not Game.flag("boss:LOOP"):
@@ -606,6 +607,131 @@ func pick_anchor(q, mx: float) -> int:
 			best = c
 	return int(best[0])
 
+# ---------------------------------------------------------------- breakpoint (MV5A-04)
+# a frozen creature is a one-way platform for players: its box joins the platforms the player can ride
+func ride_list() -> Array:
+	if bp_plats.is_empty():
+		return plats
+	return plats + bp_plats
+
+func _rebuild_bp_plats() -> void:
+	bp_plats = []
+	for e in ents:
+		if not e.dead and e.bp_t > 0.0 and e.bp_k == 1:
+			bp_plats.append({"x": e.x, "y": e.y, "w": e.w, "h": minf(e.h, 6.0), "dx": 0.0, "dy": 0.0})
+
+# in range, in front (or within 8 px behind), a clear line (a piston's own cells do not block the line to it)
+func _bp_ok(cx: float, cy: float, face: float, nx: float, ny: float) -> bool:
+	var d := Vector2(nx - cx, ny - cy)
+	var len_ := d.length()
+	if len_ > Game.BP_RANGE or d.x * face < -8.0:
+		return false
+	var steps := maxi(1, ceili(len_ / 8.0))
+	for s in range(1, steps):
+		var k := float(s) / float(steps)
+		if k * len_ > len_ - 10.0:
+			break
+		var px := cx + d.x * k
+		var py := cy + d.y * k
+		if grid.solid_at(px, py) and grid.tile(floori(px / T), floori(py / T)) != TileGrid.PHEAD:
+			return false
+	return true
+
+# what a [special] press would stop: the nearest creature, piston, gear, platform or blink group in front of the body. {} = nothing
+func bp_pick(q) -> Dictionary:
+	if q == null or q.dead:
+		return {}
+	var cx: float = q.x + q.w / 2.0
+	var cy: float = q.y + q.h / 2.0
+	var face: float = q.face
+	var best := {}
+	var bd := 1e9
+	for e in ents:
+		if e.dead or e.bp_t > 0.0 or e.passive or (e.get("is_boss") == true and e.get("bp") != true):
+			continue
+		var d := Vector2(e.cx - cx, e.cy - cy).length()
+		if d < bd and _bp_ok(cx, cy, face, e.cx, e.cy):
+			bd = d
+			best = {"kind": "c", "id": e.nid, "nx": e.cx, "ny": e.cy}
+	if tower != null:
+		for t in tower.bp_targets(cx, cy):
+			if tower.is_frozen(String(t.id)):
+				continue
+			if float(t.d) < bd and _bp_ok(cx, cy, face, float(t.nx), float(t.ny)):
+				bd = float(t.d)
+				best = {"kind": String(t.kind), "id": t.id, "nx": t.nx, "ny": t.ny}
+	return best
+
+# [special] with breakpoint: freeze the target (a guest asks the host, which decides). true = the press was used
+func bp_press(q) -> bool:
+	var t := bp_pick(q)
+	if t.is_empty():
+		return false
+	if mode == "guest":
+		net_bp.emit(String(t.kind), t.id)
+		Audio.sfx("pause")
+	else:
+		bp_apply(String(t.kind), t.id)
+	return true
+
+# host: does the guest's press name something that is really in its reach (a round trip of lag allowed for)?
+func bp_valid(kind: String, id, q) -> bool:
+	var cx: float = q.x + q.w / 2.0
+	var cy: float = q.y + q.h / 2.0
+	if kind == "c":
+		for e in ents:
+			if e.nid == int(id):
+				return Vector2(e.cx - cx, e.cy - cy).length() <= Game.BP_RANGE + 64.0
+		return false
+	if tower != null:
+		for t in tower.bp_targets(cx, cy):
+			if t.id == String(id):
+				return float(t.d) <= Game.BP_RANGE + 64.0
+	return false
+
+# host / solo: stop the target for BP_TIME
+func bp_apply(kind: String, id) -> bool:
+	var at := Vector2.ZERO
+	if kind == "c":
+		var hit_e = null
+		for e in ents:
+			if e.nid == int(id) and not e.dead and e.bp_t <= 0.0 and (e.get("is_boss") != true or e.get("bp") == true):
+				hit_e = e
+		if hit_e == null:
+			return false
+		hit_e.bp_t = Game.BP_TIME
+		at = Vector2(hit_e.cx, hit_e.cy)
+	else:
+		if tower == null or tower.is_frozen(String(id)):
+			return false
+		tower.freeze(String(id))
+		at = Vector2(player.x, player.y) if player != null else Vector2.ZERO
+	Audio.sfx("pause")
+	ring(at.x, at.y, 3, 18, "#7cc4ff", 0.35)
+	pop(at.x, at.y - 14.0, "BREAK", "#7cc4ff", true)
+	return true
+
+func _draw_bp(ci: CanvasItem) -> void:
+	var blue := Color("#7cc4ff")
+	for e in ents:
+		if e.dead or e.bp_t <= 0.0 or e.bp_k != 1:
+			continue
+		ci.draw_rect(Rect2(e.x - 2.0, e.y - 2.0, e.w + 4.0, e.h + 4.0), blue, false, 1.0)
+		PixelText.draw_text(ci, "BREAK %.1f" % e.bp_t, e.x + e.w / 2.0, e.y - 12.0, "#7cc4ff", {"align": "c", "tiny": true, "outline": Game.COL.ink})
+	var p = player
+	Game.bp_hint = false
+	if p == null or p.dead or not bool(p.tools.get("breakpoint", false)) or float(p.bp_cd) > 0.0 or Game.curl_hint:
+		return
+	var t := bp_pick(p)
+	if t.is_empty():
+		return
+	Game.bp_hint = true
+	var bx := floorf(float(t.nx)) - 8.0
+	var by := floorf(float(t.ny)) - 8.0
+	for c in [[0.0, 1.0], [16.0, -1.0]]:               # a pause bracket round the target
+		ci.draw_rect(Rect2(bx + c[0], by, 1, 16), blue)
+		ci.draw_rect(Rect2(bx + c[0] + 3.0 * c[1], by, 1, 16), blue)
+
 func update_doors() -> void:
 	grid.gates_open.catch = Game.flag("gate:%s:catch" % id)
 	grid.gates_open.agents = Game.flag("gate:%s:agents" % id) or (def.has("gate_lever") and Game.flag(String(def.gate_lever)))
@@ -753,7 +879,7 @@ func _add_platform(ch: String, tx: int, ty: int, rows: PackedStringArray) -> voi
 				if tx < rows[j].length() and rows[j][tx] == "|":
 					b = j * T
 					break
-	plats.append({"x": float(x), "y": float(y + 2), "w": 48.0, "h": 6.0, "ax": ch == "M", "a": a, "b": b, "ph": fposmod(tx * 0.37 + ty * 0.61, 1.0), "dx": 0.0, "dy": 0.0, "speed": def.get("platSpeed", 44.0)})
+	plats.append({"x": float(x), "y": float(y + 2), "w": 48.0, "h": 6.0, "ax": ch == "M", "a": a, "b": b, "ph": fposmod(tx * 0.37 + ty * 0.61, 1.0), "dx": 0.0, "dy": 0.0, "speed": def.get("platSpeed", 44.0), "bpk": "m%d" % plats.size()})
 
 # a creature that comes into the room while it runs (FORK's children): numbered, scaled by the difficulty, drawn
 func add_entity(e) -> Node:
@@ -1283,6 +1409,11 @@ func step_guest(dt: float) -> void:
 	Decor.step(self, dt)
 	_step_sighting(dt)
 	_step_variants()
+	for pe in ents:
+		if pe.bp_t > 0.0:
+			pe.bp_t -= dt
+			pe.bp_off += dt
+	_rebuild_bp_plats()
 	_move_platforms()
 	if tower != null:
 		tower.step(dt, players())
@@ -1447,7 +1578,8 @@ func _move_platforms() -> void:
 			m.dy = 0.0
 			continue
 		var period: float = (span / m.speed) * 2.0
-		var u := 0.5 - 0.5 * cos(fposmod(time / period + m.ph, 1.0) * PI * 2.0)
+		var pt: float = tower.mt(String(m.bpk)) if tower != null and m.has("bpk") else time
+		var u := 0.5 - 0.5 * cos(fposmod(pt / period + m.ph, 1.0) * PI * 2.0)
 		var v := lerpf(m.a, m.b, u)
 		if m.ax:
 			m.dx = v - m.x
@@ -1466,6 +1598,8 @@ func tick_f() -> float:
 	return Tower.tick_f_of(time)
 
 func _tick_sound() -> void:
+	if world != 4:
+		return
 	var ti := tick_i()
 	if ti != last_tick:
 		last_tick = ti
@@ -1539,6 +1673,7 @@ func step(dt: float) -> void:
 				q.done = true
 				break_tile(q.tx, q.ty)
 		break_q = break_q.filter(func(q): return not q.get("done", false))
+	_rebuild_bp_plats()
 	_move_platforms()
 	if tower != null:
 		tower.step(dt, live)
@@ -1563,6 +1698,12 @@ func step(dt: float) -> void:
 	var cy: float = cam.y
 	for e in ents:
 		if e.dead:
+			continue
+		if e.bp_t > 0.0:                          # breakpoint: stopped (its clock falls behind by the time it stood still)
+			e.bp_t -= dt
+			e.bp_off += dt
+			if e.bp_t <= 0.0:
+				e.bp_k = 1
 			continue
 		if e.always or _near_a_player(e, cx, cy):
 			e.update(dt)
@@ -1967,7 +2108,7 @@ func interact_combat(p) -> void:
 	# touching
 	var hb: Dictionary = p.hurtbox()
 	for e in ents:
-		if e.dead or pred_dead(e):
+		if e.dead or pred_dead(e) or (e.bp_t > 0.0 and e.bp_k == 1):
 			continue
 		for b in e.harmboxes():
 			if b is Dictionary and b.has("sid") and p.parried.has(b.sid):
@@ -2948,6 +3089,7 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 						ci.draw_rect(Rect2(ix + 8, iy - 9, 1, 18), Color(0.75, 0.91, 1.0, 0.8))
 	elif kind == "top":
 		_draw_curl(ci)
+		_draw_bp(ci)
 		_draw_status(ci)
 		_draw_chase(ci)
 		for a in agents:

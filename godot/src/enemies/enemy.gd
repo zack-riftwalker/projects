@@ -34,6 +34,9 @@ var dashable := true
 var always := false
 var nid := 0                  # network id (co-op)
 var strike_seen := {}         # host: strike id -> room time it was last active (the guest's parry is checked against it)
+var bp_t := 0.0                # breakpoint (MV5A-04): seconds left frozen (no update, no harm, can be stood on)
+var bp_k := 1                  # what froze it: 1 breakpoint (harmless, can be stood on), 2 a sleeping PRIORITY INVERSION (frozen but still sharp)
+var bp_off := 0.0              # the seconds this creature has been frozen so far: a tick-driven creature runs on room.time - bp_off
 var puppet := false           # a guest's copy: it only shows what the host sends
 
 func _init(r: Room, px: float, py: float, ew: float, eh: float) -> void:
@@ -49,6 +52,10 @@ var cx: float:
 	get: return x + w / 2.0
 var cy: float:
 	get: return y + h / 2.0
+
+# the clock a tick-driven creature runs on (frozen time does not count)
+func mtime() -> float:
+	return room.time - bp_off
 
 func hurtboxes() -> Array:
 	return [self]

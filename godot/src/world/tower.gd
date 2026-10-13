@@ -19,7 +19,6 @@ var offs := {}                        # object key -> seconds its clock is behin
 var fz := {}                          # object key -> seconds it stays frozen
 var has_blink := false
 var flag_t := 0.0
-var housings: Dictionary = {}         # "tx:ty" -> piston index (the `A` cells)
 
 func _init(r) -> void:
 	room = r
@@ -57,21 +56,15 @@ func load_all() -> void:
 		var pw := int(pd.get("w", 1))
 		var pz := {"x": px, "y": py, "len": int(pd.len), "w": pw, "ticks": pd.ticks, "busy": bool(pd.get("busy", false)), "key": "p%d" % pi,
 			"phase": fposmod(float(px) * 0.37 + float(py) * 0.61, 1.0), "rows": 0, "cells": []}
-		for i in range(pw):
+		for i in range(pw):                                # (the `A` casing itself is not solid: the checker's routes pass through the shaft under it)
 			if py >= rows.size() or px + i >= rows[py].length() or rows[py][px + i] != "A":
 				push_error("room %s: piston %d has no `A` housing at %d,%d" % [room.id, pi, px + i, py])
-			room.grid.tiles[py * room.w + px + i] = TileGrid.SOLID
-			housings["%d:%d" % [px + i, py]] = pi
 			for j in range(pz.len):
 				var ty := py + 1 + j
 				if ty < room.h:
 					room.grid.tiles[ty * room.w + px + i] = TileGrid.PHEAD
 					pz.cells.append([px + i, ty, j])
 		pistons.append(pz)
-	for r in range(rows.size()):                       # the other `A` cells (a housing wider than its piston) are plain wall
-		for c in range(rows[r].length()):
-			if rows[r][c] == "A" and room.grid.tiles[r * room.w + c] == 0:
-				room.grid.tiles[r * room.w + c] = TileGrid.SOLID
 	for mi in range(def.get("mutex", []).size()):
 		var md: Dictionary = def.mutex[mi]
 		var m := {"i": mi, "rect": {"x": float(int(md.key[0]) * T), "y": float(int(md.key[1]) * T), "w": 16.0, "h": 16.0}, "rows": md.rows,
@@ -82,7 +75,8 @@ func load_all() -> void:
 					m.cells.append(int(ty) * room.w + tx)
 		mutex.append(m)
 	_find_cables()
-	_find_blinks()
+	if room.world == 4:
+		_find_blinks()                               # (other worlds keep the old 1.5 s blink)
 	for fk in Game.flags:                              # cables cut earlier stay cut
 		var fks := String(fk)
 		if fks.begins_with("cable:%s:" % room.id) and Game.flag(fks):
@@ -331,6 +325,47 @@ func cut_at(tx: int, ty: int, silent: bool) -> bool:
 		return true
 	return false
 
+# ---------------------------------------------------------------- breakpoint (MV5A-04)
+func freeze(key: String) -> void:
+	if not fz.has(key):
+		fz[key] = Game.BP_TIME
+
+func is_frozen(key: String) -> bool:
+	return fz.has(key)
+
+# every machine a breakpoint could stop, as {kind, id (key), x, y, w, h, d (distance from the body centre to its nearest point), nx, ny (that point)}
+func bp_targets(cx: float, cy: float) -> Array:
+	var out: Array = []
+	var rects: Array = []
+	for pz in pistons:
+		rects.append(["p", pz.key, Rect2(float(pz.x * T), float(pz.y * T), float(pz.w * T), float((pz.len + 1) * T))])
+	for g in gears:
+		var gr := Rect2(g.px - g.r * T - 24.0, g.py - g.r * T - 24.0, g.r * T * 2.0 + 48.0, g.r * T * 2.0 + 48.0)
+		rects.append(["g", g.key, gr])
+	for i in range(room.plats.size()):
+		var pl: Dictionary = room.plats[i]
+		if pl.has("bpk"):
+			rects.append(["m", pl.bpk, Rect2(float(pl.x), float(pl.y) - 4.0, float(pl.w), 14.0)])
+	for g in bgroups:
+		for c in g.cells:
+			if room.grid.tile(c[0], c[1]) == TileGrid.BLINK_A or room.grid.tile(c[0], c[1]) == TileGrid.BLINK_B:
+				rects.append(["b", g.key, Rect2(float(c[0] * T), float(c[1] * T), 16.0, 16.0)])
+	for r in rects:
+		var rc: Rect2 = r[2]
+		var nx: float = clampf(cx, rc.position.x, rc.position.x + rc.size.x)
+		var ny: float = clampf(cy, rc.position.y, rc.position.y + rc.size.y)
+		if r[0] == "g":                                  # a gear is hit at its centre or at one of its platforms
+			var g2: Dictionary = gears[int(String(r[1]).substr(1))]
+			var best := Vector2(g2.px, g2.py)
+			for j in range(g2.n):
+				var pp: Vector2 = gear_pos(g2, j, mt(g2.key))
+				if Vector2(cx, cy).distance_to(pp) < Vector2(cx, cy).distance_to(best):
+					best = pp
+			nx = best.x
+			ny = best.y
+		out.append({"kind": r[0], "id": r[1], "rect": rc, "nx": nx, "ny": ny, "d": Vector2(nx - cx, ny - cy).length()})
+	return out
+
 # ---------------------------------------------------------------- the snapshot (host writes, guest applies)
 func net_pack() -> Dictionary:
 	var mx: Array = []
@@ -420,7 +455,7 @@ func draw(ci: CanvasItem) -> void:
 		ci.draw_circle(ctr, 1.5, cap)
 		if fz.has(g.key):
 			_frozen_frame(ci, ctr.x - 12.0, ctr.y - 12.0, 24.0, 24.0, float(fz[g.key]))
-	# pistons: the housing is wall (drawn by the tiles), the shaft and head step down cell by cell
+	# pistons: the casing (drawn here, not solid) and the shaft and head, which step down cell by cell
 	for pz in pistons:
 		var hx: float = pz.x * T
 		var hy: float = (pz.y + 1) * T
@@ -444,6 +479,24 @@ func draw(ci: CanvasItem) -> void:
 				ci.draw_rect(Rect2(hx + 2 + i * 8, hy + hh - 3, 4, 2), ink)
 		if fz.has(pz.key):
 			_frozen_frame(ci, hx - 2, hy - 18.0, wpx + 4, float(pz.len * T) + 18.0, float(fz[pz.key]))
+	for k in fz:                                          # a frozen platform or blink group
+		if String(k).begins_with("m"):
+			for pl in room.plats:
+				if pl.get("bpk", "") == k:
+					_frozen_frame(ci, float(pl.x) - 2.0, float(pl.y) - 6.0, float(pl.w) + 4.0, 16.0, float(fz[k]))
+		elif String(k).begins_with("b"):
+			for g in bgroups:
+				if g.key == k:
+					var rx0 := 1e9
+					var ry0 := 1e9
+					var rx1 := -1e9
+					var ry1 := -1e9
+					for c in g.cells:
+						rx0 = minf(rx0, float(c[0] * T))
+						ry0 = minf(ry0, float(c[1] * T))
+						rx1 = maxf(rx1, float(c[0] * T + T))
+						ry1 = maxf(ry1, float(c[1] * T + T))
+					_frozen_frame(ci, rx0 - 1.0, ry0 - 1.0, rx1 - rx0 + 2.0, ry1 - ry0 + 2.0, float(fz[k]))
 	# mutex keys and gates
 	for m in mutex:
 		var r: Dictionary = m.rect

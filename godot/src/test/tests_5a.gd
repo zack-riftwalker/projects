@@ -2,13 +2,14 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint"]
 
 func run(name: String):
 	match name:
 		"rooms5a": return await t_rooms5a()
 		"w4assets": return await t_w4assets()
 		"tick5a": return await t_tick5a()
+		"breakpoint": return await t_breakpoint()
 	return await super.run(name)
 
 func tower_ids() -> Array:
@@ -100,6 +101,15 @@ func clean_room(room_id: String, px: float, py: float) -> Room:
 	var r := bare_room(room_id, px, py)
 	r.player.inv = 99.0
 	return r
+
+func add_bug(room: Room, bx: float, by: float, fc: float) -> Bug:
+	var b := Bug.new(room, 0, 0, false)
+	b.x = bx
+	b.y = by
+	b.face = fc
+	room.ents.append(b)
+	room.entity_root.add_child(b)
+	return b
 
 func gear_xy(r: Room) -> Array:
 	var out: Array = []
@@ -309,3 +319,147 @@ func t_tick5a() -> bool:
 	Controls.script_input = null
 	Game.fresh()
 	return report("tick5a", res.ok, res.info)
+
+# MV5A-04: breakpoint
+func t_breakpoint() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var res := checker()
+	Game.tools.breakpoint = true
+	# 1. TC2's busy piston: stopped while it waits (retracted), a body can stand in its shaft for 3 s
+	var r := clean_room("TC2", 0.0, 0.0)
+	var pz: Dictionary = r.tower.pistons[0]
+	var total := 0.7 * Tower.TICK
+	var t_wait := 0.0
+	while not (r.tower.piston_rows_at(pz, t_wait) == 0 and r.tower.piston_rows_at(pz, t_wait + 0.03) == 0 and r.tower.piston_rows_at(pz, t_wait - 0.03) != 0):
+		t_wait += 0.001
+	r.time = t_wait + total * 3.0 + 0.0
+	r.tower.step(0.0, [])
+	if pz.rows != 0:
+		fail(res, "the piston is not in its wait phase (rows %d)" % pz.rows)
+	var p = r.player
+	p.x = float(pz.x * 16 + 19)
+	p.y = float(37 * 16 - 10)
+	p.face = 1.0
+	p.vx = 0.0
+	p.vy = 0.0
+	p.bp_cd = 0.0
+	var pk := r.bp_pick(p)
+	if pk.is_empty() or String(pk.kind) != "p":
+		fail(res, "no piston target: %s" % str(pk))
+	else:
+		step_keys(r, {"special": true})
+		if not r.tower.is_frozen(String(pk.id)):
+			fail(res, "the press did not freeze the piston")
+		var open_all := true
+		for f in range(60 * 3):
+			step_keys(r, {})
+			p.inv = 99.0
+			p.x = float(pz.x * 16 + 19)
+			p.y = float(37 * 16 - 10)
+			for c in pz.cells:
+				if r.grid.solid(c[0], c[1]):
+					open_all = false
+		if not open_all or pz.rows != 0:
+			fail(res, "a frozen retracted piston closed its shaft")
+		for f in range(60):
+			step_keys(r, {})
+			p.inv = 99.0
+		if r.tower.is_frozen(String(pk.id)):
+			fail(res, "the freeze did not end after 3.5 s")
+	# 2. the cooldown blocks a second press for 6 s
+	var pk2 := r.bp_pick(p)
+	if not pk2.is_empty():
+		p.bp_cd = 0.0
+	p.bp_cd = Game.BP_COOLDOWN
+	step_keys(r, {"special": true})
+	if r.tower.fz.size() > 0:
+		fail(res, "a press during the cooldown froze something")
+	r.queue_free()
+	# 3. a frozen gear resumes from the same angle
+	var rg := clean_room("TC1", 0.0, 0.0)
+	var g0: Dictionary = rg.tower.gears[0]
+	rg.time = Tower.TICK * 5.0 + 0.1
+	rg.tower.step(0.0, [])
+	var before := Vector2(g0.plats[0].x, g0.plats[0].y)
+	var t_freeze: float = rg.time
+	rg.tower.freeze(g0.key)
+	for f in range(int(Game.BP_TIME * 60.0) + 2):
+		rg.time += 1.0 / 60.0
+		rg.tower.step(1.0 / 60.0, [])
+		if f < 100 and Vector2(g0.plats[0].x, g0.plats[0].y).distance_to(before) > 0.01:
+			fail(res, "a frozen gear moved")
+			break
+	var _t0 := t_freeze
+	var after := Vector2(g0.plats[0].x, g0.plats[0].y)
+	var want_pos: Vector2 = rg.tower.gear_pos(g0, 0, rg.time - float(rg.tower.offs.get(g0.key, 0.0)))
+	if after.distance_to(want_pos - Vector2(24.0, 3.0)) > 0.01 or absf(float(rg.tower.offs.get(g0.key, 0.0)) - Game.BP_TIME) > 0.05:
+		fail(res, "the gear did not resume (offset %.2f)" % float(rg.tower.offs.get(g0.key, 0.0)))
+	rg.queue_free()
+	# 4. a frozen creature does not hurt, can be stood on, and its freeze travels in the snapshot record
+	var rb := clean_room("R01", 100.0, 150.0)
+	rb.player.inv = 0.0
+	var bug := add_bug(rb, 100.0, 180.0, -1.0)
+	bug.nid = 777
+	rb.player.x = 60.0
+	rb.player.y = 180.0
+	rb.player.face = 1.0
+	rb.player.bp_cd = 0.0
+	if not rb.bp_apply("c", 777):
+		fail(res, "the creature was not frozen")
+	var hp_b: int = rb.player.hp
+	rb.player.x = bug.x
+	rb.player.y = bug.y
+	for f in range(30):
+		step_keys(rb, {})
+	if rb.player.hp != hp_b:
+		fail(res, "a frozen creature hurt")
+	rb.player.x = bug.x + 1.0
+	rb.player.y = bug.y - 40.0
+	rb.player.vy = 0.0
+	var stood := false
+	for f in range(60):
+		step_keys(rb, {})
+		if rb.player.y + rb.player.h <= bug.y + 2.0 and rb.player.y + rb.player.h >= bug.y - 2.0 and rb.player.on_ground:
+			stood = true
+	if not stood:
+		fail(res, "a player could not stand on a frozen creature (y %.1f, bug %.1f)" % [rb.player.y, bug.y])
+	var rec: Array = JSON.parse_string(JSON.stringify(NetClasses.record(bug)))
+	var pup = NetClasses.make(NetClasses.cls_of(bug), rb)
+	NetClasses.apply(pup, rec)
+	if absf(pup.bp_t - bug.bp_t) > 0.011 or absf(pup.bp_off - bug.bp_off) > 0.011 or pup.bp_t <= 0.0:
+		fail(res, "the freeze is not in the creature's record (%.2f / %.2f)" % [pup.bp_t, pup.bp_off])
+	pup.free()
+	rb.queue_free()
+	# 5. a ring in reach takes priority over a piston in reach, and a tap that stops something does not cast agents
+	Game.tools.curl = true
+	Game.tools.agents = true
+	var rr := clean_room("TC2", 0.0, 0.0)
+	var pz2: Dictionary = rr.tower.pistons[0]
+	rr.player.x = float(pz2.x * 16 + 19)
+	rr.player.y = float(37 * 16 - 10)
+	rr.player.face = 1.0
+	rr.player.meter = float(Game.METER_MAX)
+	rr.rings.append({"x": rr.player.x + 40.0, "y": rr.player.y - 10.0})
+	step_keys(rr, {"special": true})
+	if rr.player.zip < 0 or rr.tower.fz.size() > 0:
+		fail(res, "the ring did not win over the piston (zip %d, frozen %d)" % [rr.player.zip, rr.tower.fz.size()])
+	rr.queue_free()
+	var ra := clean_room("TC2", 0.0, 0.0)
+	var pz3: Dictionary = ra.tower.pistons[0]
+	ra.player.x = float(pz3.x * 16 + 19)
+	ra.player.y = float(37 * 16 - 10)
+	ra.player.face = 1.0
+	step_keys(ra, {})                                          # (release: a press needs a new edge)
+	ra.player.meter = float(Game.METER_MAX)
+	step_keys(ra, {"special": true})
+	step_keys(ra, {})
+	step_keys(ra, {})
+	if ra.tower.fz.size() != 1 or ra.player.agents_t > 0.0 or ra.player.meter < float(Game.METER_MAX) - 0.5:
+		fail(res, "a breakpoint tap with a full meter cast agents (frozen %d, agents %.1f)" % [ra.tower.fz.size(), ra.player.agents_t])
+	ra.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("breakpoint", res.ok, res.info)

@@ -8,6 +8,7 @@ var coop
 var since := {}                 # rule -> when it started being broken
 var told := {}                  # rule -> when it was last reported (once a minute at most)
 var acc := 0.0
+var bp_seen := {}                # guest: where the frozen things were at the last check
 var count := 0                  # how many reports so far (the tests and the debug overlay read it)
 
 func _init(c) -> void:
@@ -120,6 +121,23 @@ func _guest(b: Dictionary) -> void:
 		if e.puppet and av != null and av != "":
 			b["arena-tell"] = [0.0, av + " s"]
 			break
+	# breakpoint: what the host's last snapshot says is frozen does not move on this page (MV5A-04)
+	var seen_now := {}
+	for e in mgr.room.ents:
+		if e.puppet and e.bp_t > 0.3:
+			seen_now["c%d" % e.nid] = Vector2(e.x, e.y)
+	var tw = mgr.room.tower
+	if tw != null:
+		for g in tw.gears:
+			if tw.fz.has(g.key) and float(tw.fz[g.key]) > 0.3:
+				seen_now[g.key] = Vector2(g.plats[0].x, g.plats[0].y)
+		for pz in tw.pistons:
+			if tw.fz.has(pz.key) and float(tw.fz[pz.key]) > 0.3:
+				seen_now[pz.key] = Vector2(float(pz.rows), 0.0)
+	for k in seen_now:
+		if bp_seen.has(k) and Vector2(seen_now[k]).distance_to(bp_seen[k]) > 6.0:
+			b["bp-desync"] = [0.5, "%s is frozen in the host's snapshot but moved on this page" % k]
+	bp_seen = seen_now
 	if _bodies() > 1:
 		b["one-host-body"] = [1.0, "%d host bodies" % _bodies()]
 	if mgr.rooms.size() > 1:

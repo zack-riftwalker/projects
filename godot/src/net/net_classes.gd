@@ -128,6 +128,9 @@ static func make(cls: int, room: Room):
 static func record(e) -> Array:
 	var rec: Array = [e.nid, cls_of(e), x4(e.x), x4(e.y), roundi(e.vx), roundi(e.vy), e.hp, int(e.face), roundi(maxf(e.flash, 0.0) * 100.0)]
 	rec.append_array(e.net_fields())
+	rec.append(roundi(e.bp_t * 100.0))          # the breakpoint state of every creature rides at the end of its record
+	rec.append(roundi(e.bp_off * 100.0))
+	rec.append(e.bp_k)
 	return rec
 
 static func apply(e, rec: Array) -> void:
@@ -137,7 +140,10 @@ static func apply(e, rec: Array) -> void:
 	e.face = float(rec[7])
 	if int(rec[8]) > 0:
 		e.flash = rec[8] / 100.0
-	e.net_apply(rec.slice(9))
+	e.bp_t = float(rec[rec.size() - 3]) / 100.0
+	e.bp_off = float(rec[rec.size() - 2]) / 100.0
+	e.bp_k = int(rec[rec.size() - 1])
+	e.net_apply(rec.slice(9, rec.size() - 3))
 
 static func x4(v: float) -> int:
 	return roundi(v * 4.0)
