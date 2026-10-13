@@ -278,6 +278,10 @@ func _ready() -> void:
 							break
 						prev = nx
 					break
+		elif Game.scene == "loop3":                     # screenshot helper: T09 on its third pass, the `break;` key shown (MV5A-11)
+			Game.loop_iter = {"T09": 3}
+			manager.swap_to("T09", Vector2(30.0 * 16.0, 14.0 * 16.0), null, true)
+			manager.player.inv = 999.0
 		elif Game.scene.begins_with("roomat:"):       # screenshot helper: stand in a room at a place (roomat:<id>:<x>:<y>)
 			var ra := Game.scene.substr(7).split(":")
 			manager.swap_to(ra[0], Vector2(float(ra[1]), float(ra[2])))
