@@ -1832,6 +1832,26 @@ func sc_co_worldsync() -> Array:
 	await wait_secs(12.0)
 	return [all, "guest: has all 200 flags %s" % all]
 
+# A world flag only the guest has (its `wflag` was lost or refused) kept the two digests apart for the rest of a real session ("world-digest"
+# all through T10 and T11) and a full flag list went out every second. The guest drops a world flag the host's lists keep lacking.
+func sc_co_wfextra() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		await wait_secs(1.0)
+		var t0 := Time.get_ticks_msec()
+		var apart := await wait_until(func(): return coop().guest_wh >= 0 and coop().guest_wh != Game.world_digest(), 6.0)
+		var back := await wait_until(func(): return coop().guest_wh == Game.world_digest(), 12.0)
+		var took := (Time.get_ticks_msec() - t0) / 1000.0
+		await wait_secs(2.0)
+		var host_kept: bool = not Game.flag("lever:ZZ9:0")
+		return [apart and back and host_kept and coop().watchdog.count == 0, "host: digests apart %s, equal again %s after %.1f s, host flag still unset %s, watchdog %d" % [apart, back, took, host_kept, coop().watchdog.count]]
+	await wait_secs(2.0)
+	Game.flags["lever:ZZ9:0"] = true            # set behind the host's back: no `wflag` goes out
+	var gone := await wait_until(func(): return not Game.flag("lever:ZZ9:0"), 12.0)
+	await wait_secs(4.0)
+	return [gone and not Game.flag("lever:ZZ9:0"), "guest: the flag the host does not have was dropped %s" % gone]
+
 # MVB1-03: the host keeps a staged list for the guest. The guest walks R08 -> R09 -> D01, the host rests at R08: both have the guest's rooms committed.
 func sc_co_commit() -> Array:
 	if not await wait_joined():
@@ -3477,3 +3497,58 @@ func sc_co_deadlock() -> Array:
 			short += 1
 	await wait_secs(1.0)
 	return [seen2.size() >= 3 and short == 0 and pup.kit_violation == "" and pup.arena_violation == "" and pend_seen, "guest: saw %d plans, %d shown < 0.30 s, a pending hit shown %s, violations '%s' '%s'" % [seen2.size(), short, pend_seen, pup.kit_violation, pup.arena_violation]]
+
+# A measuring run, not in `all`: both bots play in one room (PERF_ROOM, N02) for SOAK_S seconds and every 15 s each page prints its CPU per frame
+# and what it holds, with every list over 40 entries (a cost or a count that keeps growing is the "the game gets slower the longer we play" bug).
+# SOAK_S over ~90 needs a longer timeout than coop-test.sh gives.
+func sc_co_perf() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	var secs := float(OS.get_environment("SOAK_S")) if OS.get_environment("SOAK_S") != "" else 120.0
+	var rid := OS.get_environment("PERF_ROOM") if OS.get_environment("PERF_ROOM") != "" else "N02"
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7 if role == "host" else 11
+	var st := {"t": 0.0, "dir": "right"}
+	await wait_secs(1.0)
+	mgr().swap_to(rid, null, null, false)
+	var t0 := Time.get_ticks_msec()
+	var c0 := _cpu_ms()
+	var f0 := Engine.get_physics_frames()
+	var next := 15.0
+	while (Time.get_ticks_msec() - t0) / 1000.0 < secs:
+		var p = mgr().player
+		Controls.script_input = _bot(rng, st)
+		if p != null and p.dead:
+			p.dead = false
+			p.hp = p.max_hp
+		var t := (Time.get_ticks_msec() - t0) / 1000.0
+		if t >= next:
+			next += 15.0
+			var c := _cpu_ms()
+			var f := Engine.get_physics_frames()
+			print("PERF %s t=%d cpu/frame %.2f ms objects %d nodes %d orphans %d log %d rel_out %d room %s ents %d" % [role, int(t), (c - c0) / maxf(1.0, float(f - f0)),
+				Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT), Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT),
+				Game.log_buf.size(), Net.rel_out.size(), mgr().room.id, mgr().room.ents.size()])
+			print("PERFSIZES %s %s" % [role, " ".join(_big_lists({"coop": coop(), "net": Net, "game": Game, "room": mgr().room, "remote": coop().remote, "player": mgr().player}))])
+			c0 = c
+			f0 = f
+		await get_tree().physics_frame
+	Controls.script_input = {}
+	return [true, "measured"]
+
+func _big_lists(objs: Dictionary) -> Array:
+	var out: Array = []
+	for name in objs:
+		var o = objs[name]
+		if o == null or not is_instance_valid(o):
+			continue
+		for prop in o.get_property_list():
+			var v = o.get(prop.name)
+			if (v is Array or v is Dictionary) and v.size() > 40:
+				out.append("%s.%s=%d" % [name, prop.name, v.size()])
+	return out
+
+func _cpu_ms() -> float:
+	var f := FileAccess.open("/proc/self/stat", FileAccess.READ)
+	var parts := f.get_line().get_slice(")", 1).split(" ", false)
+	return (float(parts[11]) + float(parts[12])) * 10.0

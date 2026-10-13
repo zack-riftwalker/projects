@@ -2918,8 +2918,10 @@ func _draw_liquid(ci: CanvasItem) -> void:
 	var has_tiles: bool = grid.tiles.has(TileGrid.LIQ)
 	if not has_tiles and liquid_y == null:
 		return
-	var th: Dictionary = Game.theme(world)
-	var cols := {"liq": Color(th.liq), "hi": Color(th.liqHi), "lo": Color(th.liqLo)}
+	if liq_cols.is_empty():
+		var th: Dictionary = Game.theme(world)
+		liq_cols = {"liq": Color(th.liq), "hi": Color(th.liqHi), "lo": Color(th.liqLo)}
+	var cols := liq_cols
 	var cx0: float = cam.x if camera == null else camera.position.x
 	var tx0 := maxi(0, floori(cx0 / T))
 	var tx1 := mini(w - 1, floori((cx0 + W) / T))
@@ -2940,6 +2942,8 @@ func _draw_liquid(ci: CanvasItem) -> void:
 				_liq_col(ci, tx * T, top * T + (4 if surface else 0), ty * T, cols, surface)
 				top = -1
 
+var liq_cols := {}                       # the theme's liquid colours (parsed once, not every frame)
+
 # one 16-px column of liquid from y0 to y1 (js: G.drawLiquid); surface: the wobbling top line and the glints
 func _liq_col(ci: CanvasItem, px: int, y0: int, y1: int, cols: Dictionary, surface: bool) -> void:
 	var liq: Color = cols.liq
@@ -2950,11 +2954,28 @@ func _liq_col(ci: CanvasItem, px: int, y0: int, y1: int, cols: Dictionary, surfa
 	if surface:
 		ci.draw_rect(Rect2(px, y0 + 2, T, y1 - y0), fill_a)
 		ci.draw_rect(Rect2(px, y0 + 8, T, y1 - y0 - 6), fill_b)
-		for xx in range(px, px + T):
-			var o := roundi(sin(xx * 0.19 + time * 2.6) * 1.2 + sin(xx * 0.07 - time * 1.7) * 1.1)
-			ci.draw_rect(Rect2(xx, y0 + o, 1, 1), liq_hi)
-			ci.draw_rect(Rect2(xx, y0 + o + 1, 1, 2), liq)
-			if Game.hash3(xx >> 2, floori(time * 3.0 + xx * 0.01), 3) < 0.012:
+		# the same pixels as one rect per pixel, drawn as one rect per run of equal height and one hash per group of 4 columns
+		# (this used to be ~1000 draw calls and ~400 hashes a frame in a water room, one of the costs of the phone's lag)
+		var run_x := px
+		var run_o := 0
+		var gkey := Vector2i(-1, -1)
+		var glint := false
+		for xx in range(px, px + T + 1):
+			var o := 99 if xx == px + T else roundi(sin(xx * 0.19 + time * 2.6) * 1.2 + sin(xx * 0.07 - time * 1.7) * 1.1)
+			if xx == px:
+				run_o = o
+			elif o != run_o:
+				ci.draw_rect(Rect2(run_x, y0 + run_o, xx - run_x, 1), liq_hi)
+				ci.draw_rect(Rect2(run_x, y0 + run_o + 1, xx - run_x, 2), liq)
+				run_x = xx
+				run_o = o
+			if xx == px + T:
+				break
+			var k := Vector2i(xx >> 2, floori(time * 3.0 + xx * 0.01))
+			if k != gkey:
+				gkey = k
+				glint = Game.hash3(k.x, k.y, 3) < 0.012
+			if glint:
 				ci.draw_rect(Rect2(xx, y0 + 5 + (xx * 7) % 23, 1, 1), liq_hi)
 	else:
 		ci.draw_rect(Rect2(px, y0, T, y1 - y0), fill_a)

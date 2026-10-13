@@ -194,7 +194,12 @@ func step(dt: float, live: Array) -> void:
 	_step_mutex(dt, live)
 
 # a cable cut by the other player (or on the host) reaches this page as a world flag
+var cable_fh := 0                       # the flags' hash at the last sync (nothing changed: no walk over every flag)
 func _sync_cable_flags() -> void:
+	var fh := Game.flags.hash()
+	if fh == cable_fh:
+		return
+	cable_fh = fh
 	var pre := "cable:%s:" % room.id
 	for fk in Game.flags:
 		var fks := String(fk)

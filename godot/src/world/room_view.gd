@@ -31,16 +31,16 @@ func build(rm: Room) -> void:
 	var world := int(room.def.get("world", 1))
 	var ts := make_tileset(world)
 	# background, scrolls with the camera at a fraction (set by the room each frame)
-	var bg := Parallax2D.new()
-	bg.name = "Background"
-	bg.scroll_scale = Vector2(0.25, 0.1)
-	bg.repeat_size = Vector2(384, 0)
 	if world == 6:                                      # THE NETWORK draws its own sky (no art file)
 		var nb := NetBackdrop.new()
 		nb.name = "NetBackdrop"
 		nb.room = room
 		add_child(nb)
 	else:
+		var bg := Parallax2D.new()                      # (made only here: one made for a network room was never freed, a leak per visit)
+		bg.name = "Background"
+		bg.scroll_scale = Vector2(0.25, 0.1)
+		bg.repeat_size = Vector2(384, 0)
 		var spr := Sprite2D.new()
 		spr.texture = load("res://assets/bg/w%d.png" % Game.vis_world(world))
 		spr.centered = false

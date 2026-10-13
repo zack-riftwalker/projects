@@ -71,6 +71,9 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
   - Every creature field the guest's combat reads goes through `NetClasses.record/apply`; the `parity` test fails otherwise.
   - The partner is seen late: use its recent reports, with limits that grow with ping.
   - A new kind of co-op bug gets a rule in `godot/src/net/watchdog.gd`. Any `INVARIANT` or `SCRIPT ERROR` line fails a scenario.
+- Speed (the phone runs the web build several times slower than a PC; see `docs/reports/fix-2026-10-13-log.md`):
+  - Nothing that runs every frame or every snapshot walks `Game.flags` (it grows to ~1000 with play). Cache on `Game.flags.hash()`, like `Game.world_digest`.
+  - Static drawing is drawn once (its own node), not every frame. Measure with `--test=perfrooms` / `perfgrow` before and after.
 - Commit the web export (`public/mv`) as its own last commit. Both pages must run the same build (debug overlay line 3; "DIFFERENT BUILDS" notice).
 
 ## Style

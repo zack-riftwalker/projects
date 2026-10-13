@@ -385,14 +385,42 @@ func world_flags() -> Array:
 
 # A short number for "which world flags are set" (MVB1-01): the sum of one hash per flag, so it does not depend on the order flags were set in.
 # The host sends the full list only to a guest whose number differs. `extra` is state that travels beside the flags (the pins, MVB1-08).
+# Co-op asks for it ~30 times a second on each page. Walking every flag each time cost ~1.2 ms on a PC with a late-game save (~1000 flags),
+# ten times that on a phone, and it grew the further the players got ("the longer we play, the slower it gets"). The flags are set directly
+# all over the code, so the walk is redone only when the dictionary's native hash (keys and values) changes.
+var _wd_hash := 0
+var _wd_val := -1
+
 func world_digest() -> int:
-	var acc := 0
-	for k in flags:
-		if flags[k]:
-			var ks := String(k)
-			if is_world_flag(ks):
-				acc = (acc + (ks.hash() * 2654435761 & 0xFFFFFFFF)) & 0xFFFFFFFF
-	return (acc + pins_digest()) & 0xFFFFFFFF
+	var fh := flags.hash()
+	if fh != _wd_hash or _wd_val < 0:
+		_wd_hash = fh
+		var acc := 0
+		for k in flags:
+			if flags[k]:
+				var ks := String(k)
+				if is_world_flag(ks):
+					acc = (acc + (ks.hash() * 2654435761 & 0xFFFFFFFF)) & 0xFFFFFFFF
+		_wd_val = acc
+	return (_wd_val + pins_digest()) & 0xFFFFFFFF
+
+# a room's switch / key / gate / dead-code flags (the host's snapshot carries them), cached like the digest
+var _rf_hash := 0
+var _rf := {}                           # room id -> its flags, for the flags whose hash is _rf_hash
+
+func room_flags(room_id: String) -> Array:
+	var fh := flags.hash()
+	if fh != _rf_hash:
+		_rf_hash = fh
+		_rf = {}
+	if not _rf.has(room_id):
+		var gf: Array = []
+		for fk in flags:
+			var fks := String(fk)
+			if (fks.begins_with("switch:") or fks.begins_with("key:") or fks.begins_with("gate:") or fks.begins_with("dead:")) and fks.get_slice(":", 1) == room_id:
+				gf.append(fks)
+		_rf[room_id] = gf
+	return _rf[room_id]
 
 # where the other player is ({room, x, y} while a partner is connected, else {}); Coop keeps it, the map and travel read it
 var partner := {}
@@ -606,12 +634,17 @@ var equipped: Array = []              # plugin ids (saved; the guest keeps its o
 signal loadout_changed
 
 # how many lost agents were freed (flags agent:<room>, shared) and the context window they widen
+var _af_hash := 0
+var _af := -1
 func agents_freed() -> int:
-	var n := 0
-	for k in flags:
-		if flags[k] and String(k).begins_with("agent:"):
-			n += 1
-	return n
+	var fh := flags.hash()                # (R08's decor asks every frame: walk the flags only after a change)
+	if fh != _af_hash or _af < 0:
+		_af_hash = fh
+		_af = 0
+		for k in flags:
+			if flags[k] and String(k).begins_with("agent:"):
+				_af += 1
+	return _af
 
 func notches() -> int:
 	var n := agents_freed()
@@ -1012,7 +1045,9 @@ func log_text() -> String:
 # clipboard, and on the web also a .txt download (a phone's clipboard may refuse)
 func export_log() -> int:
 	var text := log_text()
-	DisplayServer.clipboard_set(text)
+	# (a page on plain http, as the phone opens the PC's address, has no clipboard: the call only logged "Clipboard API is not supported")
+	if not OS.has_feature("web") or bool(JavaScriptBridge.eval("window.isSecureContext === true")):
+		DisplayServer.clipboard_set(text)
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("(function(t){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/plain'}));a.download='clawd-log.txt';document.body.appendChild(a);a.click();a.remove();})(%s)" % JSON.stringify(text))
 	return log_buf.size()

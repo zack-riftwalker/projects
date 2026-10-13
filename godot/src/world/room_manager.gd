@@ -249,6 +249,29 @@ func travel(room_id: String) -> void:
 	Controls.locked = true
 
 
+# Going up (D31): the push must carry the body onto the ledge above the door. A plain jump (~54 px, and halved when jump was let go)
+# fell short of the tower's shafts (63..111 px to the one-way ledge over TA1/TB1/TC1 -> T04, TA2 -> T08, TC2 -> T09, H11 -> T02): the body
+# dropped back through the floor into the room below at once, which looked like a crash. The push is the door's, so letting go of jump
+# does not cut it. A ceiling (solid) over the door means side ledges: the plain push stays.
+const PUSH_MAX_ROWS := 10
+func _push_to_ledge(t_door: Dictionary) -> void:
+	var g := room.grid
+	var feet := player.y + player.h
+	for ty in range(g.h - 2, maxi(-1, g.h - 2 - PUSH_MAX_ROWS), -1):
+		var hit := -1
+		for tx in range(int(t_door.a), int(t_door.b) + 1):
+			var t := g.tile(tx, ty)
+			if t != TileGrid.E:
+				hit = t
+				break
+		if hit < 0:
+			continue
+		if hit == TileGrid.ONEWAY or hit == TileGrid.CRUMBLE or hit == TileGrid.BLINK_A or hit == TileGrid.BLINK_B:
+			var rise := feet - ty * TileGrid.T + 6.0
+			player.vy = minf(player.vy, -sqrt(2.0 * Player.G_UP * rise))
+		break
+	player.jumping = false
+
 # ---------------------------------------------------------------- transitions
 func _on_door_crossed(d: Dictionary, from_room: Room) -> void:
 	if trans.on or from_room != room:
@@ -344,6 +367,8 @@ func _place_in_target() -> void:
 		player.dash_t = 0.0
 		player.atk_t = 0.0
 		swap_to(target_room, Vector2(nx, ny))
+		if d.side == "N":
+			_push_to_ledge(t_door)
 		return
 	var new_y: float = (int(t_door.b) + 1) * 16 - ((int(trans.src_b) + 1) * 16 - float(trans.src_y))
 	var new_x: float = 1.0 if t_door.side == "W" else pw - player.w - 1.0

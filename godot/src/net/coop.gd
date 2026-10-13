@@ -33,6 +33,7 @@ var guest_wh := -1                      # host: the world digest the guest last 
 var wh_sent := -1                       # host: the digest the last snapshot carried
 var st_wh_sent := -1                    # guest: the digest its last `st` carried
 var st_n := 0
+var wf_extra := {}                    # guest: world flags only this page has -> when the host's list first lacked them
 var wf_t := -10.0                       # host: when the last full `wf` went out (at most one per second)
 var wf_count := 0                       # host: how many full `wf` lists were sent (the tests count them)
 var wf_bytes := 0
@@ -120,6 +121,8 @@ func notice_set(text: String, secs: float) -> void:
 
 func log_(s: String) -> void:
 	log_lines.append(s)
+	if log_lines.size() > 600:            # (a whole evening of play: the list must not grow without end; Game.dlog keeps the real log)
+		log_lines = log_lines.slice(-400)
 	Game.dlog(s)
 	if Game.debug or Game.scenario != "":
 		print("COOP ", s)
@@ -617,6 +620,27 @@ func _hud(p) -> void:
 		elif p.downed:
 			h.me_text = "DOWN - REVIVING..."
 
+# guest: the host's full list of world flags (it comes only while the two digests differ). Every flag in it is set here. A world flag only
+# this page has is one the host never took (a lost or refused `wflag`): it kept the digests apart for the rest of the session, and with them
+# a full list every second (seen in a real game: "world-digest" all through T10 and T11). The host owns the world, so such a flag is dropped
+# once two lists at least 2 s apart lacked it (a `wflag` still on its way is in the host's list by then), and the log names it.
+func _guest_world_flags(wf: Array) -> void:
+	var host_has := {}
+	for fk in wf:
+		host_has[String(fk)] = true
+		Game.flags[String(fk)] = true
+	var now := hms()
+	var extra := {}
+	for k in Game.flags.keys():
+		var ks := String(k)
+		if Game.flags[k] and Game.is_world_flag(ks) and not host_has.has(ks):
+			extra[ks] = wf_extra.get(ks, now)
+			if now - float(extra[ks]) >= 2.0:
+				Game.flags.erase(k)
+				extra.erase(ks)
+				log_("guest: dropped the world flag %s (the host does not have it)" % ks)
+	wf_extra = extra
+
 # a `sets` door the guest crossed sets its flag here too (state: the watchdog checks it is set 2 s later)
 var sets_pending := {}                    # flag -> when the guest crossed
 func _host_door_sets(door_id: String) -> void:
@@ -1084,11 +1108,7 @@ func _send_snapshot() -> void:
 	for q in r.projs:
 		if not q.dead:
 			pj.append([q.id, q.kind, NetClasses.x4(q.x), NetClasses.x4(q.y), roundi(q.vx), roundi(q.vy), roundi(q.r), String(q.col), q.dmg, 1 if q.get("friendly", false) else 0, 1 if q.get("catchable", false) else 0, roundi(float(q.get("hgt", 0.0))), roundi(float(q.g)), 1 if q.cut else 0, roundi(float(q.get("slow", 0.0)) * 100.0)])
-	var gf: Array = []                  # the room's switch / key / gate flags: state, applied by the guest on every snapshot
-	for fk in Game.flags:
-		var fks := String(fk)
-		if (fks.begins_with("switch:") or fks.begins_with("key:") or fks.begins_with("gate:") or fks.begins_with("dead:")) and fks.get_slice(":", 1) == r.id:
-			gf.append(fks)
+	var gf: Array = Game.room_flags(r.id)       # the room's switch / key / gate flags: state, applied by the guest on every snapshot
 	var pl: Array = []                  # owned plugins: state (the guest's pickup request or the `plugin` event may be lost)
 	for d in Game.PLUGINS:
 		if Game.owns_plugin(d.id):
@@ -1177,6 +1197,7 @@ func _guest_msg(t: String, m: Dictionary) -> void:
 func _guest_start(m: Dictionary) -> void:
 	log_("guest: start received")
 	Net.reset_reliable()
+	wf_extra = {}
 	host_present = true
 	Controls.locked = false
 	Net.epoch = int(m.e)
@@ -1400,8 +1421,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 		if String(fk) == "dead:" + r.id and not Game.flag(String(fk)):
 			r.reveal_dead(false)
 		Game.flags[String(fk)] = true
-	for fk in m.get("wf", []):
-		Game.flags[String(fk)] = true   # (never clears one)
+	if m.has("wf"):
+		_guest_world_flags(m.wf)
 	if m.has("pn"):
 		Game.set_pins(m.pn)
 	Game.flood_net = int(m.get("fl", Game.flood_net))
