@@ -298,6 +298,7 @@ func update(dt: float) -> void:
 		_idle_pose(dt, 0.0)
 		return
 	_track(dt)
+	phase = _phase_now()
 	hz = hz.filter(func(h): return not _hz_expired(h, room.time))
 	if serial_t > 0.0:
 		serial_t -= dt

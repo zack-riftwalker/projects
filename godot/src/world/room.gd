@@ -543,6 +543,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 		"FirewallBoss": b = FirewallBoss.new(self, bx, by, hp_)
 		"Reviewer2": b = Reviewer2.new(self, bx, by, hp_)
 		"RaceBoss": b = RaceBoss.new(self, bx, by, hp_)
+		"LoopBoss": b = LoopBoss.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))
@@ -747,7 +748,11 @@ func update_doors() -> void:
 	for d in grid.doors:
 		var lock: String = d.lock
 		var open: bool = Game.rooms_meta.rooms.has(String(d.to).get_slice(":", 0))      # a door to a room that does not exist (yet) never opens
-		if not open:
+		d["fightwrap"] = false
+		if fight_active and (d.side == "W" or d.side == "E") and def.has("boss") and String(def.boss.get("class", "")) == "LoopBoss":
+			open = true                            # INFINITE LOOP: while it runs the side doors are wrap portals (the boss moves a body that crosses)
+			d["fightwrap"] = true
+		elif not open:
 			pass
 		elif lock == "oneway":
 			open = false                           # never opens from this side: the other side is a drop into this room
@@ -1666,7 +1671,7 @@ func _check_door() -> void:
 		idx = floori(mid_x / T)
 	if side != "":
 		var d = grid.door_at(side, idx)
-		if d != null and d.open:
+		if d != null and d.open and not d.get("fightwrap", false):
 			crossing = true
 			door_crossed.emit(d)
 

@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss", "loopboss"]
 
 func run(name: String):
 	match name:
@@ -12,6 +12,7 @@ func run(name: String):
 		"breakpoint": return await t_breakpoint()
 		"w4enemies": return await t_w4enemies()
 		"raceboss": return await t_raceboss()
+		"loopboss": return await t_loopboss()
 	return await super.run(name)
 
 func tower_ids() -> Array:
@@ -858,3 +859,191 @@ func t_raceboss() -> bool:
 	Controls.script_input = null
 	Game.fresh()
 	return report("raceboss", res.ok, res.info)
+
+# MV5A-07: INFINITE LOOP
+func t_loopboss() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var r := new_room("T10")
+	var b: LoopBoss = r.boss as LoopBoss
+	if b == null:
+		fail(res, "T10 has no LoopBoss")
+		r.queue_free()
+		return report("loopboss", false, res.info)
+	if b.max_hp != 66:
+		fail(res, "hp %d, want 66" % b.max_hp)
+	if not start_fight(r):
+		fail(res, "the fight never started")
+	b.plan = {}
+	b.idle_t = 999.0
+	r.attacker = r.player
+	# 1. only the tail takes damage
+	b._start("lap")
+	if not rb_until(r, b, "lap", "active", Vector2(192.0, 150.0)):
+		fail(res, "the lap never became active")
+	var hp0 := b.hpf
+	var boxes := b.hurtboxes()
+	if boxes.size() != 1 or not boxes[0].has("tail"):
+		fail(res, "hurtboxes in a lap: %s" % str(boxes))
+	if b.hit(1, 1.0, 0.0, "swipe", {"x": 0.0, "y": 0.0, "w": 12.0, "h": 12.0}) != "" or b.hpf != hp0:
+		fail(res, "a hit that was not on the tail did damage")
+	if b.hit(1, 1.0, 0.0, "swipe", boxes[0]) == "" or b.hpf >= hp0:
+		fail(res, "a tail hit did no damage")
+	# 2. the attacks always come in the order lap, nested, recursion, rest
+	var order := []
+	b.plan = {}
+	b.cycle = 0
+	for k in range(8):
+		b.plan = {}
+		b._choose()
+		order.append(String(b.plan.id))
+	if order != ["lap", "nested", "recursion", "rest", "lap", "nested", "recursion", "rest"]:
+		fail(res, "order " + str(order))
+	# 3. every iteration is 15 % faster; the head covers speed x 1 s
+	b.plan = {}
+	b.iter = 0
+	b.spd = b._speed_k()
+	b.mode = "lap"
+	b.path_t = 0.0
+	var h0: Vector2 = b.seg_points()[0]
+	b.path_t = 0.5
+	var h1: Vector2 = b.seg_points()[0]
+	var d0 := h0.distance_to(h1)
+	b.iter = 1
+	b.spd = b._speed_k()
+	b.path_t = 0.0
+	var g0: Vector2 = b.seg_points()[0]
+	b.path_t = 0.5
+	var g1: Vector2 = b.seg_points()[0]
+	var d1 := g0.distance_to(g1)
+	if absf(d1 / d0 - 1.15) > 0.01 or absf(d0 - 75.0) > 1.0:
+		fail(res, "iteration speed: %.1f then %.1f px in 0.5 s" % [d0, d1])
+	# the extras from i = 2: a fourth copy, the inner ring turns the other way, a head lunge
+	b.iter = 2
+	b.spd = b._speed_k()
+	b.mode = "recursion"
+	b.path_t = 3.0
+	var back_low := false
+	for segs in b.copies():
+		if absf(segs[0].y - 170.0) < 1.0 and segs[0].x > segs[1].x:
+			back_low = true
+	if not back_low:
+		fail(res, "no fourth copy (the low one running the other way) at i = 2")
+	b.iter = 0
+	b.spd = 1.0
+	b.path_t = 3.0
+	for segs in b.copies():
+		if absf(segs[0].y - 170.0) < 1.0 and segs[0].x > segs[1].x:
+			fail(res, "a fourth copy at i = 0")
+	b.mode = "idle"
+	# 4. the panel: a hit freezes the snake for 3 s with its tail on the floor by the panel, free hits, then it goes on
+	b.plan = {}
+	b.iter = 0
+	b.hz.clear()
+	b._start("rest")
+	if not rb_until(r, b, "rest", "active", Vector2(192.0, 150.0)):
+		fail(res, "the rest never became active")
+	if b.panel_t <= 0.0 or b.hurtboxes().size() != 2:
+		fail(res, "the panel is not lit (%.2f, %d boxes)" % [b.panel_t, b.hurtboxes().size()])
+	var panel_box := {}
+	for hb in b.hurtboxes():
+		if hb.has("panel"):
+			panel_box = hb
+	b.hit(1, 0.0, -1.0, "swipe", panel_box)
+	if absf(b.freeze_t - 3.0) > 0.01 or not b.harmboxes().is_empty():
+		fail(res, "the panel did not freeze (freeze %.2f, %d harm)" % [b.freeze_t, b.harmboxes().size()])
+	var tp: Vector2 = b.tail_point()
+	if absf(tp.y - 170.0) > 1.0 or absf(tp.x - 204.0) > 1.0:
+		fail(res, "the tail is at %s" % str(tp))
+	var hp1 := b.hpf
+	r.player.x = tp.x - 20.0
+	r.player.y = 150.0
+	b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0])
+	if b.hpf >= hp1:
+		fail(res, "a frozen tail takes no hits")
+	for f in range(int(3.1 * 60.0)):
+		r.player.inv = 99.0
+		r.player.x = 40.0
+		r.player.y = 150.0
+		r.step(Game.STEP)
+		b.idle_t = 999.0
+	if b.freeze_t > 0.0:
+		fail(res, "the freeze did not end")
+	b.plan = {}
+	b.mode = "idle"
+	# 5. the arena loops: a body leaving through the portal comes out on the other side
+	r.player.x = -9.0
+	r.player.y = 160.0
+	r.player.vx = 0.0
+	r.step(Game.STEP)
+	if r.player.x < float(r.pw) - 40.0:
+		fail(res, "a body at x < 0 did not come out on the right (x %.0f)" % r.player.x)
+	r.player.x = float(r.pw) - 1.0
+	r.player.y = 160.0
+	r.step(Game.STEP)
+	if r.player.x > 40.0:
+		fail(res, "a body past the right edge did not come out on the left (x %.0f)" % r.player.x)
+	# 6. phase 3: the strips hurt and the floor is a conveyor towards the head
+	b.hpf = float(b.max_hp) * 0.2
+	b.hp = ceili(b.hpf)
+	b.mode = "rest"
+	r.player.x = 300.0
+	r.player.y = 160.0
+	r.player.vx = 0.0
+	r.player.vy = 0.0
+	r.player.inv = 99.0
+	for f in range(10):
+		r.player.x = 300.0
+		r.player.vy = 0.0
+		r.step(Game.STEP)
+	if not b.strips_on:
+		fail(res, "the side strips did not come")
+	var px0: float = r.player.x
+	b.mode = "rest"
+	for f in range(30):
+		r.step(Game.STEP)
+	if absf(r.player.x - px0) < 5.0:
+		fail(res, "the conveyor did not move the player (%.1f -> %.1f)" % [px0, r.player.x])
+	b.hpf = float(b.max_hp)
+	# 7. a puppet from the record has the same boxes and fields
+	b.mode = "idle"
+	b.plan = {}
+	b.iter = 0
+	b._start("nested")
+	rb_until(r, b, "nested", "active", Vector2(192.0, 150.0))
+	var rec: Array = JSON.parse_string(JSON.stringify(NetClasses.record(b)))
+	var pup = NetClasses.make(NetClasses.cls_of(b), r)
+	NetClasses.apply(pup, rec)
+	pup.hz_gate = 0.0                                          # (the guest's own rule: a hazard hurts after 0.5 s on screen; the test skips the wait)
+	if not same_boxes(b.harmboxes(), pup.harmboxes()) or not same_boxes(b.hurtboxes(), pup.hurtboxes()):
+		fail(res, "the puppet's boxes differ from the host's (%d/%d harm, %d/%d hurt, mode %s/%s)" % [b.harmboxes().size(), pup.harmboxes().size(), b.hurtboxes().size(), pup.hurtboxes().size(), b.mode, pup.mode])
+	var fa: Array = JSON.parse_string(JSON.stringify(pup.net_fields()))
+	var fb: Array = JSON.parse_string(JSON.stringify(b.net_fields()))
+	if JSON.stringify(fa) != JSON.stringify(fb):
+		fail(res, "the puppet's fields differ")
+	pup.free()
+	# 8. the kill gives opus and sets boss:LOOP; T10:E opens
+	b.plan = {}
+	Game.tools.opus = false
+	r.attacker = r.player
+	if not r.skip_boss():
+		fail(res, "skip boss did not work")
+	var guard := 0
+	while r.fight.state != "done" and guard < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		guard += 1
+	if r.fight.state != "done" or not Game.tools.get("opus", false) or not Game.flag("boss:LOOP"):
+		fail(res, "the reward: state %s, opus %s" % [r.fight.state, str(Game.tools.get("opus", false))])
+	r.update_doors()
+	var de = r.grid.door_at("E", 8)
+	if de == null or not de.open:
+		fail(res, "T10:E stays closed after the fight")
+	r.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("loopboss", res.ok, res.info)
