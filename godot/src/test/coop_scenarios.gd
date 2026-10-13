@@ -3230,7 +3230,7 @@ func sc_co_loop() -> Array:
 # the shared fight: 30 s, the host forces attacks at set times; the guest swings at a thread, the kit's rules must hold (no boss-cue, no arena-tell)
 func tower_fight_host(room_id: String, host_x: float, guest_x: float, forced: Array, marks: Array, extra: Callable) -> Array:
 	await wait_secs(1.0)
-	var secs := (42.0 if room_id == "T10" else 32.0) * slow
+	var secs := (34.0 if room_id == "T10" else 32.0) * slow
 	var r := boss_arena(room_id, host_x, guest_x)
 	var p = mgr().player
 	var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
@@ -3351,7 +3351,7 @@ func sc_co_loopboss() -> Array:
 	var wraps := 0
 	var last_x := 0.0
 	var modes := {}
-	var secs := 42.0 * slow
+	var secs := 34.0 * slow
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < secs * 1000.0:
 		var g = mgr().player
