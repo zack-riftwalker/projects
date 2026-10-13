@@ -1,0 +1,28 @@
+{
+ "name": "THREAD TOWER",
+ "path": "/dev/threads",
+ "time": "05:12",
+ "music": "w4",
+ "ambient": "#e6cfc4",
+ "base": "#a8793a",
+ "dark": "#5f3d1e",
+ "lite": "#dcae5e",
+ "cap": "#f3d58a",
+ "capHi": "#fff4c9",
+ "capLo": "#6b4520",
+ "code": [
+  "#8f6430",
+  "#8f6430",
+  "#c2924a",
+  "#8f6430"
+ ],
+ "plat": "#7a4a5a",
+ "platHi": "#d98a8a",
+ "platLo": "#3c1f33",
+ "accent": "#ff7a59",
+ "fx": "#f3d58a",
+ "glow": "#ffe2a0",
+ "liq": "#ff7a59",
+ "liqHi": "#ffe0c0",
+ "liqLo": "#8a2a2a"
+}

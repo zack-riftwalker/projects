@@ -9,7 +9,7 @@ const WHAT = process.argv.slice(2).length ? process.argv.slice(2) : ['all'];
 const want = (k) => WHAT.includes('all') || WHAT.includes(k);
 const WORLDS = (process.env.WORLDS || '1,2').split(',').map(Number);     // tiles, bg and theme are captured for these worlds
 const SFX = 'jump djump walljump land swipe swipeBig hit clang squish kill hurt die token spark heal dash spring crumble brk checkpoint shoot bossHit explode bigExplode uiMove uiOk uiBack text textLow textSys key gate agent agentHit warn charge laser drip splash thud roar glitch tick tock pause flap logo stamp'.split(' ');
-const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'w3', 'w3_hi', 'w6', 'w6_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
+const COPY_MUSIC = new Set(['w1', 'w2', 'w2_hi', 'w3', 'w3_hi', 'w4', 'w6', 'w6_hi', 'tension', 'tension_hi']);   // songs copied into godot/assets (the others came with earlier phases)
 const LONG = new Set(['explode', 'bigExplode', 'roar', 'logo', 'die', 'gate', 'spark']);
 const mk = (...p) => { const d = path.join(...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const save = (rel, b64) => { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(b64, 'base64')); return f; };

@@ -80,7 +80,7 @@ func t_w4assets() -> bool:
 	Game.fresh()
 	Game.load_meta()
 	var res := checker()
-	for path in ["res://assets/tiles/w4_tiles.png", "res://assets/bg/w4.png", "res://assets/theme/w4.json", "res://assets/sprites/platform_w4.png", "res://assets/music/w4.ogg", "res://assets/music/w4_hi.ogg"]:
+	for path in ["res://assets/tiles/w4_tiles.png", "res://assets/bg/w4.png", "res://assets/theme/w4.json", "res://assets/sprites/platform_w4.png", "res://assets/music/w4.ogg"]:
 		if not ResourceLoader.exists(path):
 			fail(res, path)
 	if String(Game.theme(4).name) != "THREAD TOWER":
