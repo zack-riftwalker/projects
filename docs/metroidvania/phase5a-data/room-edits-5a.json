@@ -1,0 +1,26 @@
+{
+ "N11": {
+  "cells": [
+   [
+    3,
+    44,
+    " "
+   ]
+  ],
+  "del": [
+   "end"
+  ],
+  "doors_lock": {
+   "N11:N": "oneway"
+  },
+  "sign": [
+   1,
+   "/dev/threads: the tower. GET your way to the foot of it."
+  ]
+ },
+ "H11": {
+  "doors_lock": {
+   "H11:N": "until:lever:T02"
+  }
+ }
+}
