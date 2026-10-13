@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss"]
 
 func run(name: String):
 	match name:
@@ -11,6 +11,7 @@ func run(name: String):
 		"tick5a": return await t_tick5a()
 		"breakpoint": return await t_breakpoint()
 		"w4enemies": return await t_w4enemies()
+		"raceboss": return await t_raceboss()
 	return await super.run(name)
 
 func tower_ids() -> Array:
@@ -657,3 +658,203 @@ func t_w4enemies() -> bool:
 	Controls.script_input = null
 	Game.fresh()
 	return report("w4enemies", res.ok, res.info)
+
+# runs a room until the boss's plan reaches `ph` (or `max_f` frames pass); the player stays where it was put, the boss does not start another attack
+func rb_until(r: Room, b, id: String, ph: String, keep: Vector2, max_f := 700) -> bool:
+	for f in range(max_f):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		r.player.x = keep.x
+		r.player.y = keep.y
+		r.player.vx = 0.0
+		r.player.vy = 0.0
+		r.step(Game.STEP)
+		b.idle_t = 999.0
+		if not b.plan.is_empty() and String(b.plan.id) == id and String(b.plan.ph) == ph:
+			return true
+	return false
+
+func start_fight(r: Room, px := 100.0) -> bool:
+	r.player.x = px
+	r.player.y = 150.0
+	var n := 0
+	while r.fight.state != "active" and n < 400:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		n += 1
+	return r.fight.state == "active"
+
+# MV5A-06: RACE CONDITION
+func t_raceboss() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	var r := new_room("T06")
+	var b: RaceBoss = r.boss as RaceBoss
+	if b == null:
+		fail(res, "T06 has no RaceBoss")
+		r.queue_free()
+		return report("raceboss", false, res.info)
+	if b.max_hp != 90 or b.th[0].hp != 45.0 or b.th[1].hp != 45.0:
+		fail(res, "hp %d (%s/%s), want 45 + 45" % [b.max_hp, str(b.th[0].hp), str(b.th[1].hp)])
+	if not start_fight(r):
+		fail(res, "the fight never started")
+	b.plan = {}
+	b.idle_t = 999.0
+	r.attacker = r.player
+	# 1. the write lands on the READ position, not the current one
+	r.player.x = 100.0
+	b._start("rw")
+	var read_x: float = b.gx[int(b.plan.a_i)]
+	if absf(read_x - 105.0) > 12.0:
+		fail(res, "the ghost is at %.0f, the player at 105" % read_x)
+	if not rb_until(r, b, "rw", "active", Vector2(330.0, 150.0)):
+		fail(res, "the write never came")
+	var on_ghost := false
+	var on_player := false
+	var hb: Dictionary = r.player.hurtbox()
+	for bx in b.harmboxes():
+		if absf(float(bx.x) + 16.0 - read_x) < 1.0:
+			on_ghost = true
+		if Game.overlap(bx, {"x": 330.0, "y": 150.0, "w": 8.0, "h": 9.0}):
+			on_player = true
+	if not on_ghost or on_player:
+		fail(res, "write boxes: on the ghost %s, on the player's new place %s" % [on_ghost, on_player])
+	b.plan = {}
+	b.gx = [-1.0, -1.0]
+	# 2. two writes into one segment within 4 s corrupt it: a warning, then the floor band hurts
+	r.time = 50.0
+	b._paint(0, 100.0)
+	b._paint(1, 110.0)
+	if b.hz.size() != 1:
+		fail(res, "no corrupt segment (%d)" % b.hz.size())
+	else:
+		if not b.hz_all_boxes(50.3).is_empty() or b.hz_all_boxes(50.7).size() != 1:
+			fail(res, "the corrupt segment hurts too early or never")
+		var hzb: Dictionary = b.hz_all_boxes(50.7)[0]
+		if absf(float(hzb.y) - (Boss.FLOOR - 6.0)) > 0.1 or absf(float(hzb.w) - 48.0) > 0.1:
+			fail(res, "the corrupt band is %s" % str(hzb))
+	b.hz.clear()
+	r.time = 70.0
+	b._paint(0, 200.0)
+	r.time = 76.0
+	b._paint(1, 205.0)
+	if not b.hz.is_empty():
+		fail(res, "writes 6 s apart corrupted a segment")
+	# at most 4 at once
+	r.time = 90.0
+	for sg in range(6):
+		b._paint(0, 20.0 + float(sg) * 48.0)
+		b._paint(1, 25.0 + float(sg) * 48.0)
+	if b.hz.size() != 4:
+		fail(res, "%d corrupt segments, at most 4" % b.hz.size())
+	# 3. the lock serializes (one writer, corrupt segments clear) and then rests 10 s
+	if b._lock_hit() != "hit" or b.serial_t <= 0.0 or not b.hz.is_empty():
+		fail(res, "the lock did not serialize and clear (serial %.1f, hz %d)" % [b.serial_t, b.hz.size()])
+	b._start("rw")
+	var ghosts := 0
+	for gv in b.gx:
+		if gv >= 0.0:
+			ghosts += 1
+	if ghosts != 1:
+		fail(res, "serialized: %d ghosts, want 1" % ghosts)
+	b.plan = {}
+	b.gx = [-1.0, -1.0]
+	b.serial_t = 0.05
+	b.update(0.1)
+	if b.lock_cd < 9.0 or b._lock_hit() != "block":
+		fail(res, "the lock has no cooldown (%.1f)" % b.lock_cd)
+	b.lock_cd = 0.0
+	# 4. contend: both dash through the lock; when they meet they stun each other for 2 s
+	b.th[0].x = 130.0
+	b.th[1].x = 286.0
+	b._start("contend")
+	var stunned := false
+	if rb_until(r, b, "contend", "active", Vector2(40.0, 150.0)):
+		for f in range(60):
+			r.player.inv = 99.0
+			r.player.x = 40.0
+			r.player.y = 150.0
+			r.step(Game.STEP)
+			if b.th[0].stun > 1.0 and b.th[1].stun > 1.0:
+				stunned = true
+				break
+	if not stunned:
+		fail(res, "the threads did not stun each other on meeting")
+	b.plan = {}
+	for q in b.th:
+		q.stun = 0.0
+		q.y = Boss.FLOOR
+	# 5. rule 8: the ghost goes to the player who moved least
+	var rp := partner(r, 300.0, 150.0)
+	rp.samples.clear()
+	for f in range(14):
+		r.player.x = 80.0 + float(f) * 6.0
+		b._track(0.11)
+		rp.x = 300.0
+		b._track(0.0)
+	b.mv_acc = 0.2
+	b._track(0.0)
+	var least := b._least_moved()
+	if least != "p2" and rp.get_parent() != null:
+		fail(res, "the ghost goes to %s, the moving player is p1" % least)
+	r.remote_players.erase(rp)
+	rp.queue_free()
+	# 6. the last thread alive is enraged: cues x0.85, never below 0.70 for the big write
+	b.th[0].hp = 0.5
+	b.th[0].hp = 0.5
+	r.attacker = r.player
+	b.hit(1, 1.0, 0.0, "swipe", {"x": b.th[0].x - 8.0, "y": b.th[0].y - 24.0, "w": 16.0, "h": 24.0, "head": 0})
+	if not b.th[0].dead or b._enr() != 0.85:
+		fail(res, "thread A did not die or B is not enraged")
+	b.plan = {}
+	b._start("rw")
+	if float(b.plan.t) < 0.70 or absf(float(b.plan.t) - 0.765) > 0.01:
+		fail(res, "enraged cue %.3f, want 0.765" % float(b.plan.t))
+	b.plan = {}
+	b.gx = [-1.0, -1.0]
+	# 7. net fields: a puppet built from the record has the same boxes and plan
+	b.th[0].dead = false
+	b.th[0].hp = 20.0
+	b._sums()
+	b.plan = {}
+	b._start("rw")
+	rb_until(r, b, "rw", "active", Vector2(330.0, 150.0))
+	var rec: Array = JSON.parse_string(JSON.stringify(NetClasses.record(b)))
+	var pup = NetClasses.make(NetClasses.cls_of(b), r)
+	NetClasses.apply(pup, rec)
+	if not same_boxes(b.harmboxes(), pup.harmboxes()) or not same_boxes(b.hurtboxes(), pup.hurtboxes()):
+		fail(res, "the puppet's boxes differ from the host's")
+	var fa: Array = JSON.parse_string(JSON.stringify(pup.net_fields()))
+	var fb: Array = JSON.parse_string(JSON.stringify(b.net_fields()))
+	if JSON.stringify(fa) != JSON.stringify(fb):
+		var which := []
+		for i in range(mini(fa.size(), fb.size())):
+			if JSON.stringify(fa[i]) != JSON.stringify(fb[i]):
+				which.append("%d:%s/%s" % [i, JSON.stringify(fa[i]).left(30), JSON.stringify(fb[i]).left(30)])
+		fail(res, "the puppet's fields differ %s" % str(which))
+	pup.free()
+	# 8. the kill gives breakpoint and opens T06:E
+	b.plan = {}
+	var i0 := 0
+	r.attacker = r.player
+	if not r.skip_boss():
+		fail(res, "skip boss did not work")
+	var guard := 0
+	while r.fight.state != "done" and guard < 900:
+		r.player.inv = 99.0
+		r.step(Game.STEP)
+		guard += 1
+	if r.fight.state != "done" or not Game.tools.get("breakpoint", false) or not Game.flag("boss:RACE"):
+		fail(res, "the reward: state %s, breakpoint %s" % [r.fight.state, str(Game.tools.get("breakpoint", false))])
+	r.update_doors()
+	var de = r.grid.door_at("E", 8)
+	if de == null or not de.open:
+		fail(res, "T06:E stays closed after the fight")
+	r.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("raceboss", res.ok, res.info)

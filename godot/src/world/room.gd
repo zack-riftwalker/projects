@@ -55,6 +55,7 @@ var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the ti
 var blink_period := 1.5
 var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
 var iter := 0                              # T09's loop room: which pass this is (0..3)
+var boss_cells: Array = []                 # every `B` cell: [{x, y}] (a two-bodied boss starts its bodies on them)
 var bp_plats: Array = []                    # frozen creatures as one-way platforms (rebuilt every step)
 var loop_key = null                        # T09: the `break;` key cell {x, y, w, h} (null in other rooms)
 var land_t := 0.0                          # boss trigger "land": how long somebody has stood on the arena floor
@@ -305,6 +306,7 @@ func load_room(room_id: String, snap = null) -> void:
 						end_door = {"x": x + 8, "y": y + T}
 					elif ch == "B":
 						boss_spawn = {"x": x + 8, "y": y + T}
+						boss_cells.append({"x": x + 8, "y": y + T})
 				"[", "]", "+":
 					for ge in spawn_group(ch, x, y):
 						Game.scale_enemy(ge)
@@ -540,6 +542,7 @@ func make_boss(bd: Dictionary, bx: float, by: float):
 		"CrawlerBoss": b = CrawlerBoss.new(self, bx, by, hp_)
 		"FirewallBoss": b = FirewallBoss.new(self, bx, by, hp_)
 		"Reviewer2": b = Reviewer2.new(self, bx, by, hp_)
+		"RaceBoss": b = RaceBoss.new(self, bx, by, hp_)
 		_: b = NullBoss.new(self, bx, by, hp_)
 	b.boss_name = String(bd.get("name", bd.id))
 	b.drop_n = int(bd.get("drop", 24))

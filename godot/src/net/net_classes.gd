@@ -2,9 +2,11 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger", "wormegg", "heisenbug", "datarace", "deadlockguard", "spinlock", "ticker", "orphan", "orphanchild", "priority"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger", "wormegg", "heisenbug", "datarace", "deadlockguard", "spinlock", "ticker", "orphan", "orphanchild", "priority", "raceboss"]
 
 static func cls_of(e) -> int:
+	if e is RaceBoss:
+		return 46
 	if e is Heisenbug:
 		return 38
 	if e is DataRace:
@@ -142,6 +144,7 @@ static func make(cls: int, room: Room):
 		43: e = Orphan.new(room, 0, 0)
 		44: e = OrphanChild.new(room, 0, 0)
 		45: e = PriorityInversion.new(room, 0, 0)
+		46: e = RaceBoss.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e
