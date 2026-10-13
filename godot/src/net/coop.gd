@@ -198,7 +198,7 @@ func _on_room_built(r: Room) -> void:
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id, "gz": 1 if Game.mod_gzip() else 0}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
-		r.net_bp.connect(func(kind, id): Net.rel("bp", {"room": r.id, "kind": kind, "bid": id}))
+		r.net_bp.connect(func(kind, id, gt): Net.rel("bp", {"room": r.id, "kind": kind, "bid": id, "gt": snappedf(gt, 0.01)}))
 		r.net_mutex.connect(func(ki): Net.rel("mutex", {"room": r.id, "n": ki}))
 		r.net_cable.connect(func(tx, ty): Net.rel("cable", {"room": r.id, "tx": tx, "ty": ty}))
 		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
@@ -553,7 +553,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"bp":
 			var brm := _remote_room()
 			if brm != null and brm.id == String(d.room) and not brm.remote_players.is_empty() and brm.bp_valid(String(d.kind), d.bid, brm.remote_players[0]):
-				_as_p2(brm, func(): brm.bp_apply(String(d.kind), d.bid))
+				_as_p2(brm, func(): brm.bp_apply(String(d.kind), d.bid, brm.time - float(d.get("gt", brm.time))))
 			else:
 				log_("host: P2 breakpoint refused (%s %s)" % [String(d.kind), str(d.bid)])
 		"mutex":

@@ -3070,25 +3070,19 @@ func sc_co_breakpoint() -> Array:
 		var r := tower_room("TC2", 3.0 * 16.0, 58.0 * 16.0 - 10.0, px, py)
 		clear_creatures(r)
 		var pz: Dictionary = r.tower.pistons[0]
-		var total := 0.7 * Tower.TICK
-		var t_wait := 0.0
-		while not (r.tower.piston_rows_at(pz, t_wait) == 0 and r.tower.piston_rows_at(pz, t_wait + 0.04) == 0 and r.tower.piston_rows_at(pz, t_wait - 0.04) != 0):
-			t_wait += 0.001
-		var base := t_wait + total * 40.0
 		var t0 := Time.get_ticks_msec()
 		var seen_frozen := -1.0
 		var open_after := 0
 		var still := 0
-		while Time.get_ticks_msec() - t0 < 14000.0 * slow:
+		while Time.get_ticks_msec() - t0 < 16000.0 * slow:
 			pin(mgr().player, 3.0 * 16.0, 58.0 * 16.0 - 10.0)
-			if not r.tower.is_frozen("p0"):
-				r.time = base                                 # the clock waits (the piston stays retracted) until the guest's press arrives
-			elif seen_frozen < 0.0:
-				seen_frozen = float(Time.get_ticks_msec() - t0) / 1000.0
-			else:
-				still += 1
-				if pz.rows == 0:
-					open_after += 1
+			if r.tower.is_frozen("p0"):
+				if seen_frozen < 0.0:
+					seen_frozen = float(Time.get_ticks_msec() - t0) / 1000.0
+				else:
+					still += 1
+					if pz.rows == 0:
+						open_after += 1
 			await get_tree().physics_frame
 		await wait_secs(1.0)
 		return [seen_frozen >= 0.0 and still > 60 and open_after >= still - 2, "host: frozen after %.1f s, %d frames after it, the shaft open in %d of them" % [seen_frozen, still, open_after]]
@@ -3113,9 +3107,10 @@ func sc_co_breakpoint() -> Array:
 			g.vy = 0.0
 			g.face = 1.0
 			g.inv = 999.0
-			g.bp_cd = 0.0 if f < 400 else g.bp_cd
-			Controls.script_input = {"special": f > 30 and (f % 90) < 3}
-			if f > 30 and (f % 90) == 1 and press_at == 0.0:
+			var rows_now: int = r2.tower.pistons[0].rows
+			var press: bool = f > 30 and rows_now == 0 and f % 2 == 0 and g.bp_cd <= 0.0     # (the guest presses when ITS page shows the shaft clear)
+			Controls.script_input = {"special": press}
+			if press and press_at == 0.0:
 				press_at = float(Time.get_ticks_msec()) / 1000.0
 			if r2.tower != null and r2.tower.is_frozen("p0"):
 				frozen_at = float(Time.get_ticks_msec()) / 1000.0
@@ -3127,7 +3122,7 @@ func sc_co_breakpoint() -> Array:
 			g.y = 42.0 * 16.0 - 10.0
 			g.vx = 0.0
 			g.vy = 0.0
-			if float(Time.get_ticks_msec()) / 1000.0 - frozen_at < 2.5 * slow:
+			if float(Time.get_ticks_msec()) / 1000.0 - frozen_at < 2.5:
 				inside_f += 1
 				if g.hp < hp0:
 					hurt += 1

@@ -17,6 +17,7 @@ var cables: Array = []                # {cells: [[tx, ty]], cut}
 var bgroups: Array = []               # blink groups: {key, cells: [[tx, ty]], ph}
 var offs := {}                        # object key -> seconds its clock is behind the room's (breakpoint)
 var fz := {}                          # object key -> seconds it stays frozen
+var fz_mt := {}                       # guest: object key -> the clock the host froze it at (kept exactly: the guest's own clock may be a little off)
 var has_blink := false
 var flag_t := 0.0
 
@@ -163,10 +164,14 @@ func blink_phase_of(key: String) -> int:
 # ---------------------------------------------------------------- per step (host, solo and guest)
 func step(dt: float, live: Array) -> void:
 	for k in fz.keys():
-		offs[k] = float(offs.get(k, 0.0)) + dt
+		if fz_mt.has(k) and room.mode == "guest":
+			offs[k] = room.time - float(fz_mt[k])          # frozen: its clock is the host's, whatever this page's clock says
+		else:
+			offs[k] = float(offs.get(k, 0.0)) + dt
 		fz[k] = float(fz[k]) - dt
 		if float(fz[k]) <= 0.0:
 			fz.erase(k)
+			fz_mt.erase(k)
 	for g in gears:
 		var tm := mt(g.key)
 		for j in range(g.n):
@@ -326,9 +331,11 @@ func cut_at(tx: int, ty: int, silent: bool) -> bool:
 	return false
 
 # ---------------------------------------------------------------- breakpoint (MV5A-04)
-func freeze(key: String) -> void:
+# rewind: the guest pressed when ITS clock said `rewind` seconds before the host's, so the object stops in the state the guest saw
+func freeze(key: String, rewind := 0.0) -> void:
 	if not fz.has(key):
 		fz[key] = Game.BP_TIME
+		offs[key] = float(offs.get(key, 0.0)) + clampf(rewind, 0.0, 1.5)
 
 func is_frozen(key: String) -> bool:
 	return fz.has(key)
@@ -406,7 +413,7 @@ func net_pack() -> Dictionary:
 	var fl: Array = []
 	for k in offs:
 		if float(offs[k]) > 0.0 or fz.has(k):
-			fl.append([String(k), roundi(float(fz.get(k, 0.0)) * 100.0), roundi(float(offs[k]) * 100.0)])
+			fl.append([String(k), roundi(float(fz.get(k, 0.0)) * 100.0), roundi(float(offs[k]) * 100.0), roundi(mt(String(k)) * 100.0)])
 	return {"mx": mx, "fz": fl, "it": room.iter}
 
 func net_apply(d: Dictionary) -> void:
@@ -421,12 +428,17 @@ func net_apply(d: Dictionary) -> void:
 			m.t = 0.0
 	var fresh_offs := {}
 	var fresh_fz := {}
+	var fresh_mt := {}
 	for e in d.get("fz", []):
 		fresh_offs[String(e[0])] = float(e[2]) / 100.0
 		if int(e[1]) > 0:
 			fresh_fz[String(e[0])] = float(e[1]) / 100.0
+			if e.size() > 3:
+				fresh_mt[String(e[0])] = float(e[3]) / 100.0
+				fresh_offs[String(e[0])] = room.time - float(e[3]) / 100.0
 	offs = fresh_offs
 	fz = fresh_fz
+	fz_mt = fresh_mt
 	if d.has("it"):
 		room.set_iter(int(d.it))
 

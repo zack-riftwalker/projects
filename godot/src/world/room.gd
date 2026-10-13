@@ -101,7 +101,7 @@ signal shop_requested
 signal index_requested(npc_index: int)
 signal net_lever(lever_index: int)
 signal net_mutex(key_index: int)
-signal net_bp(kind: String, id)
+signal net_bp(kind: String, id, gt: float)
 signal net_cable(tx: int, ty: int)
 signal net_pad()
 signal net_freejar(jar_index: int)
@@ -697,7 +697,7 @@ func bp_press(q) -> bool:
 	if t.is_empty():
 		return false
 	if mode == "guest":
-		net_bp.emit(String(t.kind), t.id)
+		net_bp.emit(String(t.kind), t.id, time)
 		Audio.sfx("pause")
 	else:
 		bp_apply(String(t.kind), t.id)
@@ -726,7 +726,7 @@ func bp_valid(kind: String, id, q) -> bool:
 	return false
 
 # host / solo: stop the target for BP_TIME
-func bp_apply(kind: String, id) -> bool:
+func bp_apply(kind: String, id, rewind := 0.0) -> bool:
 	var at := Vector2.ZERO
 	if kind == "h":
 		var hboss = null
@@ -748,7 +748,7 @@ func bp_apply(kind: String, id) -> bool:
 	else:
 		if tower == null or tower.is_frozen(String(id)):
 			return false
-		tower.freeze(String(id))
+		tower.freeze(String(id), rewind)
 		at = Vector2(player.x, player.y) if player != null else Vector2.ZERO
 	Audio.sfx("pause")
 	ring(at.x, at.y, 3, 18, "#7cc4ff", 0.35)
