@@ -2,9 +2,25 @@ class_name NetClasses
 extends RefCounted
 # NetClasses: the creature classes the snapshot can name (index in `en` records), and how to build the guest's puppet of each.
 
-const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger", "wormegg"]
+const NAMES := ["bug", "bug_spiky", "typo", "guard", "zombie", "null", "exception", "reviewer", "mimic", "log", "noodle", "flaky", "fork", "merge", "slime", "slime_s", "lint", "lint_v", "dripper", "pendulum", "drone", "segfault", "stackover", "leak", "gcdrone", "kitdummy", "scraper", "worm", "ddos", "spyware", "crawler", "firewall", "reviewer2", "sniffer", "mitm", "botnet", "pinger", "wormegg", "heisenbug", "datarace", "deadlockguard", "spinlock", "ticker", "orphan", "orphanchild", "priority"]
 
 static func cls_of(e) -> int:
+	if e is Heisenbug:
+		return 38
+	if e is DataRace:
+		return 39
+	if e is DeadlockGuard:
+		return 40
+	if e is Spinlock:
+		return 41
+	if e is Ticker:
+		return 42
+	if e is OrphanChild:
+		return 44
+	if e is Orphan:
+		return 43
+	if e is PriorityInversion:
+		return 45
 	if e is NullBoss:
 		return 5
 	if e is KitDummy:
@@ -118,6 +134,14 @@ static func make(cls: int, room: Room):
 		35: e = Botnet.new(room, 0, 0)
 		36: e = Pinger.new(room, 0, 0)
 		37: e = WormEgg.new(room, 0, 0)
+		38: e = Heisenbug.new(room, 0, 0)
+		39: e = DataRace.new(room, 0, 0)
+		40: e = DeadlockGuard.new(room, 0, 0)
+		41: e = Spinlock.new(room, 0, 0)
+		42: e = Ticker.new(room, 0, 0)
+		43: e = Orphan.new(room, 0, 0)
+		44: e = OrphanChild.new(room, 0, 0)
+		45: e = PriorityInversion.new(room, 0, 0)
 		_: return null
 	e.puppet = true
 	return e

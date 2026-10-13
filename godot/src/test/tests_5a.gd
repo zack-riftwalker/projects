@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies"]
 
 func run(name: String):
 	match name:
@@ -10,6 +10,7 @@ func run(name: String):
 		"w4assets": return await t_w4assets()
 		"tick5a": return await t_tick5a()
 		"breakpoint": return await t_breakpoint()
+		"w4enemies": return await t_w4enemies()
 	return await super.run(name)
 
 func tower_ids() -> Array:
@@ -463,3 +464,196 @@ func t_breakpoint() -> bool:
 	Controls.script_input = null
 	Game.fresh()
 	return report("breakpoint", res.ok, res.info)
+
+func run_for(r: Room, secs: float, keys := {}) -> void:
+	for f in range(int(secs * 60.0)):
+		step_keys(r, keys)
+		r.player.inv = 99.0
+
+# MV5A-05: the seven native enemies of the tower
+func t_w4enemies() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.diff = "normal"
+	var res := checker()
+	# HEISENBUG: looked at it freezes, looked away from it flies at the player
+	var r := bare_room("R01", 100.0, 192.0)
+	var hb := Heisenbug.new(r, 160, 176)
+	r.add_entity(hb)
+	r.player.face = 1.0                                     # looks away (the bug is to its right: facing it is +1) -> set below
+	r.player.x = 100.0
+	r.player.face = 1.0
+	run_for(r, 0.5)
+	if not hb.observed:
+		fail(res, "a bug in front of the player is not observed")
+	var hx0 := hb.x
+	run_for(r, 1.0)
+	if absf(hb.x - hx0) > 0.5:
+		fail(res, "an observed heisenbug moved")
+	r.player.x = 100.0
+	r.player.face = -1.0
+	var came := false
+	for f in range(60):
+		r.player.face = -1.0
+		step_keys(r, {})
+		r.player.inv = 99.0
+		r.player.x = 100.0
+		r.player.y = 192.0
+		if hb.x < hx0 - 20.0 and not hb.observed:
+			came = true
+	if not came:
+		fail(res, "a heisenbug did not come at a player looking away (x %.0f -> %.0f)" % [hx0, hb.x])
+	var rec_h := NetClasses.record(hb)
+	if rec_h.size() != 9 + 2 + 3:
+		fail(res, "heisenbug record size %d" % rec_h.size())
+	r.queue_free()
+	# DATA RACE: a lone hit rolls back, two hits inside 0.5 s commit
+	var r2 := bare_room("R01", 20.0, 192.0)
+	var a := DataRace.new(r2, 200, 192, false)
+	var b := DataRace.new(r2, 264, 192, true)
+	a.pair_with(b)
+	r2.add_entity(a)
+	r2.add_entity(b)
+	var hp0: int = a.hp
+	a.hit(1, 1.0, 0.0, "swipe", a)
+	run_for(r2, 0.7)
+	if a.hp != hp0 or b.hp != hp0 or a.pend_d != 0:
+		fail(res, "a lone hit on a twin did not roll back (hp %d/%d pend %d)" % [a.hp, b.hp, a.pend_d])
+	a.hit(1, 1.0, 0.0, "swipe", a)
+	b.hit(1, 1.0, 0.0, "swipe", b)
+	if a.hp != hp0 - 2 or b.hp != hp0 - 2:
+		fail(res, "two hits inside the window did not commit (hp %d/%d)" % [a.hp, b.hp])
+	var mx0 := a.cx + b.cx
+	run_for(r2, 1.0)
+	if absf((a.cx + b.cx) - mx0) > 3.0 or absf(a.cx - 200.0) < 4.0:
+		fail(res, "the twins do not mirror (sum moved %.1f)" % (a.cx + b.cx - mx0))
+	r2.queue_free()
+	# DEADLOCK pair: linked guards block, a player on the line breaks the chain
+	var r3 := bare_room("R01", 20.0, 192.0)
+	var g1 := DeadlockGuard.new(r3, 200, 192, false)
+	var g2 := DeadlockGuard.new(r3, 296, 192, true)
+	g1.pair_with(g2)
+	r3.add_entity(g1)
+	r3.add_entity(g2)
+	run_for(r3, 0.3)
+	if not g1.linked or g1.hit(1, 1.0, 0.0, "swipe", g1) != "block":
+		fail(res, "a linked guard took a hit")
+	r3.player.x = 250.0
+	r3.player.y = 192.0
+	for f in range(10):
+		r3.player.x = 250.0
+		r3.player.y = 190.0
+		step_keys(r3, {})
+		r3.player.inv = 99.0
+	if g1.linked or g1.hit(1, 1.0, 0.0, "swipe", g1) == "block":
+		fail(res, "a player on the line did not break the chain")
+	r3.queue_free()
+	# SPINLOCK: hittable only on its stop tick, dashes 48 px out the tick after
+	var r4 := bare_room("T04", 20.0, 20.0)
+	var sp := Spinlock.new(r4, 8 * 16, 8 * 16)
+	r4.add_entity(sp)
+	var hittable := []
+	var max_out := 0.0
+	var base_c := Vector2(sp.base)
+	for k in range(8):
+		r4.time = Tower.TICK * (float(k) + 0.5)
+		sp.update(0.0)
+		hittable.append(sp.stopped_now())
+		max_out = maxf(max_out, Vector2(sp.cx, sp.cy).distance_to(base_c))
+		if k % 4 == 0:
+			r4.time = Tower.TICK * (float(k) + 0.5)
+			sp.update(0.0)
+			if Vector2(sp.cx, sp.cy).distance_to(base_c) < 40.0:
+				fail(res, "the spinlock did not dash out on tick %d" % k)
+	if hittable != [false, false, false, true, false, false, false, true] or max_out < 44.0 or max_out > 50.0:
+		fail(res, "spinlock stop ticks %s, out %.1f" % [str(hittable), max_out])
+	r4.time = Tower.TICK * 3.5
+	if sp.hit(1, 1.0, 0.0, "swipe", sp) == "block":
+		fail(res, "a stopped spinlock blocked a claw")
+	r4.time = Tower.TICK * 1.5
+	if sp.hit(1, 1.0, 0.0, "swipe", sp) != "block":
+		fail(res, "a spinning blade took a claw")
+	r4.queue_free()
+	# TICKER: one cell per tick, turns at an edge, hops every 4th tick
+	var r5 := bare_room("R01", 20.0, 192.0)
+	var tk := Ticker.new(r5, 20 * 16, 12 * 16)
+	r5.add_entity(tk)
+	var cells := []
+	for k in range(6):
+		r5.time = Tower.TICK * (float(k) + 0.9)
+		tk.update(0.0)
+		cells.append(tk.cell_x)
+	var diffs := []
+	for i in range(1, cells.size()):
+		diffs.append(absi(int(cells[i]) - int(cells[i - 1])))
+	for dv_ in diffs:
+		if dv_ > 1:
+			fail(res, "the ticker moved more than a cell in a tick: %s" % str(cells))
+			break
+	if cells[0] == cells[5]:
+		fail(res, "the ticker did not move: %s" % str(cells))
+	r5.queue_free()
+	# ORPHAN: the children orbit; once the parent is dead they dash at the player
+	var r6 := bare_room("R01", 20.0, 192.0)
+	var grp := r6.spawn_group("+", 200, 192)
+	for e in grp:
+		r6.add_entity(e)
+	var par: Orphan = grp[0]
+	var kid: OrphanChild = grp[1]
+	run_for(r6, 0.5)
+	var orbit_d: float = Vector2(kid.cx - par.cx, kid.cy - par.cy).length()
+	if absf(orbit_d - 18.0) > 2.5 or kid.orphan:
+		fail(res, "a child is not orbiting (distance %.1f)" % orbit_d)
+	par.hit(99, 1.0, 0.0, "swipe", par)
+	run_for(r6, 0.2)
+	if not kid.orphan:
+		fail(res, "the children did not become orphans")
+	var dashed := false
+	for f in range(150):
+		step_keys(r6, {})
+		r6.player.inv = 99.0
+		if kid.state == "dash":
+			dashed = true
+	if not dashed:
+		fail(res, "an orphan never dashed")
+	r6.queue_free()
+	# PRIORITY INVERSION: asleep freezes a ticker 100 px away; a hit wakes both
+	var r7 := bare_room("R01", 20.0, 192.0)
+	var pi_ := PriorityInversion.new(r7, 220, 176)
+	var tk2 := Ticker.new(r7, 320, 192)
+	r7.add_entity(pi_)
+	r7.add_entity(tk2)
+	run_for(r7, 0.5)
+	if tk2.bp_t <= 0.0 or tk2.bp_k != 2:
+		fail(res, "a sleeping priority did not freeze a ticker near it")
+	if not pi_.harmboxes().is_empty():
+		fail(res, "a sleeping giant hurts")
+	pi_.hit(1, 1.0, 0.0, "swipe", pi_)
+	run_for(r7, 0.6)
+	if not pi_.awake or tk2.bp_t > 0.0:
+		fail(res, "a hit did not wake the giant and its neighbours (awake %s, frozen %.2f)" % [pi_.awake, tk2.bp_t])
+	run_for(r7, 7.0)
+	if pi_.awake:
+		fail(res, "the giant did not fall asleep again")
+	r7.queue_free()
+	# parity of the records for every new class
+	var rp := bare_room("R01", 20.0, 192.0)
+	for ch in ["(", "[", "]", ")", "{", "+", "}"]:
+		var list: Array = rp.spawn_group(ch, 200, 192) if ch in ["[", "]", "+"] else [rp.spawn_enemy(ch, 200, 192)]
+		for e in list:
+			rp.add_entity(e)
+			var rec: Array = JSON.parse_string(JSON.stringify(NetClasses.record(e)))
+			var pup = NetClasses.make(NetClasses.cls_of(e), rp)
+			if pup == null:
+				fail(res, "no puppet class for %s" % ch)
+				continue
+			NetClasses.apply(pup, rec)
+			if JSON.stringify(pup.net_fields()) != JSON.stringify(e.net_fields()):
+				fail(res, "%s: fields differ %s vs %s" % [ch, str(pup.net_fields()), str(e.net_fields())])
+			pup.free()
+	rp.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("w4enemies", res.ok, res.info)

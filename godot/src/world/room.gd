@@ -305,6 +305,12 @@ func load_room(room_id: String, snap = null) -> void:
 						end_door = {"x": x + 8, "y": y + T}
 					elif ch == "B":
 						boss_spawn = {"x": x + 8, "y": y + T}
+				"[", "]", "+":
+					for ge in spawn_group(ch, x, y):
+						Game.scale_enemy(ge)
+						ge.nid = next_nid
+						next_nid += 1
+						ents.append(ge)
 				_:
 					var e = spawn_enemy(ch, x, y)
 					if e != null:
@@ -920,10 +926,40 @@ func spawn_enemy(ch: String, x: int, y: int):
 		"u": return Mitm.new(self, x, y)
 		"r": return Botnet.new(self, x, y)
 		"y": return Pinger.new(self, x, y)
+		"(": return Heisenbug.new(self, x, y)
+		")": return Spinlock.new(self, x, y)
+		"{": return Ticker.new(self, x, y)
+		"}": return PriorityInversion.new(self, x, y)
 	push_warning("room %s: enemy letter '%s' is not ported yet (ignored)" % [id, ch])
 	return null
 
 # the five bits of a DDOS swarm at a cell (px); returns them (MVB2-06 gives the class)
+# the letters that make several creatures at once: DATA RACE twins, a DEADLOCK pair, an ORPHAN with its three children
+func spawn_group(ch: String, x: int, y: int) -> Array:
+	var out: Array = []
+	if mode == "guest":
+		return out
+	match ch:
+		"[":
+			var a := DataRace.new(self, x, y, false)
+			var b := DataRace.new(self, x + 64, y, true)
+			a.pair_with(b)
+			out = [a, b]
+		"]":
+			var a2 := DeadlockGuard.new(self, x, y, false)
+			var b2 := DeadlockGuard.new(self, x + 96, y, true)
+			a2.pair_with(b2)
+			out = [a2, b2]
+		"+":
+			var par := Orphan.new(self, x, y)
+			out = [par]
+			for i in range(3):
+				var k := OrphanChild.new(self, x, y, i)
+				k.parent = par
+				par.kids.append(k)
+				out.append(k)
+	return out
+
 func spawn_ddos(px: float, py: float, owner_rack = null) -> Array:
 	var out: Array = []
 	if mode == "guest":
@@ -2110,6 +2146,8 @@ func interact_combat(p) -> void:
 	for e in ents:
 		if e.dead or pred_dead(e) or (e.bp_t > 0.0 and e.bp_k == 1):
 			continue
+		if e.has_method("pushes") and e.pushes() and Game.overlap(hb, {"x": e.x, "y": e.y, "w": e.w, "h": e.h}):
+			grid.move_x(p, 1.0 if p.x + p.w / 2.0 > e.cx else -1.0)         # a giant pushes a body back like a wall
 		for b in e.harmboxes():
 			if b is Dictionary and b.has("sid") and p.parried.has(b.sid):
 				continue
