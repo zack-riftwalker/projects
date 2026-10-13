@@ -48,17 +48,17 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MV5A-01 | room data in (19 rooms, N11/H11 edits); checkers (`check5a.py`, two `world.py` rules) | Sonnet | todo |
-| MV5A-02 | world 4 look: tiles, backdrop, theme and music captured from the JS world 4 | Sonnet | todo |
-| MV5A-03 | the tick; tick blinks; gears `O`; pistons `A`; mutex keys `Q` and gates `4`; cables `5`; the loop room; `land` trigger | Sonnet | todo |
-| MV5A-04 | breakpoint | Sonnet | todo |
-| MV5A-05 | enemies: HEISENBUG, DATA RACE, DEADLOCK pair, SPINLOCK, TICKER, ORPHAN, PRIORITY INVERSION | Sonnet | todo |
-| MV5A-06 | RACE CONDITION → breakpoint | Sonnet | todo |
-| MV5A-07 | INFINITE LOOP → opus | Sonnet | todo |
-| MV5A-08 | DEADLOCK (optional) → plugin `lock_free`; plugin `hot_path` | Sonnet | todo |
-| MV5A-09 | the 4B-1 systems in the tower (zone, `tree`, agent, page, fragment, terminal, changelog) | Sonnet | todo |
-| MV5A-10 | walk-through tests, co-op scenarios, watchdog rules, bad line | Sonnet | todo |
-| MV5A-11 | tests, build, playtest steps, report → **stop** | Sonnet | todo |
+| MV5A-01 | room data in (19 rooms, N11/H11 edits); checkers (`check5a.py`, two `world.py` rules) | Sonnet | done |
+| MV5A-02 | world 4 look: tiles, backdrop, theme and music captured from the JS world 4 | Sonnet | done |
+| MV5A-03 | the tick; tick blinks; gears `O`; pistons `A`; mutex keys `Q` and gates `4`; cables `5`; the loop room; `land` trigger | Sonnet | done |
+| MV5A-04 | breakpoint | Sonnet | done |
+| MV5A-05 | enemies: HEISENBUG, DATA RACE, DEADLOCK pair, SPINLOCK, TICKER, ORPHAN, PRIORITY INVERSION | Sonnet | done |
+| MV5A-06 | RACE CONDITION → breakpoint | Sonnet | done |
+| MV5A-07 | INFINITE LOOP → opus | Sonnet | done |
+| MV5A-08 | DEADLOCK (optional) → plugin `lock_free`; plugin `hot_path` | Sonnet | done |
+| MV5A-09 | the 4B-1 systems in the tower (zone, `tree`, agent, page, fragment, terminal, changelog) | Sonnet | done |
+| MV5A-10 | walk-through tests, co-op scenarios, watchdog rules, bad line | Sonnet | done |
+| MV5A-11 | tests, build, playtest steps, report → **stop** | Sonnet | done |
 
 ---
 
