@@ -89,7 +89,7 @@ func t_rooms4b() -> bool:
 	if dh == null or dh.open:
 		fail(res, "H11:N2 is not closed")
 	h11.queue_free()
-	for rid in ["N11", "N17"]:
+	for rid in ["N17"]:                      # (N11's end door went with phase 5A: the tower is built)
 		var rr := new_room(rid)
 		if rr.end_door == null or String(rr.def.get("end", "")) == "":
 			fail(res, "%s has no end door" % rid)

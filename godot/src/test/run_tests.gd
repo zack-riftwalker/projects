@@ -84,6 +84,8 @@ func run(name: String) -> bool:
 		"variants4b": return t_variants4b()
 		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
+	if Tests5a.NAMES5.has(name):
+		return await Tests5a.new(main).run(name)
 	if Tests4b3.NAMES3.has(name):
 		return await Tests4b3.new(main).run(name)
 	if Tests4b2.NAMES.has(name):
@@ -503,7 +505,7 @@ func t_end() -> bool:
 	Game.persist = false
 	Game.flags = {}
 	var m := new_manager()
-	m.swap_to("N11")
+	m.swap_to("T11")
 	var room := m.room
 	var p = m.player
 	var ev := [0]
@@ -2886,8 +2888,8 @@ func t_rooms4() -> bool:
 				if td.id == d.to:
 					back = td
 			chk.call("%s partner exists" % d.id, not back.is_empty())
-			if back.is_empty():
-				continue
+			if back.is_empty() or d.get("wrap", false) or back.get("wrap", false):
+				continue                           # (the loop room's wrap door leads into its own room: MV5A tests read it)
 			chk.call("%s points back" % d.id, String(back.to) == String(d.id))
 			if (rid + ":" + to_room) in skip_pairs or d.get("symlink", false):       # (a symlink door's rooms do not touch: only the world checker reads it)
 				continue
@@ -2899,7 +2901,7 @@ func t_rooms4() -> bool:
 				chk.call("%s columns align" % d.id, int(o1[0]) + int(d.a) == int(o2[0]) + int(back.a) and int(o1[0]) + int(d.b) == int(o2[0]) + int(back.b))
 	res.info += " doors %d" % n_doors
 	# 2. every HEAP door that can open leads to safe ground
-	Game.flags = {"hatch:H10S": true, "hatch:H10N": true, "boss:LEAK": true, "gate:H07:catch": true, "crack:H02:130:0": true, "crack:H02:131:0": true, "crack:H02:132:0": true, "crack:H02:133:0": true}
+	Game.flags = {"hatch:H10S": true, "hatch:H10N": true, "boss:LEAK": true, "gate:H07:catch": true, "crack:H02:130:0": true, "crack:H02:131:0": true, "crack:H02:132:0": true, "crack:H02:133:0": true, "lever:T02": true}
 	var m := new_manager()
 	var crossed := 0
 	for rid in rooms:

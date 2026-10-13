@@ -74,6 +74,16 @@ for rid, r in built.items():
     for d in r.get("doors", []):
         tid, tdoor = d["to"].split(":")
         lo, hi = world_span(rooms[rid], d["side"], d["a"], d["b"])
+        if d.get("wrap"):
+            continue        # leads back into its own room (the loop room): the door that targets it carries the link
+        if tid in built and any(x["id"] == d["to"] and x.get("wrap") for x in built[tid]["doors"]):
+            if d["id"] != built[tid].get("loop", {}).get("after"):
+                err("%s: targets a wrap door but is not the loop's exit" % d["id"])
+            wd = next(x for x in built[tid]["doors"] if x["id"] == d["to"])
+            wlo, whi = world_span(rooms[tid], wd["side"], wd["a"], wd["b"])
+            links.append({"a": rid, "side": d["side"], "b": tid, "lo": lo, "hi": hi, "tlo": wlo, "thi": whi,
+                          "tside": wd["side"], "gate": "break", "note": "", "src": "built"})
+            continue
         if tid not in built:
             if tid in rooms:
                 continue    # a planned room: the design link covers it
@@ -98,7 +108,9 @@ for l in design["links"]:
     a, b = l["a"], l["b"]
     if a in built and b in built:
         same = [x for x in links if {x["a"], x["b"]} == {a, b} and x["src"] == "built"]
-        if not same:
+        if not same and l.get("gate") == "wrap":
+            pass        # the wrap link of a loop room: kept as the design's link
+        elif not same:
             warn("design link %s %s %s not built yet (both rooms are built)" % (a, l["side"], b))
         else:
             x = same[0]
@@ -205,6 +217,13 @@ def ground_we(room, side, lo, hi, tag):
         notes.append("%s: %s door cells are wall today (planned change to a built room)" % (tag, room["id"]))
 
 
+def lower_covers_s(room, c):
+    for d in built.get(room["id"], {}).get("doors", []):
+        if d["side"] == "S" and room["x"] + d["a"] <= c <= room["x"] + d["b"]:
+            return True
+    return False
+
+
 def ground_ns(upper, lower, lo, hi, tag):
     """N/S door: the upper room needs floor beside the hole (you arrive from below, pushed up,
     and land next to it); the lower room needs ground somewhere under the hole."""
@@ -226,6 +245,8 @@ def ground_ns(upper, lower, lo, hi, tag):
     if lower["built"]:
         for c in range(lo, hi + 1):
             col = c - lower["x"]
+            if lower_covers_s(lower, c):
+                continue        # a chute: the lower room's own S door covers the column and the fall goes on
             if not any(tile(lower, col, r) in STAND or tile(lower, col, r) in "w^" for r in range(1, lower["h"])):
                 err("%s: column %d of %s has no ground under the hole" % (tag, c, lower["id"]))
 
@@ -251,7 +272,8 @@ GATES = {"", "catch", "bash", "agents", "sudo", "curl", "ssh", "breakpoint", "re
          "flood0", "flood1", "fight", "boss", "drop", "lever", "mutex", "wrap", "break", "merge",
          "symlink", "join", "checkout",
          "until:boss:NULL", "until:boss:REVIEWER1", "until:boss:MERGE", "until:boss:LEAK", "flood:0", "flood:1",
-         "oneway", "until:boss:CRAWLER", "until:boss:FIREWALL", "until:wave:N21", "until:lever:CDN", "until:hatch:H10S", "until:hatch:H10N", "until:link:lab", "until:2of:lab:a,lab:b,lab:c"}
+         "oneway", "until:boss:CRAWLER", "until:boss:FIREWALL", "until:wave:N21", "until:lever:CDN", "until:hatch:H10S", "until:hatch:H10N", "until:link:lab", "until:2of:lab:a,lab:b,lab:c",
+         "until:lever:T02", "until:2of:thread:0,thread:1,thread:2", "until:boss:RACE", "until:boss:LOOP"}
 for l in links:
     if l["gate"] not in GATES:
         err("%s %s %s: unknown gate %r" % (l["a"], l["side"], l["b"], l["gate"]))

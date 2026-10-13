@@ -353,8 +353,8 @@ func flag(key: String) -> bool:
 	return bool(flags.get(key, false))
 
 # world state: flags that every player's world needs (a hatch the host opened must open for the guest too); they travel in snapshots
-const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:", "map:", "mapped:", "changelog:", "log:", "agent:", "page:", "wave:", "rst:"]
-const _WORLD_HEADS := ["boss", "hatch", "link", "thread", "lever", "lab", "map", "mapped", "changelog", "log", "agent", "page", "wave", "rst"]
+const WORLD_PREFIXES := ["boss:", "hatch:", "link:", "thread:", "lever:", "lab:", "map:", "mapped:", "changelog:", "log:", "agent:", "page:", "wave:", "rst:", "break:", "cable:"]
+const _WORLD_HEADS := ["boss", "hatch", "link", "thread", "lever", "lab", "map", "mapped", "changelog", "log", "agent", "page", "wave", "rst", "break", "cable"]
 
 func is_world_flag(ks: String) -> bool:
 	var c := ks.find(":")

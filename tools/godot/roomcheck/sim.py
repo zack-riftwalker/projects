@@ -10,9 +10,9 @@ WJ_X, WJ_Y, WJ_LOCK = 165.0, 285.0, 0.15
 DASH_SPEED, DASH_T, DJUMP = 320.0, 0.15, 272.0
 DT = 1.0 / 60.0
 
-E, SOLID, ONEWAY, SPU, SPD, CRACK, CRUMBLE, BA, BB, LIQ, GC, GA, DEAD, FIRE, THICK, PORT, WEB = range(17)
+E, SOLID, ONEWAY, SPU, SPD, CRACK, CRUMBLE, BA, BB, LIQ, GC, GA, DEAD, FIRE, THICK, PORT, WEB, MUTEX, CABLE = range(19)
 CH = {"#": SOLID, "=": ONEWAY, "^": SPU, "v": SPD, "%": CRACK, "~": CRUMBLE, "1": BA, "2": BB, "w": LIQ,
-      "!": GC, "&": GA, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT, "h": WEB}
+      "!": GC, "&": GA, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT, "h": WEB, "4": MUTEX, "5": CABLE}
 # phase 4B (design values, see PLAN-metroidvania-phase4b2.md)
 CURL_RANGE, CURL_SPEED, CURL_POP, CURL_EXIT_VX = 104.0, 400.0, 300.0, 210.0
 SSH_HOLD, SSH_MAX = 0.3, 2
@@ -35,6 +35,11 @@ class Room:
         self.ports_open = o.get("ports_open", True)      # optimistic: ports open (riding is checked by its own timed sim)
         self.webs_off = o.get("webs_off", False)
         self.hooks_rings = o.get("hooks_rings", False)   # boss:CRAWLER: scraper hooks `c` are GET rings
+        self.mutex_open = o.get("mutex_open", True)      # phase 5A: mutex gates `4` (open while a key is active)
+        self.cable_cut = o.get("cable_cut", False)       # phase 5A: spaghetti cables `5` (opus)
+        self.pistons_solid = o.get("pistons_solid", False)
+        self.gears = o.get("gears", [])                  # [{x, y, r, n}] cells; platforms 3 wide at 8 positions (optimistic)
+        self.pistons = o.get("pistons", [])              # [{x, y, len, w}] the column under a housing `A`
         self.t = [[CH.get(c, E) for c in r] for r in self.rows]
         self.springs = []
         self.plats = []      # treated as one-way floors along their path (optimistic)
@@ -48,6 +53,21 @@ class Room:
                 if c in "MVJ":
                     self.plats.append((tx, ty, c))
         self.extra_oneway = set()
+        self.extra_solid = set()
+        for g in self.gears:
+            for k in range(8):
+                a = k * math.pi / 4
+                cx = g["x"] + g["r"] * math.cos(a)
+                cy = g["y"] + g["r"] * math.sin(a)
+                tx, ty = int(round(cx)), int(round(cy))
+                for i in (-1, 0, 1):
+                    if 0 <= ty < self.h and 0 <= tx + i < self.w:
+                        self.extra_oneway.add((tx + i, ty))
+        if self.pistons_solid:
+            for pz in self.pistons:
+                for j in range(1, pz["len"] + 1):
+                    for i in range(pz.get("w", 1)):
+                        self.extra_solid.add((pz["x"] + i, pz["y"] + j))
         for tx, ty, c in self.plats:
             r = self.rows[ty]
             if c in "MJ":
@@ -89,6 +109,8 @@ class Room:
                 return SOLID
             return E
         v = self.t[ty][tx]
+        if v == E and (tx, ty) in self.extra_solid:
+            return SOLID
         if v == E and (tx, ty) in self.extra_oneway:
             return ONEWAY
         return v
@@ -111,6 +133,10 @@ class Room:
             return True
         if v == PORT:
             return not self.ports_open
+        if v == MUTEX:
+            return not self.mutex_open
+        if v == CABLE:
+            return not self.cable_cut
         return False
 
     def box_hits(self, x, y, w, h):

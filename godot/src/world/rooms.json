@@ -233,7 +233,7 @@
              "doors": [
                  {"id": "H11:S", "side": "S", "a": 50, "b": 53, "to": "H10:N", "lock": "until:hatch:H10N"},
                  {"id": "H11:E", "side": "E", "a": 9, "b": 12, "to": "N01:W"},
-                 {"id": "H11:N", "side": "N", "a": 60, "b": 63, "to": "T02:S"},
+                 {"id": "H11:N", "side": "N", "a": 60, "b": 63, "to": "T02:S", "lock": "until:lever:T02"},
                  {"id": "H11:N2", "side": "N", "a": 190, "b": 198, "to": "N11:S1", "lock": "oneway"}
              ] },
     "H12": { "file": "H12.txt", "zone": "heap", "secret": true, "title": "alloca.h", "size": [24, 14], "origin": [920, -34], "world": 3, "music": "w3",
@@ -358,13 +358,13 @@
                  {"id": "N10:E", "side": "E", "a": 15, "b": 18, "to": "N09:W"},
                  {"id": "N10:W", "side": "W", "a": 15, "b": 18, "to": "N11:E"}
              ] },
-    "N11": { "file": "N11.txt", "title": "airgap", "size": [100, 52], "origin": [1240, -104], "world": 6, "music": "w6", "zone": "net", "end": "to be continued in /dev/threads",
-             "signs": ["airgap: no cable between these machines. GET your way across. (fall, and eth0 catches you.)", "/dev/threads: the tower is closed tonight."],
+    "N11": { "file": "N11.txt", "title": "airgap", "size": [100, 52], "origin": [1240, -104], "world": 6, "music": "w6", "zone": "net",
+             "signs": ["airgap: no cable between these machines. GET your way across. (fall, and eth0 catches you.)", "/dev/threads: the tower. GET your way to the foot of it."],
              "landmarks": ["tower"],
              "doors": [
                  {"id": "N11:E", "side": "E", "a": 7, "b": 10, "to": "N10:W"},
                  {"id": "N11:W", "side": "W", "a": 41, "b": 44, "to": "T01:E"},
-                 {"id": "N11:N", "side": "N", "a": 40, "b": 43, "to": "T16:S"},
+                 {"id": "N11:N", "side": "N", "a": 40, "b": 43, "to": "T16:S", "lock": "oneway"},
                  {"id": "N11:S1", "side": "S", "a": 10, "b": 18, "to": "H11:N2"},
                  {"id": "N11:S2", "side": "S", "a": 21, "b": 66, "to": "N01:N"},
                  {"id": "N11:S3", "side": "S", "a": 69, "b": 98, "to": "N04:N"}
@@ -474,6 +474,156 @@
              "agents": [[24, 11]],
              "doors": [
                  {"id": "N20:N", "side": "N", "a": 12, "b": 15, "to": "N05:S"}
+             ] },
+    "T01": { "file": "T01.txt", "title": "pthread_create.c", "size": [64, 20], "origin": [1176, -72], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["pthread_create(): three threads start here. Each climbs on its own; they meet at race_condition.go.", "the clock up there ticks every 0.83 s. so does everything in the tower."],
+             "landmarks": ["tower"],
+             "npc": [{"kind": "tree", "x": 54, "y": 8, "zone": "tower", "price": 40}],
+             "decor": [{"kind": "scrap", "x": 50, "y": 12}, {"kind": "scrap", "x": 51, "y": 11}, {"kind": "scrap", "x": 52, "y": 10}],
+             "doors": [
+                 {"id": "T01:E", "side": "E", "a": 9, "b": 12, "to": "N11:W"},
+                 {"id": "T01:W", "side": "W", "a": 9, "b": 12, "to": "T02:E"},
+                 {"id": "T01:N", "side": "N", "a": 24, "b": 27, "to": "TC1:S"}
+             ] },
+    "T02": { "file": "T02.txt", "title": "async_await.ts", "size": [86, 20], "origin": [1090, -72], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["await: the blocks are there on one tick and gone on the next. Count with the clock.", "trapdoor to /proc/heap. pull the lever, then drop."],
+             "levers": [{"x": 35, "y": 12, "flag": "lever:T02"}],
+             "variants": [{"if": "boss:RACE", "rect": [0, 0, 86, 20], "from": "1", "to": "#"}, {"if": "boss:RACE", "rect": [0, 0, 86, 20], "from": "2", "to": "#"}],
+             "doors": [
+                 {"id": "T02:E", "side": "E", "a": 9, "b": 12, "to": "T01:W"},
+                 {"id": "T02:S", "side": "S", "a": 30, "b": 33, "to": "H11:N", "lock": "until:lever:T02"},
+                 {"id": "T02:N", "side": "N", "a": 10, "b": 13, "to": "TA1:S"},
+                 {"id": "T02:N2", "side": "N", "a": 58, "b": 61, "to": "TB1:S"},
+                 {"id": "T02:N3", "side": "N", "a": 40, "b": 43, "to": "T17:S", "lock": "oneway"}
+             ] },
+    "TA1": { "file": "TA1.txt", "title": "thread_0.c", "size": [26, 44], "origin": [1090, -116], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["thread_0: waiting on async I/O. the floor comes and goes."],
+             "variants": [{"if": "boss:RACE", "rect": [0, 0, 26, 44], "from": "1", "to": "#"}, {"if": "boss:RACE", "rect": [0, 0, 26, 44], "from": "2", "to": "#"}],
+             "doors": [
+                 {"id": "TA1:S", "side": "S", "a": 10, "b": 13, "to": "T02:N"},
+                 {"id": "TA1:N", "side": "N", "a": 10, "b": 13, "to": "T04:S", "sets": "thread:0"}
+             ] },
+    "TB1": { "file": "TB1.txt", "title": "thread_1.c", "size": [26, 44], "origin": [1138, -116], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["thread_1: a heisenbug. it only moves when nobody is looking. (one is asleep behind the cracked wall.)"],
+             "doors": [
+                 {"id": "TB1:S", "side": "S", "a": 10, "b": 13, "to": "T02:N2"},
+                 {"id": "TB1:N", "side": "N", "a": 10, "b": 13, "to": "T04:S2", "sets": "thread:1"},
+                 {"id": "TB1:E", "side": "E", "a": 13, "b": 16, "to": "T15:W"}
+             ] },
+    "TC1": { "file": "TC1.txt", "title": "thread_2.c", "size": [26, 44], "origin": [1190, -116], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["thread_2: the gears turn one step per tick. ride them."],
+             "gears": [{"x": 12, "y": 34, "r": 3, "n": 2}, {"x": 12, "y": 20, "r": 3, "n": 2}],
+             "doors": [
+                 {"id": "TC1:S", "side": "S", "a": 10, "b": 13, "to": "T01:N"},
+                 {"id": "TC1:N", "side": "N", "a": 10, "b": 13, "to": "T04:S3", "sets": "thread:2"}
+             ] },
+    "T15": { "file": "T15.txt", "title": "heisenbug.log", "size": [26, 14], "origin": [1164, -110], "world": 4, "music": "w4", "zone": "tower", "secret": true,
+             "signs": ["heisenbug.log: they stop when you look at them. you can only look one way."],
+             "plugins": ["hot_path"],
+             "agents": [[21, 10]],
+             "doors": [
+                 {"id": "T15:W", "side": "W", "a": 7, "b": 10, "to": "TB1:E"}
+             ] },
+    "T04": { "file": "T04.txt", "title": "race_condition.go", "size": [150, 20], "origin": [1090, -136], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["yield(): drop here to go back down and start another thread. (single core detected: threads run one by one.)", {"text": "join: 0 of 3 threads here. two must join.", "alt": [{"if": "2of:thread:0,thread:1,thread:2", "text": "join: done. the way up is open."}]}, "the stairs to thread_0's top are for sudo."],
+             "decor": [{"kind": "threads", "x": 60, "y": 2, "w": 40, "if": "!boss:RACE"}],
+             "doors": [
+                 {"id": "T04:S", "side": "S", "a": 10, "b": 13, "to": "TA1:N"},
+                 {"id": "T04:S2", "side": "S", "a": 58, "b": 61, "to": "TB1:N"},
+                 {"id": "T04:S3", "side": "S", "a": 110, "b": 113, "to": "TC1:N"},
+                 {"id": "T04:S4", "side": "S", "a": 40, "b": 43, "to": "T17:N"},
+                 {"id": "T04:N", "side": "N", "a": 10, "b": 13, "to": "TA2:S", "lock": "until:2of:thread:0,thread:1,thread:2"},
+                 {"id": "T04:N2", "side": "N", "a": 58, "b": 61, "to": "TB2:S", "lock": "until:2of:thread:0,thread:1,thread:2"}
+             ] },
+    "T17": { "file": "T17.txt", "title": "yield()", "size": [22, 44], "origin": [1116, -116], "world": 4, "music": "w4", "zone": "tower",
+             "signs": [],
+             "doors": [
+                 {"id": "T17:N", "side": "N", "a": 14, "b": 17, "to": "T04:S4"},
+                 {"id": "T17:S", "side": "S", "a": 14, "b": 17, "to": "T02:N3"}
+             ] },
+    "TA2": { "file": "TA2.txt", "title": "deadlock.rs", "size": [26, 62], "origin": [1090, -198], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["deadlock.rs: each one holds what the other needs. stand between them."],
+             "pistons": [{"x": 17, "y": 30, "len": 3, "w": 1, "ticks": [1, 1, 1, 1]}, {"x": 8, "y": 15, "len": 3, "w": 1, "ticks": [1, 1, 1, 1]}],
+             "doors": [
+                 {"id": "TA2:S", "side": "S", "a": 10, "b": 13, "to": "T04:N"},
+                 {"id": "TA2:W", "side": "W", "a": 35, "b": 38, "to": "T14:E"},
+                 {"id": "TA2:N", "side": "N", "a": 10, "b": 13, "to": "T08:S"}
+             ] },
+    "TB2": { "file": "TB2.txt", "title": "mutex.c", "size": [26, 62], "origin": [1138, -198], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["mutex.c: hit the key, the lock above is yours for 3.5 s. (two of you: one stands on the key.)"],
+             "mutex": [{"key": [3, 58], "rows": [45]}, {"key": [22, 43], "rows": [30]}, {"key": [3, 28], "rows": [15]}],
+             "doors": [
+                 {"id": "TB2:S", "side": "S", "a": 10, "b": 13, "to": "T04:N2"},
+                 {"id": "TB2:E", "side": "E", "a": 55, "b": 58, "to": "T06:W", "lock": "fight"},
+                 {"id": "TB2:N", "side": "N", "a": 10, "b": 13, "to": "T08:S2"}
+             ] },
+    "TC2": { "file": "TC2.txt", "title": "semaphore.h", "size": [26, 62], "origin": [1190, -198], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["semaphore.h: these pistons never rest (busy-wait). press [special] facing one: breakpoint. it stops for 3.5 s."],
+             "pistons": [{"x": 11, "y": 40, "len": 4, "w": 4, "ticks": [0.25, 0.1, 0.25, 0.1], "busy": true}, {"x": 11, "y": 20, "len": 4, "w": 4, "ticks": [0.25, 0.1, 0.25, 0.1], "busy": true}, {"x": 6, "y": 1, "len": 3, "w": 4, "ticks": [0.25, 0.1, 0.25, 0.1], "busy": true}],
+             "moving_freezable": true,
+             "doors": [
+                 {"id": "TC2:W", "side": "W", "a": 55, "b": 58, "to": "T06:E", "lock": "until:boss:RACE"},
+                 {"id": "TC2:N", "side": "N", "a": 6, "b": 9, "to": "T09:S"}
+             ] },
+    "T06": { "file": "T06.txt", "title": "RACE CONDITION", "size": [26, 14], "origin": [1164, -150], "world": 4, "music": "w4", "zone": "tower",
+             "signs": [],
+             "boss": {"id": "RACE", "class": "RaceBoss", "name": "RACE CONDITION", "sub": "two threads, one variable", "trigger_x": 96, "T": 100, "u": 0.9, "reward": "breakpoint", "banner": "breakpoint", "banner_sub": "facing a machine or an enemy, press [special]: it stops for 3.5 s", "music": "boss", "drop": 45},
+             "doors": [
+                 {"id": "T06:W", "side": "W", "a": 7, "b": 10, "to": "TB2:E", "lock": "fight"},
+                 {"id": "T06:E", "side": "E", "a": 7, "b": 10, "to": "TC2:W", "lock": "until:boss:RACE"}
+             ] },
+    "T14": { "file": "T14.txt", "title": "volatile.h", "size": [24, 14], "origin": [1066, -170], "world": 4, "music": "w4", "zone": "tower", "secret": true,
+             "signs": ["volatile: the compiler may not assume this value stays the same. neither should you."],
+             "pages": [[4, 10, 3]],
+             "doors": [
+                 {"id": "T14:E", "side": "E", "a": 7, "b": 10, "to": "TA2:W"}
+             ] },
+    "T08": { "file": "T08.txt", "title": "scheduler.c", "size": [76, 20], "origin": [1090, -218], "world": 4, "music": "w4", "zone": "tower", "terminal": true,
+             "signs": ["worker 2 joined. Finally, a second opinion.", "while(true) next door. it does not stop by itself."],
+             "landmarks": ["tower"],
+             "gears": [{"x": 38, "y": 7, "r": 4, "n": 2, "decor": true}],
+             "decor": [{"kind": "coffee2", "x": 33, "y": 14}],
+             "doors": [
+                 {"id": "T08:S", "side": "S", "a": 10, "b": 13, "to": "TA2:N"},
+                 {"id": "T08:S2", "side": "S", "a": 58, "b": 61, "to": "TB2:N"},
+                 {"id": "T08:E", "side": "E", "a": 7, "b": 10, "to": "T09:W"},
+                 {"id": "T08:N", "side": "N", "a": 20, "b": 23, "to": "T18:S"}
+             ] },
+    "T09": { "file": "T09.txt", "title": "while_true.js", "size": [64, 20], "origin": [1166, -218], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["while (true) {", "i++; // the room gets a little worse every time. look for break;"],
+             "loop": {"flag": "break:T09", "after": "T10:W", "iters": [{}, {"spawn": [["{", 40, 14], ["{", 52, 14]]}, {"spawn": [["{", 40, 14], ["{", 52, 14], ["(", 24, 14]], "variant": 0}, {"spawn": [["{", 40, 14], ["{", 52, 14], ["(", 24, 14], ["}", 58, 14]], "variant": 0, "key": true}]},
+             "variants": [{"if": "iter>=2", "rect": [36, 14, 13, 1], "from": " ", "to": "^"}],
+             "doors": [
+                 {"id": "T09:W", "side": "W", "a": 7, "b": 10, "to": "T08:E"},
+                 {"id": "T09:S", "side": "S", "a": 30, "b": 33, "to": "TC2:N"},
+                 {"id": "T09:E", "side": "E", "a": 11, "b": 14, "to": "T09:W", "wrap": true}
+             ] },
+    "T10": { "file": "T10.txt", "title": "INFINITE LOOP", "size": [24, 14], "origin": [1230, -214], "world": 4, "music": "w4", "zone": "tower",
+             "signs": [],
+             "boss": {"id": "LOOP", "class": "LoopBoss", "name": "INFINITE LOOP", "sub": "while (true)", "trigger_x": 80, "T": 110, "u": 0.6, "reward": "opus", "banner": "opus", "banner_sub": "your claw reaches further and hits twice as hard; it cuts spaghetti cables", "music": "boss", "drop": 50},
+             "doors": [
+                 {"id": "T10:W", "side": "W", "a": 7, "b": 10, "to": "T09:E", "lock": "fight"},
+                 {"id": "T10:E", "side": "E", "a": 7, "b": 10, "to": "T11:W", "lock": "until:boss:LOOP"}
+             ] },
+    "T11": { "file": "T11.txt", "title": "busy_wait.c", "size": [48, 20], "origin": [1254, -218], "world": 4, "music": "w4", "zone": "tower", "end": "to be continued in /var/prod",
+             "signs": ["busy_wait: it never sleeps. (breakpoint)", "spaghetti under your feet: goto, all the way down. (opus)"],
+             "pistons": [{"x": 38, "y": 1, "len": 9, "w": 2, "ticks": [0.25, 0.1, 0.25, 0.1], "busy": true}],
+             "doors": [
+                 {"id": "T11:W", "side": "W", "a": 11, "b": 14, "to": "T10:E"},
+                 {"id": "T11:S", "side": "S", "a": 24, "b": 27, "to": "T16:N"},
+                 {"id": "T11:E", "side": "E", "a": 7, "b": 10, "to": "P01:W"}
+             ] },
+    "T16": { "file": "T16.txt", "title": "goto", "size": [26, 94], "origin": [1270, -198], "world": 4, "music": "w4", "zone": "tower",
+             "signs": ["goto: considered harmful. considered fast."],
+             "doors": [
+                 {"id": "T16:N", "side": "N", "a": 8, "b": 11, "to": "T11:S"},
+                 {"id": "T16:S", "side": "S", "a": 10, "b": 13, "to": "N11:N"}
+             ] },
+    "T18": { "file": "T18.txt", "title": "lock_order.c", "size": [24, 14], "origin": [1100, -232], "world": 4, "music": "w4", "zone": "tower",
+             "signs": [],
+             "boss": {"id": "DEADLOCK", "class": "DeadlockBoss", "name": "DEADLOCK", "sub": "each waits for the other", "trigger": "land", "T": 120, "u": 0.8, "reward": "plugin:lock_free", "banner": "lock_free", "banner_sub": "plugin - your dash goes through guards and shields", "music": "boss", "drop": 40},
+             "doors": [
+                 {"id": "T18:S", "side": "S", "a": 10, "b": 13, "to": "T08:N", "lock": "fight"}
              ] }
   }
 }

@@ -95,7 +95,7 @@ func t_mapdata() -> bool:
 		if Game.is_lab(id) and Game.zone_of(id) == "src":
 			fail(res, "lab room in src " + id)
 	secrets.sort()
-	if secrets != ["D07", "H12", "H13", "H14", "H15", "H16", "N19", "N21", "R06", "R12", "R13", "R15"]:
+	if secrets != ["D07", "H12", "H13", "H14", "H15", "H16", "N19", "N21", "R06", "R12", "R13", "R15", "T14", "T15"]:
 		fail(res, "secrets " + str(secrets))
 	# staged vs committed
 	var mgr := new_manager()
