@@ -196,6 +196,8 @@ func _on_room_built(r: Room) -> void:
 		r.net_parry.connect(func(nid, sid): Net.rel("parry", {"nid": nid, "sid": sid}))
 		r.net_pickup.connect(func(id): Net.rel("pickup", {"room": r.id, "id": id, "gz": 1 if Game.mod_gzip() else 0}))
 		r.net_crack.connect(func(tx, ty): Net.rel("crack", {"room": r.id, "tx": tx, "ty": ty}))
+		r.net_mutex.connect(func(ki): Net.rel("mutex", {"room": r.id, "n": ki}))
+		r.net_cable.connect(func(tx, ty): Net.rel("cable", {"room": r.id, "tx": tx, "ty": ty}))
 		r.net_reveal.connect(func(): Net.rel("reveal", {"room": r.id}))
 		r.net_lqhit.connect(func(): Net.rel("lqhit", {"room": r.id}))
 
@@ -510,7 +512,7 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"pingok": Game.ping_ack_received(String(d.id))
 		"wflag":                                 # a world flag only the guest's page could set (a sign it read, a changelog line it was shown)
 			var wk := String(d.k)
-			if wk.begins_with("changelog:") or wk.begins_with("log:"):
+			if wk.begins_with("changelog:") or wk.begins_with("log:") or wk.begins_with("break:"):
 				if not Game.flag(wk):
 					Game.flags[wk] = true
 					Game.write_save()
@@ -538,8 +540,17 @@ func _host_rel(k: String, d: Dictionary) -> void:
 		"die": _guest_down()
 		"room":
 			_host_door_sets(String(d.get("door", "")))
+			_host_loop_cross(String(d.get("door", "")))
 			_host_remote_to_room(String(d.to))
 		"crack": _host_crack(d)
+		"mutex":
+			var mrm := _remote_room()
+			if mrm != null and mrm.id == String(d.room) and mrm.tower != null:
+				mrm.tower.mutex_hit(int(d.n))
+		"cable":
+			var crm := _remote_room()
+			if crm != null and crm.id == String(d.room) and crm.tower != null:
+				_as_p2(crm, func(): crm.tower.cut_at(int(d.tx), int(d.ty), false))
 		"lqhit":
 			var lr := _remote_room()
 			if lr != null and lr.id == String(d.room) and lr.rise_on and lr.liquid_y != null and Net.now() - lr.lq_last > 0.5:
@@ -606,6 +617,18 @@ func _host_door_sets(door_id: String) -> void:
 			Game.flags[String(d.sets)] = true
 			sets_pending[String(d.sets)] = Net.now()
 			Game.write_save()
+
+# the guest crossed a loop room's wrap door: the room gets one pass worse for both of us (the host decides)
+func _host_loop_cross(door_id: String) -> void:
+	if door_id == "":
+		return
+	var rid := door_id.get_slice(":", 0)
+	var meta: Dictionary = Game.rooms_meta.rooms.get(rid, {})
+	if not meta.has("loop"):
+		return
+	for dd in meta.doors:
+		if dd.id == door_id and dd.get("wrap", false) and not Game.flag(String(meta.loop.flag)):
+			mgr.loop_advance(rid)
 
 func _host_remote_to_room(to_id: String) -> void:
 	var old := _remote_room()
@@ -1075,7 +1098,8 @@ func _send_snapshot() -> void:
 		hz.append([z.id, z.kind, NetClasses.x4(z.x), NetClasses.x4(z.y), NetClasses.x4(z.a), NetClasses.x4(z.b), z.dmg])
 	var hp_ = mgr.player
 	var p1: Array = [mgr.room.id, NetClasses.x4(hp_.x), NetClasses.x4(hp_.y), roundi(hp_.vx), roundi(hp_.vy), int(hp_.face), 0, hp_.hp, 1 if hp_.dead else 0, host_dn, 1 if _map_open() else 0, hp_.zip, 1 if hp_.ssh_t > 0.0 else 0]
-	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "ch": r.ch_t0, "tg": tg, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1,
+	var tw: Dictionary = r.tower.net_pack() if r.tower != null else {}
+	var s := {"sn": snap_n, "tm": hms(), "room": r.id, "rt": r.time, "ch": r.ch_t0, "tg": tg, "en": en, "it": it, "pj": pj, "hz": hz, "gf": gf, "pl": pl, "cr": cr, "ag": ag, "p1": p1, "tw": tw,
 		"fs": FIGHT_STATES.find(r.fight.state), "fa": 1 if r.fight_active else 0,
 		"fl": Game.heap_flood(), "lq": NetClasses.x4(r.liquid_y) if r.liquid_y != null else -1, "rs": 1 if r.rise_on else 0}
 	# world flags are state: every snapshot carries the digest, the full list goes out only while the guest's digest differs (a lost one corrects itself)
@@ -1350,6 +1374,8 @@ func _apply_snapshot(m: Dictionary) -> void:
 	for rec in m.get("ag", []):
 		r.agent_view.append({"owner": int(rec[0]), "x": rec[1] / 4.0, "y": rec[2] / 4.0})
 	r.apply_crumbles(m.get("cr", []))
+	if r.tower != null:
+		r.tower.net_apply(m.get("tw", {}))
 	last_cr = {}
 	for rec in m.get("cr", []):
 		last_cr[int(rec[1]) * r.w + int(rec[0])] = true

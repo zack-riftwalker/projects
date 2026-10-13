@@ -108,6 +108,25 @@ func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> v
 	if hud != null:
 		hud.set_room(room)
 
+# the loop room (T09) gets one pass worse and is rebuilt for whoever stands in it (the host decides; a guest's crossing comes as its `room` event)
+func loop_advance(room_id: String) -> void:
+	Game.loop_iter[room_id] = mini(3, int(Game.loop_iter.get(room_id, 0)) + 1)
+	if room != null and room.id == room_id:
+		swap_to(room_id, Vector2(player.x, player.y), null, true)
+	elif rooms.has(room_id):
+		var dead_room: Room = rooms[room_id]
+		var keep: Array = dead_room.remote_players.duplicate()
+		for rp in keep:
+			dead_room.remote_players.erase(rp)
+			dead_room.remove_child(rp)
+		rooms.erase(room_id)
+		dead_room.queue_free()
+		var nr := ensure_room(room_id)
+		for rp in keep:
+			rp.room = nr
+			nr.remote_players.append(rp)
+			nr.add_child(rp)
+
 func start_game() -> void:
 	Game.load_meta()
 	respawn(false)
@@ -120,6 +139,7 @@ func respawn(count_death := true) -> void:
 	if room != null:
 		room.record_loss()
 	last_door_id = ""
+	Game.loop_iter = {}                    # a new life: the loop room starts over
 	if player != null:
 		if player.get_parent() != null:
 			player.get_parent().remove_child(player)
@@ -225,6 +245,7 @@ func travel(room_id: String) -> void:
 	trans.swapped = false
 	last_door_id = ""
 	trans.travel = room_id
+	Game.loop_iter = {}
 	Controls.locked = true
 
 
@@ -291,6 +312,14 @@ func _place_in_target() -> void:
 		return
 	var d: Dictionary = trans.door
 	var to_id := String(d.to)                       # "R02:W" = the target room and its door
+	var wrap_rebuild := false
+	if bool(d.get("wrap", false)):                  # the loop room's east door: back in the same room at its west door, one pass worse, until `break;` was touched
+		var lp: Dictionary = Game.rooms_meta.rooms[String(trans.src_room)].loop
+		if Game.flag(String(lp.flag)):
+			to_id = String(lp.after)
+		elif mode != "guest":
+			Game.loop_iter[String(trans.src_room)] = mini(3, int(Game.loop_iter.get(String(trans.src_room), 0)) + 1)
+			wrap_rebuild = true
 	var target_room := to_id.get_slice(":", 0)
 	var tmeta: Dictionary = Game.rooms_meta.rooms[target_room]
 	var t_door: Dictionary = {}
@@ -321,7 +350,7 @@ func _place_in_target() -> void:
 	player.face = trans.face
 	player.dash_t = 0.0
 	player.atk_t = 0.0
-	swap_to(target_room, Vector2(new_x, new_y))
+	swap_to(target_room, Vector2(new_x, new_y), null, wrap_rebuild)
 	if trans.has("ssh") and float(trans.ssh[0]) > 0.0:
 		player.ssh_t = float(trans.ssh[0])
 		player.ssh_dir = float(trans.ssh[1])

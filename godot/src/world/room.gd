@@ -53,6 +53,12 @@ var rise_armed := false         # a player has been below the trigger row: only 
 var rise_on := false            # H06: the flood is rising (it started when somebody climbed past the trigger row)
 var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the tide back (one push per 0.5 s)
 var blink_period := 1.5
+var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
+var iter := 0                              # T09's loop room: which pass this is (0..3)
+var loop_key = null                        # T09: the `break;` key cell {x, y, w, h} (null in other rooms)
+var land_t := 0.0                          # boss trigger "land": how long somebody has stood on the arena floor
+var last_tick := -1                        # world 4: the tick the last sound was made for
+const TICK := Tower.TICK
 var entity_root: Node2D
 var fight_active := false
 var crossing := false
@@ -92,6 +98,8 @@ signal net_buymap(zone_id: String)
 signal shop_requested
 signal index_requested(npc_index: int)
 signal net_lever(lever_index: int)
+signal net_mutex(key_index: int)
+signal net_cable(tx: int, ty: int)
 signal net_pad()
 signal net_freejar(jar_index: int)
 signal net_crumble(tx: int, ty: int)
@@ -179,7 +187,7 @@ func load_room(room_id: String, snap = null) -> void:
 	grid.tiles.resize(w * h)
 	grid.doors = []
 	for d in def.get("doors", []):
-		grid.doors.append({"id": d.id, "side": d.side, "a": int(d.a), "b": int(d.b), "to": d.to, "lock": d.get("lock", ""), "sets": d.get("sets", ""), "open": true})
+		grid.doors.append({"id": d.id, "side": d.side, "a": int(d.a), "b": int(d.b), "to": d.to, "lock": d.get("lock", ""), "sets": d.get("sets", ""), "wrap": bool(d.get("wrap", false)), "open": true})
 	update_doors()
 	var sign_n := 0
 	var item_id := 0
@@ -210,7 +218,7 @@ func load_room(room_id: String, snap = null) -> void:
 					gate_cells.append([tx, ty, "catch" if t == TileGrid.GATE_C else "agents"])
 				continue
 			match ch:
-				" ", ".", "|":
+				" ", ".", "|", "O", "A", "Q":        # (the tower's machines are read by Tower from rooms.json; Q is only the key's look)
 					pass
 				"P":
 					start = {"x": float(x + 3), "y": float(y + 6)}
@@ -249,6 +257,8 @@ func load_room(room_id: String, snap = null) -> void:
 						sce.nid = next_nid
 						next_nid += 1
 						ents.append(sce)
+				"F":
+					loop_key = {"x": float(x), "y": float(y), "w": 16.0, "h": 16.0}
 				"I":
 					levers.append({"x": x, "y": y, "i": levers.size()})
 				"z":
@@ -300,6 +310,19 @@ func load_room(room_id: String, snap = null) -> void:
 						e.nid = next_nid
 						next_nid += 1
 						ents.append(e)
+	if world == 4:
+		tower = Tower.new(self)
+		tower.load_all()
+	if def.has("loop"):
+		iter = clampi(int(Game.loop_iter.get(id, 0)), 0, 3)
+		if mode != "guest" and not Game.flag("boss:LOOP"):
+			for spn in def.loop.iters[iter].get("spawn", []):
+				var le = spawn_enemy(String(spn[0]), int(spn[1]) * T, int(spn[2]) * T)
+				if le != null:
+					Game.scale_enemy(le)
+					le.nid = next_nid
+					next_nid += 1
+					ents.append(le)
 	for se in ents:
 		if se.has_method("settle"):
 			se.settle()
@@ -354,12 +377,36 @@ func load_room(room_id: String, snap = null) -> void:
 
 # `variants` (rooms.json): while a flag is set, the cells of a rect that the room file has as `from` are `to`.
 # At load they apply at once; later each cell waits until it is safe (never a wall inside a body, never a floor vanishing under one).
+# a room condition: `iter>=n` is the loop room's pass, anything else is the game's
+func _cond(s: String) -> bool:
+	if s.begins_with("iter>="):
+		return iter >= int(s.substr(6))
+	return Game.cond(s)
+
+# guest: the host's pass number (the snapshot's `tw.it`)
+func set_iter(n: int) -> void:
+	if n != iter:
+		iter = n
+		_step_variants()
+
+func loop_key_on() -> bool:
+	return def.has("loop") and loop_key != null and bool(def.loop.iters[iter].get("key", false)) and not Game.flag(String(def.loop.flag))
+
+func _step_loop_key(p) -> void:
+	if p == null or p.dead or p.gone or not loop_key_on():
+		return
+	if Game.overlap(p.hurtbox(), loop_key):
+		Game.set_world_flag(String(def.loop.flag))
+		pop(float(loop_key.x) + 8.0, float(loop_key.y) - 6.0, "break;", "#f3d58a", true)
+		burst(float(loop_key.x) + 8.0, float(loop_key.y) + 8.0, 10, ["#f3d58a", "#ffffff"], 80.0, 200.0)
+		Audio.sfx("gate")
+
 func _step_variants(at_load := false) -> void:
 	var vs: Array = def.get("variants", [])
 	if vs.is_empty():
 		return
 	for vi in range(vs.size()):
-		if variants_on.has(vi) or not Game.cond(String(vs[vi]["if"])):
+		if variants_on.has(vi) or not _cond(String(vs[vi]["if"])):
 			continue
 		variants_on[vi] = true
 		var v: Dictionary = vs[vi]
@@ -1237,6 +1284,10 @@ func step_guest(dt: float) -> void:
 	_step_sighting(dt)
 	_step_variants()
 	_move_platforms()
+	if tower != null:
+		tower.step(dt, players())
+		_tick_sound()
+	_step_loop_key(player)
 	_step_tags(dt)
 	_chase_track(dt)
 	var p = player
@@ -1388,7 +1439,7 @@ func _move_platforms() -> void:
 	_move_packets()
 	_update_ports(bodies())
 	for m in plats:
-		if m.get("packet", false):
+		if m.get("packet", false) or m.has("gear"):
 			continue
 		var span := absf(m.b - m.a)
 		if span < 1.0:
@@ -1406,6 +1457,20 @@ func _move_platforms() -> void:
 			m.dy = v + 2.0 - m.y
 			m.dx = 0.0
 			m.y = v + 2.0
+
+# world 4 beats with the tick: the clock is the room's, so both pages tick together
+func tick_i() -> int:
+	return Tower.tick_i_of(time)
+
+func tick_f() -> float:
+	return Tower.tick_f_of(time)
+
+func _tick_sound() -> void:
+	var ti := tick_i()
+	if ti != last_tick:
+		last_tick = ti
+		if is_local and player != null and not player.dead:
+			Audio.local_sfx("tick" if ti % 2 == 0 else "tock", 0.22)
 
 func _check_door() -> void:
 	var p = player
@@ -1453,7 +1518,7 @@ func step(dt: float) -> void:
 
 	# blinking blocks
 	var ph_ := floori(time / blink_period) % 2
-	if ph_ != grid.blink_phase:
+	if (tower == null or not tower.has_blink) and ph_ != grid.blink_phase:
 		grid.blink_phase = ph_
 		var want := TileGrid.BLINK_A if ph_ == 0 else TileGrid.BLINK_B
 		for q in live:
@@ -1461,7 +1526,7 @@ func step(dt: float) -> void:
 				for tx in range(floori(q.x / T), floori((q.x + q.w) / T) + 1):
 					if grid.tile(tx, ty) == want:
 						grid.blink_hold[ty * w + tx] = true
-	if not grid.blink_hold.is_empty():
+	if (tower == null or not tower.has_blink) and not grid.blink_hold.is_empty():
 		for i in grid.blink_hold.keys():
 			if not grid.any_on(live, i % w, i / w):
 				grid.blink_hold.erase(i)
@@ -1475,6 +1540,10 @@ func step(dt: float) -> void:
 				break_tile(q.tx, q.ty)
 		break_q = break_q.filter(func(q): return not q.get("done", false))
 	_move_platforms()
+	if tower != null:
+		tower.step(dt, live)
+		_tick_sound()
+	_step_loop_key(player)
 
 	_step_tags(dt)
 	_step_chase(dt)
@@ -1561,6 +1630,9 @@ func _step_fight(dt: float) -> void:
 	var trigger: float = float(def.boss.get("trigger_x", 1e9))          # (a pad boss has none: MVB2-09 starts it from its pad)
 	match String(fight.state):
 		"none":
+			if String(def.boss.get("trigger", "")) == "land":
+				_step_land(dt)
+				return
 			var from_east: bool = String(def.boss.get("trigger_side", "W")) == "E"        # an arena entered from the east starts below trigger_x
 			for q in players():
 				var qx: float = q.x + q.w / 2.0
@@ -1580,6 +1652,24 @@ func _step_fight(dt: float) -> void:
 			banner.t = fight.t
 			if fight.t <= 0.0:
 				_finish_reward()
+
+# boss trigger "land" (T18): the fight starts when somebody has stood 0.5 s on the arena floor (not on the lid of the hole they came through)
+func _step_land(dt: float) -> void:
+	var fy: float = float(boss_spawn.y) if boss_spawn != null else float(ph - 48)
+	var lid_a := 0.0
+	var lid_b := 0.0
+	for d in grid.doors:
+		if d.side == "S":
+			lid_a = float(d.a) * T
+			lid_b = float(int(d.b) + 1) * T
+	var stand := false
+	for q in players():
+		var cxp: float = q.x + q.w / 2.0
+		if q.on_ground and absf(q.y + q.h - fy) <= 2.0 and (cxp < lid_a or cxp > lid_b):
+			stand = true
+	land_t = land_t + dt if stand else 0.0
+	if land_t >= 0.5:
+		_start_intro()
 
 # ---- the pad boss (MVB2-09): started by [up] on a marked cell, not by walking in ----
 func pad_on(q) -> bool:
@@ -1827,6 +1917,8 @@ func interact_combat(p) -> void:
 				if res != "":
 					p.on_hit(e, res, b)
 				break
+		if tower != null:
+			tower.claw(p, box)
 		var win: bool = p.catch_window_open()
 		for q in projs:
 			if q.dead or q.get("friendly", false):
@@ -2766,6 +2858,14 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 		for sh in shops:
 			_draw_stall(ci, sh)
 		Decor.draw(self, ci)
+		if tower != null:
+			tower.draw(ci)
+		if def.has("loop"):
+			PixelText.draw_text(ci, "i = %d" % iter, float(pw) / 2.0, 40.0, "#8f6430", {"scale": 4, "align": "c"})
+			if loop_key_on():
+				ci.draw_rect(Rect2(loop_key.x, loop_key.y + 12, 16, 4), Color(Game.COL.ink))
+				ci.draw_rect(Rect2(loop_key.x + 1, loop_key.y + 13, 14, 2), Color("#f3d58a"))
+				PixelText.draw_text(ci, "break;", loop_key.x + 8.0, loop_key.y + 2.0 + sin(time * 4.0) * 1.5, "#f3d58a", {"align": "c", "tiny": true, "outline": Game.COL.ink})
 		for k in keys:
 			var lit := Game.flag("key:%s:%d" % [id, k.i])
 			ci.draw_rect(Rect2(k.x - 3, k.y - 3, 16, 16), Color("#17131f"))

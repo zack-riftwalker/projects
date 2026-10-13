@@ -36,6 +36,7 @@ func load_meta() -> void:
 					m["start_pos"] = [px * 16 + 3, ty * 16 + 6]
 
 var _themes := {}
+var loop_iter := {}               # loop rooms (T09): room id -> the pass this life is on (0..3); a respawn or a travel starts over
 
 # the world whose art a room uses: world 6 (THE NETWORK) falls back to world 3's until its own tiles and theme exist
 func vis_world(w: int) -> int:
@@ -793,6 +794,7 @@ var fights: Array = []
 
 func fresh() -> void:
 	flags = {}
+	loop_iter = {}
 	flood_net = -1
 	tools = {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false}
 	equipped = []

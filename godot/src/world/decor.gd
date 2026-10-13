@@ -180,6 +180,32 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 	var t: float = r.time
 	var ink := Color(Game.COL.ink)
 	match String(d.kind):
+		"threads":
+			# RACE CONDITION in the background: an orange and a blue streak race along the row, now and then over the same cells (a red flash)
+			var x0 := float(int(d.cx) * T)
+			var span := float(int(d.get("w", 20)) * T)
+			var yy := float(int(d.cy) * T) + 8.0
+			var ua := fposmod(t * 0.23, 1.0)
+			var ub := fposmod(t * 0.23 + 0.5 * sin(t * 0.4) + 0.5, 1.0)
+			var ax := x0 + ua * span
+			var bx := x0 + (1.0 - ub) * span
+			ci.draw_rect(Rect2(ax - 30, yy - 1, 30, 2), Color(1.0, 0.48, 0.35, 0.55))
+			ci.draw_rect(Rect2(ax - 4, yy - 2, 4, 4), Color(1.0, 0.62, 0.45, 0.9))
+			ci.draw_rect(Rect2(bx, yy + 5, 30, 2), Color(0.49, 0.77, 1.0, 0.55))
+			ci.draw_rect(Rect2(bx, yy + 4, 4, 4), Color(0.7, 0.88, 1.0, 0.9))
+			if absf(ax - bx) < 24.0:
+				ci.draw_rect(Rect2((ax + bx) / 2.0 - 8, yy - 3, 16, 12), Color(1.0, 0.2, 0.25, 0.5 + 0.3 * sin(t * 30.0)))
+		"coffee2":
+			for k in range(2):
+				var cx2 := x - 6 + k * 12
+				ci.draw_rect(Rect2(cx2 - 4, y - 8, 8, 8), ink)
+				ci.draw_rect(Rect2(cx2 - 3, y - 7, 6, 7), Color("#e8e0d0"))
+				ci.draw_rect(Rect2(cx2 + 3, y - 6, 3, 4), ink)
+				ci.draw_rect(Rect2(cx2 - 2, y - 6, 4, 2), Color("#6b4520"))
+				if k == 0:                                                   # one cup still steams
+					for sp in range(2):
+						var sy_ := fposmod(t * 14.0 + float(sp) * 6.0, 12.0)
+						ci.draw_rect(Rect2(cx2 - 2 + sp * 3 + sin(t * 3.0 + float(sp)) * 1.5, y - 10 - sy_, 1, 2), Color(1, 1, 1, 0.5 - sy_ / 24.0))
 		"scrap":
 			ci.draw_rect(Rect2(x - 4, y - 5, 8, 5), ink)
 			ci.draw_rect(Rect2(x - 3, y - 4, 6, 3), Color(Game.COL.paper))

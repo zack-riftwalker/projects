@@ -20,9 +20,12 @@ const FIRE := 13           # `N`: firewall brick: solid (ssh passes it in 4B)
 const THICK := 14          # `0`: bulkhead: solid; only Room.blast breaks it
 const WEB := 16            # `h`: a web strand (MVB2-05): not solid, hurts like a spike until boss:CRAWLER (a room variant turns it into air)
 const PORT := 15           # `3`: solid while closed, empty while open (the room computes `port_open` from its packets)
+const MGATE := 17          # `4`: a mutex gate: solid unless its key is active (the room fills `mgate_open`)
+const CABLE := 18          # `5`: a spaghetti cable: solid until an opus claw cuts it (then the cells are air)
+const PHEAD := 19          # a piston's shaft and head cell (set from rooms.json `pistons`): solid while `phead_on` has it
 const T := 16
 
-const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT, "h": WEB}
+const CHARS := {"#": SOLID, "=": ONEWAY, "^": SPIKE_U, "v": SPIKE_D, "%": CRACK, "~": CRUMBLE, "1": BLINK_A, "2": BLINK_B, "w": LIQ, "!": GATE_C, "&": GATE_A, ";": DEAD, "N": FIRE, "0": THICK, "3": PORT, "h": WEB, "4": MGATE, "5": CABLE}
 
 var w := 0
 var h := 0
@@ -30,6 +33,9 @@ var tiles := PackedByteArray()
 var crumble := {}          # index -> {s, t}
 var blink_hold := {}       # index -> true
 var blink_phase := 0
+var blink_ph := {}         # index -> 0 | 1: the phase of a blink cell in world 4 (every group follows its own clock)
+var mgate_open := {}       # index -> true while that mutex gate is open
+var phead_on := {}         # index -> true while a piston covers that cell
 var port_open := {}        # index -> true while that port cell is open
 var gates_open := {"catch": false, "agents": false}        # the room sets them from its flags every step
 var doors: Array = []      # {side: "W"|"E"|"N"|"S", a, b, open}: rows (W/E) or columns (N/S) a..b of the edge are walkable while open
@@ -73,6 +79,12 @@ func solid(tx: int, ty: int) -> bool:
 		return not gates_open.agents
 	if t == PORT:
 		return not port_open.has(ty * w + tx)
+	if t == MGATE:
+		return not mgate_open.has(ty * w + tx)
+	if t == CABLE:
+		return true
+	if t == PHEAD:
+		return phead_on.has(ty * w + tx)
 	if t < CRUMBLE or t == LIQ:
 		return false
 	var i := ty * w + tx
@@ -81,7 +93,8 @@ func solid(tx: int, ty: int) -> bool:
 		return c == null or c.s != 2
 	if blink_hold.has(i):
 		return false
-	return blink_phase == 0 if t == BLINK_A else blink_phase == 1
+	var bp: int = blink_ph.get(i, blink_phase)
+	return bp == 0 if t == BLINK_A else bp == 1
 
 func solid_at(px: float, py: float) -> bool:
 	return solid(floori(px / T), floori(py / T))
