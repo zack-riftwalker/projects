@@ -2362,6 +2362,7 @@ func sc_co_firewall() -> Array:
 		return [false, "no firewall puppet"]
 	var st2 := {"f": 0, "swings": 0}
 	var seen2 := {}
+	var look3 := false                                 # GFX-N: the guest's own page shows the phase-3 look when the host's boss reaches phase 3
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < secs * 1000.0:
 		var g = mgr().player
@@ -2369,6 +2370,7 @@ func sc_co_firewall() -> Array:
 		if not is_instance_valid(pup):
 			break
 		plan_stats(pup, seen2)
+		look3 = look3 or (mgr().room.look != null and mgr().room.look.shift == "heat_p3")
 		Controls.script_input = boss_guest_keys(g, pup, true, st2)
 		hazard_probe(g, pup, st2)
 		await get_tree().physics_frame
@@ -2382,7 +2384,7 @@ func sc_co_firewall() -> Array:
 		if seen2[sq] == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, arena hits taken %d, violations '%s' '%s'" % [seen2.size(), short, mine, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation]]
+	return [seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1 and look3, "guest: look phase 3 %s, saw %d plans, %d active shown < 0.30 s, targeted %d times, arena hits taken %d, violations '%s' '%s'" % [look3, seen2.size(), short, mine, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation]]
 
 # the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 40 s of fight, nobody is lost
 func sc_co_reviewer2() -> Array:
