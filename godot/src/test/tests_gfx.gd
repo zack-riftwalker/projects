@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg"]
 const RENDER := ["gfxcontrast", "normals", "post", "gloss"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -27,6 +27,7 @@ func run(name: String):
 		"foreground": return await t_foreground()
 		"ambient": return await t_ambient()
 		"gloss": return await t_gloss()
+		"livingbg": return await t_livingbg()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -998,3 +999,128 @@ func t_gloss() -> bool:
 		info += " strip brightening: ultra %.3f high %.3f low %.3f;" % [lums[2], lums[1], lums[0]]
 	Game.gfx_url = -1
 	return report("gloss", ok, info + (" ultra +%.3f" % lums[2] if ok else ""))
+
+func live_frames(r: Room, n: int) -> void:
+	for i in range(n):
+		r.time += 1.0 / 60.0
+		await main.get_tree().process_frame
+
+# MVGN-12: the chase wave, a lost packet's tear, the crawler's strands, the clean palette after the firewall; all derived from flags and state
+func t_livingbg() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.gfx_url = 1
+	var ok := true
+	var info := ""
+	# N17: the RST wave goes red from the top down while the chase runs, fades back 2 s after it
+	var r := new_room("N17")
+	await frames(3)
+	var nb: NetBackdrop = r.view.get_node("NetBackdrop")
+	if nb.red_leds() != 0:
+		ok = false
+		info += " red LEDs before the chase;"
+	r.time = 20.0
+	r.ch_t0 = 20.0
+	await live_frames(r, 30)
+	var a := nb.red_leds()
+	await live_frames(r, 120)
+	var b := nb.red_leds()
+	await live_frames(r, 600)
+	var c := nb.red_leds()
+	if not (a >= 0 and b > a and c >= b and c > 0):
+		ok = false
+		info += " wave %d -> %d -> %d;" % [a, b, c]
+	r.ch_t0 = -1.0
+	await live_frames(r, 60)
+	if nb.chase_red <= 0.0 or nb.chase_red >= 1.0:
+		ok = false
+		info += " chase_red %.2f one second after the chase;" % nb.chase_red
+	await live_frames(r, 130)
+	if nb.red_leds() != 0:
+		ok = false
+		info += " still red 2 s after the chase;"
+	r.queue_free()
+	await frames(1)
+	# N12: a packet turns lost -> a tear and a CA pulse (none with Reduce flashing); warn -> magenta either way
+	for calm in [false, true]:
+		Game.reduce_flash = calm
+		var r2 := new_room("N12")
+		await frames(3)
+		var nb2: NetBackdrop = r2.view.get_node("NetBackdrop")
+		var pk = null
+		for m in r2.plats:
+			if m.get("packet", false):
+				pk = m
+				break
+		pk["lost"] = false
+		await live_frames(r2, 2)
+		pk["lost"] = true
+		await live_frames(r2, 2)
+		if not calm:
+			if nb2.tears != 1 or nb2.bands.is_empty() or absf(r2.look.ca_pulse - 0.6 * 0.65) > 0.05:
+				ok = false
+				info += " tear %d bands %d ca %.2f;" % [nb2.tears, nb2.bands.size(), r2.look.ca_pulse]
+			await live_frames(r2, 20)
+			if not nb2.bands.is_empty() or nb2.tear_t > 0.0:
+				ok = false
+				info += " the tear did not end after 150 ms;"
+		else:
+			if nb2.tears != 0 or r2.look.ca_pulse > 0.001:
+				ok = false
+				info += " Reduce flashing still tears (%d, %.2f);" % [nb2.tears, r2.look.ca_pulse]
+		pk["lost"] = false
+		pk["warn"] = true
+		await live_frames(r2, 2)
+		if not nb2.warn_on:
+			ok = false
+			info += " warn did not turn the LEDs magenta (calm %s);" % str(calm)
+		r2.queue_free()
+		await frames(1)
+	Game.reduce_flash = false
+	# the crawler's strands: intact, falling for 1.5 s when the flag turns up, broken; a fresh load with the flag shows broken at once
+	var r3 := new_room("N09")
+	await frames(3)
+	var nb3: NetBackdrop = r3.view.get_node("NetBackdrop")
+	if nb3.strand_state() != "intact":
+		ok = false
+		info += " strands %s before the crawler;" % nb3.strand_state()
+	Game.flags["boss:CRAWLER"] = true
+	await live_frames(r3, 3)
+	if nb3.strand_state() != "falling":
+		ok = false
+		info += " strands %s when the flag turned;" % nb3.strand_state()
+	await live_frames(r3, 100)
+	if nb3.strand_state() != "broken":
+		ok = false
+		info += " strands %s 1.6 s later;" % nb3.strand_state()
+	r3.queue_free()
+	await frames(1)
+	var r4 := new_room("N08")
+	await frames(2)
+	if (r4.view.get_node("NetBackdrop") as NetBackdrop).strand_state() != "broken":
+		ok = false
+		info += " a fresh load with the flag is not broken;"
+	r4.queue_free()
+	await frames(1)
+	# the clean palette after the firewall: stable rooms are stable_clean with the calmer LEDs and more green dots; the other moods do not change
+	var r5 := new_room("N01")
+	await frames(2)
+	Game.flags["boss:FIREWALL"] = true
+	var r6 := new_room("N05")
+	await frames(3)
+	var nb6: NetBackdrop = r6.view.get_node("NetBackdrop")
+	if r6.look.mood != "stable_clean" or not nb6.clean:
+		ok = false
+		info += " N05 is %s after the firewall;" % r6.look.mood
+	var r7 := new_room("N12")
+	if r7.look.mood != "loss":
+		ok = false
+		info += " N12 changed;"
+	Game.flags.erase("boss:FIREWALL")
+	Game.flags.erase("boss:CRAWLER")
+	for rr in [r5, r6, r7]:
+		rr.queue_free()
+	Game.gfx_url = -1
+	return report("livingbg", ok, info)
