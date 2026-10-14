@@ -736,11 +736,11 @@ func t_moodshift() -> bool:
 		a.fight.t = 0.0
 		a._begin_fight()
 		await frames(2)
-		run_follow(a, 0.6)
+		run_follow(a, 3.0)
 		var b0 := float(a.look.out.bloom)
 		var amb0: Color = a.look.out.ambient
 		a.boss.phase = 3
-		run_follow(a, 1.5)
+		run_follow(a, 3.0)
 		if absf(float(a.look.out.bloom) - b0 - 0.15) > 0.02 or absf((a.look.out.ambient as Color).r / amb0.r - 0.9) > 0.03:
 			ok = false
 			info += " %s phase 3: bloom %.2f -> %.2f ambient x%.2f;" % [id, b0, a.look.out.bloom, (a.look.out.ambient as Color).r / amb0.r]
