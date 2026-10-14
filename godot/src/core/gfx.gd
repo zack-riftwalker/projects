@@ -9,7 +9,8 @@ static var _ntex := {}                   # name -> CanvasTexture (diffuse + norm
 static func tex(name: String) -> Texture2D:
 	if not _tex.has(name):
 		_tex[name] = load("res://assets/sprites/%s.png" % name)
-	if Game.gfx_tier >= 1:                       # a sprite with a normal map (tools/godot/make-normals.gd) is lit by the NETWORK's lights; elsewhere it draws as before
+	if Game.gfx_tier >= 1 and Look.lit_frame >= Engine.get_process_frames() - 3:      # (only while a NETWORK room is the local one: other worlds draw exactly as before)
+		# a sprite with a normal map (tools/godot/make-normals.gd) is lit by the NETWORK's lights; elsewhere it draws as before
 		var n = _ntex.get(name)
 		if n == null:
 			n = false

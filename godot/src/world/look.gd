@@ -12,6 +12,7 @@ const NUM := ["bg_brightness", "bg_saturation", "glitch", "bloom", "gloss"]
 const COL := ["sky_far", "sky_mid", "fog", "ambient", "accent_a", "accent_b"]
 
 static var _pal := {}                    # palette name -> {key: Color / float / String}
+static var lit_frame := -100               # the last frame a local NETWORK room ran (Gfx.tex uses the lit sprites only then)
 static var _unshaded: CanvasItemMaterial
 static var _unshaded_add: CanvasItemMaterial
 
@@ -147,6 +148,7 @@ func _process(dt: float) -> void:
 	if room == null or not room.is_local:
 		return
 	step(dt)
+	lit_frame = Engine.get_process_frames()
 	if stage != null:
 		stage.claim(out.ambient)
 

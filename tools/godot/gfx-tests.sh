@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # The GFX-N tests that need a real renderer (xvfb + opengl3): gfx-tests.sh [names...]. Prints `TEST <name> PASS|FAIL` lines, exit 1 on any failure.
-# gfxother: worlds 1, 2, 4 must render as the golden captures (tools/godot/golden/, taken before GFX-N). A random speck (an ambient particle) moves
-# between runs even on unchanged code, so up to 64 pixels (0.08 %) may differ; a real change moves far more. World 3 is left out: its frames differ
-# more from run to run (checked twice on unchanged code).
+# gfxother: worlds 1-4 must render byte for byte as the golden captures (tools/godot/golden/, taken from the code before GFX-N with the same
+# command). shot.sh runs Godot with --fixed-fps 60, so a frame always advances the game by the same step and two runs give the same picture.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -14,10 +13,10 @@ for t in "${NAMES[@]}"; do
   case "$t" in
     gfxother)
       bad=""
-      for r in R03 D05 T04; do
+      for r in R03 D01 D02 D05 H05 T04; do
         bash "$HERE/shot.sh" "$TMP/$r.png" "room:$r"
         n=$(compare -metric AE "$TMP/$r.png" "$HERE/golden/$r.png" null: 2>&1 | grep -oE "^[0-9]+" | head -1)
-        [ "${n:-99999}" -le 64 ] || bad="$bad $r($n)"
+        [ "${n:-99999}" -eq 0 ] || bad="$bad $r($n)"
       done
       if [ -z "$bad" ]; then echo "TEST gfxother PASS"; else echo "TEST gfxother FAIL differs:$bad"; rc=1; fi ;;
     RENDER_TESTS) ;;
