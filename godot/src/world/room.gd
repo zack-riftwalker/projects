@@ -1065,7 +1065,13 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		foreground.name = "Foreground"
 		foreground.room = self
 		add_child(foreground)
-	var ent_root := Node2D.new()
+	var ent_root: Node2D = Node2D.new()
+	if look != null:                                       # a CanvasGroup: the outline shader sees the creatures' own picture (MVGN-14)
+		var cg := CanvasGroup.new()
+		cg.fit_margin = 2.0
+		cg.clear_margin = 2.0
+		cg.material = Look.outline_material()
+		ent_root = cg
 	ent_root.name = "Entities"
 	ent_root.z_index = 2
 	add_child(ent_root)

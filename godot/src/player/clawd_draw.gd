@@ -25,12 +25,32 @@ static func draw_clawd(ci: CanvasItem, x: float, y: float, o: Dictionary) -> voi
 		var a := _r(x + x0 * sx)
 		var b := _r(y + y0 * sy)
 		ci.draw_rect(Rect2(a, b, maxi(1, _r(x + x1 * sx) - a), maxi(1, _r(y + y1 * sy) - b)), col)
-	rect.call(-6, -10 + lift, 6, -2 + lift, body)
-	rect.call(-8 - (reach if f < 0 else 0), -6 + a_l + lift, -6, -4 + a_l + lift, body)
-	rect.call(6, -6 + a_r + lift, 8 + (reach if f > 0 else 0), -4 + a_r + lift, body)
-	for i in range(4):
-		if legs[i] > 0:
-			rect.call(LEGX[i], -2 + lift, LEGX[i] + 1, -2 + lift + legs[i], body)
+	# the body, the arms and the legs in one colour at an offset (the outline passes use it)
+	var shape := func(col: Color, dx: float, dy: float) -> void:
+		var shifted := func(x0: float, y0: float, x1: float, y1: float) -> void:
+			var a := _r(x + x0 * sx) + dx
+			var b := _r(y + y0 * sy) + dy
+			ci.draw_rect(Rect2(a, b, maxi(1, _r(x + x1 * sx) - _r(x + x0 * sx)), maxi(1, _r(y + y1 * sy) - _r(y + y0 * sy))), col)
+		shifted.call(-6, -10 + lift, 6, -2 + lift)
+		shifted.call(-8 - (reach if f < 0 else 0), -6 + a_l + lift, -6, -4 + a_l + lift)
+		shifted.call(6, -6 + a_r + lift, 8 + (reach if f > 0 else 0), -4 + a_r + lift)
+		for i in range(4):
+			if legs[i] > 0:
+				shifted.call(LEGX[i], -2 + lift, LEGX[i] + 1, -2 + lift + legs[i])
+	var ol = o.get("outline", null)
+	if ol == null and not o.has("noEyes"):
+		ol = outline_for(ci, x)
+	if ol != null:
+		# THE NETWORK (MVGN-14): a 1-px dark ring, and on the side away from the middle of the screen a 1-px rim in the mood's accent (60 %)
+		var side: float = ol.side
+		var dark: Color = ol.dark
+		dark.a = alpha
+		for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(2.0 * side, 0)]:
+			shape.call(dark, d.x, d.y)
+		var rim: Color = ol.rim
+		rim.a = 0.6 * alpha
+		shape.call(rim, side, 0)
+	shape.call(body, 0, 0)
 	if not o.get("noEyes", false):
 		var ex: float = o.get("eyeX", f)
 		var ey: float = o.get("eyeY", 0) + lift
@@ -49,6 +69,14 @@ static func draw_clawd(ci: CanvasItem, x: float, y: float, o: Dictionary) -> voi
 		else:
 			rect.call(-4 + ex, -8 + ey, -3 + ex, -6 + ey, ec)
 			rect.call(3 + ex, -8 + ey, 4 + ex, -6 + ey, ec)
+
+# the outline of a NETWORK room's players: the dark ring (sky_far) and the rim side (away from the camera's middle); null elsewhere
+static func outline_for(ci: CanvasItem, px: float):
+	var rm = ci.get("room")
+	if rm == null or rm.look == null or rm.camera == null:
+		return null
+	var o: Dictionary = rm.look.out
+	return {"dark": o.sky_far, "rim": o.accent_a, "side": 1.0 if px >= float(rm.camera.position.x) + 192.0 else -1.0}
 
 # the exact pixel layout, for effects that take Clawd apart
 static func clawd_pixels() -> Array:

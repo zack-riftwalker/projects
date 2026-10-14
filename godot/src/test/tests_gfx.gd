@@ -324,6 +324,7 @@ func contrast_room(id: String, mood = null, label := "") -> Dictionary:
 	var bg_his := []
 	var gains := []
 	var caps := []
+	var actives := []
 	for cx in cam_positions(r):
 		await look_at(r, cx)
 		show_parts(r, true, false, false)
@@ -346,6 +347,7 @@ func contrast_room(id: String, mood = null, label := "") -> Dictionary:
 		var ty0 := floori(r.camera.position.y / 16.0)
 		var gsum := 0.0
 		var gn := 0
+		var tsum := 0.0
 		for ty in range(ty0, ty0 + 14):
 			for tx in range(tx0 + 1, tx0 + 24):
 				if tx < 0 or ty < 0 or tx >= g.w or ty >= g.h or g.tile(tx, ty) != TileGrid.SOLID:
@@ -355,15 +357,44 @@ func contrast_room(id: String, mood = null, label := "") -> Dictionary:
 				if px < 0 or py < 0 or px > 368 or py > 200:
 					continue
 				gsum += block_mean(tr, px, py, 16, 16) - block_mean(bg, px, py, 16, 16)
+				tsum += block_mean(tr, px, py, 16, 16)
 				gn += 1
 				if ty > 0 and g.tile(tx, ty - 1) == TileGrid.E:
 					caps.append(block_mean(tr, px, py, 16, 2))
 		if gn > 0:
 			gains.append(gsum / gn)
+		# tier 3: the active things on screen: creatures (no outline yet) must be 0.15 above the terrain's mean; the players carry the outline
+		var tmean := tsum / maxf(gn, 1.0)
+		show_parts(r, false, false, true)
+		await frames(1)
+		var rest := lum_array(await grab())
+		show_parts(r, true, true, true)
+		for e in r.ents:
+			if not is_instance_valid(e) or not e.visible or e.get("dead") == true or e.get("gone") == true:
+				continue
+			var bx := int(e.x - r.camera.position.x)
+			var by := int(e.y - r.camera.position.y)
+			if bx < 0 or by < 0 or bx + int(e.w) >= 384 or by + int(e.h) >= 216 or e.w < 6 or e.h < 6:
+				continue
+			var sum := 0.0
+			var cnt := 0
+			for yy in range(by, by + int(e.h)):
+				for xx in range(bx, bx + int(e.w)):
+					var lv: float = rest[yy * 384 + xx]
+					if lv > 0.02:
+						sum += lv
+						cnt += 1
+			if cnt < 6:
+				continue
+			actives.append([e.get_script().get_global_name() if e.get_script() != null else "?", sum / cnt, tmean, e.get("has_outline") == true])
 	var bgm: float = bg_means.max() if not bg_means.is_empty() else 0.0
 	var bgh: float = bg_his.max() if not bg_his.is_empty() else 0.0
 	var gain: float = gains.min() if not gains.is_empty() else 1.0
 	var cap: float = caps.min() if not caps.is_empty() else 1.0
+	for a in actives:
+		if not a[3] and float(a[1]) < float(a[2]) + 0.15:
+			res.ok = false
+			res.info += " %s%s %s L %.2f vs terrain %.2f;" % [id, label, a[0], a[1], a[2]]
 	res.line = "GFX contrast %s%s bg_mean %.3f bg_bright %.3f terrain_gain %.3f cap %.2f" % [id, label, bgm, bgh, gain, cap]
 	if bgm > 0.16 or bgh > 0.02:
 		res.ok = false

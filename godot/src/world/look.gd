@@ -13,8 +13,37 @@ const COL := ["sky_far", "sky_mid", "fog", "ambient", "accent_a", "accent_b"]
 
 static var _pal := {}                    # palette name -> {key: Color / float / String}
 static var lit_frame := -100               # the last frame a local NETWORK room ran (Gfx.tex uses the lit sprites only then)
+static var _outline_mat: ShaderMaterial
 static var _unshaded: CanvasItemMaterial
 static var _unshaded_add: CanvasItemMaterial
+
+# the creatures' outline (MVGN-14): the Entities node of a NETWORK room is a CanvasGroup; this shader reads the group's own picture (alpha) and draws a 1-px
+# dark ring around what is drawn, and on High and Ultra brightens the edge pixels a little (a rim in the creature's own highlight colour)
+const OUTLINE_SHADER := "shader_type canvas_item;
+uniform sampler2D scr : hint_screen_texture, filter_nearest;
+uniform vec4 dark : source_color = vec4(0.03, 0.04, 0.08, 1.0);
+uniform float rim = 0.0;
+void fragment() {
+	vec2 p = SCREEN_PIXEL_SIZE;
+	vec4 c = texture(scr, SCREEN_UV);
+	float n = max(max(texture(scr, SCREEN_UV + vec2(p.x, 0.0)).a, texture(scr, SCREEN_UV - vec2(p.x, 0.0)).a), max(texture(scr, SCREEN_UV + vec2(0.0, p.y)).a, texture(scr, SCREEN_UV - vec2(0.0, p.y)).a));
+	if (c.a > 0.5) {
+		float edge = 1.0 - min(min(texture(scr, SCREEN_UV + vec2(p.x, 0.0)).a, texture(scr, SCREEN_UV - vec2(p.x, 0.0)).a), min(texture(scr, SCREEN_UV + vec2(0.0, p.y)).a, texture(scr, SCREEN_UV - vec2(0.0, p.y)).a));
+		COLOR = vec4(min(c.rgb * (1.0 + 0.55 * rim * edge) + 0.12 * rim * edge, vec3(1.0)), c.a);
+	} else if (n > 0.5) {
+		COLOR = vec4(dark.rgb, 1.0);
+	} else {
+		COLOR = vec4(0.0);
+	}
+}"
+
+static func outline_material() -> ShaderMaterial:
+	if _outline_mat == null:
+		var sh := Shader.new()
+		sh.code = OUTLINE_SHADER
+		_outline_mat = ShaderMaterial.new()
+		_outline_mat.shader = sh
+	return _outline_mat
 
 # the one way to keep an item out of the ambient and the lights (plan 3.4): a material with LIGHT_MODE_UNSHADED
 static func unshaded(additive := false) -> CanvasItemMaterial:
@@ -157,6 +186,8 @@ func _process(dt: float) -> void:
 	follow_room(dt)
 	step(dt)
 	lit_frame = Engine.get_process_frames()
+	outline_material().set_shader_parameter("dark", out.sky_far)
+	outline_material().set_shader_parameter("rim", 1.0 if Game.gfx_tier >= 1 else 0.0)
 	if stage != null:
 		stage.claim(out.ambient)
 	if post != null:
