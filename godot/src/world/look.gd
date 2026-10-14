@@ -154,6 +154,7 @@ func step(dt: float) -> void:
 func _process(dt: float) -> void:
 	if room == null or not room.is_local:
 		return
+	follow_room(dt)
 	step(dt)
 	lit_frame = Engine.get_process_frames()
 	if stage != null:
@@ -212,3 +213,41 @@ func lut_pair() -> Array:
 		lut_from = lut_to
 	var e := _u * _u * (3.0 - 2.0 * _u) if _u < 1.0 else 1.0
 	return [lut_from, lut_to, e]
+
+# ---------------------------------------------------------------- in-room shifts (MVGN-08): read from the state both pages already have
+const SIREN := Color("#FF6B00")
+var shift := ""                          # the palette the room's own state asks for now ("" = the room's mood from rooms.json)
+
+func follow_room(dt: float) -> void:
+	if room == null:
+		return
+	var id: String = room.id
+	var want := ""
+	var ambient_mul := 1.0
+	var bloom_add := 0.0
+	# the fight rooms: the boss's phase 3
+	var b = room.boss
+	var p3: bool = b != null and is_instance_valid(b) and not b.get("gone") and int(b.get("phase")) == 3 and not b.get("dying")
+	if p3:
+		if id == "N15":
+			want = "heat_p3"
+		elif id == "N09" or id == "N22":
+			bloom_add = 0.15
+			ambient_mul = 0.9
+	if want != shift:
+		shift = want
+		var mm := Look.resolve(room.def)
+		if want == "":
+			set_target(mm[0], mm[1], false, 2.0)
+		else:
+			set_target(want, 1.0, false, 2.0)
+		Game.dlog("look %s" % (want if want != "" else mm[0]))
+	# N17: the RST line is running: the sky and the lights go siren orange, pulsing (no pulse with Reduce flashing)
+	var chase_on: bool = id == "N17" and room.ch_t0 >= 0.0
+	var pulse := 1.0 if Game.reduce_flash else 1.0 + 0.15 * sin(TAU * room.time / 1.2)
+	adj.accent_b_k = Game.damp(float(adj.accent_b_k), 1.0 if chase_on else 0.0, 10.0 if chase_on else 2.5, dt)
+	adj.accent_b = SIREN
+	adj.ambient = SIREN
+	adj.ambient_k = Game.damp(float(adj.ambient_k), 0.35 * pulse if chase_on else 0.0, 10.0 if chase_on else 2.5, dt)
+	adj.ambient_mul = Game.damp(float(adj.ambient_mul), ambient_mul, 5.0, dt)
+	adj.bloom_add = Game.damp(float(adj.bloom_add), bloom_add, 5.0, dt)

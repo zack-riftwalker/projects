@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift"]
 const RENDER := ["gfxcontrast", "normals", "post"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -23,6 +23,7 @@ func run(name: String):
 		"lights": return await t_lights()
 		"normals": return await t_normals()
 		"luts": return t_luts()
+		"moodshift": return await t_moodshift()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -649,3 +650,95 @@ func t_post() -> bool:
 	Game.reduce_flash = false
 	Game.gfx_url = -1
 	return report("post", ok, info)
+
+func run_follow(r: Room, secs: float) -> void:
+	for i in range(int(secs * 60.0)):
+		r.time += 1.0 / 60.0
+		r.look.follow_room(1.0 / 60.0)
+		r.look.step(1.0 / 60.0)
+
+# MVGN-08: the N17 chase moves the look within 0.2 s and ends with it; the FIREWALL's phase 3 has its own look and skipping the boss restores it
+func t_moodshift() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	var r := new_room("N17")
+	await frames(2)
+	run_follow(r, 0.5)
+	var base: Color = r.look.out.ambient
+	var base_b: Color = r.look.out.accent_b
+	r.time = 20.0
+	r.ch_t0 = 8.0
+	run_follow(r, 0.2)
+	var moved: Color = r.look.out.ambient
+	if absf(moved.r - base.r) + absf(moved.g - base.g) + absf(moved.b - base.b) < 0.04 or absf((r.look.out.accent_b as Color).r - base_b.r) + absf((r.look.out.accent_b as Color).g - base_b.g) + absf((r.look.out.accent_b as Color).b - base_b.b) < 0.2:
+		ok = false
+		info += " chase did not move the look in 0.2 s;"
+	run_follow(r, 1.2)
+	var siren_a: Color = r.look.out.ambient
+	r.look.follow_room(0.0)
+	# the pulse: samples half a period apart differ, unless Reduce flashing is on
+	var samples := []
+	for calm in [false, true]:
+		Game.reduce_flash = calm
+		run_follow(r, 0.3)
+		var s1: Color = r.look.out.ambient
+		run_follow(r, 0.6)
+		var s2: Color = r.look.out.ambient
+		samples.append(absf(s1.r - s2.r) + absf(s1.g - s2.g) + absf(s1.b - s2.b))
+	Game.reduce_flash = false
+	if samples[0] < 0.01 or samples[1] > 0.02:
+		ok = false
+		info += " pulse %.3f / calm %.3f;" % [samples[0], samples[1]]
+	r.ch_t0 = -1.0
+	run_follow(r, 3.0)
+	var back: Color = r.look.out.ambient
+	if absf(back.r - base.r) + absf(back.g - base.g) + absf(back.b - base.b) > 0.02:
+		ok = false
+		info += " the chase look stayed;"
+	r.queue_free()
+	await frames(1)
+	# N15
+	var f := new_room("N15")
+	f._start_intro()
+	f.fight.t = 0.0
+	f._begin_fight()
+	await frames(2)
+	run_follow(f, 0.5)
+	var heat := Look.mixed("heat", 1.0)
+	if not (f.look.out.sky_far as Color).is_equal_approx(heat.sky_far):
+		ok = false
+		info += " N15 does not start in heat;"
+	f.boss.phase = 3
+	run_follow(f, 2.3)
+	if not (f.look.out.sky_far as Color).is_equal_approx(Look.mixed("heat_p3", 1.0).sky_far):
+		ok = false
+		info += " phase 3 look missing;"
+	f.skip_boss()
+	run_follow(f, 2.3)
+	if not (f.look.out.sky_far as Color).is_equal_approx(heat.sky_far):
+		ok = false
+		info += " heat not restored after the boss;"
+	f.queue_free()
+	await frames(1)
+	# N09 / N22: bloom up by 0.15 and the ambient 10 % darker in phase 3
+	for id in ["N09", "N22"]:
+		var a := new_room(id)
+		a._start_intro()
+		a.fight.t = 0.0
+		a._begin_fight()
+		await frames(2)
+		run_follow(a, 0.6)
+		var b0 := float(a.look.out.bloom)
+		var amb0: Color = a.look.out.ambient
+		a.boss.phase = 3
+		run_follow(a, 1.5)
+		if absf(float(a.look.out.bloom) - b0 - 0.15) > 0.02 or absf((a.look.out.ambient as Color).r / amb0.r - 0.9) > 0.03:
+			ok = false
+			info += " %s phase 3: bloom %.2f -> %.2f ambient x%.2f;" % [id, b0, a.look.out.bloom, (a.look.out.ambient as Color).r / amb0.r]
+		a.queue_free()
+		await frames(1)
+	return report("moodshift", ok, info)
