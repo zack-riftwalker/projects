@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas"]
-const RENDER := ["gfxcontrast", "normals", "post", "gloss"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim"]
+const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -29,6 +29,7 @@ func run(name: String):
 		"gloss": return await t_gloss()
 		"livingbg": return await t_livingbg()
 		"arenas": return await t_arenas()
+		"rim": return await t_rim()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -386,7 +387,7 @@ func contrast_room(id: String, mood = null, label := "") -> Dictionary:
 						cnt += 1
 			if cnt < 6:
 				continue
-			actives.append([e.get_script().get_global_name() if e.get_script() != null else "?", sum / cnt, tmean, e.get("has_outline") == true])
+			actives.append([e.get_script().get_global_name() if e.get_script() != null else "?", sum / cnt, tmean, e.get_parent() is CanvasGroup])
 	var bgm: float = bg_means.max() if not bg_means.is_empty() else 0.0
 	var bgh: float = bg_his.max() if not bg_his.is_empty() else 0.0
 	var gain: float = gains.min() if not gains.is_empty() else 1.0
@@ -1274,3 +1275,58 @@ func t_arenas() -> bool:
 	rv.queue_free()
 	Game.gfx_url = -1
 	return report("arenas", ok, info)
+
+# MVGN-14 (render): the rim and the dark ring exist around Clawd; creatures are outlined (a CanvasGroup) and the hit flash still turns one white
+func t_rim() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return report("rim", true, "skipped: no renderer")
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.gfx_url = 2
+	var ok := true
+	var info := ""
+	var r := new_room("N05")
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	await frames(4)
+	show_parts(r, false, false, true)
+	await frames(2)
+	var img := await grab()
+	var p = r.player
+	var cx := int(p.x + p.w / 2.0 + 0.5 - r.camera.position.x)
+	var cy := int(p.y + p.h - 5.0 - r.camera.position.y)
+	var side := -1 if float(cx) < 192.0 else 1
+	var rim := img.get_pixel(cx + side * 7, cy)            # one pixel outside the body (body spans -6..5)
+	var far := img.get_pixel(cx + side * 12, cy)
+	if rim.a < 0.5 or rim.b < rim.r or rim == far:
+		ok = false
+		info += " no rim at the side (%s vs %s);" % [rim.to_html(), far.to_html()]
+	var ring := img.get_pixel(cx - side * 7, cy)
+	if ring.a < 0.5:
+		ok = false
+		info += " no dark ring;"
+	# a creature in the group, flashing white
+	var b := Bug.new(r, 140, 192, false)
+	r.ents.append(b)
+	r.entity_root.add_child(b)
+	if not (r.entity_root is CanvasGroup):
+		ok = false
+		info += " Entities is not a CanvasGroup;"
+	await frames(3)
+	var bi := await grab()
+	var bx := int(b.x + b.w / 2.0 - r.camera.position.x)
+	var by := int(b.y + b.h / 2.0 - r.camera.position.y)
+	var normal := block_mean(lum_array(bi), bx - 3, by - 3, 6, 6)
+	b.flash = 1.0
+	await frames(3)
+	var fi := await grab()
+	var flashed := block_mean(lum_array(fi), bx - 3, by - 3, 6, 6)
+	if flashed < 0.6 or flashed < normal + 0.2:
+		ok = false
+		info += " flash %.2f vs %.2f;" % [flashed, normal]
+	r.queue_free()
+	Game.gfx_url = -1
+	return report("rim", ok, info)

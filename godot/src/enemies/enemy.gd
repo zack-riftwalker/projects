@@ -159,7 +159,7 @@ func _draw() -> void:
 func _process(_dt: float) -> void:
 	if flash_mat == null:
 		var sh := Shader.new()
-		sh.code = "shader_type canvas_item;\nuniform float flash = 1.0;\nvoid fragment() { vec4 c = texture(TEXTURE, UV); COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a); }\n"
+		sh.code = "shader_type canvas_item;\nrender_mode unshaded;\nuniform float flash = 1.0;\nvoid fragment() { vec4 c = texture(TEXTURE, UV); COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a); }\n"
 		flash_mat = ShaderMaterial.new()
 		flash_mat.shader = sh
 	material = flash_mat if flash > 0.0 else null

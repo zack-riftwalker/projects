@@ -7,7 +7,7 @@ extends Node
 # Palettes: assets/theme/moods.json (copied from docs/metroidvania/gfx-network-data/palettes.json by apply.py).
 
 const DUR := 1.2
-const TERRAIN_GAIN := Color(1.65, 1.65, 1.7)   # tiles' modulate (above 1 brightens in the shader): the ambient darkens the lit world, the terrain must still be lighter than the backdrop
+const TERRAIN_GAIN := Color(1.85, 1.85, 1.9)   # tiles' modulate (above 1 brightens in the shader): the ambient darkens the lit world, the terrain must still be lighter than the backdrop
 const NUM := ["bg_brightness", "bg_saturation", "glitch", "bloom", "gloss"]
 const COL := ["sky_far", "sky_mid", "fog", "ambient", "accent_a", "accent_b"]
 

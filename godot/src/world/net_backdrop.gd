@@ -22,7 +22,7 @@ const P_RACK := 520.0                  # the racks' wrap
 const P_SHAFT := 520.0
 const HAZE_W := 256
 const SKY_BANDS := 8
-const SKY_DIM := 0.88                  # the sky gradient is a little darker than the palette's colours (tuned with the contrast test, MVGN-17)
+const SKY_DIM := 0.66                  # the sky gradient is a little darker than the palette's colours (tuned with the contrast test, MVGN-17)
 const NT := 9                          # towers per period
 
 var room: Room
