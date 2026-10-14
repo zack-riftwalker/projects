@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# The GFX-N tests that need a real renderer (xvfb + opengl3): gfx-tests.sh [names...]. Prints `TEST <name> PASS|FAIL` lines, exit 1 on any failure.
+# gfxother: worlds 1, 2, 4 must render as the golden captures (tools/godot/golden/, taken before GFX-N). A random speck (an ambient particle) moves
+# between runs even on unchanged code, so up to 64 pixels (0.08 %) may differ; a real change moves far more. World 3 is left out: its frames differ
+# more from run to run (checked twice on unchanged code).
+set -uo pipefail
+HERE=$(cd "$(dirname "$0")" && pwd)
+ROOT=$(cd "$HERE/../.." && pwd)
+GODOT=$("$HERE/setup-godot.sh" 2>/dev/null | tail -1) || { echo "FAIL setup"; exit 1; }
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+NAMES=("$@"); [ ${#NAMES[@]} -eq 0 ] && NAMES=(gfxother RENDER_TESTS)
+rc=0
+for t in "${NAMES[@]}"; do
+  case "$t" in
+    gfxother)
+      bad=""
+      for r in R03 D05 T04; do
+        bash "$HERE/shot.sh" "$TMP/$r.png" "room:$r"
+        n=$(compare -metric AE "$TMP/$r.png" "$HERE/golden/$r.png" null: 2>&1 | grep -oE "^[0-9]+" | head -1)
+        [ "${n:-99999}" -le 64 ] || bad="$bad $r($n)"
+      done
+      if [ -z "$bad" ]; then echo "TEST gfxother PASS"; else echo "TEST gfxother FAIL differs:$bad"; rc=1; fi ;;
+    RENDER_TESTS) ;;
+    *)
+      out=$(timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$ROOT/godot" --rendering-driver opengl3 --audio-driver Dummy --resolution 768x432 -- --test="$t" 2>&1)
+      echo "$out" | grep -E "^TEST $t |^PERF|^GFX" 
+      if echo "$out" | grep -q "^TEST $t PASS" && ! echo "$out" | grep -q "SCRIPT ERROR"; then :; else echo "$out" | tail -15; rc=1; fi ;;
+  esac
+done
+exit $rc

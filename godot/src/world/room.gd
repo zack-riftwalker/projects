@@ -46,6 +46,7 @@ var rng := RandomNumberGenerator.new()
 var cam := {"x": 0.0, "y": 0.0, "ty": 0.0, "look": 0.0, "lock": null}
 var fx: Fx
 var view: RoomView
+var look: Look                              # the NETWORK's look (world 6 only, MVGN-02); null elsewhere
 var camera: Camera2D
 var layers := {}
 var liquid_y = null
@@ -1020,6 +1021,13 @@ func spawn_ddos(px: float, py: float, owner_rack = null) -> Array:
 
 # the nodes that draw the room; called once after load_room. local = false: a room only the partner is in
 func build_nodes(p = null, spawn = null, local := true) -> void:
+	if int(def.get("world", 1)) == 6:                 # (before the view: the backdrop reads it)
+		look = Look.new()
+		look.name = "Look"
+		look.room = self
+		add_child(look)
+		var mm := Look.resolve(def)
+		look.set_target(mm[0], mm[1], true)
 	view = RoomView.new()
 	view.name = "View"
 	add_child(view)

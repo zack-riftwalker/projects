@@ -84,6 +84,8 @@ func run(name: String) -> bool:
 		"variants4b": return t_variants4b()
 		"signs4b": return t_signs4b()
 		"locks4b": return t_locks4b()
+	if TestsGfx.NAMES.has(name):
+		return await TestsGfx.new(main).run(name)
 	if TestsPerf.NAMES.has(name):
 		return await TestsPerf.new(main).run(name)
 	if Tests5a.NAMES5.has(name):

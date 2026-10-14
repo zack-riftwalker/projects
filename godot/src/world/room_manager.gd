@@ -20,6 +20,7 @@ var room: Room
 var player: Player
 var trans := {"on": false, "t": 0.0, "door": null, "swapped": false}
 var fade := 0.0
+var door_blend := false          # the next swap_to is a door crossing: the new room's look starts from the old one and blends (MVGN-08)
 var last_door_id := ""           # the door the local player last crossed (a guest tells the host, for `sets` doors)
 
 func _init(h: Node2D, hd = null) -> void:
@@ -103,6 +104,11 @@ func swap_to(room_id: String, spawn = null, _snap = null, rebuild := false) -> v
 		if old.remote_players.is_empty() or mode == "guest":     # the guest only shows the current room: the host's snapshots rebuild the rest
 			rooms.erase(old.id)
 			old.queue_free()
+	if door_blend and old != null and old != target and old.look != null and target.look != null:
+		var mm := Look.resolve(target.def)
+		target.look.inherit(old.look)
+		target.look.set_target(mm[0], mm[1], false)
+	door_blend = false
 	room = target
 	room_changed.emit(room)
 	if hud != null:
@@ -366,6 +372,7 @@ func _place_in_target() -> void:
 		player.face = trans.face
 		player.dash_t = 0.0
 		player.atk_t = 0.0
+		door_blend = true
 		swap_to(target_room, Vector2(nx, ny))
 		if d.side == "N":
 			_push_to_ledge(t_door)
@@ -375,6 +382,7 @@ func _place_in_target() -> void:
 	player.face = trans.face
 	player.dash_t = 0.0
 	player.atk_t = 0.0
+	door_blend = true
 	swap_to(target_room, Vector2(new_x, new_y), null, wrap_rebuild)
 	if trans.has("ssh") and float(trans.ssh[0]) > 0.0:
 		player.ssh_t = float(trans.ssh[0])
