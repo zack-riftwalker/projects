@@ -60,24 +60,24 @@
 
 | task | what | owner | status |
 |---|---|---|---|
-| MVGN-01 | renderer probe: what works in the web build (Compatibility / WebGL 2), and what it costs | Sonnet | todo |
-| MVGN-02 | moods: the `mood` field, palettes, the `Look` node that owns every look parameter | Sonnet | todo |
-| MVGN-03 | quality tiers, "Reduce flashing", URL args, debug overlay line | Sonnet | todo |
-| MVGN-04 | backdrop v2: five depth layers, haze, light shafts, mood palettes, the 3-tier contrast fix | Sonnet | todo |
-| MVGN-05 | 2D lighting: ambient, player / partner / projectile / LED / boss lights, unshaded emissives | Sonnet | todo |
-| MVGN-06 | normal maps for the w6 tiles and the NETWORK sprites | Sonnet | todo |
-| MVGN-07 | post chain at 384×216: bloom, LUT grading, vignette, grain, scanlines, CA pulse | Sonnet | todo |
-| MVGN-08 | mood transitions and in-room shifts (N17 chase, FIREWALL phase 3) | Sonnet | todo |
-| MVGN-09 | foreground silhouette layer | Sonnet | todo |
-| MVGN-10 | ambient particles per mood and animated tiles (LEDs, fans, vents) | Sonnet | todo |
-| MVGN-11 | glossy floors (reflection strip) | Sonnet | todo |
-| MVGN-12 | living backdrop: RST wave, packet-loss glitch, crawler strands fall, calm after FIREWALL | Sonnet | todo |
-| MVGN-13 | arena lighting: WEB CRAWLER, THE FIREWALL, THE REVIEWER #2 | Sonnet | todo |
-| MVGN-14 | rim light and outlines: players and creatures | Sonnet | todo |
-| MVGN-15 | impact feel: zoom punch, CA pulse, flash rules | Sonnet | todo |
-| MVGN-16 | dynamic shadows (Ultra) | Sonnet | todo |
-| MVGN-17 | tests, screenshots, measurements, co-op pass, web export | Sonnet | todo |
-| MVGN-18 | report and playtest steps → **stop** | Sonnet | todo |
+| MVGN-01 | renderer probe: what works in the web build (Compatibility / WebGL 2), and what it costs | Sonnet | done |
+| MVGN-02 | moods: the `mood` field, palettes, the `Look` node that owns every look parameter | Sonnet | done |
+| MVGN-03 | quality tiers, "Reduce flashing", URL args, debug overlay line | Sonnet | done |
+| MVGN-04 | backdrop v2: five depth layers, haze, light shafts, mood palettes, the 3-tier contrast fix | Sonnet | done |
+| MVGN-05 | 2D lighting: ambient, player / partner / projectile / LED / boss lights, unshaded emissives | Sonnet | done |
+| MVGN-06 | normal maps for the w6 tiles and the NETWORK sprites | Sonnet | done |
+| MVGN-07 | post chain at 384×216: bloom, LUT grading, vignette, grain, scanlines, CA pulse | Sonnet | done |
+| MVGN-08 | mood transitions and in-room shifts (N17 chase, FIREWALL phase 3) | Sonnet | done |
+| MVGN-09 | foreground silhouette layer | Sonnet | done |
+| MVGN-10 | ambient particles per mood and animated tiles (LEDs, fans, vents) | Sonnet | done |
+| MVGN-11 | glossy floors (reflection strip) | Sonnet | done |
+| MVGN-12 | living backdrop: RST wave, packet-loss glitch, crawler strands fall, calm after FIREWALL | Sonnet | done |
+| MVGN-13 | arena lighting: WEB CRAWLER, THE FIREWALL, THE REVIEWER #2 | Sonnet | done |
+| MVGN-14 | rim light and outlines: players and creatures | Sonnet | done |
+| MVGN-15 | impact feel: zoom punch, CA pulse, flash rules | Sonnet | done |
+| MVGN-16 | dynamic shadows (Ultra) | Sonnet | done |
+| MVGN-17 | tests, screenshots, measurements, co-op pass, web export | Sonnet | done |
+| MVGN-18 | report and playtest steps → **stop** | Sonnet | done |
 
 ---
 

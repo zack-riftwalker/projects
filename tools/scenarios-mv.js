@@ -239,7 +239,7 @@ module.exports = (S, h) => {
       chk('pad in game', padVisible());
       chk('pause button', await press('pause'));
       await sleep(800);
-      await tapG(192, 52 + 5 * 19 + 8);
+      await tapG(192, 52 + 6 * 14 + 6);           // ?debug: 11 rows 14 px apart (GFX-N added Graphics and Reduce flashing); Fullscreen is the 7th
       chk('pause Fullscreen', await wait(() => fsOn() === 2));
       if (process.env.MV_LOG) console.log(lines.filter((l) => /CLAWD/.test(l)).join('\n'));
     } finally { await browser.close(); await srv.stop(); }

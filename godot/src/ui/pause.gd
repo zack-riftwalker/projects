@@ -23,7 +23,7 @@ var log_msg := ""
 var refight_msg := ""
 
 func options() -> Array:
-	var o := ["Resume", "Map", "Logs", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Graphics: " + Game.GFX_NAMES[Game.gfx_tier], "Reduce flashing: " + ("on" if Game.reduce_flash else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
+	var o := ["Resume", "Map", "Logs", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off"), "Graphics: " + Game.GFX_NAMES[Game.gfx_tier], "Reduce flashing: " + ("on" if Game.reduce_flash else "off")]
 	if Game.debug:
 		o.append("Refight bosses" if refight_msg == "" else refight_msg)
 		o.append(log_msg if log_msg != "" else "Copy log (5 min)")
@@ -126,13 +126,13 @@ func choose(i: int) -> void:
 		5:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
-		6:                                       # Low -> High -> Ultra -> Low (kept: the settings file)
+		6: fullscreen_requested.emit()
+		7:                                       # Low -> High -> Ultra -> Low (kept: the settings file)
 			Game.gfx_tier = (Game.gfx_tier + 1) % 3
 			Game.save_settings()
-		7:
+		8:
 			Game.reduce_flash = not Game.reduce_flash
 			Game.save_settings()
-		8: fullscreen_requested.emit()
 		9: refight_bosses()
 		10: log_msg = "Log copied: %d lines" % Game.export_log()
 	queue_redraw()
