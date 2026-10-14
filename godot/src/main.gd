@@ -288,6 +288,10 @@ func _ready() -> void:
 		elif Game.scene.begins_with("roomat:"):       # screenshot helper: stand in a room at a place (roomat:<id>:<x>:<y>)
 			var ra := Game.scene.substr(7).split(":")
 			manager.swap_to(ra[0], Vector2(float(ra[1]), float(ra[2])))
+		elif Game.scene.begins_with("look:"):         # screenshot helper: a NETWORK room in a chosen mood (look:<room>:<mood>[:<k>])
+			var la := Game.scene.substr(5).split(":")
+			manager.swap_to(la[0])
+			manager.room.look.set_target(la[1], float(la[2]) if la.size() > 2 else 1.0, true)
 		elif Game.scene.begins_with("room:"):         # screenshot helper: stand in a room
 			manager.swap_to(Game.scene.substr(5))
 		elif Game.scene in ["title", "settings", "join", "end"]:       # screenshot helpers: the menus

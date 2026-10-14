@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier"]
-const RENDER := []                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast"]
+const RENDER := ["gfxcontrast"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -18,6 +18,12 @@ func run(name: String):
 	match name:
 		"moods": return t_moods()
 		"gfxtier": return t_gfxtier()
+		"netbackdrop2": return await t_netbackdrop2()
+		"gfxcontrast": return await t_gfxcontrast()
+
+func frames(n: int) -> void:
+	for i in range(n):
+		await main.get_tree().process_frame
 
 func new_room(room_id: String) -> Room:
 	var room := Room.new()
@@ -166,3 +172,221 @@ func t_gfxtier() -> bool:
 	Game.persist = old_persist
 	DirAccess.remove_absolute(path)
 	return report("gfxtier", ok, info)
+
+# MVGN-04: five layers, the static ones do not redraw while nothing changes, the mood colours apply, a blend costs at most 12 redraws a second
+func t_netbackdrop2() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	Game.gfx_url = 1
+	var r := new_room("N05")
+	await frames(6)
+	var nb: NetBackdrop = r.view.get_node_or_null("NetBackdrop")
+	if nb == null:
+		return report("netbackdrop2", false, "no backdrop")
+	for n in ["sky", "skyline", "towers", "cables", "racks"]:
+		if nb.get(n) == null or not nb.get(n).is_inside_tree():
+			ok = false
+			info += " layer %s missing;" % n
+	if nb.layer_count() != 5 or not nb.skyline.visible or not nb.racks.visible:
+		ok = false
+		info += " high has %d layers;" % nb.layer_count()
+	var s0 := nb.static_draws
+	var c0 := nb.draws
+	await frames(300)
+	if nb.static_draws != s0:
+		ok = false
+		info += " static layers redrew %d times in 300 frames;" % (nb.static_draws - s0)
+	if nb.draws - c0 < 200:
+		ok = false
+		info += " cables drew %d times;" % (nb.draws - c0)
+	# the mood colours apply: a heat room is red at the top of the sky, a blend finishes on the target
+	r.look.set_target("heat", 1.0, true)
+	await frames(3)
+	if not (nb._out().sky_far as Color).is_equal_approx(Look.mixed("heat", 1.0).sky_far) or nb.static_draws == s0:
+		ok = false
+		info += " heat not applied;"
+	var s1 := nb.static_draws
+	r.look.set_target("loss", 1.0, false)                # 1.2 s blend
+	for i in range(80):
+		r.look.step(1.0 / 60.0)                          # (the node's own _process steps it too; this makes sure 1.2 s passed)
+		await frames(1)
+	if not r.look.reached() or not (nb._out().sky_far as Color).is_equal_approx(Look.mixed("loss", 1.0).sky_far):
+		ok = false
+		info += " blend end;"
+	if nb.static_draws - s1 > 24 or nb.static_draws - s1 < 1:
+		ok = false
+		info += " blend redraws %d;" % (nb.static_draws - s1)
+	# the tiers: Low has three layers, Ultra shows the shafts
+	Game.gfx_url = 0
+	Game.gfx_changed.emit()
+	if nb.layer_count() != 3 or nb.skyline.visible or nb.racks.visible or nb.shafts.visible:
+		ok = false
+		info += " low layers;"
+	Game.gfx_url = 2
+	Game.gfx_changed.emit()
+	if not nb.shafts.visible or not nb.skyline.visible:
+		ok = false
+		info += " ultra shafts;"
+	# two rooms do not share a skyline (the rooms' numbers seed it)
+	var r2 := new_room("N06")
+	await frames(2)
+	var nb2: NetBackdrop = r2.view.get_node_or_null("NetBackdrop")
+	if nb2 == null or is_equal_approx(nb._th(0), nb2._th(0)) and is_equal_approx(nb._th(1), nb2._th(1)):
+		ok = false
+		info += " same skyline;"
+	Game.gfx_url = -1
+	r.queue_free()
+	r2.queue_free()
+	return report("netbackdrop2", ok, info)
+
+# ---------------------------------------------------------------- rendering helpers (a real renderer)
+func grab() -> Image:
+	await RenderingServer.frame_post_draw
+	var img: Image = main.game_vp.get_texture().get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	return img
+
+# L = 0.299 R + 0.587 G + 0.114 B of every pixel (0..1), row by row
+func lum_array(img: Image) -> PackedFloat32Array:
+	var d := img.get_data()
+	var out := PackedFloat32Array()
+	out.resize(d.size() / 4)
+	for i in range(out.size()):
+		out[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255.0
+	return out
+
+func block_mean(lum: PackedFloat32Array, x0: int, y0: int, w: int, h: int) -> float:
+	var s := 0.0
+	for y in range(y0, y0 + h):
+		for x in range(x0, x0 + w):
+			s += lum[y * 384 + x]
+	return s / float(w * h)
+
+# which parts of a room are drawn: the backdrop (sky + landmarks), the terrain tiles, everything else (decor, furniture, creatures, players, ...)
+func show_parts(r: Room, bg: bool, terr: bool, rest: bool) -> void:
+	for n in ["NetBackdrop", "Landmarks"]:
+		var c = r.view.get_node_or_null(n)
+		if c != null:
+			c.visible = bg
+	r.view.tiles.visible = terr
+	r.view.decor.visible = rest
+	r.view.dynamic.visible = rest
+	for k in r.layers:
+		r.layers[k].visible = rest
+	r.entity_root.visible = rest
+	if r.player != null:
+		r.player.visible = rest
+	for rp in r.remote_players:
+		rp.visible = rest
+	for n in ["Lights", "Post"]:
+		var c2 = r.get_node_or_null(n)
+		if c2 != null:
+			c2.visible = rest
+
+# the camera at x (clamped), the room's first y; `settle` frames so every node has moved with it
+func look_at(r: Room, x: float, settle := 3) -> void:
+	var wpx := float(r.def.size[0]) * 16.0
+	r.cam.x = clampf(x, 0.0, maxf(0.0, wpx - 384.0))
+	r.camera.position = Vector2(floor(r.cam.x + 0.5), floor(r.cam.y + 0.5))
+	for i in range(settle):
+		await main.get_tree().process_frame
+
+func cam_positions(r: Room) -> Array:
+	var wpx := float(r.def.size[0]) * 16.0
+	if wpx <= 384.0 + 16.0:
+		return [0.0]
+	return [0.0, (wpx - 384.0) * 0.5, wpx - 384.0]
+
+# ---------------------------------------------------------------- MVGN-04 / 05 / 14: the 3-tier contrast rule (plan 3.7), measured
+# tier 1 background: mean L <= 0.16, at most 2 % of the pixels above 0.35 (LEDs and dots)
+# tier 2 terrain: its tiles' mean L is at least 0.06 above the background behind them; floor cap rows (the top 2 pixel rows of a tile with air above) >= 0.40
+func contrast_room(id: String, mood = null, label := "") -> Dictionary:
+	var r := new_room(id)
+	if mood != null and r.look != null:
+		r.look.set_target(mood[0], mood[1], true)
+	await frames(2)
+	var res := {"ok": true, "info": "", "line": ""}
+	var bg_means := []
+	var bg_his := []
+	var gains := []
+	var caps := []
+	for cx in cam_positions(r):
+		await look_at(r, cx)
+		show_parts(r, true, false, false)
+		await frames(1)
+		var bg := lum_array(await grab())
+		show_parts(r, false, true, false)
+		await frames(1)
+		var tr := lum_array(await grab())
+		show_parts(r, true, true, true)
+		var m := 0.0
+		var hi := 0
+		for v in bg:
+			m += v
+			if v > 0.35:
+				hi += 1
+		bg_means.append(m / bg.size())
+		bg_his.append(float(hi) / bg.size())
+		var g := r.grid
+		var tx0 := floori(r.camera.position.x / 16.0)
+		var ty0 := floori(r.camera.position.y / 16.0)
+		var gsum := 0.0
+		var gn := 0
+		for ty in range(ty0, ty0 + 14):
+			for tx in range(tx0 + 1, tx0 + 24):
+				if tx < 0 or ty < 0 or tx >= g.w or ty >= g.h or g.tile(tx, ty) != TileGrid.SOLID:
+					continue
+				var px := tx * 16 - int(r.camera.position.x)
+				var py := ty * 16 - int(r.camera.position.y)
+				if px < 0 or py < 0 or px > 368 or py > 200:
+					continue
+				gsum += block_mean(tr, px, py, 16, 16) - block_mean(bg, px, py, 16, 16)
+				gn += 1
+				if g.tile(tx, ty - 1) != TileGrid.SOLID and ty > 0:
+					caps.append(block_mean(tr, px, py, 16, 2))
+		if gn > 0:
+			gains.append(gsum / gn)
+	var bgm: float = bg_means.max() if not bg_means.is_empty() else 0.0
+	var bgh: float = bg_his.max() if not bg_his.is_empty() else 0.0
+	var gain: float = gains.min() if not gains.is_empty() else 1.0
+	var cap: float = caps.min() if not caps.is_empty() else 1.0
+	res.line = "GFX contrast %s%s bg_mean %.3f bg_bright %.3f terrain_gain %.3f cap %.2f" % [id, label, bgm, bgh, gain, cap]
+	if bgm > 0.16 or bgh > 0.02:
+		res.ok = false
+		res.info += " %s%s background %.3f/%.3f;" % [id, label, bgm, bgh]
+	if gain < 0.06:
+		res.ok = false
+		res.info += " %s%s terrain gain %.3f;" % [id, label, gain]
+	if cap < 0.40:
+		res.ok = false
+		res.info += " %s%s cap rows %.2f;" % [id, label, cap]
+	r.queue_free()
+	await frames(1)
+	return res
+
+func t_gfxcontrast() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return report("gfxcontrast", true, "skipped: no renderer (run it through tools/godot/gfx-tests.sh)")
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.gfx_url = 2
+	var ok := true
+	var info := ""
+	var only: String = OS.get_environment("GFX_ROOMS")
+	for i in range(1, 23):
+		var id := "N%02d" % i
+		if only != "" and not only.split(",").has(id):
+			continue
+		var res: Dictionary = await contrast_room(id)
+		print(res.line)
+		if not res.ok:
+			ok = false
+			info += res.info
+	Game.gfx_url = -1
+	return report("gfxcontrast", ok, info)

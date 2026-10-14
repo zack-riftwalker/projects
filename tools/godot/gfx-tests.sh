@@ -8,7 +8,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 GODOT=$("$HERE/setup-godot.sh" 2>/dev/null | tail -1) || { echo "FAIL setup"; exit 1; }
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-NAMES=("$@"); [ ${#NAMES[@]} -eq 0 ] && NAMES=(gfxother RENDER_TESTS)
+NAMES=("$@"); [ ${#NAMES[@]} -eq 0 ] && NAMES=(gfxother gfxcontrast)
 rc=0
 for t in "${NAMES[@]}"; do
   case "$t" in
