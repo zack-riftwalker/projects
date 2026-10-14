@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient"]
 const RENDER := ["gfxcontrast", "normals", "post"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -25,6 +25,7 @@ func run(name: String):
 		"luts": return t_luts()
 		"moodshift": return await t_moodshift()
 		"foreground": return await t_foreground()
+		"ambient": return await t_ambient()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -852,3 +853,89 @@ func t_foreground() -> bool:
 	r3.queue_free()
 	Game.gfx_url = -1
 	return report("foreground", ok, info + (" (%d drawn states checked)" % drawn if ok else ""))
+
+func play_frames(r: Room, n: int) -> void:
+	for i in range(n):
+		Controls.script_input = {"right": (i / 90) % 2 == 0, "left": (i / 90) % 2 == 1, "jump": i % 40 == 0, "attack": i % 25 == 0}
+		Controls.poll()
+		r.step(Game.STEP)
+		await main.get_tree().process_frame
+
+# MVGN-10: counts per tier, room.rng untouched (rule 0), the animated tiles obey their placement rules, at most two vents
+func t_ambient() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	for tier in [0, 1, 2]:
+		Game.gfx_url = tier
+		var r := new_room("N05")
+		await frames(3)
+		var am: RoomAmbient = r.get_node("Ambient")
+		if am.n != [40, 96, 160][tier] or am.kind != "motes":
+			ok = false
+			info += " tier %d: %d %s particles;" % [tier, am.n, am.kind]
+		r.queue_free()
+		await frames(1)
+	Game.gfx_url = 2
+	for pair in [["N12", "shards", 160], ["N09", "spores", 160], ["N15", "embers", 160], ["N22", "paper", 160]]:
+		var r2 := new_room(pair[0])
+		await frames(3)
+		var am2: RoomAmbient = r2.get_node("Ambient")
+		if am2.kind != pair[1] or am2.n != pair[2]:
+			ok = false
+			info += " %s has %d %s;" % [pair[0], am2.n, am2.kind]
+		if pair[0] == "N15":
+			r2.look.set_target("heat_p3", 1.0, true)
+			await frames(3)
+			if am2.n != 320:
+				ok = false
+				info += " embers x2 is %d;" % am2.n
+		r2.queue_free()
+		await frames(1)
+	# rule 0: the room's rng is in the same state after 600 frames with and without the ambient particles
+	var states := []
+	for with_amb in [true, false]:
+		Game.gfx_url = 2
+		var r3 := new_room("N05")
+		r3.rng.seed = 4242
+		if not with_amb:
+			r3.get_node("Ambient").free()
+		await play_frames(r3, 600)
+		states.append([r3.rng.state, r3.player.x, r3.player.y])
+		r3.queue_free()
+		await frames(1)
+	if states[0][0] != states[1][0] or absf(states[0][1] - states[1][1]) > 0.01:
+		ok = false
+		info += " ambient particles changed the room's rng or the play: %s vs %s;" % [str(states[0]), str(states[1])]
+	# animated tiles and vents
+	for i in range(1, 23):
+		var id := "N%02d" % i
+		var r4 := new_room(id)
+		await frames(1)
+		var vw: RoomView = r4.view
+		var cells := 0
+		var air := 0
+		var g := r4.grid
+		for ty in range(g.h):
+			for tx in range(g.w):
+				if g.tile(tx, ty) == TileGrid.SOLID and (g.tile(tx - 1, ty) == TileGrid.E or g.tile(tx + 1, ty) == TileGrid.E or g.tile(tx, ty - 1) == TileGrid.E):
+					air += 1
+		for tl in [vw.led_layer, vw.fan_layer]:
+			for c in tl.get_used_cells():
+				cells += 1
+				if r4.reserved(c.x, c.y) or g.tile(c.x, c.y) != TileGrid.SOLID:
+					ok = false
+					info += " %s: animated tile on a bad cell %s;" % [id, str(c)]
+		if cells > air / 12 * 1.6 + 6:
+			ok = false
+			info += " %s: %d animated tiles for %d wall faces;" % [id, cells, air]
+		if (r4.get_node("Ambient") as RoomAmbient).vents.size() > 2:
+			ok = false
+			info += " %s: too many vents;" % id
+		r4.queue_free()
+		await frames(1)
+	Game.gfx_url = -1
+	return report("ambient", ok, info)

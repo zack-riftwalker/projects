@@ -1048,6 +1048,10 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		rl.name = "Lights"
 		rl.room = self
 		add_child(rl)
+		var amb := RoomAmbient.new()
+		amb.name = "Ambient"
+		amb.room = self
+		add_child(amb)
 		foreground = RoomForeground.new()
 		foreground.name = "Foreground"
 		foreground.room = self

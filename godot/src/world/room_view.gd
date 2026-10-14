@@ -7,6 +7,9 @@ var tiles: TileMapLayer
 var dynamic: TileMapLayer
 var decor: TileMapLayer
 var room: Room
+var led_layer: TileMapLayer              # world 6: animated LED strips and fan grilles over some wall faces (MVGN-10)
+var fan_layer: TileMapLayer
+var anim_rev := -1
 
 static func make_tileset(world := 1) -> TileSet:
 	var ts := TileSet.new()
@@ -35,6 +38,7 @@ static func normal_tex(diffuse: Texture2D) -> Texture2D:
 func _on_gfx_changed() -> void:
 	if room == null or room.look == null:
 		return
+	_apply_anim()
 	var d: Texture2D = load("res://assets/tiles/w6_tiles.png")
 	var tx: Texture2D = normal_tex(d) if Game.gfx_tier >= 1 else d
 	for tl in [decor, tiles, dynamic]:
@@ -97,11 +101,72 @@ func build(rm: Room) -> void:
 	for ty in range(g.h):
 		for tx in range(g.w):
 			_put_cell(g, tx, ty)
+	if room.look != null:
+		_build_anim(g)
 	# decor sits in the empty cell above exposed ground (and not on a cell the map uses for something else)
 	for ty in range(1, g.h):
 		for tx in range(g.w):
 			if g.tile(tx, ty) == TileGrid.SOLID and g.tiles[(ty - 1) * g.w + tx] == TileGrid.E and not room.reserved(tx, ty - 1):
 				decor.set_cell(Vector2i(tx, ty - 1), 0, Vector2i(floori(Game.hash3(tx, ty, 77) * 16), 6))
+
+# an animated tile set from a 4-frame strip (64 x 16)
+static func anim_set(path: String) -> TileSet:
+	var ts := TileSet.new()
+	ts.tile_size = Vector2i(T, T)
+	var src := TileSetAtlasSource.new()
+	src.texture = load(path)
+	src.texture_region_size = Vector2i(T, T)
+	src.create_tile(Vector2i(0, 0))
+	src.set_tile_animation_columns(Vector2i(0, 0), 4)
+	src.set_tile_animation_frames_count(Vector2i(0, 0), 4)
+	for f in range(4):
+		src.set_tile_animation_frame_duration(Vector2i(0, 0), f, 0.18)
+	ts.add_source(src, 0)
+	return ts
+
+# LED strips and fan grilles on some wall faces (a solid cell with air beside or above it), by hash, at most 1 cell in 12, never on a cell the map uses
+func _build_anim(g: TileGrid) -> void:
+	led_layer = TileMapLayer.new()
+	led_layer.name = "AnimLed"
+	led_layer.tile_set = anim_set("res://assets/tiles/w6_led.png")
+	led_layer.material = Look.unshaded()
+	add_child(led_layer)
+	fan_layer = TileMapLayer.new()
+	fan_layer.name = "AnimFan"
+	fan_layer.tile_set = anim_set("res://assets/tiles/w6_fan.png")
+	fan_layer.modulate = Look.TERRAIN_GAIN
+	add_child(fan_layer)
+	var sd := int(String(room.id).substr(1)) * 13 if String(room.id).substr(1).is_valid_int() else 5
+	for ty in range(g.h):
+		for tx in range(g.w):
+			if g.tile(tx, ty) != TileGrid.SOLID or room.reserved(tx, ty):
+				continue
+			var air := g.tile(tx - 1, ty) == TileGrid.E or g.tile(tx + 1, ty) == TileGrid.E or g.tile(tx, ty - 1) == TileGrid.E
+			if not air or Game.hash3(tx, ty, 330 + sd) >= 1.0 / 12.0:
+				continue
+			(led_layer if Game.hash3(tx, ty, 331 + sd) < 0.6 else fan_layer).set_cell(Vector2i(tx, ty), 0, Vector2i(0, 0))
+	_apply_anim()
+
+# the layers follow the tier ("Reduce flashing" freezes the LED strips on one frame) and the mood's accent
+func _apply_anim() -> void:
+	if led_layer == null:
+		return
+	var on := Game.gfx_tier >= 1
+	led_layer.visible = on
+	fan_layer.visible = on
+	var dur := 1000.0 if Game.reduce_flash else 0.18
+	for tl in [led_layer, fan_layer]:
+		var src := tl.tile_set.get_source(0) as TileSetAtlasSource
+		for f in range(4):
+			src.set_tile_animation_frame_duration(Vector2i(0, 0), f, 1000.0 if (Game.reduce_flash and tl == led_layer) else 0.18)
+	var o: Dictionary = room.look.out if room.look != null and not room.look.out.is_empty() else Look.mixed("stable", 1.0)
+	var ca: Color = o.accent_a
+	led_layer.modulate = Color(ca.r, ca.g, ca.b, 1.0)
+	anim_rev = room.look.rev if room.look != null else 0
+
+func _process(_dt: float) -> void:
+	if led_layer != null and room.look != null and room.look.rev != anim_rev:
+		_apply_anim()
 
 func _put_cell(g: TileGrid, tx: int, ty: int) -> void:
 	var t := g.tile(tx, ty)
