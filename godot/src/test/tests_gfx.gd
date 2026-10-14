@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas"]
 const RENDER := ["gfxcontrast", "normals", "post", "gloss"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -28,6 +28,7 @@ func run(name: String):
 		"ambient": return await t_ambient()
 		"gloss": return await t_gloss()
 		"livingbg": return await t_livingbg()
+		"arenas": return await t_arenas()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -1124,3 +1125,121 @@ func t_livingbg() -> bool:
 		rr.queue_free()
 	Game.gfx_url = -1
 	return report("livingbg", ok, info)
+
+func start_fight(id: String, phase := 1) -> Room:
+	var r := new_room(id)
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	if phase > 1:
+		r.boss.phase = phase
+	return r
+
+# MVGN-13: each arena's own lights and effects; bosses and their telegraphs are never darkened (unshaded); the ambient floor of 35 %
+func t_arenas() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.gfx_url = 2
+	var ok := true
+	var info := ""
+	for pair in [["N09", 0.45], ["N15", 1.0], ["N22", 1.0]]:
+		for phase in [1, 3]:
+			var r := start_fight(pair[0], phase)
+			await frames(3)
+			r.look.follow_room(1.0 / 60.0)
+			for i in range(180):
+				r.time += 1.0 / 60.0
+				r.look.follow_room(1.0 / 60.0)
+				r.look.step(1.0 / 60.0)
+			await frames(2)
+			var b = r.boss
+			if b == null:
+				ok = false
+				info += " %s: no boss;" % pair[0]
+				r.queue_free()
+				continue
+			if b.body.material == null or (b.overlay.material as CanvasItemMaterial).light_mode != CanvasItemMaterial.LIGHT_MODE_UNSHADED:
+				ok = false
+				info += " %s boss or telegraphs are lit;" % pair[0]
+			var lit := lit_count(r)
+			if lit < 2 or lit > 48:
+				ok = false
+				info += " %s phase %d: %d lights;" % [pair[0], phase, lit]
+			# the ambient: N09 at 45 % of the lair during the fight (x0.9 in phase 3), never below 35 % anywhere
+			var base := Look.mixed(r.look.mood, r.look.k).ambient as Color
+			var ratio := (r.look.out.ambient as Color).r / base.r
+			if pair[0] == "N09":
+				var want: float = 0.45 * (0.9 if phase == 3 else 1.0)
+				if absf(ratio - want) > 0.03:
+					ok = false
+					info += " N09 ambient x%.2f, wanted %.2f;" % [ratio, want]
+			if ratio < 0.35 - 0.001:
+				ok = false
+				info += " %s ambient below 35 %% (%.2f);" % [pair[0], ratio]
+			if pair[0] == "N15":
+				var hz: RoomHaze = r.get_node_or_null("Haze")
+				if hz == null or hz.rects.is_empty() or not hz.visible:
+					ok = false
+					info += " N15 haze missing;"
+				Game.reduce_flash = true
+				hz._apply()
+				if hz.visible:
+					ok = false
+					info += " haze with Reduce flashing;"
+				Game.reduce_flash = false
+				hz._apply()
+				if (r.get_node("Ambient") as RoomAmbient).fe.is_empty():
+					ok = false
+					info += " no embers off the bricks;"
+			if pair[0] == "N09":
+				var eyes := 0
+				var rl: RoomLights = r.get_node("Lights")
+				var c: Array = []
+				rl._arena(c, b, Color.WHITE, Color.WHITE)
+				for w in c:
+					if w[7] == null:
+						eyes += 1
+				if eyes != 2:
+					ok = false
+					info += " N09 eyes %d;" % eyes
+			if pair[0] == "N22":
+				var c2: Array = []
+				(r.get_node("Lights") as RoomLights)._arena(c2, b, Color.WHITE, Color.WHITE)
+				var over := 0
+				for w in c2:
+					if w[8]:
+						over += 1
+				if over != 3:
+					ok = false
+					info += " N22 overheads %d;" % over
+			r.queue_free()
+			await frames(1)
+	# the reviewer's verdict: bloom +0.3 for half a second
+	var rv := start_fight("N22")
+	await frames(2)
+	rv.look.follow_room(0.0)
+	for i in range(120):
+		rv.time += 1.0 / 60.0
+		rv.look.follow_room(1.0 / 60.0)
+		rv.look.step(1.0 / 60.0)
+	var b0 := float(rv.look.out.bloom)
+	rv.boss.plan = {"id": "verdict", "ph": "active", "t": 0.3, "seq": 1, "fam": "", "tgt": "p1"}
+	for i in range(20):
+		rv.time += 1.0 / 60.0
+		rv.look.follow_room(1.0 / 60.0)
+		rv.look.step(1.0 / 60.0)
+	var b1 := float(rv.look.out.bloom)
+	rv.boss.plan = {}
+	for i in range(90):
+		rv.time += 1.0 / 60.0
+		rv.look.follow_room(1.0 / 60.0)
+		rv.look.step(1.0 / 60.0)
+	var b2 := float(rv.look.out.bloom)
+	if b1 - b0 < 0.2 or absf(b2 - b0) > 0.03:
+		ok = false
+		info += " verdict bloom %.2f -> %.2f -> %.2f;" % [b0, b1, b2]
+	rv.queue_free()
+	Game.gfx_url = -1
+	return report("arenas", ok, info)

@@ -44,6 +44,10 @@ func _ready() -> void:
 			"N": p = Vector2(mid, 10.0)
 			"S": p = Vector2(mid, float(room.ph) - 10.0)
 		statics.append({"x": p.x, "y": p.y, "r": 40.0, "e": 0.5, "k": 0})
+	if room.id == "N15":                                      # the firewall's bricks glow (every third one: the budget is for the fight)
+		for i in range(0, room.fire_cells.size(), 3):
+			var fc: Array = room.fire_cells[i]
+			statics.append({"x": float(fc[0]) * 16.0 + 8.0, "y": float(fc[1]) * 16.0 + 8.0, "r": 38.0, "e": 0.55, "k": 1})
 	# the LEDs of the towers are in the backdrop (far away): they are not lights; terminals come from the signs / stations above
 
 func _light(i: int) -> PointLight2D:
@@ -75,9 +79,10 @@ func _process(_dt: float) -> void:
 		_players(c, rp, pc, cam)
 	var bs = room.boss
 	if bs != null and is_instance_valid(bs) and not bs.gone:
-		c.append([1, 0.0, bs.x + bs.w * 0.5, bs.y + bs.h * 0.5, 96.0, 0.9, cb.lerp(Color.WHITE, 0.2), null])
+		c.append([1, 0.0, bs.x + bs.w * 0.5, bs.y + bs.h * 0.5, 96.0, 0.9, cb.lerp(Color.WHITE, 0.2), null, false])
+		_arena(c, bs, ca, cb)
 	for e in extra:
-		c.append([int(e.get("prio", 1)), 0.0, float(e.x), float(e.y), float(e.r), float(e.e), e.col, e.get("cone", null)])
+		c.append([int(e.get("prio", 1)), 0.0, float(e.x), float(e.y), float(e.r), float(e.e), e.col, e.get("cone", null), false])
 	if tier >= 1:
 		var pr: Array = []
 		for q in room.projs:
@@ -85,14 +90,14 @@ func _process(_dt: float) -> void:
 				continue
 			var d := Vector2(q.x, q.y).distance_to(cam)
 			if d < 260.0:
-				pr.append([2, d, float(q.x), float(q.y), 28.0 + float(q.r) * 2.0, 0.8, Color(q.col).lerp(Color.WHITE, 0.25), null])
+				pr.append([2, d, float(q.x), float(q.y), 28.0 + float(q.r) * 2.0, 0.8, Color(q.col).lerp(Color.WHITE, 0.25), null, false])
 		pr.sort_custom(func(a, b): return a[1] < b[1])
 		c.append_array(pr.slice(0, 30))
 		var st: Array = []
 		for s in statics:
 			var d2 := Vector2(s.x, s.y).distance_to(cam)
 			if absf(s.x - cam.x) < 192.0 + CULL and absf(s.y - cam.y) < 108.0 + CULL:
-				st.append([3, d2, s.x, s.y, s.r, s.e, ca if s.k == 0 else (cb if s.k == 1 else Color("#58f0c8")), null])
+				st.append([3, d2, s.x, s.y, s.r, s.e, ca if s.k == 0 else (cb if s.k == 1 else Color("#58f0c8")), null, false])
 		st.sort_custom(func(a, b): return a[1] < b[1])
 		c.append_array(st)
 		if tier >= 2:                                       # glowing particles: a short-lived light, at most 6 at once
@@ -100,7 +105,7 @@ func _process(_dt: float) -> void:
 			for i in range(room.fx.list.size() - 1, -1, -1):
 				var p = room.fx.list[i]
 				if int(p.get("glow", 0)) == 1 and float(p.get("life", 0.0)) > 0.05:
-					c.append([4, 0.0, float(p.x), float(p.y), 22.0, 0.5 * clampf(float(p.life) / maxf(float(p.get("max", 1.0)), 0.01), 0.0, 1.0), Color(p.col), null])
+					c.append([4, 0.0, float(p.x), float(p.y), 22.0, 0.5 * clampf(float(p.life) / maxf(float(p.get("max", 1.0)), 0.01), 0.0, 1.0), Color(p.col), null, false])
 					n += 1
 					if n >= 6:
 						break
@@ -114,6 +119,7 @@ func _process(_dt: float) -> void:
 		l.position = Vector2(w[2], w[3])
 		l.color = w[6]
 		l.energy = w[5]
+		l.shadow_enabled = bool(w[8]) and tier >= 2                 # shadows: Ultra only, and only the lights that ask (MVGN-16)
 		if w[7] == null:
 			l.texture = tex_soft
 			l.texture_scale = w[4] * 2.0 / TEX
@@ -134,4 +140,31 @@ func _players(c: Array, p, col: Color, cam: Vector2) -> void:
 		return
 	if p.material == null:                                     # players are never darkened: unshaded, and they carry the light that lights the ground
 		p.material = Look.unshaded()
-	c.append([0, 0.0, p.x + p.w * 0.5, p.y + p.h * 0.5, 74.0, 0.9, col, null])
+	c.append([0, 0.0, p.x + p.w * 0.5, p.y + p.h * 0.5, 74.0, 0.9, col, null, false])
+
+# the arenas' own lights (MVGN-13): the crawler's eyes and its strands' beams, the firewall's shield, the reviewer's overheads and unresolved comments
+func _arena(c: Array, bs, ca: Color, cb: Color) -> void:
+	match String(room.id):
+		"N09":
+			if bs is CrawlerBoss:
+				var red := Color(Game.COL.hazard)
+				c.append([1, 0.0, float(bs.core_px) - 5.0, float(bs.core_y) - 1.5, 26.0, 0.95, red, null, false])
+				c.append([1, 0.0, float(bs.core_px) + 5.0, float(bs.core_y) - 1.5, 26.0, 0.95, red, null, false])
+				var n := 0
+				for h in bs.hz:                                   # the strand being spun: a cone along it ("indexing"), casting shadows on Ultra
+					if n >= 2:
+						break
+					var a: Vector2 = bs.strand_a(h)
+					var b: Vector2 = bs.strand_b(h)
+					c.append([1, 0.0, a.x, a.y, a.distance_to(b), 0.8, Color("#d6f6ff"), (b - a).angle(), true])
+					n += 1
+		"N15":
+			if bs is FirewallBoss:
+				var sp: Vector2 = bs.shield_pos()
+				c.append([1, 0.0, sp.x, sp.y - 8.0, 56.0, 0.85, cb.lerp(Color.WHITE, 0.35), null, false])       # the shield's rim light
+		"N22":
+			if bs is Reviewer2:
+				for i in range(3):                                # three cold overheads (shadows on Ultra)
+					c.append([1, 0.0, float(room.pw) * (0.2 + 0.3 * float(i)), 18.0, 120.0, 0.65, Color(0.82, 0.9, 1.0), null, true])
+				for h in bs.hz:                                   # unresolved comments glow
+					c.append([2, 0.0, float(h.v[0]), Boss.FLOOR - 6.0, 24.0, 0.8 if bs.hz_live(h, room.time) else 0.4, Color("#FF4B5C"), null, false])

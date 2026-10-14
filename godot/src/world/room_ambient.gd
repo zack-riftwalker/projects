@@ -20,6 +20,7 @@ var vents: Array = []                   # {x, y (world px: the top of the floor 
 var proxy: DrawProxy
 var t := 0.0
 var fade := 1.0
+var fe: Array = []                      # N15: embers off the bricks {x, y (world), vx, vy, life, max}
 
 func _ready() -> void:
 	z_index = 1
@@ -96,7 +97,25 @@ func _process(dt: float) -> void:
 					var push := d / dl * (20.0 - dl) * 6.0 * dt * 4.0
 					px[b] += push.x
 					px[b + 1] += push.y
-	Game.gfx_stats.parts = n
+	if room.id == "N15" and not room.fire_cells.is_empty():            # THE FIREWALL: embers lift off the brick tops
+		var want_fe: int = [8, 18, 30][Game.gfx_tier]
+		while fe.size() < want_fe:
+			var c: Array = room.fire_cells[rng.randi() % room.fire_cells.size()]
+			fe.append({"x": float(c[0]) * 16.0 + rng.randf() * 16.0, "y": float(c[1]) * 16.0, "vx": rng.randf_range(-8.0, 8.0), "vy": rng.randf_range(-42.0, -20.0), "life": rng.randf_range(0.8, 2.2), "max": 2.2})
+		for e in fe:
+			e.x += float(e.vx) * dt
+			e.y += float(e.vy) * dt
+			e.life -= dt
+			if e.life <= 0.0:
+				var c2: Array = room.fire_cells[rng.randi() % room.fire_cells.size()]
+				e.x = float(c2[0]) * 16.0 + rng.randf() * 16.0
+				e.y = float(c2[1]) * 16.0
+				e.vx = rng.randf_range(-8.0, 8.0)
+				e.vy = rng.randf_range(-42.0, -20.0)
+				e.life = rng.randf_range(0.8, 2.2)
+		while fe.size() > want_fe:
+			fe.pop_back()
+	Game.gfx_stats.parts = n + fe.size()
 	proxy.position = cam
 	proxy.queue_redraw()
 
@@ -144,6 +163,12 @@ func _draw_all(ci: CanvasItem) -> void:
 				col = ca if (i & 1) == 0 else cb
 				a = 0.5 * fade * (0.6 + 0.4 * sin(t * 1.7 + ph))
 		ci.draw_rect(Rect2(floorf(sp.x), floorf(sp.y), sz, sz), Color(col.r, col.g, col.b, a))
+	for e in fe:
+		var ex := float(e.x) - cam.x
+		var ey := float(e.y) - cam.y
+		if ex > -2.0 and ex < W + 2.0 and ey > -2.0 and ey < H + 2.0:
+			var ec := ca.lerp(cb, 0.4)
+			ci.draw_rect(Rect2(floorf(ex), floorf(ey), 1.0, 1.0 if float(e.life) < 0.8 else 2.0), Color(ec.r, ec.g, ec.b, clampf(float(e.life) / 0.8, 0.0, 1.0) * 0.9))
 	# vent steam: puffs rise and spread for 1.4 s every 3-5 s (a pure function of the room clock)
 	var rt: float = room.time
 	for v in vents:

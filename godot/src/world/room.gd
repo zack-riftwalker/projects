@@ -1048,6 +1048,11 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		rl.name = "Lights"
 		rl.room = self
 		add_child(rl)
+		if id == "N15":
+			var hz := RoomHaze.new()
+			hz.name = "Haze"
+			hz.room = self
+			add_child(hz)
 		var gl := RoomGloss.new()
 		gl.name = "Gloss"
 		gl.room = self

@@ -43,6 +43,8 @@ func _ready() -> void:
 	add_child(body)
 	overlay = DrawProxy.new()
 	overlay.cb = draw_boss_overlay
+	if room.look != null:
+		overlay.material = Look.unshaded()          # telegraphs are never darkened (GFX-N)
 	add_child(overlay)
 
 # the co-op factor (a second player in the arena); MERGE CONFLICT overrides it (two heads)
@@ -148,7 +150,7 @@ func death_rattle(dt: float, dur: float, cols: Array) -> bool:
 func _process(_dt: float) -> void:
 	if flash_mat == null:
 		super._process(_dt)
-	body.material = flash_mat if flash > 0.0 else null
+	body.material = flash_mat if flash > 0.0 else (Look.unshaded() if room.look != null else null)      # (a NETWORK boss is never darkened, GFX-N)
 	body.queue_redraw()
 	overlay.queue_redraw()
 

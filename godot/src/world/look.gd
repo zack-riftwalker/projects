@@ -216,6 +216,7 @@ func lut_pair() -> Array:
 
 # ---------------------------------------------------------------- in-room shifts (MVGN-08): read from the state both pages already have
 const SIREN := Color("#FF6B00")
+var verdict_until := -1.0
 var shift := ""                          # the palette the room's own state asks for now ("" = the room's mood from rooms.json)
 
 func follow_room(dt: float) -> void:
@@ -228,12 +229,20 @@ func follow_room(dt: float) -> void:
 	# the fight rooms: the boss's phase 3
 	var b = room.boss
 	var p3: bool = b != null and is_instance_valid(b) and not b.get("gone") and int(b.get("phase")) == 3 and not b.get("dying")
+	var fighting: bool = room.fight.state in ["intro", "active"] and b != null and is_instance_valid(b)
+	if id == "N09" and fighting:
+		ambient_mul = 0.45                                          # the crawler's lair goes dark for the fight (the lights carry it: eyes, beams)
 	if p3:
 		if id == "N15":
 			want = "heat_p3"
 		elif id == "N09" or id == "N22":
 			bloom_add = 0.15
-			ambient_mul = 0.9
+			ambient_mul *= 0.9
+	if id == "N22" and b != null and is_instance_valid(b) and b.get("plan") is Dictionary and not b.plan.is_empty() and String(b.plan.id) == "verdict" and String(b.plan.ph) == "active":
+		verdict_until = room.time + 0.5
+	if room.time < verdict_until:
+		bloom_add += 0.3                                            # the verdict moment: a flash of bloom
+	ambient_mul = maxf(ambient_mul, 0.35)                           # the arenas never go darker than 35 %
 	if want != shift:
 		shift = want
 		var mm := Look.resolve(room.def)
