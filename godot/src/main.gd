@@ -55,6 +55,9 @@ func _ready() -> void:
 	resized.connect(_fit)
 	_fit()
 	print("CLAWD: ready")
+	if Game.scene == "gfxprobe":                       # MVGN-01: which 2D features this renderer has (no game, no HUD)
+		game_vp.add_child(GfxProbe.new())
+		return
 	if Game.test_name != "":
 		var script = load("res://src/test/run_tests.gd")
 		if script == null:
@@ -603,7 +606,7 @@ func on_host_left() -> void:
 	print("CLAWD: host left")
 
 func _physics_process(_d: float) -> void:
-	if Game.test_name != "":
+	if Game.test_name != "" or Game.scene == "gfxprobe":
 		return
 	if Game.debug:
 		_dbg_menu_state()

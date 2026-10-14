@@ -976,6 +976,7 @@ var test_name := ""
 var shot_path := ""
 var demo := false
 var scene := ""
+var probe_out := ""                 # --probe-out=<file>: where the renderer probe (MVGN-01) writes its table
 var shot_wait := 30
 var full_shot := false
 var build_text := "dev"
@@ -1085,6 +1086,8 @@ func _ready() -> void:
 					diff = v
 					diff_from_url = true
 			"scene": scene = v
+			"gfxprobe": scene = "gfxprobe"
+			"probe-out": probe_out = v
 			"wait": shot_wait = int(v)
 			"full": full_shot = true
 	if fps30:
