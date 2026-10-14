@@ -7,14 +7,28 @@ extends Node
 # Palettes: assets/theme/moods.json (copied from docs/metroidvania/gfx-network-data/palettes.json by apply.py).
 
 const DUR := 1.2
+const TERRAIN_GAIN := Color(1.65, 1.65, 1.7)   # tiles' modulate (above 1 brightens in the shader): the ambient darkens the lit world, the terrain must still be lighter than the backdrop
 const NUM := ["bg_brightness", "bg_saturation", "glitch", "bloom", "gloss"]
 const COL := ["sky_far", "sky_mid", "fog", "ambient", "accent_a", "accent_b"]
 
 static var _pal := {}                    # palette name -> {key: Color / float / String}
+static var _unshaded: CanvasItemMaterial
+static var _unshaded_add: CanvasItemMaterial
+
+# the one way to keep an item out of the ambient and the lights (plan 3.4): a material with LIGHT_MODE_UNSHADED
+static func unshaded(additive := false) -> CanvasItemMaterial:
+	if _unshaded == null:
+		_unshaded = CanvasItemMaterial.new()
+		_unshaded.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+		_unshaded_add = CanvasItemMaterial.new()
+		_unshaded_add.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+		_unshaded_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return _unshaded_add if additive else _unshaded
 
 var room: Room
 var mood := "stable"                     # the target's palette name (or "stable_clean" ...)
 var k := 1.0                             # how strongly it is mixed over `stable`
+var stage: LookStage                     # the canvas's one CanvasModulate: this room claims it with its ambient while it is the local room
 var out := {}                            # the values now, after the blend and the adjustments
 var rev := 0                             # +1 for every step in which `out` changed
 var ca_pulse := 0.0                      # chromatic aberration strength now (0 at rest; pulse_ca sets it, it fades out over its length)
@@ -66,6 +80,10 @@ static func mixed(name: String, kk: float) -> Dictionary:
 		d[key] = lerpf(float(a[key]), float(b[key]), kk)
 	d["particles"] = b.particles if kk >= 0.5 else a.particles
 	return d
+
+func _enter_tree() -> void:
+	if stage == null and room != null:
+		stage = LookStage.of(room)
 
 func set_target(mood_name: String, kk: float, immediate := false, dur := DUR) -> void:
 	mood = mood_name
@@ -129,6 +147,8 @@ func _process(dt: float) -> void:
 	if room == null or not room.is_local:
 		return
 	step(dt)
+	if stage != null:
+		stage.claim(out.ambient)
 
 # a new adjustment value; Look is the only place that keeps them (so a room never stores look state)
 func set_adj(key: String, v) -> void:

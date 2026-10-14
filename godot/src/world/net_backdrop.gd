@@ -22,6 +22,7 @@ const P_RACK := 520.0                  # the racks' wrap
 const P_SHAFT := 520.0
 const HAZE_W := 256
 const SKY_BANDS := 8
+const SKY_DIM := 0.88                  # the sky gradient is a little darker than the palette's colours (tuned with the contrast test, MVGN-17)
 const NT := 9                          # towers per period
 
 var room: Room
@@ -51,9 +52,7 @@ func _init() -> void:
 	sky = _layer(_draw_sky)
 	skyline = _layer(_draw_skyline)
 	shafts = _layer(_draw_shafts)
-	var ma := CanvasItemMaterial.new()
-	ma.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	shafts.material = ma
+	shafts.material = Look.unshaded(true)
 	haze_a = _haze(0.5)
 	towers = _layer(_draw_towers)
 	cables = _layer(_draw_cables)
@@ -90,6 +89,7 @@ func _th(i: int) -> float:
 func _layer(cb: Callable) -> Node2D:
 	var n := DrawProxy.new()
 	n.cb = cb
+	n.material = Look.unshaded()                 # the backdrop is graded by its own colours, not by the ambient
 	add_child(n)
 	return n
 
@@ -110,6 +110,7 @@ func _haze(_pf: float) -> Array:
 		s.texture = haze_tex
 		s.centered = false
 		s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		s.material = Look.unshaded()
 		s.scale = Vector2(1.0, 1.6)
 		add_child(s)
 		out.append(s)
@@ -186,7 +187,8 @@ func _draw_sky(ci: CanvasItem) -> void:
 	var mid: Color = o.sky_mid
 	var prev := Color()
 	for i in range(SKY_BANDS):
-		var col := far.lerp(mid, pow(float(i) / (SKY_BANDS - 1), 1.3))
+		var col := far.lerp(mid, pow(float(i) / (SKY_BANDS - 1), 1.3)) * SKY_DIM
+		col.a = 1.0
 		var y0 := i * H / SKY_BANDS
 		ci.draw_rect(Rect2(0, y0, W, H / SKY_BANDS + 1), col)
 		if i > 0:                                         # a dithered seam between two bands (a 1-px checker)

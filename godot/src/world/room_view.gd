@@ -51,6 +51,8 @@ func build(rm: Room) -> void:
 		lm.name = "Landmarks"
 		lm.room = room
 		lm.kinds = room.def.landmarks
+		if room.look != null:
+			lm.material = Look.unshaded()
 		add_child(lm)
 	decor = TileMapLayer.new()
 	decor.name = "Decor"
@@ -64,6 +66,9 @@ func build(rm: Room) -> void:
 	dynamic.name = "Dynamic"
 	dynamic.tile_set = ts
 	add_child(dynamic)
+	if room.look != null:                                   # the terrain sits above the backdrop in the 3-tier contrast rule: the ambient darkens it, this lifts it back
+		for tl in [decor, tiles, dynamic]:
+			tl.modulate = Look.TERRAIN_GAIN
 	var g := room.grid
 	for ty in range(g.h):
 		for tx in range(g.w):

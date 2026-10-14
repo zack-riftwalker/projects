@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights"]
 const RENDER := ["gfxcontrast"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -20,6 +20,7 @@ func run(name: String):
 		"gfxtier": return t_gfxtier()
 		"netbackdrop2": return await t_netbackdrop2()
 		"gfxcontrast": return await t_gfxcontrast()
+		"lights": return await t_lights()
 
 func frames(n: int) -> void:
 	for i in range(n):
@@ -346,7 +347,7 @@ func contrast_room(id: String, mood = null, label := "") -> Dictionary:
 					continue
 				gsum += block_mean(tr, px, py, 16, 16) - block_mean(bg, px, py, 16, 16)
 				gn += 1
-				if g.tile(tx, ty - 1) != TileGrid.SOLID and ty > 0:
+				if ty > 0 and g.tile(tx, ty - 1) == TileGrid.E:
 					caps.append(block_mean(tr, px, py, 16, 2))
 		if gn > 0:
 			gains.append(gsum / gn)
@@ -390,3 +391,81 @@ func t_gfxcontrast() -> bool:
 			info += res.info
 	Game.gfx_url = -1
 	return report("gfxcontrast", ok, info)
+
+func lit_count(r: Room) -> int:
+	var n := 0
+	var rl: RoomLights = r.get_node_or_null("Lights")
+	if rl == null:
+		return -1
+	for l in rl.pool:
+		if l.visible and l.is_visible_in_tree():
+			n += 1
+	return n
+
+# MVGN-05: the light budget holds (worst room with a swarm of shots, every arena, every tier), a hidden room lights nothing, the ambient is claimed
+func t_lights() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	var budgets := [6, 24, 48]
+	for tier in [0, 1, 2]:
+		Game.gfx_url = tier
+		var r := new_room("N05")
+		for i in range(40):                                  # a swarm: 40 shots around the player
+			r.shoot(r.player.x + float(i * 7 % 160) - 80.0, r.player.y - float(i * 11 % 90), 0.0, 0.0, {"life": 99.0})
+		await frames(3)
+		var n := lit_count(r)
+		if n > budgets[tier] or n < 1:
+			ok = false
+			info += " N05 tier %d lights %d;" % [tier, n]
+		if tier == 0 and (r.get_node("Lights").wanted > 3):
+			ok = false
+			info += " low lists %d;" % r.get_node("Lights").wanted
+		if tier == 2 and n < 30:
+			ok = false
+			info += " ultra only %d lights in a busy room;" % n
+		var st := LookStage.of(r)
+		if st == null or st.color == Color.WHITE:
+			ok = false
+			info += " no ambient claimed;"
+		r.queue_free()
+		await frames(1)
+	Game.gfx_url = 2
+	for pair in [["N09", "CRAWLER"], ["N15", "FIREWALL"], ["N22", "REVIEWER2"]]:
+		var r2 := new_room(pair[0])
+		r2._start_intro()
+		r2.fight.t = 0.0
+		r2._begin_fight()
+		await frames(3)
+		var n2 := lit_count(r2)
+		if n2 > 48 or n2 < 1:
+			ok = false
+			info += " %s lights %d;" % [pair[0], n2]
+		r2.queue_free()
+		await frames(1)
+	# a hidden room (only the partner is in it) has no visible light and does not claim the ambient
+	var hid := Room.new()
+	main.world.add_child(hid)
+	hid.load_room("N09")
+	hid.build_nodes(null, null, false)
+	await frames(3)
+	if lit_count(hid) > 0:
+		ok = false
+		info += " hidden room lights %d;" % lit_count(hid)
+	hid.queue_free()
+	# worlds 1-5: no lights node, the stage (if any) is white again a few frames after the last NETWORK room
+	var r3 := new_room("D05")
+	await frames(6)
+	if r3.get_node_or_null("Lights") != null:
+		ok = false
+		info += " D05 has lights;"
+	var stg := main.world.get_node_or_null("LookStage") as LookStage
+	if stg != null and stg.color != Color.WHITE:
+		ok = false
+		info += " the ambient stayed on in world 2;"
+	r3.queue_free()
+	Game.gfx_url = -1
+	return report("lights", ok, info)

@@ -1038,8 +1038,15 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		layer.room = self
 		layer.kind = spec[0]
 		layer.z_index = spec[1]
+		if look != null:
+			layer.material = Look.unshaded()          # doors, pickups, projectiles, telegraphs, the HUD-like marks: never darkened (plan 3.4)
 		add_child(layer)
 		layers[spec[0]] = layer
+	if look != null:
+		var rl := RoomLights.new()
+		rl.name = "Lights"
+		rl.room = self
+		add_child(rl)
 	var ent_root := Node2D.new()
 	ent_root.name = "Entities"
 	ent_root.z_index = 2
