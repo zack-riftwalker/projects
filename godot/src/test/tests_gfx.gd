@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient"]
-const RENDER := ["gfxcontrast", "normals", "post"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss"]
+const RENDER := ["gfxcontrast", "normals", "post", "gloss"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -26,6 +26,7 @@ func run(name: String):
 		"moodshift": return await t_moodshift()
 		"foreground": return await t_foreground()
 		"ambient": return await t_ambient()
+		"gloss": return await t_gloss()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -939,3 +940,61 @@ func t_ambient() -> bool:
 		await frames(1)
 	Game.gfx_url = -1
 	return report("ambient", ok, info)
+
+# MVGN-11 (render): a bright shot above the floor brightens the strip under it; Low and High have no strip
+func t_gloss() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return report("gloss", true, "skipped: no renderer")
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	var lums := {}
+	for tier in [2, 1, 0]:
+		Game.gfx_url = tier
+		var r := new_room("N05")
+		await frames(2)
+		var gl: RoomGloss = r.get_node("Gloss")
+		if tier < 2:
+			if gl.visible:
+				ok = false
+				info += " tier %d shows the gloss;" % tier
+		var best: Dictionary = {}
+		for s in gl.strips:
+			if best.is_empty() or s.rect.size.x > best.rect.size.x:
+				best = s
+		var rc: Rect2 = best.rect
+		var cx := clampf(rc.position.x + rc.size.x * 0.5 - 192.0, 0.0, maxf(0.0, float(r.pw) - 384.0))
+		var cy := clampf(rc.position.y - 150.0, 0.0, maxf(0.0, float(r.ph) - 216.0))
+		r.cam.x = cx
+		r.cam.y = cy
+		r.camera.position = Vector2(cx, cy)
+		r.player.x = -500.0                                   # (out of the way)
+		var vals := []
+		for with_shot in [false, true]:
+			var shot: ColorRect = null
+			if with_shot:
+				shot = ColorRect.new()
+				shot.color = Color(1.0, 0.9, 0.5)
+				shot.size = Vector2(8, 6)
+				shot.position = Vector2(rc.position.x + rc.size.x * 0.5 - 4.0, rc.position.y - 10.0)
+				shot.material = Look.unshaded()
+				shot.z_index = 2
+				r.add_child(shot)
+			await frames(4)
+			var lum := lum_array(await grab())
+			var sx := int(rc.position.x + rc.size.x * 0.5 - cx)
+			var sy := int(rc.position.y - cy) + 6
+			vals.append(block_mean(lum, sx - 3, sy, 6, 3))
+			if shot != null:
+				shot.queue_free()
+		lums[tier] = vals[1] - vals[0]
+		r.queue_free()
+		await frames(1)
+	if lums[2] < 0.02 or lums[1] > 0.005 or lums[0] > 0.005:
+		ok = false
+		info += " strip brightening: ultra %.3f high %.3f low %.3f;" % [lums[2], lums[1], lums[0]]
+	Game.gfx_url = -1
+	return report("gloss", ok, info + (" ultra +%.3f" % lums[2] if ok else ""))
