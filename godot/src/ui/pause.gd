@@ -23,7 +23,7 @@ var log_msg := ""
 var refight_msg := ""
 
 func options() -> Array:
-	var o := ["Resume", "Map", "Logs", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
+	var o := ["Resume", "Map", "Logs", "Fights", "Restart room", "30 fps: " + ("on" if Game.fps30 else "off"), "Graphics: " + Game.GFX_NAMES[Game.gfx_tier], "Reduce flashing: " + ("on" if Game.reduce_flash else "off"), "Fullscreen: " + ("on" if Game.is_fullscreen() else "off")]
 	if Game.debug:
 		o.append("Refight bosses" if refight_msg == "" else refight_msg)
 		o.append(log_msg if log_msg != "" else "Copy log (5 min)")
@@ -126,9 +126,15 @@ func choose(i: int) -> void:
 		5:
 			Game.fps30 = not Game.fps30
 			Engine.max_fps = 30 if Game.fps30 else 0
-		6: fullscreen_requested.emit()
-		7: refight_bosses()
-		8: log_msg = "Log copied: %d lines" % Game.export_log()
+		6:                                       # Low -> High -> Ultra -> Low (kept: the settings file)
+			Game.gfx_tier = (Game.gfx_tier + 1) % 3
+			Game.save_settings()
+		7:
+			Game.reduce_flash = not Game.reduce_flash
+			Game.save_settings()
+		8: fullscreen_requested.emit()
+		9: refight_bosses()
+		10: log_msg = "Log copied: %d lines" % Game.export_log()
 	queue_redraw()
 
 # a tap in game coordinates (0..384, 0..216)
@@ -171,10 +177,11 @@ func _draw() -> void:
 
 # more options than fit: tighter rows (the debug menu, a boss fight with the skip entry)
 func row_step() -> int:
-	return 19 if options().size() <= 7 else 16
+	var n := options().size()
+	return 19 if n <= 7 else (16 if n <= 10 else 14)
 
 func row_h() -> int:
-	return 17 if row_step() == 19 else 14
+	return 17 if row_step() == 19 else (14 if row_step() == 16 else 12)
 
 # ?debug: forget the beaten bosses so they can be fought again for more measurements (abilities and plugins stay)
 func refight_bosses() -> void:

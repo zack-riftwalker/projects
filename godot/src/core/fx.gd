@@ -19,7 +19,7 @@ func shake(a: float) -> void:
 	trauma = minf(1.0, trauma + a)
 
 func flash_screen(a: float, col) -> void:
-	flash = a
+	flash = minf(a, 0.25) if Game.reduce_flash else a          # (Reduce flashing)
 	flash_col = Color(col if col != null else "#ffffff")
 
 func part(x: float, y: float, vx: float, vy: float, life: float, size: float, col, grav := 0.0, o = null):

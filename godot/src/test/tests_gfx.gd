@@ -101,5 +101,68 @@ func t_moods() -> bool:
 		r2.queue_free()
 	return report("moods", ok, info if info != "" else "%d rooms" % n)
 
+# MVGN-03: the tier round-trips through the settings file, ?gfx= wins, low_fx follows, the device default
 func t_gfxtier() -> bool:
-	return report("gfxtier", false, "todo")
+	var ok := true
+	var info := ""
+	var path := "user://gfxtier_test.json"
+	var old_path: String = Game.settings_path
+	var old_persist: bool = Game.persist
+	Game.settings_path = path
+	Game.persist = true
+	Game.gfx_url = -1
+	Game.gfx_saved = -1
+	Game._gfx_default = -1
+	Game.touch_seen = false
+	if not OS.has_feature("web") and not DisplayServer.is_touchscreen_available():
+		if Game.gfx_tier != 2:
+			ok = false
+			info += " pc default is %d;" % Game.gfx_tier
+	Game.touch_seen = true
+	if Game.gfx_tier != 1:
+		ok = false
+		info += " touch default is %d;" % Game.gfx_tier
+	Game.touch_seen = false
+	Game._gfx_default = -1
+	Game.gfx_tier = 0
+	Game.reduce_flash = true
+	Game.save_settings()
+	Game.gfx_saved = -1
+	Game.reduce_flash = false
+	Game.load_settings()
+	if Game.gfx_tier != 0 or not Game.reduce_flash or not Game.low_fx:
+		ok = false
+		info += " round trip %d %s;" % [Game.gfx_tier, str(Game.reduce_flash)]
+	Game.gfx_url = 2                                         # ?gfx=ultra wins over the saved low
+	if Game.gfx_tier != 2 or Game.low_fx:
+		ok = false
+		info += " url;"
+	Game.gfx_url = -1
+	Game.gfx_tier = 1
+	if Game.low_fx:
+		ok = false
+		info += " low_fx on high;"
+	# the pause menu has the two rows and they change the values
+	var pm := PauseMenu.new()
+	var o: Array = pm.options()
+	if not (o.has("Graphics: high") and o.has("Reduce flashing: on")):
+		ok = false
+		info += " pause rows %s;" % str(o)
+	pm.choose(o.find("Graphics: high"))
+	if Game.gfx_tier != 2:
+		ok = false
+		info += " pause choose;"
+	pm.free()
+	# Reduce flashing caps the screen flash
+	var rm := new_room("N01")
+	rm.flash_screen(0.9, "#ffffff")
+	if absf(rm.fx.flash - 0.25) > 0.001:
+		ok = false
+		info += " flash %.2f;" % rm.fx.flash
+	rm.queue_free()
+	Game.reduce_flash = false
+	Game.gfx_saved = -1
+	Game.settings_path = old_path
+	Game.persist = old_persist
+	DirAccess.remove_absolute(path)
+	return report("gfxtier", ok, info)

@@ -886,13 +886,15 @@ func load_settings() -> void:
 	if d.get("fps30", false):
 		fps30 = true
 		Engine.max_fps = 30
+	gfx_saved = clampi(int(d.get("gfx", -1)), -1, 2)
+	reduce_flash = bool(d.get("reduce_flash", false))
 
 func save_settings() -> void:
 	if not persist:
 		return
 	var f := FileAccess.open(settings_path, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"diff": diff, "coop_hp_pct": coop_hp_pct, "vol_music": vol_music, "vol_sfx": vol_sfx, "fps30": fps30}))
+		f.store_string(JSON.stringify({"diff": diff, "coop_hp_pct": coop_hp_pct, "vol_music": vol_music, "vol_sfx": vol_sfx, "fps30": fps30, "gfx": gfx_saved, "reduce_flash": reduce_flash}))
 
 func is_fullscreen() -> bool:
 	var m := DisplayServer.window_get_mode()
@@ -964,7 +966,30 @@ func bench_spawn(room_id: String):
 # the tools Clawd owns (phase 1 test build: bash only)
 var tools := {"bash": false, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": false, "ssh": false, "breakpoint": false}
 var shake_opt := 1.0
-var low_fx := false          # G.save.data.opt.min
+# Graphics quality (GFX-N, MVGN-03): 0 Low, 1 High, 2 Ultra. ?gfx=low|high|ultra wins over the saved choice; with neither it is Ultra on a PC and High on a
+# touch device. Only THE NETWORK has anything that depends on it (worlds 1-5 look the same on every tier, except Low's smaller particle caps).
+const GFX_NAMES := ["low", "high", "ultra"]
+signal gfx_changed
+var gfx_url := -1                    # ?gfx=
+var gfx_saved := -1                  # the saved choice (-1: never chosen)
+var _gfx_default := -1
+var gfx_tier: int:
+	get:
+		if gfx_url >= 0:
+			return gfx_url
+		if gfx_saved >= 0:
+			return gfx_saved
+		if _gfx_default < 0 or (touch_seen and _gfx_default == 2):      # (touch_seen turns true when the touch pad shows up, after the first read)
+			_gfx_default = 1 if (touch_seen or DisplayServer.is_touchscreen_available() or (OS.has_feature("web") and bool(JavaScriptBridge.eval("(navigator.maxTouchPoints||0)>0")))) else 2
+		return _gfx_default
+	set(v):
+		gfx_saved = clampi(v, 0, 2)
+		gfx_changed.emit()
+var reduce_flash := false            # "Reduce flashing": no flicker, glitch tears, chromatic aberration, zoom punch; screen flashes capped at 0.25
+var low_fx: bool:                    # G.save.data.opt.min: the Fx caps follow the Low tier
+	get: return gfx_tier == 0
+# what the GFX systems report for the debug overlay's GFX line
+var gfx_stats := {"lights": 0, "parts": 0, "post_ms": -1.0}
 
 # query options: ?debug ?fps30 ?mute ?selftest (web) or user args (native)
 var debug := false
@@ -1087,6 +1112,10 @@ func _ready() -> void:
 					diff_from_url = true
 			"scene": scene = v
 			"gfxprobe": scene = "gfxprobe"
+			"gfx":
+				if GFX_NAMES.has(v):
+					gfx_url = GFX_NAMES.find(v)
+			"reduceflash": reduce_flash = true
 			"probe-out": probe_out = v
 			"wait": shot_wait = int(v)
 			"full": full_shot = true

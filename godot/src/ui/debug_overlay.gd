@@ -100,7 +100,12 @@ func _text() -> String:
 		l2 += " | ERRORS %d (see log)" % Game.errors
 	var ws := DisplayServer.window_get_size()
 	var l3 := "%s | %s | %dx%d @%.2f | %s" % [Game.build_text, AudioServer.get_driver_name(), ws.x, ws.y, DisplayServer.screen_get_scale(), Time.get_time_string_from_system().substr(0, 5)]
-	return l1 + "\n" + l2 + "\n" + l3
+	var l4 := "GFX %s lights %d/%d parts %d" % [Game.GFX_NAMES[Game.gfx_tier], int(Game.gfx_stats.lights), [6, 24, 48][Game.gfx_tier], int(Game.gfx_stats.parts)]
+	if float(Game.gfx_stats.post_ms) >= 0.0:
+		l4 += " post %.1f" % float(Game.gfx_stats.post_ms)
+	if Game.reduce_flash:
+		l4 += " | calm"
+	return l1 + "\n" + l2 + "\n" + l3 + "\n" + l4
 
 func _draw() -> void:
 	if not Game.debug or last_text == "":
