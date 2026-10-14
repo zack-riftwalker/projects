@@ -46,6 +46,7 @@ var rng := RandomNumberGenerator.new()
 var cam := {"x": 0.0, "y": 0.0, "ty": 0.0, "look": 0.0, "lock": null}
 var fx: Fx
 var view: RoomView
+var foreground: RoomForeground             # the NETWORK's near silhouettes (MVGN-09)
 var look: Look                              # the NETWORK's look (world 6 only, MVGN-02); null elsewhere
 var camera: Camera2D
 var layers := {}
@@ -1047,6 +1048,10 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		rl.name = "Lights"
 		rl.room = self
 		add_child(rl)
+		foreground = RoomForeground.new()
+		foreground.name = "Foreground"
+		foreground.room = self
+		add_child(foreground)
 	var ent_root := Node2D.new()
 	ent_root.name = "Entities"
 	ent_root.z_index = 2

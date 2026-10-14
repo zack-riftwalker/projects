@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground"]
 const RENDER := ["gfxcontrast", "normals", "post"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -24,6 +24,7 @@ func run(name: String):
 		"normals": return await t_normals()
 		"luts": return t_luts()
 		"moodshift": return await t_moodshift()
+		"foreground": return await t_foreground()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -742,3 +743,112 @@ func t_moodshift() -> bool:
 		a.queue_free()
 		await frames(1)
 	return report("moodshift", ok, info)
+
+# every standable floor top (solid with air above, one-way) as world rects, brute force over the whole grid
+func floor_rects(r: Room) -> Array:
+	var out: Array = []
+	var g := r.grid
+	for ty in range(g.h):
+		for tx in range(g.w):
+			var t := g.tile(tx, ty)
+			if t == TileGrid.ONEWAY or (t == TileGrid.SOLID and (ty == 0 or g.tile(tx, ty - 1) != TileGrid.SOLID)):
+				out.append(Rect2(tx * 16, ty * 16, 16, 16))
+	return out
+
+# MVGN-09: 2-6 shapes per room; wherever one is drawn nothing that matters is within 64 px (objects) / 48 px (floors) of it; behind a player it is 0.3; Low has none
+func t_foreground() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.gfx_url = 1
+	var ok := true
+	var info := ""
+	var drawn := 0
+	var faded := 0
+	for i in range(1, 23):
+		var id := "N%02d" % i
+		var r := new_room(id)
+		await frames(1)
+		var fg: RoomForeground = r.foreground
+		if fg == null or fg.shapes.size() < 2 or fg.shapes.size() > 6:
+			ok = false
+			info += " %s has %d shapes;" % [id, 0 if fg == null else fg.shapes.size()]
+			r.queue_free()
+			continue
+		var floors := floor_rects(r)
+		var wpx := float(r.pw)
+		var hpx := float(r.ph)
+		for cy in range(0, maxi(1, int(hpx - 216.0) + 1), 48):
+			for cx in range(0, maxi(1, int(wpx - 384.0) + 1), 24):
+				var cam := Vector2(cx, cy)
+				for k in range(fg.shapes.size()):
+					var a := fg.wanted_alpha(k, cam, [])
+					var sr := fg.screen_rect(k, cam)
+					if sr.end.x < 0.0 or sr.position.x > 384.0 or a <= 0.05:
+						continue
+					drawn += 1
+					var wr := Rect2(sr.position + cam, sr.size)
+					for o in fg.objects:
+						if wr.grow(64.0).intersects(o):
+							ok = false
+							info += " %s shape %d near an object at cam %s;" % [id, k, str(cam)]
+					for f in floors:
+						if wr.grow_individual(0, 48, 0, 48).intersects(f):
+							ok = false
+							info += " %s shape %d within 48 px of a floor at cam %s;" % [id, k, str(cam)]
+					# behind a player: 0.3
+					var box := Rect2(wr.get_center() - Vector2(5, 5), Vector2(10, 10))
+					if absf(fg.wanted_alpha(k, cam, [box]) - 0.3) > 0.001:
+						ok = false
+						info += " %s shape %d does not fade behind a player;" % [id, k]
+					else:
+						faded += 1
+		r.queue_free()
+		await frames(1)
+	if drawn < 40 or faded < 40:
+		ok = false
+		info += " only %d drawn / %d faded states in 22 rooms;" % [drawn, faded]
+	# the fade is smooth and per frame: a player stands behind a shape of N05 and its node dims
+	Game.gfx_url = 2
+	var r2 := new_room("N05")
+	await frames(2)
+	var fg2: RoomForeground = r2.foreground
+	var found := -1
+	var cam_f := Vector2.ZERO
+	for cx in range(0, int(r2.pw - 384) + 1, 8):
+		for k in range(fg2.shapes.size()):
+			if found < 0 and fg2.wanted_alpha(k, Vector2(cx, 0), []) > 0.8 and fg2.screen_rect(k, Vector2(cx, 0)).position.x > 20.0 and fg2.screen_rect(k, Vector2(cx, 0)).end.x < 360.0:
+				found = k
+				cam_f = Vector2(cx, 0)
+	if found >= 0:
+		r2.camera.position = cam_f
+		r2.cam.x = cam_f.x
+		var wr2 := Rect2(fg2.screen_rect(found, cam_f).position + cam_f, fg2.screen_rect(found, cam_f).size)
+		r2.player.x = wr2.get_center().x - r2.player.w * 0.5
+		r2.player.y = wr2.get_center().y - r2.player.h * 0.5
+		for i in range(40):
+			fg2._process(1.0 / 60.0)
+		if absf(float(fg2.shapes[found].a) - 0.3) > 0.05 or absf((fg2.shapes[found].node as DrawProxy).modulate.a - 0.3 / 0.9) > 0.06:
+			ok = false
+			info += " the node did not fade to 0.3 (a=%.2f);" % float(fg2.shapes[found].a)
+	else:
+		ok = false
+		info += " no unsuppressed shape in N05;"
+	r2.queue_free()
+	await frames(1)
+	# Low has none
+	Game.gfx_url = 0
+	var r3 := new_room("N05")
+	await frames(2)
+	if r3.foreground.visible:
+		ok = false
+		info += " low shows the foreground;"
+	Game.gfx_url = 1
+	Game.gfx_changed.emit()
+	if not r3.foreground.visible:
+		ok = false
+		info += " high does not;"
+	r3.queue_free()
+	Game.gfx_url = -1
+	return report("foreground", ok, info + (" (%d drawn states checked)" % drawn if ok else ""))
