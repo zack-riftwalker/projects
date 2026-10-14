@@ -29,6 +29,7 @@ static func unshaded(additive := false) -> CanvasItemMaterial:
 var room: Room
 var mood := "stable"                     # the target's palette name (or "stable_clean" ...)
 var k := 1.0                             # how strongly it is mixed over `stable`
+var post: PostChain
 var stage: LookStage                     # the canvas's one CanvasModulate: this room claims it with its ambient while it is the local room
 var out := {}                            # the values now, after the blend and the adjustments
 var rev := 0                             # +1 for every step in which `out` changed
@@ -85,11 +86,15 @@ static func mixed(name: String, kk: float) -> Dictionary:
 func _enter_tree() -> void:
 	if stage == null and room != null:
 		stage = LookStage.of(room)
+		post = PostChain.of(room)
 
 func set_target(mood_name: String, kk: float, immediate := false, dur := DUR) -> void:
 	mood = mood_name
 	k = kk
 	_tgt = mixed(mood_name, kk)
+	var old_lut := lut_to if _u >= 1.0 or lut_from == null else (lut_to if _u > 0.5 else lut_from)
+	lut_to = lut_for(mood_name, kk)
+	lut_from = lut_to if immediate or _from.is_empty() or old_lut == null else old_lut
 	if immediate or _from.is_empty():
 		_from = _tgt.duplicate()
 		_u = 1.0
@@ -104,6 +109,8 @@ func inherit(other: Look) -> void:
 	_from = other._cur()
 	_u = 1.0
 	_tgt = _from.duplicate()
+	lut_to = other.lut_to if other._u >= 1.0 or other._u > 0.5 else other.lut_from
+	lut_from = lut_to
 	_apply()
 
 func reached() -> bool:
@@ -151,6 +158,8 @@ func _process(dt: float) -> void:
 	lit_frame = Engine.get_process_frames()
 	if stage != null:
 		stage.claim(out.ambient)
+	if post != null:
+		post.claim(self, room.time)
 
 # a new adjustment value; Look is the only place that keeps them (so a room never stores look state)
 func set_adj(key: String, v) -> void:
@@ -164,3 +173,42 @@ func pulse_ca(v: float, length := 0.12) -> void:
 		_ca_len = length
 		_ca_t = length
 		ca_pulse = v
+
+# ---------------------------------------------------------------- the colour grade (LUT) of the post chain
+# One 16x16x16 LUT as a 256x16 strip (x = blue * 16 + red, y = green) per palette state, built from the palette with `grade` and cached; Look cross-fades
+# the LUT of the state it came from with the LUT of the state it goes to. tools/godot/make-luts.gd writes the same LUTs of the pure palettes as PNGs.
+static var _luts := {}                   # "mood:k" -> ImageTexture
+var lut_to: Texture2D
+var lut_from: Texture2D
+
+# lift the shadows toward sky_far, tint the mid tones toward the ambient, leave the highlights alone (the catchable yellow stays yellow)
+static func grade(c: Color, sky_far: Color, ambient: Color) -> Color:
+	var l := c.get_luminance()
+	var sh := 1.0 - smoothstep(0.0, 0.35, l)
+	var mid := smoothstep(0.08, 0.3, l) * (1.0 - smoothstep(0.42, 0.65, l))
+	var r := c.lerp(Color(sky_far.r * 2.0 + c.r * 0.5, sky_far.g * 2.0 + c.g * 0.5, sky_far.b * 2.0 + c.b * 0.5), 0.22 * sh)
+	var tint := Color(lerpf(1.0, ambient.r * 1.3, 0.4 * mid), lerpf(1.0, ambient.g * 1.3, 0.4 * mid), lerpf(1.0, ambient.b * 1.3, 0.4 * mid))
+	return Color(clampf(r.r * tint.r, 0.0, 1.0), clampf(r.g * tint.g, 0.0, 1.0), clampf(r.b * tint.b, 0.0, 1.0), 1.0)
+
+static func lut_image(sky_far: Color, ambient: Color) -> Image:
+	var img := Image.create(256, 16, false, Image.FORMAT_RGB8)
+	for bi in range(16):
+		for gi in range(16):
+			for ri in range(16):
+				img.set_pixel(bi * 16 + ri, gi, grade(Color(float(ri) / 15.0, float(gi) / 15.0, float(bi) / 15.0), sky_far, ambient))
+	return img
+
+static func lut_for(mood_name: String, kk: float) -> Texture2D:
+	var key := "%s:%.2f" % [mood_name, kk]
+	if not _luts.has(key):
+		var m := mixed(mood_name, kk)
+		_luts[key] = ImageTexture.create_from_image(lut_image(m.sky_far, m.ambient))
+	return _luts[key]
+
+# [from, to, mix]: set_target / inherit keep the two ends, the eased blend progress is the mix
+func lut_pair() -> Array:
+	if lut_to == null:
+		lut_to = lut_for(mood, k)
+		lut_from = lut_to
+	var e := _u * _u * (3.0 - 2.0 * _u) if _u < 1.0 else 1.0
+	return [lut_from, lut_to, e]

@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals"]
-const RENDER := ["gfxcontrast", "normals"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post"]
+const RENDER := ["gfxcontrast", "normals", "post"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -22,6 +22,8 @@ func run(name: String):
 		"gfxcontrast": return await t_gfxcontrast()
 		"lights": return await t_lights()
 		"normals": return await t_normals()
+		"luts": return t_luts()
+		"post": return await t_post()
 
 func frames(n: int) -> void:
 	for i in range(n):
@@ -528,3 +530,122 @@ func t_normals() -> bool:
 		info += " lit edges: with normal %.3f without %.3f;" % [res[0], res[1]]
 	Game.gfx_url = -1
 	return report("normals", ok, info + " left-right %.3f (flat %.3f)" % [res[0], res[1]])
+
+const MOODS := ["stable", "loss", "lair", "heat", "heat_p3", "review", "stable_clean"]
+
+# CIE76 delta E between two sRGB colours
+static func delta_e(a: Color, b: Color) -> float:
+	var la := _lab(a)
+	var lb := _lab(b)
+	return la.distance_to(lb)
+
+static func _lab(c: Color) -> Vector3:
+	var lin := func(v: float) -> float: return v / 12.92 if v <= 0.04045 else pow((v + 0.055) / 1.055, 2.4)
+	var r: float = lin.call(c.r)
+	var g: float = lin.call(c.g)
+	var b: float = lin.call(c.b)
+	var x := (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
+	var y := 0.2126 * r + 0.7152 * g + 0.0722 * b
+	var z := (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+	var f := func(t: float) -> float: return pow(t, 1.0 / 3.0) if t > 0.008856 else 7.787 * t + 16.0 / 116.0
+	var fx: float = f.call(x)
+	var fy: float = f.call(y)
+	var fz: float = f.call(z)
+	return Vector3(116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
+
+# MVGN-07: the LUT of every palette keeps the catchable yellow within delta E 6 (computed), and writes the strips when LUT_OUT is set
+func t_luts() -> bool:
+	var ok := true
+	var info := ""
+	var yel := Color("#ffd23f")
+	var out: String = OS.get_environment("LUT_OUT")
+	for name in MOODS:
+		var m := Look.mixed(name, 1.0)
+		var img := Look.lut_image(m.sky_far, m.ambient)
+		if out != "":
+			img.save_png(out.path_join("%s.png" % name))
+		# the grid cell nearest to the yellow, as the shader's trilinear fetch would give (corners mixed by the fractions)
+		var q := Vector3(yel.r, yel.g, yel.b) * 15.0
+		var acc := Color(0, 0, 0, 0)
+		for dr in [0, 1]:
+			for dg in [0, 1]:
+				for db in [0, 1]:
+					var ri := mini(int(q.x) + dr, 15)
+					var gi := mini(int(q.y) + dg, 15)
+					var bi := mini(int(q.z) + db, 15)
+					var w := (q.x - int(q.x) if dr == 1 else 1.0 - (q.x - int(q.x))) * (q.y - int(q.y) if dg == 1 else 1.0 - (q.y - int(q.y))) * (q.z - int(q.z) if db == 1 else 1.0 - (q.z - int(q.z)))
+					acc += img.get_pixel(bi * 16 + ri, gi) * w
+		acc.a = 1.0
+		var de := delta_e(yel, acc)
+		if de > 6.0:
+			ok = false
+			info += " %s yellow dE %.1f;" % [name, de]
+	return report("luts", ok, info)
+
+# MVGN-07 (render): the HUD's pixels are the same with the post chain on and off; the catchable yellow is within dE 6 after the real shader, in every mood
+func t_post() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return report("post", true, "skipped: no renderer")
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	Game.gfx_url = 2
+	var ok := true
+	var info := ""
+	var r := new_room("N05")
+	var hl := CanvasLayer.new()
+	hl.layer = 2
+	main.game_vp.add_child(hl)
+	var hud := Hud.new()
+	hl.add_child(hud)
+	hud.set_room(r)
+	r.visible = false                                          # nothing but the HUD and the (empty) post-graded screen
+	await frames(4)
+	var on := await grab()
+	var pc: PostChain = main.game_vp.get_node("PostChain")
+	pc.layer.visible = false
+	r.look.post = null                                          # (Look no longer claims it: the layer stays hidden)
+	await frames(2)
+	var off := await grab()
+	var diff := 0
+	var hudpx := 0
+	var bg := off.get_pixel(380, 210)
+	for y in range(0, 216):
+		for x in range(0, 384):
+			var c1 := on.get_pixel(x, y)
+			var c0 := off.get_pixel(x, y)
+			if c0 != bg and c0.a > 0.0 and y >= 6 and y < 15 and x >= 6 and x < 60:        # the HUD's hit-point pips (opaque sprites; the panels are translucent over the graded world on purpose)
+				hudpx += 1
+				if c1 != c0:
+					diff += 1
+	if hudpx < 15 or diff > 0:
+		ok = false
+		info += " hud pixels %d differ %d;" % [hudpx, diff]
+	hl.queue_free()
+	r.queue_free()
+	await frames(2)
+	# the yellow in every mood
+	Game.reduce_flash = true                                    # (no grain, no scanlines: only the grade is measured)
+	for name in MOODS:
+		var r2 := new_room("N05")
+		r2.look.set_target(name, 1.0, true)
+		var sq := ColorRect.new()
+		sq.color = Color("#ffd23f")
+		sq.size = Vector2(60, 40)
+		sq.position = r2.camera.position + Vector2(162, 88)
+		sq.material = Look.unshaded()
+		sq.z_index = 100
+		r2.add_child(sq)
+		await frames(4)
+		var img := await grab()
+		var got := img.get_pixel(192, 109)
+		var de := delta_e(Color("#ffd23f"), got)
+		if de > 6.0:
+			ok = false
+			info += " %s yellow dE %.1f (%s);" % [name, de, got.to_html(false)]
+		r2.queue_free()
+		await frames(1)
+	Game.reduce_flash = false
+	Game.gfx_url = -1
+	return report("post", ok, info)

@@ -69,6 +69,7 @@ func _ready() -> void:
 		return
 	hud_layer = CanvasLayer.new()
 	hud_layer.name = "HudLayer"
+	hud_layer.layer = 2                                 # above the NETWORK's post chain (layer 1): the HUD is never graded
 	game_vp.add_child(hud_layer)
 	hud = Hud.new()
 	hud_layer.add_child(hud)
