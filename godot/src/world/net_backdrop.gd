@@ -51,6 +51,7 @@ var strand_t0 := -1.0                  # room time the strands fell (-1: not fal
 var clean := false                     # the FIREWALL is down: fewer flickering LEDs, more green dots on the cables
 var strands: Node2D
 var dirty_strands := true
+var wave_last := -1.0
 var chase_end_t := -1.0
 var chase_step := -99                  # the chase wave redraws the towers whenever its front passed another LED row
 var sd := 0                          # from the room number: every room has its own skyline
@@ -161,8 +162,9 @@ func _live(dt: float, cy: float) -> void:
 			chase_front = 1e9
 			chase_red = clampf(1.0 - (t - chase_end_t) / 2.0, 0.0, 1.0) if chase_end_t >= 0.0 else chase_red
 		var st := floori(chase_front / 7.0) if chase_front < 1e8 else 9999
-		if st != chase_step or (room.ch_t0 < 0.0 and chase_red > 0.0):
+		if (st != chase_step or (room.ch_t0 < 0.0 and chase_red > 0.0)) and t - wave_last >= 0.1:      # (a tower redraw is ~600 rects: 10 a second at most)
 			chase_step = st
+			wave_last = t
 			towers.queue_redraw()
 	# N12: a packet that was just lost tears the backdrop for 150 ms; one about to be lost makes the LEDs blink magenta
 	var any_warn := false
@@ -231,7 +233,7 @@ func _r(ci: CanvasItem, r: Rect2, c: Color) -> void:
 
 # ---- look ----
 func _out() -> Dictionary:
-	return look.out if look != null and not look.out.is_empty() else Look.mixed("stable", 1.0)
+	return look.base if look != null and not look.base.is_empty() else Look.mixed("stable", 1.0)
 
 # the structure colours' grade (brightness, saturation)
 func _g(c: Color) -> Color:
@@ -245,8 +247,8 @@ func _process(dt: float) -> void:
 	if room == null or room.camera == null or not room.is_local:
 		return
 	clock += dt
-	if look != null and look.rev != last_rev:
-		last_rev = look.rev
+	if look != null and look.base_rev != last_rev:
+		last_rev = look.base_rev
 		dirty = true
 	if dirty and (clock - last_redraw >= 0.08 or look == null or look.reached()):
 		dirty = false
@@ -398,8 +400,8 @@ func _draw_cables(ci: CanvasItem) -> void:
 		var y0 := 50.0 + k * span * 0.8 - cy * 0.12
 		var sag := 14.0 + (k % 3) * 4.0
 		var pts := PackedVector2Array()
-		for s in range(0, 25):
-			var u := float(s) / 24.0
+		for s in range(0, 13):
+			var u := float(s) / 12.0
 			pts.append(Vector2(u * (W + 40.0) - 20.0, y0 + sin(u * PI) * sag))
 		ci.draw_polyline(pts, cable, 2.0)
 		var plen := float(W + 40)

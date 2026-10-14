@@ -62,6 +62,8 @@ var post: PostChain
 var stage: LookStage                     # the canvas's one CanvasModulate: this room claims it with its ambient while it is the local room
 var out := {}                            # the values now, after the blend and the adjustments
 var rev := 0                             # +1 for every step in which `out` changed
+var base := {}                           # the blend alone (no adjustments): what the backdrop draws with
+var base_rev := 0                        # +1 when `base` changed (a door blend, a mood shift): the backdrop's static layers redraw on this only
 var ca_pulse := 0.0                      # chromatic aberration strength now (0 at rest; pulse_ca sets it, it fades out over its length)
 var _ca_peak := 0.0
 var _ca_t := 0.0
@@ -161,6 +163,9 @@ func _cur() -> Dictionary:
 # adjustments the rooms ask for (all of them blended by the room itself with Game.damp, so Look only applies them)
 func _apply() -> void:
 	var d := _cur()
+	if base.is_empty() or d != base:
+		base = d.duplicate()
+		base_rev += 1
 	var amb: Color = d.ambient
 	amb = amb.lerp(adj.ambient, float(adj.ambient_k))
 	var m := float(adj.ambient_mul)

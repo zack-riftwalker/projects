@@ -122,6 +122,9 @@ func _ready() -> void:
 		_open_title()
 		return
 	_begin_game("continue")
+	if Game.scene.begins_with("gfxbench:"):               # MVGN-17: average frame time of a room (gfxbench:<room>[:<frames>]); web: ?scene=gfxbench:N05
+		_bench(Game.scene.substr(9).split(":"))
+		return
 	if Game.demo:
 		demo_frame = 0
 	elif Game.selftest:
@@ -337,6 +340,19 @@ func _ready() -> void:
 				pause_menu.map_view.set_world(true)
 		_shot_after(Game.shot_wait)
 
+
+func _bench(a: PackedStringArray) -> void:
+	manager.swap_to(a[0])
+	var n := int(a[1]) if a.size() > 1 else 600
+	for i in range(60):
+		await get_tree().process_frame
+	var t0 := Time.get_ticks_usec()
+	for i in range(n):
+		await get_tree().process_frame
+	var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(n)
+	print("BENCH %s %s %.2f ms/frame %.1f fps" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms])
+	if not OS.has_feature("web"):
+		get_tree().quit()
 
 # the title screen shows up for a plain page load; every URL / test option that names what to do skips it
 func _wants_title() -> bool:

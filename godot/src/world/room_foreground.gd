@@ -108,9 +108,9 @@ func _process(dt: float) -> void:
 		return
 	var cam: Vector2 = room.camera.position
 	var boxes := _boxes()
-	var redraw := room.look != null and room.look.rev != rev
+	var redraw := room.look != null and room.look.base_rev != rev
 	if redraw:
-		rev = room.look.rev
+		rev = room.look.base_rev
 	for i in range(shapes.size()):
 		var s: Dictionary = shapes[i]
 		var sr := screen_rect(i, cam)
