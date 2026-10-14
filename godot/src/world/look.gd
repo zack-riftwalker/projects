@@ -253,6 +253,7 @@ var shift := ""                          # the palette the room's own state asks
 func follow_room(dt: float) -> void:
 	if room == null:
 		return
+	feel(dt)
 	var id: String = room.id
 	var want := ""
 	var ambient_mul := 1.0
@@ -291,3 +292,71 @@ func follow_room(dt: float) -> void:
 	adj.ambient_k = Game.damp(float(adj.ambient_k), 0.35 * pulse if chase_on else 0.0, 10.0 if chase_on else 2.5, dt)
 	adj.ambient_mul = Game.damp(float(adj.ambient_mul), ambient_mul, 5.0, dt)
 	adj.bloom_add = Game.damp(float(adj.bloom_add), bloom_add, 5.0, dt)
+
+# ---------------------------------------------------------------- impact feel (MVGN-15): a zoom punch and a chromatic-aberration pulse, from this page's own view of the state
+var zoom_amp := 0.0
+var zoom_t := 0.0
+var zoom_len := 0.25
+var zoom_pt := Vector2.ZERO
+var _fp_phase := -1
+var _fp_dying := false
+var _fp_dead := false
+var _fp_hp := -1
+
+func punch(amp: float, pt: Vector2, length := 0.25) -> void:
+	if Game.reduce_flash:
+		return
+	zoom_amp = amp
+	zoom_len = length
+	zoom_t = length
+	zoom_pt = pt
+
+# called every frame by follow_room: boss phase change / final hit (1.04 + a CA pulse), the local player's death (1.03), a hit of 2 or more (CA pulse)
+func feel(dt: float) -> void:
+	zoom_t = maxf(0.0, zoom_t - dt)
+	var b = room.boss
+	if b != null and is_instance_valid(b) and b.get("phase") != null:
+		var ph := int(b.phase)
+		var dy: bool = b.get("dying") == true
+		var bc := Vector2(b.x + b.w * 0.5, b.y + b.h * 0.5)
+		if _fp_phase >= 1 and ph != _fp_phase:
+			punch(0.04, bc)
+			if not Game.reduce_flash:
+				pulse_ca(0.5)
+		if dy and not _fp_dying:
+			punch(0.04, bc)
+		_fp_phase = ph
+		_fp_dying = dy
+	else:
+		_fp_phase = -1
+		_fp_dying = false
+	var p = room.player
+	if p != null:
+		var dead: bool = p.dead
+		if dead and not _fp_dead:
+			punch(0.03, Vector2(p.x + p.w * 0.5, p.y + p.h * 0.5))
+		_fp_dead = dead
+		if _fp_hp >= 0 and int(p.hp) <= _fp_hp - 2 and not dead and not Game.reduce_flash:
+			pulse_ca(0.5)
+		_fp_hp = int(p.hp)
+
+func zoom_now() -> float:
+	if zoom_t <= 0.0 or Game.reduce_flash:
+		return 1.0
+	return 1.0 + zoom_amp * sin(PI * (1.0 - zoom_t / zoom_len))
+
+# the camera node zooms around the action point (its top-left anchor moves so that point keeps its place on screen), clamped to the room
+func zoom_camera(cam_node: Camera2D) -> void:
+	var z := zoom_now()
+	if z == 1.0:
+		if cam_node.zoom != Vector2.ONE:
+			cam_node.zoom = Vector2.ONE
+		return
+	var pos := cam_node.position
+	var view := Vector2(384.0, 216.0)
+	var f := ((zoom_pt - pos) / view).clamp(Vector2.ZERO, Vector2.ONE)
+	var np := zoom_pt - f * view / z
+	np.x = clampf(np.x, 0.0, maxf(0.0, float(room.pw) - view.x / z))
+	np.y = clampf(np.y, 0.0, maxf(0.0, float(room.ph) - view.y / z))
+	cam_node.zoom = Vector2(z, z)
+	cam_node.position = Vector2(floorf(np.x + 0.5), floorf(np.y + 0.5))

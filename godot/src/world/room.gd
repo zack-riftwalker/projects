@@ -1510,6 +1510,8 @@ func _process(_dt: float) -> void:
 		return
 	var amp := fx.trauma * fx.trauma * 7.0 * Game.shake_opt
 	camera.position = Vector2(floori(cam.x + (randf() * 2.0 - 1.0) * amp + 0.5), floori(cam.y + (randf() * 2.0 - 1.0) * amp + 0.5))
+	if look != null:
+		look.zoom_camera(camera)                                  # (a punch: GFX-N, this page's own view)
 	for k in layers:
 		layers[k].queue_redraw()
 

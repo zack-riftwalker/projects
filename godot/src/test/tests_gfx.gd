@@ -3,7 +3,7 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim"]
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel"]
 const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
@@ -30,6 +30,7 @@ func run(name: String):
 		"livingbg": return await t_livingbg()
 		"arenas": return await t_arenas()
 		"rim": return await t_rim()
+		"feel": return await t_feel()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -1330,3 +1331,77 @@ func t_rim() -> bool:
 	r.queue_free()
 	Game.gfx_url = -1
 	return report("rim", ok, info)
+
+# MVGN-15: zoom punches return to exactly 1.0, none with Reduce flashing, CA pulses, a hidden room (the partner's) does nothing here
+func t_feel() -> bool:
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	var r := start_fight("N15")
+	await frames(3)
+	r.look.follow_room(1.0 / 60.0)
+	var peak := 1.0
+	r.boss.phase = 2
+	for i in range(30):
+		r.look.follow_room(1.0 / 60.0)
+		r.camera.position = Vector2(r.cam.x, r.cam.y)
+		r.look.zoom_camera(r.camera)
+		peak = maxf(peak, r.camera.zoom.x)
+		if r.camera.position.x < 0.0 or r.camera.position.x + 384.0 / r.camera.zoom.x > float(r.pw) + 1.0:
+			ok = false
+			info += " camera left the room;"
+	if peak < 1.035 or peak > 1.0401:
+		ok = false
+		info += " phase punch peaked at %.3f;" % peak
+	if r.camera.zoom != Vector2.ONE or r.look.zoom_now() != 1.0:
+		ok = false
+		info += " zoom did not return to 1.0 (%s);" % str(r.camera.zoom)
+	if r.look.ca_pulse <= 0.0 and r.look._ca_t <= 0.0:
+		pass
+	# the player's death 1.03, a hit of 2 -> CA pulse
+	r.look.step(1.0)
+	r.look.follow_room(1.0 / 60.0)
+	r.player.hp = r.player.max_hp
+	r.look.follow_room(1.0 / 60.0)
+	r.player.hp -= 2
+	r.look.follow_room(1.0 / 60.0)
+	if r.look.ca_pulse < 0.45:
+		ok = false
+		info += " no CA pulse for a hit of 2 (%.2f);" % r.look.ca_pulse
+	r.player.dead = true
+	r.look.follow_room(1.0 / 60.0)
+	if absf(r.look.zoom_amp - 0.03) > 0.001 or r.look.zoom_t <= 0.0:
+		ok = false
+		info += " death punch %.3f;" % r.look.zoom_amp
+	r.player.dead = false
+	# Reduce flashing: no zoom, no pulse
+	Game.reduce_flash = true
+	r.look.zoom_t = 0.0
+	r.look.ca_pulse = 0.0
+	r.boss.phase = 3
+	r.look.follow_room(1.0 / 60.0)
+	r.look.zoom_camera(r.camera)
+	if r.look.zoom_now() != 1.0 or r.camera.zoom != Vector2.ONE or r.look.ca_pulse > 0.0:
+		ok = false
+		info += " Reduce flashing still punches;"
+	Game.reduce_flash = false
+	r.queue_free()
+	await frames(1)
+	# the partner's room (hidden here) never zooms this page: its Look is not stepped
+	var hid := Room.new()
+	main.world.add_child(hid)
+	hid.load_room("N15")
+	hid.build_nodes(null, null, false)
+	hid._start_intro()
+	hid.fight.t = 0.0
+	hid._begin_fight()
+	hid.boss.phase = 2
+	hid.look._process(1.0 / 60.0)
+	if hid.look.zoom_t > 0.0:
+		ok = false
+		info += " a hidden room punched;"
+	hid.queue_free()
+	return report("feel", ok, info)
