@@ -1048,6 +1048,10 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		rl.name = "Lights"
 		rl.room = self
 		add_child(rl)
+		var oc := RoomOccluders.new()
+		oc.name = "Occluders"
+		oc.room = self
+		add_child(oc)
 		if id == "N15":
 			var hz := RoomHaze.new()
 			hz.name = "Haze"

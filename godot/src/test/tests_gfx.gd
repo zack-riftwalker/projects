@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel"]
-const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel", "shadows"]
+const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim", "shadows"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -31,6 +31,7 @@ func run(name: String):
 		"arenas": return await t_arenas()
 		"rim": return await t_rim()
 		"feel": return await t_feel()
+		"shadows": return await t_shadows()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -1405,3 +1406,94 @@ func t_feel() -> bool:
 		info += " a hidden room punched;"
 	hid.queue_free()
 	return report("feel", ok, info)
+
+# MVGN-16 (render): at most 120 occluder polygons per room, Ultra only; behind a wall a shadow-casting light leaves the tiles darker than without the occluders
+func t_shadows() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return report("shadows", true, "skipped: no renderer")
+	Game.persist = false
+	Game.net_role = ""
+	Game.fresh()
+	Game.load_meta()
+	var ok := true
+	var info := ""
+	Game.gfx_url = 2
+	var worst := 0
+	var wall_room := ""
+	for i in range(1, 23):
+		var rr := new_room("N%02d" % i)
+		await frames(1)
+		var oc: RoomOccluders = rr.get_node("Occluders")
+		worst = maxi(worst, oc.polys)
+		if wall_room == "":
+			for rc in oc.rects:
+				if rc.size.x >= 48.0 and rc.size.y >= 64.0 and rc.position.x > 40.0 and rr.grid.tile(int((rc.position.x - 12.0) / 16.0), int(rc.get_center().y / 16.0)) == TileGrid.E:
+					wall_room = "N%02d" % i
+					break
+		if oc.polys > 120 or oc.polys < 1 or not oc.visible:
+			ok = false
+			info += " N%02d has %d occluders;" % [i, oc.polys]
+		rr.queue_free()
+		await frames(1)
+	if wall_room == "":
+		return report("shadows", false, "no thick wall in any room to test with")
+	var r := new_room(wall_room)
+	await frames(2)
+	var oc2: RoomOccluders = r.get_node("Occluders")
+	var best := Rect2()
+	var g := r.grid
+	for rc in oc2.rects:
+		if rc.size.x >= 48.0 and rc.size.y >= 64.0 and g.tile(int((rc.position.x - 12.0) / 16.0), int(rc.get_center().y / 16.0)) == TileGrid.E and rc.position.x > 40.0:
+			best = rc
+			break
+	if best.size == Vector2.ZERO:
+		return report("shadows", false, "no thick wall in N05 to test with")
+	r.player.x = -500.0
+	var cx := clampf(best.position.x - 120.0, 0.0, maxf(0.0, float(r.pw) - 384.0))
+	var cy := clampf(best.get_center().y - 108.0, 0.0, maxf(0.0, float(r.ph) - 216.0))
+	r.cam.x = cx
+	r.cam.y = cy
+	r.camera.position = Vector2(cx, cy)
+	var light := PointLight2D.new()
+	light.texture = load("res://assets/fx/light_soft.png")
+	light.texture_scale = 2.4
+	light.energy = 2.0
+	light.height = 20.0
+	light.shadow_enabled = true
+	light.shadow_color = Color(0, 0, 0, 0.6)
+	light.position = Vector2(best.position.x - 12.0, best.get_center().y)
+	r.add_child(light)
+	var vals := []
+	for occluders_on in [true, false]:
+		oc2.visible = occluders_on
+		await frames(4)
+		var lum := lum_array(await grab())
+		var px := int(best.position.x + 36.0 - cx)
+		var py := int(best.get_center().y - cy)
+		vals.append(block_mean(lum, px - 4, py - 4, 8, 8))
+	if vals[0] > vals[1] - 0.02:
+		ok = false
+		info += " shadowed %.3f vs unshadowed %.3f;" % [vals[0], vals[1]]
+	# Low and High: the occluders are not there
+	for tier in [0, 1]:
+		Game.gfx_url = tier
+		Game.gfx_changed.emit()
+		if oc2.visible:
+			ok = false
+			info += " tier %d has occluders;" % tier
+	r.queue_free()
+	await frames(1)
+	# N09: the frame cost with and without shadows (logged, not a gate)
+	var ms := []
+	for tier in [1, 2]:
+		Game.gfx_url = tier
+		var rb := start_fight("N09")
+		await frames(10)
+		var t0 := Time.get_ticks_usec()
+		await frames(120)
+		ms.append(float(Time.get_ticks_usec() - t0) / 120000.0)
+		rb.queue_free()
+		await frames(1)
+	print("GFX shadows N09 ms/frame: high %.2f ultra %.2f, most occluders in a room %d" % [ms[0], ms[1], worst])
+	Game.gfx_url = -1
+	return report("shadows", ok, info)

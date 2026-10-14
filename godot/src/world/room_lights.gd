@@ -120,6 +120,9 @@ func _process(_dt: float) -> void:
 		l.color = w[6]
 		l.energy = w[5]
 		l.shadow_enabled = bool(w[8]) and tier >= 2                 # shadows: Ultra only, and only the lights that ask (MVGN-16)
+		if l.shadow_enabled:
+			l.shadow_color = Color(o.sky_far.r, o.sky_far.g, o.sky_far.b, 0.6)
+			l.shadow_filter = Light2D.SHADOW_FILTER_PCF5
 		if w[7] == null:
 			l.texture = tex_soft
 			l.texture_scale = w[4] * 2.0 / TEX
