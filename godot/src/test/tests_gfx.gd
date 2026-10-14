@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel", "shadows"]
-const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim", "shadows"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel", "shadows", "gfxprobe"]
+const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim", "shadows", "gfxprobe"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -32,6 +32,7 @@ func run(name: String):
 		"rim": return await t_rim()
 		"feel": return await t_feel()
 		"shadows": return await t_shadows()
+		"gfxprobe": return await t_gfxprobe()
 		"post": return await t_post()
 
 func frames(n: int) -> void:
@@ -317,9 +318,18 @@ func cam_positions(r: Room) -> Array:
 # ---------------------------------------------------------------- MVGN-04 / 05 / 14: the 3-tier contrast rule (plan 3.7), measured
 # tier 1 background: mean L <= 0.16, at most 2 % of the pixels above 0.35 (LEDs and dots)
 # tier 2 terrain: its tiles' mean L is at least 0.06 above the background behind them; floor cap rows (the top 2 pixel rows of a tile with air above) >= 0.40
-func contrast_room(id: String, mood = null, label := "") -> Dictionary:
+func contrast_room(id: String, mood = null, label := "", fight_phase := 0) -> Dictionary:
 	var r := new_room(id)
-	if mood != null and r.look != null:
+	if fight_phase > 0:
+		r._start_intro()
+		r.fight.t = 0.0
+		r._begin_fight()
+		r.boss.phase = fight_phase
+		for i in range(240):                                  # (the look settles on the phase: ambient, bloom)
+			r.time += 1.0 / 60.0
+			r.look.follow_room(1.0 / 60.0)
+			r.look.step(1.0 / 60.0)
+	elif mood != null and r.look != null:
 		r.look.set_target(mood[0], mood[1], true)
 	await frames(2)
 	var res := {"ok": true, "info": "", "line": ""}
@@ -432,6 +442,13 @@ func t_gfxcontrast() -> bool:
 		if not res.ok:
 			ok = false
 			info += res.info
+	if only == "":
+		for pair in [["N15", "heat_p3"], ["N09", "lair"], ["N22", "review"]]:        # the arenas' phase-3 looks
+			var res3: Dictionary = await contrast_room(pair[0], [pair[1], 1.0], " phase3", 3)
+			print(res3.line)
+			if not res3.ok:
+				ok = false
+				info += res3.info
 	Game.gfx_url = -1
 	return report("gfxcontrast", ok, info)
 
@@ -1497,3 +1514,20 @@ func t_shadows() -> bool:
 	print("GFX shadows N09 ms/frame: high %.2f ultra %.2f, most occluders in a room %d" % [ms[0], ms[1], worst])
 	Game.gfx_url = -1
 	return report("shadows", ok, info)
+
+# MVGN-01: the probe runs its seven steps and writes its table (it does not fail on a "no")
+func t_gfxprobe() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return report("gfxprobe", true, "skipped: no renderer")
+	var pr := GfxProbe.new()
+	pr.in_test = true
+	main.game_vp.add_child(pr)
+	var n := 0
+	while not pr.done and n < 4000:
+		await main.get_tree().process_frame
+		n += 1
+	var yes := 0
+	for r in pr.results:
+		if r[1]:
+			yes += 1
+	return report("gfxprobe", pr.done and pr.results.size() == 7, "%d of 7 steps work here" % yes)

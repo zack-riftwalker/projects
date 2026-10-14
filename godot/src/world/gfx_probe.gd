@@ -14,6 +14,7 @@ var vp: SubViewport
 var results: Array = []                  # per step: [name, works, ms, note]
 var label: Label
 var done := false
+var in_test := false                     # the gfxprobe test: finish without quitting the process
 
 func _ready() -> void:
 	vp = get_viewport() as SubViewport
@@ -100,7 +101,7 @@ func _run() -> void:
 	Game.dlog("PROBE done")
 	label.text += "\nDONE (send the log)"
 	done = true
-	if OS.has_feature("web"):
+	if OS.has_feature("web") or in_test:
 		return
 	if Game.probe_out != "":
 		var f := FileAccess.open(Game.probe_out, FileAccess.WRITE)

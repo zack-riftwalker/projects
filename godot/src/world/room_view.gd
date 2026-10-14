@@ -151,6 +151,12 @@ func _build_anim(g: TileGrid) -> void:
 func _apply_anim() -> void:
 	if led_layer == null:
 		return
+	# the arenas dim the ambient (N09's fight): the terrain is lifted back toward readable (the contrast rule beats the mood)
+	var am := float(room.look.adj.ambient_mul) if room.look != null else 1.0
+	var tg := Look.TERRAIN_GAIN * clampf(pow(1.0 / maxf(am, 0.35), 0.9), 1.0, 2.4)
+	tg.a = 1.0
+	for tl in [decor, tiles, dynamic, fan_layer]:
+		tl.modulate = tg
 	var on := Game.gfx_tier >= 1
 	led_layer.visible = on
 	fan_layer.visible = on

@@ -16,7 +16,7 @@ run check5a python3 -I tools/godot/roomcheck/check5a.py
 # a script that does not parse makes every scenario hang until its timeout: stop at once instead
 "$GODOT" --headless --path godot --import > /dev/null 2>&1
 if timeout 60 "$GODOT" --headless --path godot --quit-after 3 2>&1 | grep -E "Parse Error|Compile Error|Failed to load script"; then echo "FAIL parse"; exit 1; fi
-for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork rooms3b merge agents shop mergeinterp loadout bossstats strikeseen sidunique bossfree skipboss nsdoors tiles4 flood rise plugins4 w3assets w3enemies segfault stackover leak rooms4 lab locks4b signs4b variants4b symlink packets bosskit worlddigest mapdata tree mappage mapoverlay changelog travelp2 logs lostagents decor terminals rooms4b w6assets curl ssh net4b w6enemies plugins4b net4b1 kit4b3 w6enemies2 net4b3 crawler2 firewall2 reviewer2b bosspresets hardrooms rooms5a w4assets tick5a breakpoint w4enemies raceboss loopboss deadlockboss plugins5a tower4b1 updoors perfflags; do
+for t in tiles jump combat hurt soak rooms doors save bench crack platform focus dashhurt guard zombie null nullcoop guestpred parity end relpend misc bossreg rooms3 catch exception reviewer plugins crumble w2enemies fork rooms3b merge agents shop mergeinterp loadout bossstats strikeseen sidunique bossfree skipboss nsdoors tiles4 flood rise plugins4 w3assets w3enemies segfault stackover leak rooms4 lab locks4b signs4b variants4b symlink packets bosskit worlddigest mapdata tree mappage mapoverlay changelog travelp2 logs lostagents decor terminals rooms4b w6assets curl ssh net4b w6enemies plugins4b net4b1 kit4b3 w6enemies2 net4b3 crawler2 firewall2 reviewer2b bosspresets hardrooms rooms5a w4assets tick5a breakpoint w4enemies raceboss loopboss deadlockboss plugins5a tower4b1 updoors perfflags moods gfxtier netbackdrop2 lights luts moodshift foreground ambient livingbg arenas feel; do
   timeout 180 "$GODOT" --headless --path godot -- --test=$t > "$TMP/$t.log" 2>&1
   if grep -q "^TEST $t PASS" "$TMP/$t.log" && ! grep -q "SCRIPT ERROR" "$TMP/$t.log"; then rec "test-$t" PASS; else rec "test-$t" FAIL; echo "---- $t ----"; tail -20 "$TMP/$t.log"; fi
 done
@@ -26,6 +26,7 @@ for tape in tools/godot/parity/tapes/*.json; do
   timeout 120 "$GODOT" --headless --path godot -- --test=tape:"$ROOT/$tape" > "$TMP/gd_$n.csv" 2>&1
   if python3 tools/godot/parity/compare.py "$TMP/js_$n.csv" "$TMP/gd_$n.csv" > "$TMP/cmp_$n.txt"; then rec "parity-$n" PASS; else rec "parity-$n" FAIL; cat "$TMP/cmp_$n.txt"; fi
 done
+run gfx bash tools/godot/gfx-tests.sh gfxother gfxcontrast normals post gloss rim shadows gfxprobe
 run etrace bash tools/godot/parity/enemy-cases.sh
 run export bash tools/godot/export-web.sh
 run web-check node tools/godot/web-check.js
