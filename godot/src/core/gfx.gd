@@ -4,9 +4,23 @@ extends RefCounted
 
 static var _tex := {}
 
+static var _ntex := {}                   # name -> CanvasTexture (diffuse + normal) or false (no normal map): GFX-N, High and Ultra only
+
 static func tex(name: String) -> Texture2D:
 	if not _tex.has(name):
 		_tex[name] = load("res://assets/sprites/%s.png" % name)
+	if Game.gfx_tier >= 1:                       # a sprite with a normal map (tools/godot/make-normals.gd) is lit by the NETWORK's lights; elsewhere it draws as before
+		var n = _ntex.get(name)
+		if n == null:
+			n = false
+			if ResourceLoader.exists("res://assets/sprites/%s_n.png" % name) and _tex[name] != null:
+				var ct := CanvasTexture.new()
+				ct.diffuse_texture = _tex[name]
+				ct.normal_texture = load("res://assets/sprites/%s_n.png" % name)
+				n = ct
+			_ntex[name] = n
+		if n is CanvasTexture:
+			return n
 	return _tex[name]
 
 static func rnd(v: float) -> int:

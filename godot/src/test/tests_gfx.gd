@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights"]
-const RENDER := ["gfxcontrast"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals"]
+const RENDER := ["gfxcontrast", "normals"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -21,6 +21,7 @@ func run(name: String):
 		"netbackdrop2": return await t_netbackdrop2()
 		"gfxcontrast": return await t_gfxcontrast()
 		"lights": return await t_lights()
+		"normals": return await t_normals()
 
 func frames(n: int) -> void:
 	for i in range(n):
@@ -469,3 +470,61 @@ func t_lights() -> bool:
 	r3.queue_free()
 	Game.gfx_url = -1
 	return report("lights", ok, info)
+
+# MVGN-06: the normal maps exist and match their diffuse; lit from the left, a tile's left bevel is lighter than its right bevel (render)
+func t_normals() -> bool:
+	var ok := true
+	var info := ""
+	var pairs := [["res://assets/tiles/w6_tiles.png", "res://assets/tiles/w6_tiles_n.png"]]
+	for s in ["drone_0", "bug_0", "platform_w6", "noodle_0"]:
+		pairs.append(["res://assets/sprites/%s.png" % s, "res://assets/sprites/%s_n.png" % s])
+	for p in pairs:
+		if not ResourceLoader.exists(p[1]):
+			ok = false
+			info += " missing %s;" % p[1]
+			continue
+		var d: Texture2D = load(p[0])
+		var n: Texture2D = load(p[1])
+		if d.get_size() != n.get_size():
+			ok = false
+			info += " size %s;" % p[1]
+	if DisplayServer.get_name() == "headless":
+		return report("normals", ok, info + " (light test skipped: no renderer)")
+	Game.gfx_url = 1
+	var res := []
+	for with_normal in [true, false]:
+		var root := Node2D.new()
+		main.world.add_child(root)
+		var cm := CanvasModulate.new()
+		cm.color = Color(0.15, 0.15, 0.2)
+		root.add_child(cm)
+		var tex: Texture2D = load("res://assets/tiles/w6_tiles.png")
+		if with_normal:
+			tex = RoomView.normal_tex(tex)
+		var sp := Sprite2D.new()
+		sp.texture = tex
+		sp.region_enabled = true
+		sp.region_rect = Rect2(0, 0, 16, 16)                       # the tile with every edge exposed (mask 0, variant 0)
+		sp.centered = false
+		sp.position = Vector2(184, 100)
+		sp.scale = Vector2(4, 4)
+		root.add_child(sp)
+		var l := PointLight2D.new()
+		l.texture = load("res://assets/fx/light_soft.png")
+		l.position = Vector2(150, 132)
+		l.texture_scale = 2.0
+		l.energy = 1.4
+		l.height = 12.0
+		root.add_child(l)
+		await frames(4)
+		var lum := lum_array(await grab())
+		var left := block_mean(lum, 184, 110, 8, 40)             # the left 2 tile pixels (x4)
+		var right := block_mean(lum, 240, 110, 8, 40)
+		res.append(left - right)
+		root.queue_free()
+		await frames(1)
+	if res[0] < 0.03 or res[0] < res[1] + 0.02:
+		ok = false
+		info += " lit edges: with normal %.3f without %.3f;" % [res[0], res[1]]
+	Game.gfx_url = -1
+	return report("normals", ok, info + " left-right %.3f (flat %.3f)" % [res[0], res[1]])

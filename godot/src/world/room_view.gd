@@ -13,12 +13,34 @@ static func make_tileset(world := 1) -> TileSet:
 	ts.tile_size = Vector2i(T, T)
 	var src := TileSetAtlasSource.new()
 	src.texture = load("res://assets/tiles/w%d_tiles.png" % Game.vis_world(world))
+	if world == 6 and Game.gfx_tier >= 1:                  # lit tiles get relief from the normal map (High and Ultra, MVGN-06)
+		src.texture = normal_tex(src.texture)
 	src.texture_region_size = Vector2i(T, T)
 	for r in range(7):
 		for c in range(16):
 			src.create_tile(Vector2i(c, r))
 	ts.add_source(src, 0)
 	return ts
+
+static var _ntiles: CanvasTexture
+
+static func normal_tex(diffuse: Texture2D) -> Texture2D:
+	if _ntiles == null:
+		_ntiles = CanvasTexture.new()
+		_ntiles.diffuse_texture = diffuse
+		_ntiles.normal_texture = load("res://assets/tiles/w6_tiles_n.png")
+	return _ntiles
+
+# the tier changed in the pause menu: the tiles of a NETWORK room swap their texture (the next room is built with the new tier anyway)
+func _on_gfx_changed() -> void:
+	if room == null or room.look == null:
+		return
+	var d: Texture2D = load("res://assets/tiles/w6_tiles.png")
+	var tx: Texture2D = normal_tex(d) if Game.gfx_tier >= 1 else d
+	for tl in [decor, tiles, dynamic]:
+		var s := tl.tile_set.get_source(0) as TileSetAtlasSource
+		if s != null and s.texture != tx:
+			s.texture = tx
 
 # what a wall tile joins up with
 static func _wallish(t: int) -> bool:
@@ -30,6 +52,8 @@ func build(rm: Room) -> void:
 		c.queue_free()
 	var world := int(room.def.get("world", 1))
 	var ts := make_tileset(world)
+	if world == 6 and not Game.gfx_changed.is_connected(_on_gfx_changed):
+		Game.gfx_changed.connect(_on_gfx_changed)
 	# background, scrolls with the camera at a fraction (set by the room each frame)
 	if world == 6:                                      # THE NETWORK draws its own sky (no art file)
 		var nb := NetBackdrop.new()
