@@ -2717,8 +2717,8 @@ func _step_sighting(dt: float) -> void:
 			sight_t = 0.0
 		return
 	sight_t += dt
-	if int(sight_t * 9.0) != int((sight_t - dt) * 9.0):
-		Audio.local_sfx("tick", 0.12)
+	if int(sight_t * 9.0) != int((sight_t - dt) * 9.0):          # its steps are keys pressed far away
+		Audio.local_sfx("kbd", 0.18)
 	if sight_t > 3.0:
 		sight_t = -1.0
 

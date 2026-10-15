@@ -335,7 +335,7 @@
                  {"id": "N05:S", "side": "S", "a": 52, "b": 55, "to": "N20:N"}
              ] },
     "N08": { "file": "N08.txt", "mood": ["lair", 0.6], "title": "crawl_queue", "size": [26, 72], "origin": [1460, -110], "world": 6, "music": "w6", "zone": "net",
-             "signs": ["crawl_queue: 1,042 URLs waiting. The crawler takes them from the top.", "Disallow: /. (it did not listen.)"],
+             "signs": ["index.log: 0 searches today. 0 searches yesterday.", "crawl_queue: 1,042 URLs waiting. The crawler takes them from the top. Disallow: /. (it did not listen.)"],
              "landmarks": ["ci"],
              "sighting": {"kind": "crawler", "row": 30},
              "variants": [{"if": "boss:CRAWLER", "rect": [0, 0, 26, 72], "from": "h", "to": " "}],

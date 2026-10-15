@@ -1211,7 +1211,7 @@ func t_arenas() -> bool:
 				info += " %s: no boss;" % pair[0]
 				r.queue_free()
 				continue
-			if b.body.material == null or (b.overlay.material as CanvasItemMaterial).light_mode != CanvasItemMaterial.LIGHT_MODE_UNSHADED:
+			if (b.body.material == null and not (b is CrawlerBoss)) or (b.overlay.material as CanvasItemMaterial).light_mode != CanvasItemMaterial.LIGHT_MODE_UNSHADED:   # (the crawler's body is lit on purpose: it lives in the dark of its hall)
 				ok = false
 				info += " %s boss or telegraphs are lit;" % pair[0]
 			var lit := lit_count(r)
@@ -1252,9 +1252,10 @@ func t_arenas() -> bool:
 				for w in c:
 					if w[7] == null:
 						eyes += 1
-				if eyes != 2:
+				var want_e := 1 + (0 if b.lights_out() else (8 if b.legs_ok >= 8 else 7))     # its monitor, and its red LEDs until the last 15 %
+				if eyes != want_e:
 					ok = false
-					info += " N09 eyes %d;" % eyes
+					info += " N09 lights %d, wanted %d;" % [eyes, want_e]
 			if pair[0] == "N22":
 				var c2: Array = []
 				(r.get_node("Lights") as RoomLights)._arena(c2, b, Color.WHITE, Color.WHITE)

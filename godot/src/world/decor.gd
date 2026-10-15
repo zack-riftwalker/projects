@@ -342,7 +342,7 @@ static func draw_levers(r: Room, ci: CanvasItem) -> void:
 		ci.draw_circle(tip, 2.5, Color(Game.COL.ink))
 		ci.draw_circle(tip, 1.5, Color("#7fd08a") if on else Color("#ff4f6d"))
 
-# a dark spider silhouette (the crawler passing in N08, 60 % alpha, no collision)
+# a dark spider silhouette (the crawler passing in N08, 60 % alpha, no collision): an old monitor and eight red LEDs, as in its hall
 static func draw_spider(ci: CanvasItem, x: float, y: float, a: float, t: float) -> void:
 	var col := Color(0.04, 0.05, 0.12, a)
 	ci.draw_rect(Rect2(x - 12, y - 8, 24, 16), col)
@@ -350,8 +350,12 @@ static func draw_spider(ci: CanvasItem, x: float, y: float, a: float, t: float) 
 		var ph := sin(t * 14.0 + float(i) * 1.6) * 3.0
 		ci.draw_line(Vector2(x - 10 + i * 4, y + 4), Vector2(x - 18 + i * 8 - 4, y + 14 + ph), col, 2.0)
 		ci.draw_line(Vector2(x + 10 - i * 4, y + 4), Vector2(x + 18 - i * 8 + 4, y + 14 - ph), col, 2.0)
-	ci.draw_rect(Rect2(x - 3, y - 4, 2, 2), Color(0.35, 0.82, 1.0, a))
-	ci.draw_rect(Rect2(x + 2, y - 4, 2, 2), Color(0.35, 0.82, 1.0, a))
+	ci.draw_rect(Rect2(x - 7, y - 6, 14, 9), Color(0.55, 0.85, 0.65, a * 0.35))    # its old monitor, a faint green square in the dark
+	for i in range(8):                                                     # eight red LEDs at its feet: what is seen again in the hall
+		var side := -1.0 if i < 4 else 1.0
+		var k := float(i % 4)
+		var ph2 := sin(t * 14.0 + k * 1.6) * 3.0 * side
+		ci.draw_rect(Rect2(x + side * (10.0 + k * 4.0) - 1.0, y + 13.0 + ph2, 2, 2), Color(1.0, 0.22, 0.28, minf(1.0, a * 1.6)))
 
 # ---------------------------------------------------------------- the furniture layer
 static func draw(r: Room, ci: CanvasItem) -> void:
