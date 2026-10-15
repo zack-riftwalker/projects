@@ -868,9 +868,9 @@
    "zone": "net",
    "title": "WEB CRAWLER",
    "x": 1436,
-   "y": -104,
+   "y": -114,
    "w": 24,
-   "h": 14,
+   "h": 24,
    "role": "boss",
    "feats": [
     "boss:WEB CRAWLER"
@@ -879,8 +879,8 @@
    "doors": [
     {
      "side": "E",
-     "a": 7,
-     "b": 10,
+     "a": 17,
+     "b": 20,
      "to": "N08",
      "gate": "fight",
      "note": "",
@@ -888,8 +888,8 @@
     },
     {
      "side": "W",
-     "a": 7,
-     "b": 10,
+     "a": 17,
+     "b": 20,
      "to": "N10",
      "gate": "boss",
      "note": "",

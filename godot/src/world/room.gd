@@ -1974,12 +1974,18 @@ func _start_intro() -> void:
 	summon_t = 0.0
 	summon_ok = true
 	fight_active = true
-	cam.lock = {"x": (pw - W) / 2.0, "y": float(ph - H)}
+	cam.lock = fight_cam_lock()
 	for q in players():
 		q.frozen = true
 	Audio.sfx("roar")                      # (the music follows fight.state: Main.song_for)
 	events.append("bossIntro")
 	fight_intro.emit()
+
+# the camera in a fight: the arena's bottom screen, or (boss "cam": "free", an arena taller than the screen) the usual follow
+func fight_cam_lock():
+	if def.has("boss") and String(def.boss.get("cam", "")) == "free":
+		return null
+	return {"x": (pw - W) / 2.0, "y": float(ph - H)}
 
 # TEMPORARY (pause menu "Skip boss"): the boss dies at once and the normal reward follows (flag, ability, doors)
 func skip_boss() -> bool:

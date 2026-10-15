@@ -344,12 +344,12 @@
                  {"id": "N08:W2", "side": "W", "a": 13, "b": 16, "to": "N09:E", "lock": "fight"},
                  {"id": "N08:E", "side": "E", "a": 50, "b": 53, "to": "N18:W"}
              ] },
-    "N09": { "file": "N09.txt", "mood": ["lair", 1], "title": "WEB CRAWLER", "size": [24, 14], "origin": [1436, -104], "world": 6, "music": "w6", "zone": "net",
+    "N09": { "file": "N09.txt", "mood": ["lair", 1], "title": "CRAWLER OF THE WEB", "size": [24, 24], "origin": [1436, -114], "world": 6, "music": "w6", "zone": "net",
              "signs": [],
-             "boss": {"id": "CRAWLER", "class": "CrawlerBoss", "name": "WEB CRAWLER", "sub": "it follows every link", "trigger_x": 304, "trigger_side": "E", "T": 109.4, "u": 0.75, "reward": "curl", "banner": "curl", "banner_sub": "near a GET ring, press [special]: you zip to it", "music": "boss", "drop": 40},
+             "boss": {"id": "CRAWLER", "class": "CrawlerBoss", "name": "CRAWLER OF THE WEB", "sub": "search engine \u00b7 0 searches today", "trigger_x": 304, "trigger_side": "E", "cam": "free", "T": 109.4, "u": 0.75, "reward": "curl", "banner": "curl", "banner_sub": "near a GET ring, press [special]: you zip to it", "music": "boss", "drop": 40},
              "doors": [
-                 {"id": "N09:E", "side": "E", "a": 7, "b": 10, "to": "N08:W2", "lock": "fight"},
-                 {"id": "N09:W", "side": "W", "a": 7, "b": 10, "to": "N10:E", "lock": "until:boss:CRAWLER"}
+                 {"id": "N09:E", "side": "E", "a": 17, "b": 20, "to": "N08:W2", "lock": "fight"},
+                 {"id": "N09:W", "side": "W", "a": 17, "b": 20, "to": "N10:E", "lock": "until:boss:CRAWLER"}
              ] },
     "N10": { "file": "N10.txt", "mood": ["stable", 1], "title": "GET.http", "size": [96, 20], "origin": [1340, -112], "world": 6, "music": "w6", "zone": "net",
              "signs": ["GET /curl HTTP/1.1\n200 OK\nNear a blue GET ring, press [special]: you zip to it and pop up. Chain them.", "GET /airgap: 301 Moved. Mind the gap."],

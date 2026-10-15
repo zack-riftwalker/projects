@@ -1450,7 +1450,7 @@ func _apply_snapshot(m: Dictionary) -> void:
 	if fa != r.fight_active:
 		r.fight_active = fa
 	if fa and r.cam.lock == null:
-		r.cam.lock = {"x": (r.pw - 384.0) / 2.0, "y": float(r.ph - 216)}
+		r.cam.lock = r.fight_cam_lock()
 	elif not fa:
 		r.cam.lock = null
 	if m.has("bn"):
