@@ -106,6 +106,7 @@ func step(_dt: float) -> void:
 # ---------------------------------------------------------------- drawing
 # the back wall: a tall dark room of panels, with the hall's name up high (static)
 func draw_wall(ci: CanvasItem) -> void:
+	ci.draw_rect(Rect2(0.0, 0.0, float(room.pw), float(room.ph)), Color("#0c0a10"))     # behind the outer walls too: the city never shows, and the walls stand out from the dark
 	var r := Rect2(16.0, 16.0, float(room.pw) - 32.0, float(NET_ROW * T) - 16.0)
 	ci.draw_rect(r, Color("#17141d"))
 	var xx := r.position.x

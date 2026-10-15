@@ -282,7 +282,7 @@ func block_mean(lum: PackedFloat32Array, x0: int, y0: int, w: int, h: int) -> fl
 
 # which parts of a room are drawn: the backdrop (sky + landmarks), the terrain tiles, everything else (decor, furniture, creatures, players, ...)
 func show_parts(r: Room, bg: bool, terr: bool, rest: bool) -> void:
-	for n in ["NetBackdrop", "Landmarks"]:
+	for n in ["NetBackdrop", "Landmarks", "HallWall"]:
 		var c = r.view.get_node_or_null(n)
 		if c != null:
 			c.visible = bg
@@ -292,6 +292,8 @@ func show_parts(r: Room, bg: bool, terr: bool, rest: bool) -> void:
 	for k in r.layers:
 		r.layers[k].visible = rest
 	r.entity_root.visible = rest
+	for hn in r.hall_nodes:                                   # (the crawler's hall: its furniture and its screen are props, its back wall is the backdrop)
+		hn.visible = rest
 	if r.player != null:
 		r.player.visible = rest
 	for rp in r.remote_players:
