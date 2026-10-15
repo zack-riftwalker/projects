@@ -2234,8 +2234,8 @@ func sc_co_crawler() -> Array:
 		var b: CrawlerBoss = r.boss
 		var seen := {}
 		var st := {}
-		var forced := [[3.0, "spin"], [6.0, "volley"], [10.0, "spin"], [14.0, "skitter"], [20.0, "spin"], [25.0, "volley"], [28.0, "spin"], [33.0, "back"]]
-		var marks := [[12.0, 0.5], [22.0, 0.2]]
+		var forced := [[3.0, "results", "p2"], [7.0, "fetch", "p2"], [15.0, "leap", "p2"], [19.0, "results", "p1"], [27.0, "flash", "p2"], [31.0, "feint", "p2"], [35.0, "results", "p2"]]
+		var marks := [[11.0, 0.55], [22.0, 0.2]]
 		var caught_hits := 0
 		var prev_caught := int(r.stats.get("caught", 0))
 		var strands_max := 0
@@ -2250,7 +2250,8 @@ func sc_co_crawler() -> Array:
 			plan_stats(b, seen)
 			var el := float(Time.get_ticks_msec() - t0) / 1000.0 / slow
 			boss_phase_script(b, el, st, forced, marks)
-			strands_max = maxi(strands_max, b.hz.size())
+			if r.hall != null and (r.hall.net != IndexHall.ALL_NET or r.hall.drawers != IndexHall.ALL_DRAWERS or r.hall.zones != 15):
+				strands_max = 1                               # the hall changed (a torn net, a fallen drawer, a broken tube)
 			phases[b.phase] = true
 			var caught := int(r.stats.get("caught", 0))
 			if caught > prev_caught:
@@ -2262,7 +2263,7 @@ func sc_co_crawler() -> Array:
 		for sq in seen:
 			tg[seen[sq]] += 1
 		await wait_secs(1.0)
-		return [started and seen.size() >= 6 and tg.p1 >= 1 and tg.p2 >= 1 and strands_max >= 1 and phases.size() >= 3, "host: started %s, %d plans (p1 %d, p2 %d), strands at most %d, phases %s, packets caught %d" % [started, seen.size(), tg.p1, tg.p2, strands_max, str(phases.keys()), caught_hits]]
+		return [started and seen.size() >= 6 and tg.p1 >= 1 and tg.p2 >= 1 and strands_max >= 1 and phases.size() >= 3, "host: started %s, %d plans (p1 %d, p2 %d), hall changed %d, phases %s, packets caught %d" % [started, seen.size(), tg.p1, tg.p2, strands_max, str(phases.keys()), caught_hits]]
 	var has := await wait_until(func(): return Game.tools.get("catch", false), 10.0)
 	var r2 := boss_arena("N09", 230.0, 270.0)
 	var found := {"b": null}
@@ -2298,7 +2299,7 @@ func sc_co_crawler() -> Array:
 		if seen2[sq] == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [has and seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1 and deep, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, web hits taken %d, deep crawl seen %s, violations '%s' '%s'" % [seen2.size(), short, mine, int(st2.get("hz_hits", 0)), deep, pup.kit_violation, pup.arena_violation]]
+	return [has and seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1 and deep, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, hazard hits taken %d, phase 3 seen %s, violations '%s' '%s'" % [seen2.size(), short, mine, int(st2.get("hz_hits", 0)), deep, pup.kit_violation, pup.arena_violation]]
 
 func sc_co_firewall() -> Array:
 	if not await wait_joined():

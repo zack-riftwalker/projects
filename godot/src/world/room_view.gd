@@ -64,6 +64,11 @@ func build(rm: Room) -> void:
 		nb.name = "NetBackdrop"
 		nb.room = room
 		add_child(nb)
+		if room.hall != null:                           # the crawler's hall is indoors: its back wall hides the city (drawn once; the lights grade it)
+			var bw := DrawProxy.new()
+			bw.name = "HallWall"
+			bw.cb = room.hall.draw_wall
+			add_child(bw)
 	else:
 		var bg := Parallax2D.new()                      # (made only here: one made for a network room was never freed, a leak per visit)
 		bg.name = "Background"
@@ -175,6 +180,8 @@ func _process(_dt: float) -> void:
 		_apply_anim()
 
 func _put_cell(g: TileGrid, tx: int, ty: int) -> void:
+	if room.hall != null and room.hall.owns(tx, ty):
+		return                                  # the hall draws its own drawers, net and strands (their tiles come and go)
 	var t := g.tile(tx, ty)
 	if t == TileGrid.DEAD:
 		if Game.flag("dead:" + room.id):

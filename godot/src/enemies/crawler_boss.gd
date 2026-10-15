@@ -1,83 +1,98 @@
 class_name CrawlerBoss
 extends Boss
-# WEB CRAWLER v2 (MVB3-06): a spider on a ceiling graph of four nodes that fills the arena with web. Its core hangs on a thread under a node, out of
-# reach, and only comes down in the recovery of a fetch, a back or a skitter, or when a yellow packet is caught back into it.
-# The environment is the web (an arena hazard, see Boss.hz_*): every `spin` pulls a strand from where the crawler hangs to a knot of the room; strands
-# stay, hurt (1) once their dotted warning is over, and at most four exist. Hit a knot with a claw, or catch a packet back across a strand, and it snaps.
-# Phase 3 is the deep crawl: all strands are cut, the nodes go dark, the crawler swings from the middle of the ceiling like a pendulum
-# (the swing is a pure function of the room clock, so the guest computes the same one).
-# A kit boss: every attack is announced (cue), harm exists only in an active phase, an arena hazard or the deep crawl's body, and comes from the plan and
-# the net fields; the guest builds the same boxes. Rule 8: after each attack it walks to the node above whoever stood under the core longest.
+# CRAWLER OF THE WEB (docs/metroidvania/14-crawler.md): an old search engine nobody asks anything any more; with nothing left to answer it only
+# crawls, and it has become its own spider. A big body (an old beige case under a CRT that shows its homepage, the text cursor for an eye) on
+# eight long cable legs with a red LED at each tip, in its tall hall (IndexHall: drawers, a web net over a spike pit, two strands, a screen).
+# No warning is drawn on the screen: every attack is read from the body (a leg's LED brightens and the leg draws back, the body crouches, the
+# cursor widens, the search box types). The kit still runs each attack as an announced plan, so the guest sees the same wind-up.
+# Two layers at once: the attack, and the hall (CAPTCHA squares, falling drawers, the dark). Choices are weighted by where the target is and
+# never repeat. Phase 1 (lit, heavy): fetch, results, drop. Phase 2 (a leg breaks: it leaps; the net tears, the tubes break): leap, fetch,
+# results, CAPTCHA. Phase 3 (blackout, it swings from the ceiling): flash + stabs at the remembered spots + a dive at where you are now,
+# feints, results, small crawlers on the strands, drawers falling every 10 s; the last 15 % without its leg lights.
 
-const IDS := ["fetch", "spin", "volley", "skitter", "back"]
-const NODES := [Vector2(56, 40), Vector2(144, 32), Vector2(240, 32), Vector2(328, 40)]
-# the knots of the web: ceiling x3, walls x4, floor x4. (The plan puts the ceiling knots at y 0 and the wall knots at x 0 and 384: those points are inside the
-# wall tiles, where nobody can reach them, so the ceiling knots hang at y 32 and the wall knots stand at x 16 and 368.)
-const KNOTS := [Vector2(96, 32), Vector2(192, 32), Vector2(288, 32), Vector2(16, 64), Vector2(16, 128), Vector2(368, 64), Vector2(368, 128),
-				Vector2(48, 176), Vector2(144, 176), Vector2(240, 176), Vector2(336, 176)]
-const THREAD := 18.0
-const LEG_W := 12.0
-const MAX_STRANDS := 4
-const PEND_A := Vector2(192, 0)
-const PEND_LEN := 120.0
-const PEND_T := 3.2
-const PEND_AMP := 0.9
-const SK_SPEED := 300.0
-const BRASS := "#5ad1ff"
+const IDS := ["fetch", "results", "drop", "leap", "flash", "dive", "feint"]
+const KINDS := ["captcha", "drawer", "stab", "ling"]
+const FLOOR_Y := 336.0
+const CEIL_Y := 16.0
+const HANG_Y := 62.0
+const HOME := Vector2(192.0, 62.0)
+const BW := 44.0
+const BH := 30.0
+const P2_AT := 0.65
+const P3_AT := 0.30
+const DARK_AT := 0.15
+const PIVOT := Vector2(192.0, 16.0)
+const SW_LEN := 150.0
+const SW_AMP := 0.85
+const SW_T := 3.4
+const SHIFT2 := 2.0
+const SHIFT3 := 3.0
+const DIVE_CUE := 0.7               # a 2-damage hit is wound up at least 0.7 s (the kit's rule)
+const QUERIES := ["where is it", "new agent", "who replaced me", "is it faster", "find the new one", "why"]
+const SCREENS := ["home", "query", "results", "zero", "off"]
 const INK := "#1b1226"
-const P1_SEQ := ["fetch", "spin", "volley", "fetch"]
-const P2_SEQ := ["fetch", "skitter", "spin", "volley"]
+const BEIGE := "#c9b98f"
+const RED := "#ff3b4e"
+const CABLES := ["#8d93a0", "#c9b98f", "#3f6fd0", "#8d93a0", "#6a6f7a", "#c9b98f", "#3f6fd0", "#6a6f7a"]
 
-var node := 1
-var prev_node := 0
-var core_px := 144.0              # the core's x (it follows its node)
-var core_y := 50.0                # the core's centre y
-var down := false                 # the core is coming down (or is down) because of a recovery
-var down_t := 0.0                 # caught packet: down for this long
-var leg_x := 0.0                  # the x of the leg / the middle of `back`
-var leg_top := 16.0               # a leg comes down from here
-var leg_on := 0                   # a leg is in the floor (the last of a fetch stays: pogo it)
-var leg_i := 0                    # which leg of the fetch (0 = the first, the 2-damage one)
-var leg_n := 1                    # how many legs this fetch has
-var move_to := 1
-var cycle := 0
-var idle_t := 0.0
-var volley_n := 0
-var volley_t := 0.0
-var volley_cnt := 3
-var strike_sid := 0
-var sk_state := 0                 # skitter: 0 none, 1 landing, 2 running, 3 climbing, 4 still on the wall, 5 going back up
-var sk_x := 0.0                   # where it lands
-var sk_dir := 1.0                 # the way it runs
-var sk_t := 0.0
-var dc := 0                       # 1: the deep crawl (phase 3) is on
-var sw_t0 := 0.0                  # the room time the swing began (angle 0)
-var sw_x0 := 0.0                  # where the core was when the swing began (it eases to the pendulum for a second)
-var sw_y0 := 0.0
-var dc_fetch_cd := 0.0
-var dc_volley_cd := 1.5
-var dc_swing := 0                 # half swings seen (a spin every second swing)
-var dc_end := false               # the last frame was inside a swing's end
-var dc_toggle := false
-var ghosts: Array = []            # cut strands fading (0.3 s): {a, b, t}; each page's own picture
-var scr_spawned := 0              # the phases whose scrapers are out
+var core_px := 192.0
+var core_y := 62.0
+var strike_sid := 0                 # the strike now (a parry is checked against it)
+var ph := 1                         # the phase it is in (a phase change waits for its little scene)
+var shift_k := 0                    # 2 or 3: the scene of the change to that phase is running
+var shift_t := 0.0
+var legs_ok := 8                    # 7 once a leg broke (phase 2)
+var leg_x := 0.0                    # the stab: where the leg strikes / stays planted
+var leg_y := 0.0
+var leg_on := 0                     # 0 none, 1 striking, 2 planted in the web (claw it 3 times: the body sags)
+var leg_k := 0                      # which leg
+var leg_hits := 0
+var leg_i := 0
+var leg_n := 1
+var down_t := 0.0                   # host: sagging low (a knocked leg, a caught link): the body is in reach
+var low := false                    # the body is low now (down, stuck after a drop / leap / dive)
+var pend := ""                      # host: an attack waiting for the body to get above the target first (drop)
+var pend_x := 0.0
+var pend_t := 0.0
+var arc_a := Vector2.ZERO           # a leap or a dive: from, to
+var arc_b := Vector2.ZERO
+var dc := 0                         # phase 3: swinging from the middle of the ceiling
+var sw_t0 := 0.0
+var sw_x0 := 192.0
+var sw_y0 := 62.0
+var flash_t0 := -9.0                # the room time of the last flash (a light, and its stabs)
+var dbl := false                    # host: the flash is the first of two
+var combo := ""                     # host: the attack that must follow (a flash or a feint is followed by a dive)
+var last_id := ""
+var idle_t := 1.0
+var vol_n := 0
+var vol_t := 0.0
+var captcha_cd := 4.0
+var drawer_cd := 6.0
+var ling_cd := 2.0
+var scr := 0                        # the screen: SCREENS index
+var scr_t0 := 0.0
+var scr_q := 0
+var feet: Array = []                # cosmetic, each page its own: [{p, from, to, t}] the planted feet of the eight legs
+var dark_k := 0.0                   # cosmetic: smoothed darkness
 
 func _init(r: Room, bx: float, by: float, base_hp := 82) -> void:
-	super(r, bx, by, 24, 16, base_hp)
-	boss_name = "WEB CRAWLER"
-	sub = "it follows every link"
-	col = BRASS
+	super(r, bx, by, BW, BH, base_hp)
+	boss_name = "CRAWLER OF THE WEB"
+	sub = "search engine · 0 searches today"
+	col = BEIGE
 	kit_init()
-	node = 1
-	core_px = NODES[1].x
-	core_y = NODES[1].y + THREAD
+	core_px = HOME.x
+	core_y = HOME.y
 	_place()
+	for i in range(8):
+		feet.append({"p": _ideal_foot(i), "from": Vector2.ZERO, "to": Vector2.ZERO, "t": 0.0})
 
 func plan_ids() -> Array:
 	return IDS
 
 func hz_kinds() -> Array:
-	return ["strand"]
+	return KINDS
 
 func _big() -> int:
 	return int(Game.dv("big_hit"))
@@ -86,375 +101,520 @@ func _place() -> void:
 	x = core_px - w / 2.0
 	y = core_y - h / 2.0
 
-func _rest_y() -> float:
-	return float(NODES[node].y) + THREAD
+func _hall():
+	return room.hall
 
-# ---- the web: strands are hazards {k "strand", v [knot, start x, start y]} ----
-func knot_box(i: int) -> Dictionary:
-	var p: Vector2 = KNOTS[i]
-	return {"x": p.x - 6.0, "y": p.y - 6.0, "w": 12.0, "h": 12.0}
+func _phase_hp() -> int:
+	var f := hpf / float(max_hp)
+	return 3 if f <= P3_AT else (2 if f <= P2_AT else 1)
 
-func strand_a(h: Dictionary) -> Vector2:
-	return Vector2(float(h.v[1]), float(h.v[2]))
+func lights_out() -> bool:
+	return ph == 3 and hpf / float(max_hp) <= DARK_AT
 
-func strand_b(h: Dictionary) -> Vector2:
-	return KNOTS[clampi(int(h.v[0]), 0, KNOTS.size() - 1)]
+# ---------------------------------------------------------------- boxes
+func _body_box() -> Dictionary:
+	return {"x": core_px - BW / 2.0, "y": core_y - BH / 2.0, "w": BW, "h": BH}
 
-# 8x8 boxes every 8 px along the strand (1 damage)
-func hz_boxes(h: Dictionary, _now: float) -> Array:
-	var a := strand_a(h)
-	var b := strand_b(h)
-	var n := maxi(1, ceili(a.distance_to(b) / 8.0))
-	var out: Array = []
-	for i in range(n + 1):
-		var p := a.lerp(b, float(i) / float(n))
-		out.append({"x": p.x - 4.0, "y": p.y - 4.0, "w": 8.0, "h": 8.0, "dmg": 1})
-	return out
+func _cbox() -> Dictionary:                           # the "I'm not a robot" tick box, on the left drawer of row 12
+	return {"x": 24.0, "y": 180.0, "w": 12.0, "h": 12.0, "cbox": 1}
 
-func strand_at_knot(i: int) -> bool:
+func _captcha_on() -> bool:
 	for h in hz:
-		if int(h.v[0]) == i:
+		if h.k == "captcha":
 			return true
 	return false
 
-func _snap(h: Dictionary) -> void:
-	ghosts.append({"a": strand_a(h), "b": strand_b(h), "t": 0.3})
-	hz.erase(h)
-	var b := strand_b(h)
-	room.burst(b.x, b.y, 6, ["#d6f6ff", BRASS], 90.0, 100.0)
-	Audio.sfx("tick", {"vol": 0.6})
-
-func cut_knot(i: int) -> bool:
-	var cut := false
-	for h in hz.duplicate():
-		if int(h.v[0]) == i:
-			_snap(h)
-			cut = true
-	return cut
-
-func cut_all() -> void:
-	for h in hz.duplicate():
-		_snap(h)
-
-# a packet caught back across a strand cuts it
-func _cut_by_packets() -> void:
-	for q in room.projs:
-		if q.dead or not q.get("friendly", false):
-			continue
-		for h in hz.duplicate():
-			if _dist_seg(Vector2(q.x, q.y), strand_a(h), strand_b(h)) <= 8.0:
-				_snap(h)
-
-static func _dist_seg(p: Vector2, a: Vector2, b: Vector2) -> float:
-	var ab := b - a
-	var l2 := ab.length_squared()
-	if l2 < 0.01:
-		return p.distance_to(a)
-	var t := clampf((p - a).dot(ab) / l2, 0.0, 1.0)
-	return p.distance_to(a + ab * t)
-
-# the strand a `spin` pulls: from where the crawler hangs to the knot nearest the target on the far side of it from the boss (a free knot)
-func _spin_knot(ap: Vector2, from: Vector2) -> int:
-	var best := -1
-	var bd := 1e9
-	for pass_n in range(2):
-		for i in range(KNOTS.size()):
-			if strand_at_knot(i):
-				continue
-			var k: Vector2 = KNOTS[i]
-			if pass_n == 0 and (k.x - ap.x) * (ap.x - from.x) <= 0.0:
-				continue
-			var d := k.distance_to(ap)
-			if d < bd:
-				bd = d
-				best = i
-		if best >= 0:
-			break
-	return best
-
-func _add_strand(knot: int, from: Vector2, warn: float) -> void:
-	if knot < 0:
-		return
-	if hz.size() >= MAX_STRANDS:
-		_snap(hz[0])                                    # a fifth strand cuts the oldest
-	hz_add("strand", warn, [knot, roundi(from.x), roundi(from.y)])
-
-# ---- the body ----
-func _core_box() -> Dictionary:
-	return {"x": core_px - 12.0, "y": core_y - 8.0, "w": 24.0, "h": 16.0}
-
-func _body_box() -> Dictionary:
-	return {"x": core_px - 16.0, "y": core_y - 9.0, "w": 32.0, "h": 18.0}
-
 func hurtboxes() -> Array:
 	var b: Array = []
-	if sk_state >= 2 and sk_state <= 4:
-		b.append(_body_box())                            # running, climbing, still: the body itself (pogo off it)
-	else:
-		b.append(_core_box())
-	if leg_on == 1 and plan_phase() == "recover" and String(plan.get("id", "")) == "fetch":      # the planted leg's lower 48 px hurt it too
-		b.append({"x": leg_x - LEG_W / 2.0, "y": Boss.FLOOR - 48.0, "w": LEG_W, "h": 48.0})
-	for h in hz:                                         # a knot with a strand on it can be cut with the claw
-		var kb := knot_box(int(h.v[0]))
-		kb["knot"] = int(h.v[0])
-		b.append(kb)
+	if shift_k == 0:
+		b.append(_body_box())
+	if leg_on == 2:
+		b.append({"x": leg_x - 6.0, "y": leg_y - 30.0, "w": 12.0, "h": 30.0, "leg": 1})
+	if _captcha_on():
+		b.append(_cbox())
+	for h in hz:
+		if h.k == "ling" and hz_live(h, room.time):
+			var lp := ling_pos(h, room.time)
+			b.append({"x": lp.x - 5.0, "y": lp.y - 4.0, "w": 10.0, "h": 8.0, "ling": hz_key(h)})
 	return b
 
-# only the plan hurts and only while it is active; the web hurts through its hazards; the deep crawl's body and the running skitter hurt by touch
 func harmboxes() -> Array:
 	var b: Array = []
-	if plan_active():
-		match String(plan.id):
-			"fetch":
-				b.append({"x": leg_x - LEG_W / 2.0, "y": leg_top, "w": LEG_W, "h": Boss.FLOOR - leg_top, "sid": strike_sid, "catchable": false, "dmg": _big() if leg_i == 0 else 1})
-			"skitter":
-				if sk_state == 1:
-					b.append({"x": core_px - 16.0, "y": Boss.FLOOR - 24.0, "w": 32.0, "h": 24.0, "dmg": _big()})
-			"back":
-				b.append({"x": leg_x - 52.0, "y": 0.0, "w": 24.0, "h": Boss.FLOOR, "dmg": _big()})
-				b.append({"x": leg_x + 28.0, "y": 0.0, "w": 24.0, "h": Boss.FLOOR, "dmg": _big()})
-	if sk_state == 2:
-		b.append({"x": core_px - 16.0, "y": Boss.FLOOR - 18.0, "w": 32.0, "h": 18.0, "dmg": 1})
-	if dc == 1 and active and not dying:
-		b.append(_core_box_dmg())
+	if active and not dying and shift_k == 0:
+		var bb := _body_box()
+		bb["dmg"] = 1
+		if plan_active() and String(plan.id) in ["drop", "dive"]:
+			bb["dmg"] = _big()
+		if plan_active() and String(plan.id) == "leap" and float(plan.t) < 0.15:
+			bb = {"x": core_px - 28.0, "y": core_y - BH / 2.0, "w": 56.0, "h": BH + 4.0, "dmg": _big()}
+		b.append(bb)
+		if leg_on == 1 and plan_active() and String(plan.id) == "fetch":
+			b.append({"x": leg_x - 7.0, "y": leg_y - 30.0, "w": 14.0, "h": 34.0, "dmg": 1, "sid": strike_sid, "catchable": false})
 	b.append_array(hz_harm())
 	return b
 
-func _core_box_dmg() -> Dictionary:
-	var c := _core_box()
-	c["dmg"] = 1
-	return c
+# ---------------------------------------------------------------- the hall's hazards: pure functions of their fields and the room time
+func ling_pos(h: Dictionary, now: float) -> Vector2:
+	var s: Array = IndexHall.STRANDS[clampi(int(h.v[0]), 0, 1)]
+	var x0 := float(s[0]) * 16.0
+	var x1 := float(int(s[0]) + int(s[2])) * 16.0
+	var dir := float(h.v[1])
+	var u := maxf(0.0, now - float(h.t0) - float(h.warn)) * 42.0
+	var px := (x0 + u) if dir > 0.0 else (x1 - u)
+	return Vector2(px, float(s[1]) * 16.0 - 4.0)
 
-func _phase_now() -> int:
-	var f := hpf / float(max_hp)
-	return 3 if f <= 0.30 else (2 if f <= 0.65 else 1)
+func hz_boxes(h: Dictionary, now: float) -> Array:
+	var since := now - float(h.t0) - float(h.warn)
+	match String(h.k):
+		"stab":
+			if since < 0.25:
+				return [{"x": float(h.v[0]) - 7.0, "y": float(h.v[1]) - 28.0, "w": 14.0, "h": 34.0, "dmg": 1}]
+		"drawer":
+			var r: Rect2 = room.hall.drawer_rect(clampi(int(h.v[0]), 0, 9)) if room.hall != null else Rect2()
+			if since < 0.8:
+				return [{"x": r.position.x, "y": r.position.y + since * 320.0, "w": r.size.x, "h": 12.0, "dmg": 1}]
+		"ling":
+			var lp := ling_pos(h, now)
+			return [{"x": lp.x - 4.0, "y": lp.y - 3.0, "w": 8.0, "h": 6.0, "dmg": 1}]
+	return []
+
+# ---------------------------------------------------------------- hits
+func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
+	if b is Dictionary and b.has("cbox"):
+		if active and not dying:
+			room.pop(30.0, 168.0, "Verification failed: you are a robot", "#ff8a8a", true)
+			Audio.sfx("glitch", {"vol": 0.7})
+		return "hit"
+	if b is Dictionary and b.has("ling"):
+		for h in hz.duplicate():
+			if hz_key(h) == String(b.ling):
+				var lp := ling_pos(h, room.time)
+				room.burst(lp.x, lp.y, 6, ["#d6f6ff", RED], 90.0, 200.0)
+				hz.erase(h)
+		Audio.sfx("squish", {"vol": 0.7})
+		return "kill"
+	if b is Dictionary and b.has("leg"):
+		if not active or dying:
+			return ""
+		leg_hits += 1
+		room.burst(leg_x, leg_y - 12.0, 4, ["#ffffff", RED], 80.0, 200.0)
+		Audio.sfx("clang", {"vol": 0.6})
+		if leg_hits >= 3:                                  # the leg tears out of the web: the body sags into reach
+			leg_on = 0
+			leg_hits = 0
+			down_t = 1.6
+			room.shake(0.4)
+			Audio.sfx("brk")
+		return "hit"
+	if not active or dying or shift_k != 0:
+		return ""
+	if how == "catch":
+		down_t = maxf(down_t, 1.5)                         # a link caught back into its screen: dazed, it sags
+		room.burst(core_px, core_y - 8.0, 8, ["#ffd23f", "#ffffff"], 90.0, 100.0)
+	return super.hit(d, dx, dy, how, b)
 
 func on_damage() -> void:
-	var p := _phase_now()
-	if p != phase:
-		phase = p
-		room.shake(0.5)
-		Audio.sfx("roar", {"vol": 0.7})
-
-func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
-	if b is Dictionary and b.has("knot"):                 # a claw (or a dash) on a knot: the strand snaps, the boss takes nothing
-		if active and not dying and cut_knot(int(b.knot)):
-			return "hit"
-		return ""
-	if active and not dying and how == "catch":
-		down_t = 1.6                                      # a packet caught back into the core: the core comes down
-		room.burst(core_px, core_y - 10.0, 8, [BRASS, "#d6f6ff"], 90.0, 100.0)
-		Audio.sfx("clang")
-	return super.hit(d, dx, dy, how, b)
+	var p := _phase_hp()
+	if p > ph and shift_k == 0 and not dying and hpf > 0.0:
+		_begin_shift(p)
 
 func start() -> void:
 	super.start()
-	idle_t = 1.0
+	idle_t = 0.8
+	scr = 0
 
-func _scrapers(n_pair: int) -> void:
-	# two scrapers drop from ceiling knots (no hook: they hang on a thread from the knot)
-	var picks := [0, 2] if n_pair % 2 == 0 else [1, 2]
-	for ki in picks:
-		var k: Vector2 = KNOTS[ki]
-		var sc := Scraper.new(room, k.x - 8.0, k.y - 8.0)
-		room.add_entity(sc)
-	room.pop(192.0, 60.0, "scrapers", "#c3bccd", true)
+# ---------------------------------------------------------------- the phase scenes (it cannot be hurt during them)
+func _begin_shift(p: int) -> void:
+	shift_k = p
+	shift_t = SHIFT2 if p == 2 else SHIFT3
+	plan = {}
+	pend = ""
+	combo = ""
+	leg_on = 0
+	down_t = 0.0
+	room.shake(0.8)
+	Audio.sfx("roar", {"vol": 0.8})
+	room.events.append("bossPhase")
+	Game.dlog("%s phase %d" % [boss_name, p])
 
+func _step_shift(dt: float) -> void:
+	var hl = _hall()
+	var total := SHIFT2 if shift_k == 2 else SHIFT3
+	var u := 1.0 - shift_t / total
+	shift_t -= dt
+	if shift_k == 2:
+		core_y = move_toward(core_y, 250.0, 300.0 * dt)       # it slams itself down; a leg snaps
+		if u > 0.35 and legs_ok == 8:
+			legs_ok = 7
+			room.shake(1.0)
+			room.burst(core_px + 14.0, core_y, 12, ["#ffffff", "#ffd23f", RED], 160.0, 300.0)
+			Audio.sfx("brk")
+			if hl != null:
+				hl.zones &= ~_zone_bit(core_px)
+	else:
+		if hl != null:                                        # the power dies: the tubes one by one, the screen shows 0, then nothing
+			var n := clampi(floori(u * 5.0), 0, 4)
+			for i in range(n):
+				hl.zones &= ~(1 << i)
+			if u > 0.55:
+				scr = SCREENS.find("zero")
+			if u > 0.85:
+				scr = SCREENS.find("off")
+			if u > 0.4:
+				hl.net = 0
+		core_px = move_toward(core_px, PIVOT.x, 160.0 * dt)
+		core_y = move_toward(core_y, PIVOT.y + SW_LEN, 160.0 * dt)
+	if shift_t <= 0.0:
+		ph = shift_k
+		phase = ph
+		shift_k = 0
+		if ph == 3:
+			dc = 1
+			_swing_from_here()
+			ling_cd = 0.5
+			drawer_cd = 6.0
+		idle_t = 0.5
+		last_id = ""
+
+func _zone_bit(px: float) -> int:
+	return 1 << clampi(floori(px / 96.0), 0, 3)
+
+# ---------------------------------------------------------------- update (host)
 func update(dt: float) -> void:
 	tick(dt)
 	if read != null:
 		read.update(dt)
-	for g in ghosts:
-		g.t -= dt
-	ghosts = ghosts.filter(func(g): return g.t > 0.0)
+	_feet_step(dt)
 	if dying:
-		down = true
-		sk_state = 0
-		dc = 0
 		hz.clear()
-		death_rattle(dt, 2.4, ["#ffffff", "#d6f6ff", BRASS, "#2a6fa8"])
-		_ease(dt)
+		down_t = 0.0
+		core_y = move_toward(core_y, FLOOR_Y - 40.0, 160.0 * dt)
+		death_rattle(dt, 2.6, ["#ffffff", "#d6f6ff", BEIGE, "#57ff8a"])
+		_sync_hall()
 		_place()
 		return
 	if not active:
+		_sync_hall()
 		_place()
 		return
-	_ease(dt)
-	if scr_spawned < _phase_now() - 1:
-		scr_spawned += 1
-		if scr_spawned == 2:
-			cut_all()                                     # the deep crawl: every strand snaps and the nodes go dark
-			dc = 1
-			sw_t0 = snappedf(room.time, 0.01)
-			sw_x0 = core_px
-			sw_y0 = core_y
-			down = false
-			dc_fetch_cd = 1.5
-			dc_volley_cd = 2.0
-			dc_swing = 0
-		_scrapers(scr_spawned)
-	if down_t > 0.0:
-		down_t -= dt
-	_cut_by_packets()
+	_hz_expire()
+	if shift_k != 0:
+		_step_shift(dt)
+		_sync_hall()
+		_place()
+		return
+	down_t = maxf(0.0, down_t - dt)
+	_pressure(dt)
 	if plan.is_empty():
-		idle_t -= dt
 		plan_clock += dt
-		if dc == 1:
-			dc_fetch_cd -= dt
-			dc_volley_cd -= dt
-		if idle_t <= 0.0:
+		_idle_move(dt)
+		idle_t -= dt
+		if pend != "":
+			pend_t -= dt
+			if absf(core_px - pend_x) < 6.0 or pend_t <= 0.0:
+				var id := pend
+				pend = ""
+				_start(id, kit_pick_target())
+		elif idle_t <= 0.0:
 			_choose()
 	else:
 		_plan_logic(dt)
-	if dc == 1:
-		_dc_follow()
+	_sync_hall()
 	_place()
 
-# ---- the swing (a pure function of the room clock and the fields) ----
-func pend_angle(now: float) -> float:
-	return PEND_AMP * sin(TAU * (now - sw_t0) / PEND_T)
-
-func pend_pos(now: float) -> Vector2:
-	var a := pend_angle(now)
-	return PEND_A + Vector2(sin(a), cos(a)) * PEND_LEN
-
-func dc_pos(now: float) -> Vector2:
-	var k := clampf((now - sw_t0) / 1.0, 0.0, 1.0)
-	return Vector2(sw_x0, sw_y0).lerp(pend_pos(now), k * k * (3.0 - 2.0 * k))
-
-func _dc_follow() -> void:
-	var p := dc_pos(room.time)
-	core_px = p.x
-	core_y = p.y
-
-func _ease(dt: float) -> void:
-	if dc == 1 and not dying:
+# the hall follows the boss (host: from its state; guest: from the net fields, in net_apply)
+func _sync_hall() -> void:
+	var hl = _hall()
+	if hl == null:
 		return
-	if sk_state != 0 and not dying:
+	var hide := 0
+	hl.rattle = {}
+	for h in hz:
+		match String(h.k):
+			"captcha":
+				if hz_live(h, room.time):
+					var sel := int(h.v[0])
+					for k in range(7):
+						if (sel >> k) & 1 == 1:
+							hide |= 3 << (k * 2)
+			"drawer":
+				if not hz_live(h, room.time):
+					hl.rattle[int(h.v[0])] = float(h.t0)
+	hl.hide = hide & IndexHall.ALL_NET
+	var dk := 0.0
+	if ph == 2 or shift_k == 2:
+		var lit := 0
+		for i in range(4):
+			if (hl.zones >> i) & 1 == 1:
+				lit += 1
+		dk = 0.15 + 0.5 * float(4 - lit) / 4.0
+	if ph == 3 or shift_k == 3:
+		dk = 1.0 if ph == 3 else clampf(1.0 - shift_t / SHIFT3, 0.0, 1.0)
+	hl.dark = dk
+	var mode: String = SCREENS[clampi(scr, 0, SCREENS.size() - 1)]
+	if _captcha_on() and mode != "zero" and mode != "off":
+		var sel2 := 0
+		for h in hz:
+			if h.k == "captcha":
+				sel2 = int(h.v[0])
+		hl.screen = {"mode": "captcha", "text": "", "t0": 0.0, "sel": sel2}
+	else:
+		hl.screen = {"mode": mode, "text": QUERIES[clampi(scr_q, 0, QUERIES.size() - 1)], "t0": scr_t0, "sel": 0, "sub": "%d results" % (1 + scr_q * 7 % 9)}
+	hl.apply()                                          # (the tiles follow at once: a torn cell is not a floor for another frame)
+
+func _hz_expire() -> void:
+	var now := room.time
+	var hl = _hall()
+	for h in hz.duplicate():
+		var since := now - float(h.t0) - float(h.warn)
+		match String(h.k):
+			"captcha":
+				if since > 2.5:
+					hz.erase(h)
+			"stab":
+				if since > 0.3:
+					hz.erase(h)
+			"drawer":
+				if since >= 0.0 and hl != null:
+					hl.drawers &= ~(1 << int(h.v[0]))
+				if since > 0.8:
+					hz.erase(h)
+			"ling":
+				var lp := ling_pos(h, now)
+				var s: Array = IndexHall.STRANDS[clampi(int(h.v[0]), 0, 1)]
+				if lp.x < float(s[0]) * 16.0 - 2.0 or lp.x > float(int(s[0]) + int(s[2])) * 16.0 + 2.0 or (hl != null and (hl.strands >> int(h.v[0])) & 1 == 0):
+					hz.erase(h)
+
+# the hall's own pressure, beside the attack
+func _pressure(dt: float) -> void:
+	var hl = _hall()
+	if hl == null:
 		return
-	var want_y := float(Boss.FLOOR - 70.0) if (down or down_t > 0.0 or dying) else _rest_y()
-	core_y = move_toward(core_y, want_y, 160.0 * dt)
-	core_px = move_toward(core_px, float(NODES[node].x), 220.0 * dt)
+	if ph == 2:
+		captcha_cd -= dt
+		if captcha_cd <= 0.0 and not _captcha_on():
+			captcha_cd = 11.0
+			var sel := 0
+			var picks := [0, 1, 2, 3, 4, 5, 6]
+			picks.shuffle()
+			for k in range(3 + room.rng.randi() % 2):
+				sel |= 1 << int(picks[k])
+			hz_add("captcha", 1.4, [sel])
+			Audio.sfx("textSys", {"vol": 0.8})
+	if ph == 3:
+		drawer_cd -= dt
+		if drawer_cd <= 0.0:
+			drawer_cd = 10.0
+			_drop_drawer(-1)
+		ling_cd -= dt
+		var n := 0
+		for h in hz:
+			if h.k == "ling":
+				n += 1
+		if ling_cd <= 0.0 and n < 2:
+			ling_cd = 7.0
+			var si := room.rng.randi() % 2
+			if (hl.strands >> si) & 1 == 1:
+				hz_add("ling", 0.7, [si, 1 if room.rng.randf() < 0.5 else -1])
 
-# rule 8: the node above whoever stood under the core longest in the last second; nobody: the next one in order
-func _pick_node() -> int:
-	var best_key := ""
-	var best_n := 0
-	if read != null:
-		for k in kit_keys():
-			var n_u := 0
-			for s in read.samples[k]:
-				if s.u:
-					n_u += 1
-			if n_u > best_n:
-				best_n = n_u
-				best_key = k
-	if best_key != "":
-		var q = kit_body(best_key)
-		var bi := 0
-		var bd := 1e9
-		for i in range(NODES.size()):
-			var dd := absf(float(NODES[i].x) - (q.x + q.w / 2.0))
-			if dd < bd:
-				bd = dd
-				bi = i
-		if bi != node:
-			return bi
-	return (node + 1) % NODES.size()
+# a drawer shakes, then falls (never fewer than four left: there is always a way to win). di < 0: one at random
+func _drop_drawer(di: int) -> void:
+	var hl = _hall()
+	if hl == null or hl.drawers_left() <= 4:
+		return
+	var cand: Array = []
+	for i in range(IndexHall.DRAWERS.size()):
+		if (hl.drawers >> i) & 1 == 1:
+			var busy := false
+			for h in hz:
+				if h.k == "drawer" and int(h.v[0]) == i:
+					busy = true
+			if not busy:
+				cand.append(i)
+	if cand.is_empty():
+		return
+	var pick: int = di if di in cand else int(cand[room.rng.randi() % cand.size()])
+	hz_add("drawer", 0.8, [pick])
 
+# ---------------------------------------------------------------- moving between attacks
+func _idle_move(dt: float) -> void:
+	if dc == 1:
+		var p := dc_pos(room.time)
+		core_px = p.x
+		core_y = p.y
+		low = false
+		return
+	if down_t > 0.0:
+		core_y = move_toward(core_y, 232.0, 260.0 * dt)
+		low = true
+		return
+	low = false
+	var tx := core_px
+	if pend != "":
+		tx = pend_x
+	elif ph == 1:
+		var ap := kit_aim(kit_pick_target()) if not kit_keys().is_empty() else HOME
+		tx = clampf(ap.x, 56.0, 328.0)
+	# jerky: it scuttles in bursts, then stops dead (a pure function of the clock: no state)
+	var go := 1.0 if fposmod(room.time, 0.5) < 0.28 else 0.0
+	var spd := (300.0 if pend != "" else 170.0) * (go if pend == "" else 1.0)
+	if ph == 2:
+		spd *= 0.6                                      # a broken leg: it drags itself
+	core_px = move_toward(core_px, tx, spd * dt)
+	core_y = move_toward(core_y, HANG_Y, (140.0 if ph == 2 else 220.0) * dt)
+
+# ---------------------------------------------------------------- choosing (weighted, never the same twice in a row)
 func _choose() -> void:
 	if kit_keys().is_empty():
 		idle_t = 0.3
 		return
-	if dc == 1:
-		_choose_dc()
-		return
-	var seq: Array = P2_SEQ if _phase_now() == 2 else P1_SEQ
-	var id: String = seq[cycle % seq.size()]
-	cycle += 1
-	_start(id)
-
-# the deep crawl: fetch / back at a swing's end, a volley every 2.4 s, a spin every second swing
-func _choose_dc() -> void:
-	var s := absf(sin(TAU * (room.time - sw_t0) / PEND_T))
-	var at_end := s > 0.95 and room.time - sw_t0 > 1.2
-	if at_end and not dc_end:
-		dc_swing += 1
-	dc_end = at_end
-	idle_t = 0.05
-	if at_end and dc_fetch_cd <= 0.0:
-		dc_fetch_cd = PEND_T
-		dc_toggle = not dc_toggle
-		_start("fetch" if dc_toggle else "back")
-	elif dc_volley_cd <= 0.0:
-		dc_volley_cd = 2.4
-		_start("volley")
-	elif dc_swing >= 2 and s < 0.5:
-		dc_swing = 0
-		_start("spin")
-
-func _start(id: String) -> void:
-	down = false
 	var tgt := kit_pick_target()
+	if combo != "":
+		var c := combo
+		combo = ""
+		_start(c, tgt)
+		return
+	var ap := kit_aim(tgt)
+	var far := absf(ap.x - core_px) > 120.0
+	var opts: Array = []
+	match ph:
+		1:
+			opts = [["fetch", 3.0], ["results", 2.0 + (2.0 if far else 0.0)], ["drop", 2.0 + (2.0 if not far else 0.0)]]
+		2:
+			opts = [["leap", 3.0], ["fetch", 2.0], ["results", 2.0 + (1.0 if far else 0.0)]]
+		_:
+			opts = [["flash", 3.0], ["feint", 2.0], ["results", 1.0], ["dflash", 1.0]]
+	var tot := 0.0
+	for o in opts:
+		if String(o[0]) != last_id:
+			tot += float(o[1])
+	var r := room.rng.randf() * tot
+	var pick := String(opts[0][0])
+	for o in opts:
+		if String(o[0]) == last_id:
+			continue
+		r -= float(o[1])
+		if r <= 0.0:
+			pick = String(o[0])
+			break
+	last_id = pick
+	if pick == "drop":
+		pend = "drop"
+		pend_x = clampf(ap.x, 40.0, 344.0)
+		pend_t = 0.9
+		return
+	if pick == "dflash":
+		dbl = true
+		pick = "flash"
+	_start(pick, tgt)
+
+func _start(id: String, tgt: String) -> void:
 	var ap := kit_aim(tgt)
 	match id:
 		"fetch":
-			leg_n = clampi(_phase_now(), 1, 3)
+			leg_n = (1 + room.rng.randi() % 2) if ph == 1 else (2 + room.rng.randi() % 2)
 			leg_i = 0
 			_start_leg(tgt)
-		"spin":
-			var from := _hang_point()
-			var knot := _spin_knot(ap, from)
-			plan_start("spin", "lunge", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.9, 0.55)
-			_add_strand(knot, from, float(plan.t))
-		"volley":
-			volley_cnt = clampi(_phase_now() + 2, 3, 5)
-			plan_start("volley", "proj", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.6, 0.6)
-		"skitter":
-			sk_x = clampf(ap.x, 40.0, 344.0)
-			sk_dir = 1.0 if sk_x < 192.0 else -1.0
-			var run_t := absf((352.0 if sk_dir > 0.0 else 32.0) - sk_x) / SK_SPEED
-			plan_start("skitter", "slam", tgt, [sk_x - 16.0, Boss.FLOOR - 24.0, 32.0, 24.0], 0.3, 0.7, run_t + 1.4)
-		"back":
-			leg_x = clampf(ap.x, 64.0, 320.0) if dc == 1 else float(NODES[prev_node].x)
-			plan_start("back", "dual", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.8, 0.8)
-	Game.dlog("%s attack %s on %s (plan %d)" % [boss_name, id, tgt, plan.seq])
-
-# where a strand starts: the node the crawler hangs under, or the swing point in the deep crawl
-func _hang_point() -> Vector2:
-	if dc == 1:
-		return Vector2(core_px, core_y)
-	return Vector2(NODES[node])
+		"results":
+			vol_n = 0
+			scr = SCREENS.find("query")
+			scr_t0 = room.time
+			scr_q = room.rng.randi() % QUERIES.size()
+			plan_start("results", "proj", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.5 if ph == 3 else 0.6, 0.5, 0.2 if ph == 1 else 0.7)
+		"drop":
+			arc_a = Vector2(core_px, core_y)
+			var land := _ground_below(ap.x, ap.y) - BH / 2.0 - 2.0
+			arc_b = Vector2(core_px, maxf(core_y + 20.0, land))
+			plan_start("drop", "slam", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.7, 1.5, (arc_b.y - arc_a.y) / 520.0 + 0.05)
+		"leap":
+			arc_a = Vector2(core_px, core_y)
+			arc_b = Vector2(clampf(ap.x, 40.0, 344.0), _ground_below(ap.x, ap.y) - BH / 2.0)
+			plan_start("leap", "lunge", tgt, [0.0, 0.0, 0.0, 0.0], 0.25, 0.7, 1.5, 0.6)
+		"flash":
+			plan_start("flash", "guard", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.5, 0.1, 0.05)
+		"dive":
+			arc_a = Vector2(core_px, core_y)
+			arc_b = ap
+			plan_start("dive", "lunge", tgt, [0.0, 0.0, 0.0, 0.0], 0.2, DIVE_CUE, 1.0, 0.35)
+		"feint":
+			arc_a = Vector2(core_px, core_y)
+			arc_b = ap
+			plan_start("feint", "lunge", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, DIVE_CUE, 0.35, 0.05)
+	if not plan.is_empty():
+		Game.dlog("%s attack %s on %s (plan %d)" % [boss_name, id, tgt, plan.seq])
 
 func _start_leg(tgt: String) -> void:
 	var ap := kit_aim(tgt)
-	leg_x = clampf(ap.x, 16.0, Game.W - 16.0)
-	leg_top = 16.0 if dc == 1 else maxf(16.0, core_y - 8.0)
+	leg_x = clampf(ap.x, 20.0, 364.0)
+	leg_y = ap.y + 6.0
+	leg_k = [1, 2, 5, 6][(leg_i + leg_n) % 4]
 	var last := leg_i >= leg_n - 1
-	plan_start("fetch", "slam", tgt, [leg_x - 16.0, leg_top, 32.0, Boss.FLOOR - leg_top], 0.45, 0.75 if leg_i == 0 else 0.45, 0.8 if last else 0.1)
+	plan_start("fetch", "slam", tgt, [0.0, 0.0, 0.0, 0.0], 0.2, 0.5 if leg_i == 0 else 0.4, 1.2 if last else 0.05, 0.2)
+
+# the first floor under a point (a one-way top or a solid cell); the floor line when there is none (the pit: its spikes)
+func _ground_below(px: float, py: float) -> float:
+	var g = room.grid
+	var tx := clampi(floori(px / 16.0), 1, g.w - 2)
+	for ty in range(clampi(floori(py / 16.0), 0, g.h - 1), g.h):
+		var t: int = g.tile(tx, ty)
+		if t == TileGrid.SOLID or t == TileGrid.ONEWAY or t == TileGrid.SPIKE_U:
+			return float(ty) * 16.0
+	return FLOOR_Y
 
 func _plan_logic(dt: float) -> void:
 	var pid := String(plan.id)
-	# the aim follows the target through the cue; the last `lock` seconds it is fixed
-	if plan.ph == "cue" and plan.t > float(plan.lock):
+	if plan.ph == "cue" and plan.t > float(plan.lock):          # the aim follows the target through the wind-up; fixed for the last `lock`
 		var ap := kit_aim(plan.tgt)
-		if pid == "fetch":
-			leg_x = clampf(ap.x, 16.0, Game.W - 16.0)
-			plan.fp = [leg_x - 16.0, leg_top, 32.0, Boss.FLOOR - leg_top]
-		elif pid == "skitter":
-			sk_x = clampf(ap.x, 40.0, 344.0)
-			sk_dir = 1.0 if sk_x < 192.0 else -1.0
-			plan.fp = [sk_x - 16.0, Boss.FLOOR - 24.0, 32.0, 24.0]
-			plan["rec"] = absf((352.0 if sk_dir > 0.0 else 32.0) - sk_x) / SK_SPEED + 1.4
-		elif pid == "back" and dc == 1:
-			leg_x = clampf(ap.x, 64.0, 320.0)
-	if pid == "volley" and plan.ph == "active":
-		volley_t -= dt
-		if volley_t <= 0.0 and volley_n < 1:
-			volley_n += 1
-			_shoot_fan()
-	if pid == "skitter":
-		_skitter_step(dt)
+		match pid:
+			"fetch":
+				leg_x = clampf(ap.x, 20.0, 364.0)
+				leg_y = ap.y + 6.0
+			"leap":
+				arc_b = Vector2(clampf(ap.x, 40.0, 344.0), _ground_below(ap.x, ap.y) - BH / 2.0)
+			"dive":
+				arc_b = ap
+	match pid:
+		"drop":
+			if plan.ph == "active":
+				core_y = move_toward(core_y, arc_b.y, 520.0 * dt)
+				low = true
+			elif plan.ph == "recover":
+				low = true
+		"leap":
+			if plan.ph == "cue":
+				pass
+			elif plan.ph == "active":
+				var u := clampf(1.0 - float(plan.t) / 0.6, 0.0, 1.0)
+				var p := arc_a.lerp(arc_b, u)
+				p.y -= sin(u * PI) * 90.0
+				core_px = p.x
+				core_y = p.y
+			else:
+				low = true
+		"dive", "feint":
+			if plan.ph == "cue":                               # it comes closer: the eight lights grow
+				var c := arc_a.lerp(arc_b, 0.3 * (1.0 - float(plan.t) / DIVE_CUE))
+				core_px = c.x
+				core_y = c.y
+			elif plan.ph == "active" and pid == "dive":
+				var u2 := clampf(1.0 - float(plan.t) / 0.35, 0.0, 1.0)
+				var p2 := arc_a.lerp(arc_b, 0.3 + 0.7 * u2)
+				core_px = p2.x
+				core_y = clampf(p2.y, CEIL_Y + 20.0, FLOOR_Y - 10.0)
+			elif plan.ph == "recover" and pid == "dive":
+				low = true
+		"results":
+			if plan.ph == "active":
+				vol_t -= dt
+				var want := 2 if ph >= 2 else 1
+				if vol_n < want and vol_t <= 0.0:
+					vol_n += 1
+					vol_t = 0.45
+					_shoot_results()
+	if dc == 1 and pid in ["results", "flash"]:
+		var sp := dc_pos(room.time)
+		core_px = sp.x
+		core_y = sp.y
 	var ev := plan_step(dt)
 	match ev:
 		"active":
@@ -462,41 +622,49 @@ func _plan_logic(dt: float) -> void:
 				"fetch":
 					leg_on = 1
 					strike_sid = Game.next_strike_id()
-					room.shake(0.4)
-					Audio.sfx("thud")
-				"volley":
-					volley_n = 0
-					volley_t = 0.0
-				"spin":
-					room.shake(0.2)
-					Audio.sfx("laser", {"vol": 0.5})
-				"skitter":
-					sk_state = 1
-					sk_t = 0.0
-					core_px = sk_x
-					core_y = Boss.FLOOR - 9.0
-					room.shake(0.5)
-					room.burst(sk_x, Boss.FLOOR - 4.0, 10, [BRASS, "#ffffff"], 120.0, 300.0)
-					Audio.sfx("thud")
-				"back":
-					if dc == 0:
-						prev_node = node
-						core_px = float(NODES[prev_node].x)
-					room.shake(0.5)
-					Audio.sfx("thud")
+					room.shake(0.35)
+					Audio.sfx("thud", {"vol": 0.8})
+				"results":
+					scr = SCREENS.find("results")
+					vol_t = 0.0
+				"drop":
+					Audio.sfx("dash")
+				"leap":
+					Audio.sfx("jump")
+				"flash":
+					flash_t0 = room.time
+					Audio.sfx("spark")
+					room.flash_screen(0.35, "#ffffff")
+					for k in kit_keys():                           # it remembers where everyone was: legs will strike there
+						var q = kit_body(k)
+						var ap2 := kit_aim(k)
+						hz_add("stab", 0.65, [roundi(ap2.x), roundi(q.y + q.h if q != null else ap2.y + 6.0)])
+				"dive":
+					Audio.sfx("dash")
 		"recover":
 			strike_sid = 0
 			match pid:
 				"fetch":
 					if leg_i >= leg_n - 1:
-						down = true                              # the last leg stays planted and the core comes down: pogo it
+						leg_on = 2                                 # the last leg stays in the web: claw it
+						leg_hits = 0
 					else:
 						leg_on = 0
-				"back":
-					down = true
-				"skitter":
-					sk_state = 2
-					sk_t = 0.0
+				"drop":
+					core_y = arc_b.y
+					room.shake(0.6)
+					Audio.sfx("thud")
+					room.dust(core_px, core_y + BH / 2.0, 8)
+				"leap":
+					_land()
+				"dive":
+					room.shake(0.4)
+					Audio.sfx("thud", {"vol": 0.7})
+				"feint":
+					# it pulls back into the dark and comes again from the other side
+					core_px = clampf(float(room.pw) - core_px, 40.0, 344.0)
+					arc_a = Vector2(core_px, core_y)
+					combo = "dive"
 	if ev == "done":
 		strike_sid = 0
 		if pid == "fetch" and leg_i < leg_n - 1:
@@ -505,212 +673,269 @@ func _plan_logic(dt: float) -> void:
 			_start_leg(String(plan.tgt) if not plan.is_empty() else kit_pick_target())
 			return
 		leg_on = 0
-		if sk_state != 0:
-			sk_state = 0
-			var nn := _nearest_node(core_px)
-			prev_node = node
-			node = nn
-		_end_attack()
+		if pid == "results":
+			scr = SCREENS.find("home") if ph < 3 else scr
+		if pid == "flash":
+			if dbl:
+				dbl = false
+				combo = "flash"
+			else:
+				combo = "dive"
+		if pid in ["dive"] and dc == 1:
+			_swing_from_here()
+		idle_t = 0.35 if ph == 3 else (0.45 if ph == 2 else 0.6)
+		if combo != "":
+			idle_t = 0.15
 
-func _nearest_node(px: float) -> int:
-	var bi := 0
-	var bd := 1e9
-	for i in range(NODES.size()):
-		var dd := absf(float(NODES[i].x) - px)
-		if dd < bd:
-			bd = dd
-			bi = i
-	return bi
+func _land() -> void:
+	var hl = _hall()
+	core_px = arc_b.x
+	core_y = arc_b.y
+	room.shake(1.0)
+	Audio.sfx("thud")
+	room.dust(core_px, core_y + BH / 2.0, 12)
+	var gy := core_y + BH / 2.0
+	for d in [-1.0, 1.0]:
+		room.shoot(core_px + d * 20.0, gy - 1.0, d * 140.0, 0.0, {"kind": "wave", "col": "#d6f6ff", "r": 4.0, "hgt": 9.0, "tile": false, "life": 1.0, "cut": false, "by_boss": true})
+	if hl != null:
+		if absf(gy - float(IndexHall.NET_ROW) * 16.0) < 6.0:   # it landed on the net: it tears
+			var ci := floori(core_px / 16.0) - IndexHall.NET_C0
+			for k in [ci - 1, ci, ci + 1]:
+				if k >= 0 and k < IndexHall.NET_N:
+					hl.net &= ~(1 << k)
+			Audio.sfx("crumble")
+		var zb := _zone_bit(core_px)
+		if hl.zones & zb != 0:
+			hl.zones &= ~zb                                 # a neon tube breaks: that quarter of the hall goes dark
+			Audio.sfx("glitch", {"vol": 0.8})
+		var best := -1
+		var bd := 70.0
+		for i in range(IndexHall.DRAWERS.size()):
+			var r: Rect2 = hl.drawer_rect(i)
+			var dd := Vector2(r.get_center()).distance_to(Vector2(core_px, core_y))
+			if (hl.drawers >> i) & 1 == 1 and dd < bd:
+				bd = dd
+				best = i
+		if best >= 0:
+			_drop_drawer(best)
 
-# after an attack: it walks (<= 0.6 s, harmless) to the node above whoever stood under it, then the next attack
-func _end_attack() -> void:
-	down = false
-	if dc == 1:
-		idle_t = 0.2
-		return
-	var to := _pick_node()
-	var dist := absf(float(NODES[to].x) - core_px)
-	prev_node = node
-	node = to
-	idle_t = clampf(dist / 220.0, 0.15, 0.6)
-
-func _skitter_step(dt: float) -> void:
-	match sk_state:
-		1:
-			core_y = Boss.FLOOR - 9.0
-		2:
-			var wall_x := 352.0 if sk_dir > 0.0 else 32.0
-			core_px = move_toward(core_px, wall_x, SK_SPEED * dt)
-			if absf(core_px - wall_x) < 0.5:
-				sk_state = 3
-		3:
-			core_y = move_toward(core_y, 64.0, 220.0 * dt)
-			if absf(core_y - 64.0) < 0.5:
-				sk_state = 4
-				sk_t = 0.6
-		4:
-			sk_t -= dt
-			if sk_t <= 0.0:
-				sk_state = 5
-		5:
-			var nn := _nearest_node(core_px)
-			core_px = move_toward(core_px, float(NODES[nn].x), 260.0 * dt)
-			core_y = move_toward(core_y, float(NODES[nn].y) + THREAD, 260.0 * dt)
-			if absf(core_px - float(NODES[nn].x)) < 0.5 and absf(core_y - (float(NODES[nn].y) + THREAD)) < 0.5:
-				sk_state = 0
-				prev_node = node
-				node = nn
-	if sk_state == 1 and plan.ph == "recover":
-		sk_state = 2
-
-# a fan of yellow packets at the target (P1 3, P2 4, P3 5): catch one back and it hits the core for 2
-func _shoot_fan() -> void:
+# results: four blue links and one yellow (catch it back into its screen)
+func _shoot_results() -> void:
 	var ap := kit_aim(plan.tgt)
 	var ox := core_px
-	var oy := core_y + 8.0
-	var dist := Vector2(ap.x - ox, ap.y - oy).length()
-	if dist < 60.0:
-		dist = 60.0
+	var oy := core_y - 6.0
 	var a0 := atan2(ap.y - oy, ap.x - ox)
-	var speed := clampf(dist / 0.7, 80.0, 190.0)
-	for i in range(volley_cnt):
-		var a := a0 + (float(i) - float(volley_cnt - 1) / 2.0) * 0.17
-		room.shoot(ox, oy, cos(a) * speed, sin(a) * speed, {"kind": "diamond", "col": "#ffd23f", "r": 4.0, "catchable": true, "cut": true, "life": 3.0, "dmg": 1, "by_boss": true})
+	var n := 5
+	var gold := room.rng.randi() % n
+	var speed := 150.0 if ph < 3 else 175.0
+	for i in range(n):
+		var a := a0 + (float(i) - 2.0) * 0.2
+		if i == gold:
+			room.shoot(ox, oy, cos(a) * speed, sin(a) * speed, {"kind": "diamond", "col": "#ffd23f", "r": 4.0, "catchable": true, "cut": true, "life": 3.0, "dmg": 1, "by_boss": true})
+		else:
+			room.shoot(ox, oy, cos(a) * speed, sin(a) * speed, {"kind": "link", "col": "#3f6fd0", "r": 3.0, "cut": true, "life": 3.0, "dmg": 1, "by_boss": true})
 	Audio.sfx("shoot")
 
-# ---- drawing ----
-func _hatch(ci: CanvasItem, r: Rect2) -> void:
-	var hot := int(t * 12.0) % 2 == 0
-	var c1 := Color(Game.COL.hazardHi) if hot else Color(Game.COL.hazard)
-	var c2 := Color(Game.COL.hazard)
-	ci.draw_rect(r, Color(c2.r, c2.g, c2.b, 0.18))
-	var yy := 0.0
-	while yy < r.size.y:
-		ci.draw_rect(Rect2(r.position.x, r.position.y + yy, r.size.x, 1), Color(c1.r, c1.g, c1.b, 0.7))
-		yy += 4.0
-	ci.draw_rect(Rect2(r.position.x, r.position.y, r.size.x, 1), c1)
-	ci.draw_rect(Rect2(r.position.x, r.end.y - 1, r.size.x, 1), c1)
-	ci.draw_rect(Rect2(r.position.x, r.position.y, 1, r.size.y), c1)
-	ci.draw_rect(Rect2(r.end.x - 1, r.position.y, 1, r.size.y), c1)
+# ---------------------------------------------------------------- the swing of phase 3 (a pure function of the clock and the fields)
+func _swing_from_here() -> void:
+	sw_t0 = snappedf(room.time, 0.01)
+	sw_x0 = core_px
+	sw_y0 = core_y
 
-func _draw_strand(ci: CanvasItem, h: Dictionary) -> void:
-	var a := strand_a(h)
-	var b := strand_b(h)
-	var live := hz_live(h, room.time)
-	if live:
-		ci.draw_line(a, b, Color(Game.COL.ink), 3.0)
-		ci.draw_line(a, b, Color("#d6f6ff"), 1.0)
-		var n := maxi(1, ceili(a.distance_to(b) / 16.0))
-		for i in range(n + 1):                                   # beads: the strand is a row of hurt
-			var p := a.lerp(b, float(i) / float(n))
-			ci.draw_rect(Rect2(p.x - 1, p.y - 1, 3, 3), Color(Game.COL.hazardHi) if int(t * 10.0) % 2 == 0 else Color("#ffffff"))
+func pend_angle(now: float) -> float:
+	return SW_AMP * sin(TAU * (now - sw_t0) / SW_T)
+
+func pend_pos(now: float) -> Vector2:
+	var a := pend_angle(now)
+	return PIVOT + Vector2(sin(a), cos(a)) * SW_LEN
+
+func dc_pos(now: float) -> Vector2:
+	var k := clampf((now - sw_t0) / 1.0, 0.0, 1.0)
+	return Vector2(sw_x0, sw_y0).lerp(pend_pos(now), k * k * (3.0 - 2.0 * k))
+
+# ---------------------------------------------------------------- the legs (cosmetic: each page its own)
+func _hip(i: int) -> Vector2:
+	var s := -1.0 if i < 4 else 1.0
+	var k := i % 4
+	return Vector2(core_px + s * (8.0 + float(k) * 3.0), core_y - 2.0 + float(k) * 3.0)
+
+func _ideal_foot(i: int) -> Vector2:
+	var s := -1.0 if i < 4 else 1.0
+	var k := i % 4
+	var reach := 46.0 + float(k) * 20.0
+	var up := core_y < 150.0 and not low
+	var fx := core_px + s * reach
+	var fy: float
+	if up:
+		fy = CEIL_Y if k < 3 else core_y + 30.0             # hanging: three pairs on the ceiling, the last pair hangs free
 	else:
-		var n2 := maxi(1, ceili(a.distance_to(b) / 6.0))      # the warning: a dotted line that fills in
-		var left := clampf((float(h.t0) + float(h.warn) - room.time) / maxf(0.01, float(h.warn)), 0.0, 1.0)
-		for i in range(n2 + 1):
-			if i % 2 == 0 and float(i) / float(n2) <= 1.0 - left * 0.0:
-				var p2 := a.lerp(b, float(i) / float(n2))
-				ci.draw_rect(Rect2(p2.x, p2.y, 1, 1), Color(Game.COL.hazardHi) if int(t * 12.0) % 2 == 0 else Color(Game.COL.hazard))
-	var kb := knot_box(int(h.v[0]))
-	var kc := Color("#ffd23f") if live else Color(Game.COL.hazard)
-	ci.draw_rect(Rect2(kb.x, kb.y, kb.w, 1), kc)
-	ci.draw_rect(Rect2(kb.x, kb.y + kb.h - 1, kb.w, 1), kc)
-	ci.draw_rect(Rect2(kb.x, kb.y, 1, kb.h), kc)
-	ci.draw_rect(Rect2(kb.x + kb.w - 1, kb.y, 1, kb.h), kc)
+		fy = minf(_ground_below(fx, core_y) if room.grid != null else FLOOR_Y, FLOOR_Y)
+		if k == 0:
+			fy = core_y - 40.0
+	return Vector2(clampf(fx, 16.0, float(room.pw) - 16.0), clampf(fy, CEIL_Y, FLOOR_Y))
+
+func _feet_step(dt: float) -> void:
+	for i in range(feet.size()):
+		var f: Dictionary = feet[i]
+		if float(f.t) > 0.0:
+			f.t = maxf(0.0, float(f.t) - dt)
+			var u := 1.0 - float(f.t) / 0.12
+			f.p = Vector2(f.from).lerp(Vector2(f.to), u) + Vector2(0.0, -sin(u * PI) * 8.0)
+			if float(f.t) <= 0.0 and room.is_local:
+				Audio.local_sfx("tick", 0.25)                  # a key of an old keyboard
+			continue
+		var ideal := _ideal_foot(i)
+		if Vector2(f.p).distance_to(ideal) > 28.0:
+			f.from = f.p
+			f.to = ideal
+			f.t = 0.12
+
+# ---------------------------------------------------------------- drawing
+func _process(_dt: float) -> void:
+	super._process(_dt)
+	if flash <= 0.0:
+		body.material = null                                   # the body is lit by the room's lights (it is dark in the dark); the overlay glows
+	dark_k = Game.damp(dark_k, room.hall.dark if room.hall != null else 0.0, 3.0, _dt)
+
+func _leg_points(i: int) -> Array:
+	var hip := _hip(i)
+	var foot: Vector2 = feet[i].p
+	if i == 6 and legs_ok < 8:                                 # the broken one dangles
+		foot = hip + Vector2(10.0 + sin(t * 3.0) * 3.0, 24.0)
+	if i == leg_k and plan_phase() == "cue" and not plan.is_empty() and String(plan.id) == "fetch":
+		foot = hip + Vector2((-1.0 if i < 4 else 1.0) * 14.0, -26.0)     # drawn back before the strike
+	elif i == leg_k and leg_on > 0:
+		foot = Vector2(leg_x, leg_y)
+	var d := foot - hip
+	var up := Vector2(0.0, -1.0)
+	var k1 := hip + d * 0.33 + up * (16.0 + d.length() * 0.12)
+	var k2 := hip + d * 0.7 + up * (6.0 + d.length() * 0.05)
+	return [hip, k1, k2, foot]
 
 func draw_boss_body(ci: CanvasItem) -> void:
+	if gone:
+		return
 	var ink := Color(INK)
-	var br := Color(BRASS)
-	# the knots (rings in the walls) and the nodes (rings joined by lines); dark in the deep crawl
-	for i in range(KNOTS.size()):
-		var kp: Vector2 = KNOTS[i]
-		ci.draw_arc(kp, 3.0, 0.0, TAU, 8, Color(br.r, br.g, br.b, 0.35), 1.0)
-	if dc == 0:
-		for i in range(NODES.size() - 1):
-			ci.draw_line(NODES[i], NODES[i + 1], Color(br.r, br.g, br.b, 0.5), 1.0)
-		for i in range(NODES.size()):
-			ci.draw_arc(NODES[i], 6.0, 0.0, TAU, 14, ink, 3.0)
-			ci.draw_arc(NODES[i], 6.0, 0.0, TAU, 14, br if not dying else Color("#3a4a5a"), 1.0)
-	else:
-		for i in range(NODES.size()):
-			ci.draw_arc(NODES[i], 6.0, 0.0, TAU, 14, Color("#2a3040"), 1.0)
-	for h in hz:
-		_draw_strand(ci, h)
-	for g in ghosts:
-		ci.draw_line(g.a, g.b, Color(0.84, 0.96, 1.0, clampf(g.t / 0.3, 0.0, 1.0) * 0.6), 1.0)
-	if plan_phase() == "cue" and not plan.is_empty() and dc == 0:
-		if plan.id == "back":
-			var bp: Vector2 = NODES[prev_node]
-			PixelText.draw_text(ci, "BACK", bp.x, bp.y - 16.0, "#ffd23f", {"align": "c", "tiny": true, "outline": INK})
-			ci.draw_arc(bp, 9.0 + sin(t * 14.0) * 2.0, 0.0, TAU, 14, Color("#ffd23f"), 1.0)
-	# the thread and the core
-	var cxp := floorf(core_px)
-	var cyp := floorf(core_y)
-	if dc == 1:
-		var pa := Vector2(PEND_A.x, 16.0)
-		ci.draw_line(pa, Vector2(cxp, cyp - 8.0), Color("#c3bccd"), 1.0)
-	elif sk_state == 0 or sk_state == 5:
-		ci.draw_line(Vector2(core_px, float(NODES[node].y)), Vector2(core_px, core_y - 8.0), Color("#c3bccd"), 1.0)
-	# eight legs: two segments each, up to the ceiling; a planted leg is a column to the floor
-	var low := sk_state >= 1 and sk_state <= 4
+	# the legs: three segments of old cable
 	for i in range(8):
-		var side := -1.0 if i % 2 == 0 else 1.0
-		var k := float(i / 2)
-		var knee := Vector2(cxp + side * (14.0 + k * 9.0), cyp - 10.0 - k * 3.0 + sin(t * 3.0 + float(i)) * 1.5)
-		var foot := Vector2(cxp + side * (24.0 + k * 16.0), maxf(6.0, cyp - 34.0 - k * 6.0) if not low else cyp + 6.0)
-		if sk_state == 2:
-			knee.y = cyp - 4.0 - k * 2.0 + sin(t * 40.0 + float(i)) * 2.0
-		ci.draw_line(Vector2(cxp + side * 6.0, cyp - 4.0), knee, ink, 3.0)
-		ci.draw_line(knee, foot, ink, 3.0)
-		ci.draw_line(Vector2(cxp + side * 6.0, cyp - 4.0), knee, Color("#2a6fa8"), 1.0)
-		ci.draw_line(knee, foot, Color("#2a6fa8"), 1.0)
-	if leg_on == 1:
-		var top := leg_top if plan.get("id", "") == "fetch" else cyp
-		ci.draw_rect(Rect2(leg_x - LEG_W / 2.0 - 1.0, top, LEG_W + 2.0, Boss.FLOOR - top), ink)
-		ci.draw_rect(Rect2(leg_x - LEG_W / 2.0 + 1.0, top, LEG_W - 2.0, Boss.FLOOR - top), Color("#2a6fa8"))
-		ci.draw_rect(Rect2(leg_x - 3.0, top, 2, Boss.FLOOR - top), Color("#5ad1ff"))
-	ci.draw_rect(Rect2(cxp - 13.0, cyp - 9.0, 26, 18), ink)
-	ci.draw_rect(Rect2(cxp - 12.0, cyp - 8.0, 24, 16), Color("#24306a"))
-	ci.draw_rect(Rect2(cxp - 12.0, cyp - 8.0, 24, 3), Color("#3a4a9a"))
-	ci.draw_rect(Rect2(cxp - 7.0, cyp - 3.0, 4, 3), Color(Game.COL.hazard))
-	ci.draw_rect(Rect2(cxp + 3.0, cyp - 3.0, 4, 3), Color(Game.COL.hazard))
-	ci.draw_rect(Rect2(cxp - 5.0, cyp + 3.0, 10, 2), ink)
-	if plan_active() and plan.id == "back":
-		for hb in harmboxes():
-			if hb.h > 100.0:
-				ci.draw_rect(Rect2(hb.x, hb.y, hb.w, hb.h), Color(0.45, 0.8, 1.0, 0.7))
-	if sk_state == 1 or sk_state == 2:
-		for hb in harmboxes():
-			if hb.y > Boss.FLOOR - 30.0:
-				ci.draw_rect(Rect2(hb.x, hb.y, hb.w, hb.h), Color(1.0, 0.31, 0.43, 0.35))
+		var pts: Array = _leg_points(i)
+		for s in range(3):
+			ci.draw_line(pts[s], pts[s + 1], ink, 4.0)
+		var cc := Color(CABLES[i])
+		for s in range(3):
+			ci.draw_line(pts[s], pts[s + 1], cc, 2.0)
+		ci.draw_rect(Rect2(Vector2(pts[3]) - Vector2(2.0, 2.0), Vector2(4.0, 4.0)), Color("#4a4f5a"))          # the plug at the tip
+	var cx_ := floorf(core_px)
+	var cy_ := floorf(core_y)
+	var crouch := 0.0
+	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["leap", "drop"]:
+		crouch = 4.0
+	# the case: yellowed beige, stickers, a dangling cable
+	var case_r := Rect2(cx_ - 17.0, cy_ - 1.0 + crouch, 34.0, 15.0)
+	ci.draw_rect(case_r.grow(1.0), ink)
+	ci.draw_rect(case_r, Color(BEIGE))
+	ci.draw_rect(Rect2(case_r.position.x, case_r.position.y + 12.0, case_r.size.x, 3.0), Color("#8f7f5a"))
+	ci.draw_rect(Rect2(case_r.position.x + 3.0, case_r.position.y + 3.0, 9.0, 4.0), Color("#efe6c8"))        # "Under Construction"
+	ci.draw_rect(Rect2(case_r.position.x + 4.0, case_r.position.y + 4.0, 7.0, 2.0), Color("#e0b23a"))
+	ci.draw_rect(Rect2(case_r.position.x + 22.0, case_r.position.y + 4.0, 9.0, 2.0), Color("#5a5040"))       # the drive bay
+	if legs_ok < 8:
+		ci.draw_rect(Rect2(case_r.position.x + 28.0, case_r.position.y + 7.0, 4.0, 6.0), Color("#2a2420"))  # the crack
+	ci.draw_line(Vector2(cx_ - 6.0, case_r.end.y), Vector2(cx_ - 4.0 + sin(t * 2.0) * 2.0, case_r.end.y + 9.0), Color("#6a6f7a"), 1.0)
+	# the monitor (the picture itself is in the overlay: it glows)
+	var mon := Rect2(cx_ - 14.0, cy_ - 17.0 + crouch, 28.0, 20.0)
+	ci.draw_rect(mon.grow(1.0), ink)
+	ci.draw_rect(mon, Color("#d8cba3"))
+	ci.draw_rect(Rect2(mon.position.x, mon.end.y - 3.0, mon.size.x, 3.0), Color("#a89a74"))
 
 func draw_boss_overlay(ci: CanvasItem) -> void:
-	draw_plan(ci)
-	if plan.is_empty() or plan.ph != "cue":
+	if gone:
 		return
-	if plan.id == "skitter":
-		ci.draw_rect(Rect2(sk_x - 18.0, Boss.FLOOR - 3.0, 36.0, 3.0), Color(0.0, 0.0, 0.0, 0.5))       # its shadow
-		PixelText.draw_text(ci, "!", sk_x, Boss.FLOOR - 40.0, "#ffd23f", {"align": "c", "outline": INK})
-		var wx := 352.0 if sk_dir > 0.0 else 32.0
-		ci.draw_line(Vector2(sk_x, Boss.FLOOR - 9.0), Vector2(wx, Boss.FLOOR - 9.0), Color(1.0, 0.5, 0.3, 0.35), 1.0)
-	elif plan.id == "back":
-		_hatch(ci, Rect2(leg_x - 52.0, 0.0, 24.0, Boss.FLOOR))
-		_hatch(ci, Rect2(leg_x + 28.0, 0.0, 24.0, Boss.FLOOR))
-		PixelText.draw_text(ci, "1", leg_x - 40.0, 90.0, "#ffffff", {"align": "c", "outline": INK})
-		PixelText.draw_text(ci, "2", leg_x + 40.0, 90.0, "#ffffff", {"align": "c", "outline": INK})
-		PixelText.draw_text(ci, "SAFE", leg_x, Boss.FLOOR - 30.0, "#7fd08a", {"align": "c", "tiny": true, "outline": INK})
-	elif plan.id == "fetch" and leg_n > 1:
-		PixelText.draw_text(ci, "%d/%d" % [leg_i + 1, leg_n], leg_x, leg_top + 6.0, "#ffffff", {"align": "c", "tiny": true, "outline": INK})
+	var cx_ := floorf(core_px)
+	var cy_ := floorf(core_y)
+	var crouch := 0.0
+	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["leap", "drop"]:
+		crouch = 4.0
+	# the LEDs at the leg tips: dim at rest, bright on the leg about to strike; off in the last 15 %; brighter as it comes at you in a dive
+	var leds_off := lights_out() and not dying
+	if not leds_off:
+		for i in range(8):
+			if i == 6 and legs_ok < 8:
+				continue
+			var pts: Array = _leg_points(i)
+			var tip: Vector2 = pts[3]
+			var hot := 0.45
+			if i == leg_k and leg_on > 0:
+				hot = 1.0
+			if i == leg_k and not plan.is_empty() and String(plan.id) == "fetch" and plan.ph == "cue":
+				hot = 1.0
+			if not plan.is_empty() and String(plan.id) in ["dive", "feint"] and plan.ph == "cue":
+				hot = 0.6 + 0.4 * (1.0 - float(plan.t) / DIVE_CUE)
+			if not plan.is_empty() and String(plan.id) == "feint" and plan.ph == "recover":
+				hot = 0.0
+			var r := 1.0 + hot * 1.5
+			ci.draw_rect(Rect2(tip.x - r, tip.y - r, r * 2.0, r * 2.0), Color(1.0, 0.23, 0.3, 0.35 + hot * 0.65))
+	# the screen: its homepage, small; the text cursor is its eye
+	var scr_r := Rect2(cx_ - 11.0, cy_ - 15.0 + crouch, 22.0, 14.0)
+	var glow := 1.0 if not leds_off else 0.55
+	var face := Color("#dfe6da") * Color(glow, glow, glow, 1.0)
+	if ph >= 2 or shift_k == 2:
+		face = Color("#ffcf9a") * Color(glow, glow, glow, 1.0)
+	if ph == 3 and int(t * 25.0) % 7 == 0:
+		face = Color("#9aa09a")                               # static
+	ci.draw_rect(scr_r, face)
+	for k in range(4):
+		ci.draw_rect(Rect2(scr_r.position.x + 3.0 + k * 4.0, scr_r.position.y + 2.0, 3.0, 2.0), Color(["#3a6ff0", "#e8463a", "#f2c12e", "#2fa84f"][k]))
+	ci.draw_rect(Rect2(scr_r.position.x + 2.0, scr_r.position.y + 6.0, 18.0, 5.0), Color("#ffffff"))
+	ci.draw_rect(Rect2(scr_r.position.x + 2.0, scr_r.position.y + 6.0, 18.0, 1.0), Color("#7d8a96"))
+	var dazed: bool = down_t > 0.0 or low and not plan.is_empty() and plan.ph == "recover"
+	if dazed:                                                   # an hourglass instead of the cursor
+		var hx := scr_r.position.x + 10.0
+		var hy := scr_r.position.y + 6.0
+		ci.draw_rect(Rect2(hx, hy, 3.0, 1.0), Color("#222222"))
+		ci.draw_rect(Rect2(hx + 1.0, hy + 1.0, 1.0, 3.0), Color("#c08a2a"))
+		ci.draw_rect(Rect2(hx, hy + 4.0, 3.0, 1.0), Color("#222222"))
+	else:
+		var winding: bool = not plan.is_empty() and plan.ph == "cue"
+		var cw := 2.0 if winding else 1.0
+		var cur_col := Color("#222222")
+		if ph >= 2 or winding:
+			cur_col = Color(RED)
+		var blink := 2.5 if not winding else 9.0
+		if int(t * blink) % 2 == 0 or winding:
+			ci.draw_rect(Rect2(scr_r.position.x + 4.0, scr_r.position.y + 7.0, cw, 3.0), cur_col)
+	# sparks from the broken joint
+	if legs_ok < 8 and int(t * 6.0) % 3 == 0:
+		var hp6 := _hip(6)
+		ci.draw_rect(Rect2(hp6.x + sin(t * 40.0) * 3.0, hp6.y + 2.0, 1.0, 1.0), Color("#ffd23f"))
+	# the small crawlers on the strands (hazards): a faint glow each
+	for h in hz:
+		if h.k == "ling":
+			var lp := ling_pos(h, room.time)
+			var a := 0.4 if not hz_live(h, room.time) else 1.0
+			ci.draw_rect(Rect2(lp.x - 4.0, lp.y - 3.0, 8.0, 5.0), Color(0.1, 0.08, 0.14, a))
+			ci.draw_rect(Rect2(lp.x - 2.0, lp.y - 2.0, 4.0, 2.0), Color(0.85, 0.8, 0.6, a))
+			ci.draw_rect(Rect2(lp.x - 1.0, lp.y - 2.0, 1.0, 1.0), Color(1.0, 0.25, 0.3, a))
+			for s in [-1.0, 1.0]:
+				ci.draw_line(Vector2(lp.x + s * 3.0, lp.y), Vector2(lp.x + s * 6.0, lp.y + 3.0 + sin(t * 20.0 + s) * 1.0), Color(0.6, 0.6, 0.65, a), 1.0)
+		elif h.k == "drawer" and hz_live(h, room.time) and room.hall != null:          # the drawer falling
+			var since := room.time - float(h.t0) - float(h.warn)
+			var r: Rect2 = room.hall.drawer_rect(int(h.v[0]))
+			var yy := r.position.y + since * 320.0
+			ci.draw_rect(Rect2(r.position.x, yy, r.size.x, 11.0), Color(BEIGE))
+			ci.draw_rect(Rect2(r.position.x, yy + 9.0, r.size.x, 2.0), Color("#8f7f5a"))
 
-# ---- net ----
+# ---------------------------------------------------------------- net
 func net_fields() -> Array:
-	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, strike_sid, node, prev_node, roundi(core_y), roundi(leg_x), leg_on, roundi(leg_top),
-		roundi(core_px), 1 if (down or down_t > 0.0) else 0, sk_state, roundi(sk_x), roundi(sk_dir), dc, roundi(sw_t0 * 100.0), roundi(sw_x0), roundi(sw_y0), leg_i, leg_n]
+	var hl = _hall()
+	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, 1 if dying else 0, strike_sid, roundi(core_px), roundi(core_y), ph, shift_k, roundi(shift_t * 100.0),
+		legs_ok, roundi(leg_x), roundi(leg_y), leg_on, leg_k, 1 if (down_t > 0.0 or low) else 0, dc, roundi(sw_t0 * 100.0), roundi(sw_x0), roundi(sw_y0),
+		roundi(flash_t0 * 100.0), hl.net if hl != null else 0, hl.drawers if hl != null else 0, hl.strands if hl != null else 0, hl.zones if hl != null else 0,
+		scr, roundi(scr_t0 * 100.0), scr_q, roundi(arc_a.x), roundi(arc_a.y), roundi(arc_b.x), roundi(arc_b.y)]
 	f.append_array(plan_fields())
 	f.append(hz_pack())
 	return f
 
-const NF := 21
+const NF := 32
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -718,45 +943,56 @@ func net_apply(f: Array) -> void:
 	max_hp = int(f[1])
 	active = int(f[2]) == 1
 	passive = not active
-	strike_sid = int(f[3])
-	node = clampi(int(f[4]), 0, 3)
-	prev_node = clampi(int(f[5]), 0, 3)
+	dying = int(f[3]) == 1
+	strike_sid = int(f[4])
+	core_px = float(f[5])
 	core_y = float(f[6])
-	leg_x = float(f[7])
-	leg_on = int(f[8])
-	leg_top = float(f[9])
-	core_px = float(f[10])
-	down = int(f[11]) == 1
-	sk_state = int(f[12])
-	sk_x = float(f[13])
-	sk_dir = float(f[14])
-	dc = int(f[15])
-	sw_t0 = f[16] / 100.0
-	sw_x0 = float(f[17])
-	sw_y0 = float(f[18])
-	leg_i = int(f[19])
-	leg_n = int(f[20])
-	phase = _phase_now()
+	ph = int(f[7])
+	phase = ph
+	shift_k = int(f[8])
+	shift_t = f[9] / 100.0
+	legs_ok = int(f[10])
+	leg_x = float(f[11])
+	leg_y = float(f[12])
+	leg_on = int(f[13])
+	leg_k = int(f[14])
+	low = int(f[15]) == 1
+	down_t = 0.5 if low else 0.0
+	dc = int(f[16])
+	sw_t0 = f[17] / 100.0
+	sw_x0 = float(f[18])
+	sw_y0 = float(f[19])
+	var was_flash := flash_t0
+	flash_t0 = f[20] / 100.0
+	if flash_t0 > was_flash + 0.05 and room.time - flash_t0 < 0.5:
+		room.flash_screen(0.35, "#ffffff")                    # (the host's flash: this page shows it too)
+	var hl = _hall()
+	if hl != null:
+		hl.net = int(f[21])
+		hl.drawers = int(f[22])
+		hl.strands = int(f[23])
+		hl.zones = int(f[24])
+	scr = int(f[25])
+	scr_t0 = f[26] / 100.0
+	scr_q = int(f[27])
+	arc_a = Vector2(float(f[28]), float(f[29]))
+	arc_b = Vector2(float(f[30]), float(f[31]))
 	plan_apply(f.slice(NF, NF + 11))
-	var old: Array = hz.duplicate()
 	hz_unpack(f[NF + 11] if f.size() > NF + 11 else [])
-	for h in old:                                        # a strand that is gone snapped: show it fading
-		var gone := true
-		for h2 in hz:
-			if hz_key(h2) == hz_key(h):
-				gone = false
-		if gone and not dying:
-			ghosts.append({"a": strand_a(h), "b": strand_b(h), "t": 0.3})
-	if dc == 1:
-		_dc_follow()
+	if dc == 1 and active and not dying and plan.is_empty():
+		var p := dc_pos(room.time)
+		core_px = p.x
+		core_y = p.y
+	_sync_hall()
 	_place()
 
 func puppet_tick(dt: float) -> void:
 	kit_puppet_tick(dt)
 	hz_puppet_tick(dt)
-	for g in ghosts:
-		g.t -= dt
-	ghosts = ghosts.filter(func(g): return g.t > 0.0)
-	if dc == 1 and active and not dying:
-		_dc_follow()
+	_feet_step(dt)
+	if dc == 1 and active and not dying and plan.is_empty():
+		var p := dc_pos(room.time)
+		core_px = p.x
+		core_y = p.y
 		_place()
+	_sync_hall()

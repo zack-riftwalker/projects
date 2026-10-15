@@ -267,8 +267,10 @@ func follow_room(dt: float) -> void:
 	var b = room.boss
 	var p3: bool = b != null and is_instance_valid(b) and not b.get("gone") and int(b.get("phase")) == 3 and not b.get("dying")
 	var fighting: bool = room.fight.state in ["intro", "active"] and b != null and is_instance_valid(b)
-	if id == "N09" and fighting:
-		ambient_mul = 0.45                                          # the crawler's lair goes dark for the fight (the lights carry it: eyes, beams)
+	var hall_dark: float = room.hall.dark if room.hall != null else 0.0
+	if id == "N09" and (fighting or hall_dark > 0.0):
+		# the crawler's hall goes dark with the fight: 45 % lit, darker as its tubes break, almost black in phase 3 (only its own lights show)
+		ambient_mul = lerpf(0.45, 0.07 if Game.gfx_tier >= 1 else 0.18, hall_dark)
 	if p3:
 		if id == "N15":
 			want = "heat_p3"
@@ -279,7 +281,8 @@ func follow_room(dt: float) -> void:
 		verdict_until = room.time + 0.5
 	if room.time < verdict_until:
 		bloom_add += 0.3                                            # the verdict moment: a flash of bloom
-	ambient_mul = maxf(ambient_mul, 0.35)                           # the arenas never go darker than 35 %
+	if id != "N09":
+		ambient_mul = maxf(ambient_mul, 0.35)                       # the arenas never go darker than 35 % (but the crawler's hall: 14-crawler.md)
 	if want != shift:
 		shift = want
 		var mm := Look.resolve(room.def)

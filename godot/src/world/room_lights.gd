@@ -79,8 +79,11 @@ func _process(_dt: float) -> void:
 		_players(c, rp, pc, cam)
 	var bs = room.boss
 	if bs != null and is_instance_valid(bs) and not bs.gone:
-		c.append([1, 0.0, bs.x + bs.w * 0.5, bs.y + bs.h * 0.5, 96.0, 0.9, cb.lerp(Color.WHITE, 0.2), null, false])
+		if not (bs is CrawlerBoss):
+			c.append([1, 0.0, bs.x + bs.w * 0.5, bs.y + bs.h * 0.5, 96.0, 0.9, cb.lerp(Color.WHITE, 0.2), null, false])
 		_arena(c, bs, ca, cb)
+	if room.hall != null:
+		_hall_lights(c)
 	for e in extra:
 		c.append([int(e.get("prio", 1)), 0.0, float(e.x), float(e.y), float(e.r), float(e.e), e.col, e.get("cone", null), false])
 	if tier >= 1:
@@ -143,24 +146,25 @@ func _players(c: Array, p, col: Color, cam: Vector2) -> void:
 		return
 	if p.material == null:                                     # players are never darkened: unshaded, and they carry the light that lights the ground
 		p.material = Look.unshaded()
-	c.append([0, 0.0, p.x + p.w * 0.5, p.y + p.h * 0.5, 74.0, 0.9, col, null, false])
+	var dk: float = room.hall.dark if room.hall != null else 0.0        # the crawler's dark: Clawd's own light shrinks to just enough to see itself
+	c.append([0, 0.0, p.x + p.w * 0.5, p.y + p.h * 0.5, lerpf(74.0, 22.0, dk), lerpf(0.9, 0.4, dk), col, null, false])
 
 # the arenas' own lights (MVGN-13): the crawler's eyes and its strands' beams, the firewall's shield, the reviewer's overheads and unresolved comments
 func _arena(c: Array, bs, ca: Color, cb: Color) -> void:
 	match String(room.id):
 		"N09":
 			if bs is CrawlerBoss:
-				var red := Color(Game.COL.hazard)
-				c.append([1, 0.0, float(bs.core_px) - 5.0, float(bs.core_y) - 1.5, 26.0, 0.95, red, null, false])
-				c.append([1, 0.0, float(bs.core_px) + 5.0, float(bs.core_y) - 1.5, 26.0, 0.95, red, null, false])
-				var n := 0
-				for h in bs.hz:                                   # the strand being spun: a cone along it ("indexing"), casting shadows on Ultra
-					if n >= 2:
-						break
-					var a: Vector2 = bs.strand_a(h)
-					var b: Vector2 = bs.strand_b(h)
-					c.append([1, 0.0, a.x, a.y, a.distance_to(b), 0.8, Color("#d6f6ff"), (b - a).angle(), true])
-					n += 1
+				var cb2: CrawlerBoss = bs
+				var crt := Color("#c8ffd8") if cb2.ph < 2 else Color("#ffcf9a")
+				c.append([1, 0.0, cb2.core_px, cb2.core_y - 8.0, 46.0 if not cb2.lights_out() else 30.0, 0.9, crt, null, false])   # the monitor lights its own face from below
+				if not cb2.lights_out():
+					for i in range(8):                            # the eight red LEDs
+						if i == 6 and cb2.legs_ok < 8:
+							continue
+						var tip: Vector2 = cb2._leg_points(i)[3]
+						c.append([2, 0.0, tip.x, tip.y, 16.0, 0.8, Color(1.0, 0.25, 0.3), null, false])
+				if room.time - cb2.flash_t0 < 0.22:                 # the flash: the whole hall, for a moment
+					c.append([0, 0.0, 192.0, 170.0, 420.0, 1.6 * (1.0 - (room.time - cb2.flash_t0) / 0.22), Color.WHITE, null, false])
 		"N15":
 			if bs is FirewallBoss:
 				var sp: Vector2 = bs.shield_pos()
@@ -171,3 +175,14 @@ func _arena(c: Array, bs, ca: Color, cb: Color) -> void:
 					c.append([1, 0.0, float(room.pw) * (0.2 + 0.3 * float(i)), 18.0, 120.0, 0.65, Color(0.82, 0.9, 1.0), null, true])
 				for h in bs.hz:                                   # unresolved comments glow
 					c.append([2, 0.0, float(h.v[0]), Boss.FLOOR - 6.0, 24.0, 0.8 if bs.hz_live(h, room.time) else 0.4, Color("#FF4B5C"), null, false])
+
+# the crawler's hall (IndexHall): its tubes, its screen and its cocoons, lit or not from the hall's own state (also after the fight)
+func _hall_lights(c: Array) -> void:
+	var hl: IndexHall = room.hall
+	for i in range(IndexHall.ZONES.size()):
+		if (hl.zones >> i) & 1 == 1 and hl.dark < 0.95:
+			c.append([2, 0.0, IndexHall.ZONES[i], 214.0, 110.0, 0.75 * (1.0 - hl.dark), Color("#ff4fd8") if i % 2 == 0 else Color("#4ff0ff"), null, false])
+	if String(hl.screen.get("mode", "home")) != "off":
+		c.append([2, 0.0, IndexHall.SCREEN.get_center().x, IndexHall.SCREEN.get_center().y, 90.0, 0.7 * (1.0 - hl.dark * 0.7), Color("#d6f6e0"), null, false])
+	for co in IndexHall.COCOONS:
+		c.append([3, 0.0, co[0], co[1], 18.0, 0.35, Color(0.8, 0.95, 0.75), null, false])

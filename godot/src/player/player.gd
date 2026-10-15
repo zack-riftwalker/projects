@@ -780,6 +780,11 @@ func hazard() -> void:
 		var f = room.grid.find_safe(x, y, room.liquid_y)
 		if f != null:
 			set_safe(f.x, f.y)
+	var under := room.grid.tile(floori((safe.x + w / 2.0) / T), floori((safe.y + h + 1.0) / T))
+	if under != TileGrid.SOLID and under != TileGrid.ONEWAY:            # the ground it stood on is gone (a torn web, a fallen drawer)
+		var f2 = room.grid.find_safe(safe.x, safe.y, room.liquid_y)
+		if f2 != null:
+			set_safe(f2.x, f2.y)
 	x = safe.x
 	y = safe.y
 	vx = 0.0

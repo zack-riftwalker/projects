@@ -55,6 +55,8 @@ var rise_armed := false         # a player has been below the trigger row: only 
 var rise_on := false            # H06: the flood is rising (it started when somebody climbed past the trigger row)
 var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the tide back (one push per 0.5 s)
 var blink_period := 1.5
+var hall_nodes: Array = []
+var hall: IndexHall = null                # N09: the crawler's hall (drawers, web net, strands, the back wall screen), 14-crawler.md
 var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
 var iter := 0                              # T09's loop room: which pass this is (0..3)
 var boss_cells: Array = []                 # every `B` cell: [{x, y}] (a two-bodied boss starts its bodies on them)
@@ -324,6 +326,8 @@ func load_room(room_id: String, snap = null) -> void:
 						ents.append(e)
 	tower = Tower.new(self)                                  # (every room: a breakpoint can stop its platforms)
 	tower.load_all()
+	if IndexHall.wanted(def):
+		hall = IndexHall.new(self)
 	if def.has("loop"):
 		iter = clampi(int(Game.loop_iter.get(id, 0)), 0, 3)
 		if mode != "guest" and not Game.flag("boss:LOOP"):
@@ -1034,6 +1038,20 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 	add_child(view)
 	view.build(self)
 	fx = Fx.new(self)
+	if hall != null:                                        # the hall: wood and web are lit by the room's lights, its lamps and screen are not
+		var hs := DrawProxy.new()
+		hs.name = "HallShaded"
+		hs.cb = hall.draw_shaded
+		hs.z_index = 1
+		add_child(hs)
+		var hg := DrawProxy.new()
+		hg.name = "HallGlow"
+		hg.cb = hall.draw_glow
+		hg.z_index = 1
+		if look != null:
+			hg.material = Look.unshaded()
+		add_child(hg)
+		hall_nodes = [hs, hg]
 	for spec in [["furniture", 1], ["top", 4]]:
 		var layer := RoomLayer.new()
 		layer.room = self
@@ -1499,6 +1517,8 @@ func update_cam(dt: float) -> void:
 	var feet: float = p.y + p.h
 	if p.on_ground or p.wall_dir != 0:
 		cam.ty = Game.damp(cam.ty, feet - H * 0.64, 5.0, dt)
+	if fight_active and boss != null and is_instance_valid(boss) and def.has("boss") and String(def.boss.get("cam", "")) == "free":
+		cam.ty = Game.damp(cam.ty, lerpf(feet - H * 0.64, boss.cy - H * 0.3, 0.45), 3.0, dt)      # a tall arena: lean towards the boss (the clamps below keep Clawd in view)
 	var sy: float = feet - cam.ty               # feet in screen space if the camera were at the target
 	if sy < 56.0:
 		cam.ty = feet - 56.0
@@ -1518,6 +1538,8 @@ func _process(_dt: float) -> void:
 		look.zoom_camera(camera)                                  # (a punch: GFX-N, this page's own view)
 	for k in layers:
 		layers[k].queue_redraw()
+	for hn in hall_nodes:
+		hn.queue_redraw()
 
 # ---------------------------------------------------------------- the guest's room: only its own body is simulated
 func step_guest(dt: float) -> void:
@@ -1538,6 +1560,8 @@ func step_guest(dt: float) -> void:
 			pe.bp_off += dt
 	_rebuild_bp_plats()
 	_move_platforms()
+	if hall != null:
+		hall.step(dt)
 	if tower != null:
 		tower.step(dt, players())
 		_tick_sound()
@@ -1798,6 +1822,8 @@ func step(dt: float) -> void:
 		break_q = break_q.filter(func(q): return not q.get("done", false))
 	_rebuild_bp_plats()
 	_move_platforms()
+	if hall != null:
+		hall.step(dt)
 	if tower != null:
 		tower.step(dt, live)
 		_tick_sound()
@@ -2882,6 +2908,10 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px + 2, py - 1, 2, 2), Color.WHITE)
 		"comment":
 			PixelText.draw_text(ci, "//", px - 3, py - 3, q.col, {"outline": Game.COL.ink})
+		"link":                                          # a search result: a short blue underlined link
+			ci.draw_rect(Rect2(px - 5, py - 3, 11, 6), ink)
+			ci.draw_rect(Rect2(px - 4, py - 2, 9, 2), col)
+			ci.draw_rect(Rect2(px - 4, py + 1, 9, 1), Color("#a8c4ff"))
 		"diamond":                                       # a catchable orb of the boss kit: a yellow diamond
 			var dr: float = q.r + 1.0
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(px, py - dr - 1), Vector2(px + dr + 1, py), Vector2(px, py + dr + 1), Vector2(px - dr - 1, py)]), ink)

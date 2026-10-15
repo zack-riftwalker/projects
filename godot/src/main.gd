@@ -259,6 +259,21 @@ func _ready() -> void:
 			bb.hpf = float(bb.max_hp) * (float(bp[1]) if bp.size() > 1 else 0.2)
 			bb.hp = ceili(bb.hpf)
 			bb.on_damage()
+		elif Game.scene.begins_with("crawler:"):       # screenshot helper: CRAWLER OF THE WEB at an hp fraction, Clawd at a spot (crawler:<hp>:<x>:<y>)
+			var ca := Game.scene.substr(8).split(":")
+			manager.swap_to("N09")
+			var cp = manager.player
+			cp.x = float(ca[1]) if ca.size() > 1 else 250.0
+			cp.y = float(ca[2]) if ca.size() > 2 else 300.0
+			cp.inv = 999.0
+			var cr: Room = manager.room
+			cr._start_intro()
+			cr.fight.t = 0.0
+			cr._begin_fight()
+			var cbb = cr.boss
+			cbb.hpf = float(cbb.max_hp) * float(ca[0])
+			cbb.hp = ceili(cbb.hpf)
+			cbb.on_damage()
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room

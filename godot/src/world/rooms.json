@@ -344,7 +344,7 @@
                  {"id": "N08:W2", "side": "W", "a": 13, "b": 16, "to": "N09:E", "lock": "fight"},
                  {"id": "N08:E", "side": "E", "a": 50, "b": 53, "to": "N18:W"}
              ] },
-    "N09": { "file": "N09.txt", "mood": ["lair", 1], "title": "CRAWLER OF THE WEB", "size": [24, 24], "origin": [1436, -114], "world": 6, "music": "w6", "zone": "net",
+    "N09": { "file": "N09.txt", "hall": "index", "mood": ["lair", 1], "title": "CRAWLER OF THE WEB", "size": [24, 24], "origin": [1436, -114], "world": 6, "music": "w6", "zone": "net",
              "signs": [],
              "boss": {"id": "CRAWLER", "class": "CrawlerBoss", "name": "CRAWLER OF THE WEB", "sub": "search engine \u00b7 0 searches today", "trigger_x": 304, "trigger_side": "E", "cam": "free", "T": 109.4, "u": 0.75, "reward": "curl", "banner": "curl", "banner_sub": "near a GET ring, press [special]: you zip to it", "music": "boss", "drop": 40},
              "doors": [
