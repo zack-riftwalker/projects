@@ -1996,7 +1996,7 @@ func summon_ready() -> bool:
 
 func _start_intro() -> void:
 	fight.state = "intro"
-	fight.t = 1.5
+	fight.t = boss.intro_len() if boss != null and boss.has_method("intro_len") else 1.5     # (a boss with a show of its own: CRAWLER OF THE WEB)
 	summon_t = 0.0
 	summon_ok = true
 	fight_active = true

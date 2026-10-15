@@ -58,5 +58,20 @@
   "len": 40,
   "loop_start": 0,
   "once": false
+ },
+ "crawler": {
+  "len": 74.534,
+  "loop_start": 8.282,
+  "once": false
+ },
+ "crawler_hi": {
+  "len": 74.534,
+  "loop_start": 8.282,
+  "once": false
+ },
+ "crawler_dark": {
+  "len": 87.457,
+  "loop_start": 9.662,
+  "once": false
  }
 }

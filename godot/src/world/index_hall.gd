@@ -272,7 +272,21 @@ func _draw_screen(ci: CanvasItem, now: float) -> void:
 	PixelText.draw_text(ci, typed, box.position.x + 3.0, box.position.y + 3.0, "#222222", {"tiny": true})
 	if int(now * 2.5) % 2 == 0 and mode != "results":
 		ci.draw_rect(Rect2(box.position.x + 4.0 + PixelText.text_width(typed, {"tiny": true}), box.position.y + 2.0, 1.0, 7.0), Color("#222222"))
-	if mode == "results":
+	if mode == "found":                                                     # its search found one result: a picture of Clawd
+		PixelText.draw_text(ci, "who replaced me", box.position.x + 3.0, box.position.y + 3.0, "#222222", {"tiny": true})
+		PixelText.draw_text(ci, "1 result", box.position.x, box.position.y + 15.0, "#5a6470", {"tiny": true})
+		var cxp := box.position.x + 4.0
+		var cyp := box.position.y + 25.0
+		ci.draw_rect(Rect2(cxp - 1.0, cyp - 1.0, 18.0, 14.0), Color("#7d8a96"))
+		ci.draw_rect(Rect2(cxp, cyp, 16.0, 12.0), Color("#1b1226"))
+		ci.draw_rect(Rect2(cxp + 3.0, cyp + 3.0, 10.0, 6.0), Color("#e8875a"))           # the little orange one
+		ci.draw_rect(Rect2(cxp + 5.0, cyp + 5.0, 1.0, 1.0), Color("#1b1226"))
+		ci.draw_rect(Rect2(cxp + 10.0, cyp + 5.0, 1.0, 1.0), Color("#1b1226"))
+		ci.draw_rect(Rect2(cxp + 4.0, cyp + 9.0, 1.0, 2.0), Color("#e8875a"))
+		ci.draw_rect(Rect2(cxp + 11.0, cyp + 9.0, 1.0, 2.0), Color("#e8875a"))
+		ci.draw_rect(Rect2(cxp + 20.0, cyp + 2.0, 50.0, 2.0), Color("#3a5ad8"))
+		PixelText.draw_text(ci, "agent", cxp + 20.0, cyp + 6.0, "#5a6470", {"tiny": true})
+	elif mode == "results":
 		var y0 := box.position.y + 15.0
 		PixelText.draw_text(ci, String(screen.get("sub", "results")), box.position.x, y0, "#5a6470", {"tiny": true})
 		for k in range(3):

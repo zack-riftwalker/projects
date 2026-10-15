@@ -1041,16 +1041,26 @@ func t_crawler3() -> bool:
 	if pup.ph != cb.ph or pup.dc != cb.dc or hl.net != hl2_net or pup.legs_ok != cb.legs_ok:
 		fail(res, "net fields: ph %d/%d dc %d/%d legs %d/%d" % [pup.ph, cb.ph, pup.dc, cb.dc, pup.legs_ok, cb.legs_ok])
 	pup.free()
-	# the kill: curl, boss flag, N09:W opens; the hall keeps its last search
+	# the kill: the scene (it falls, it speaks when Clawd comes near, the compaction, the summary), then curl, the boss flag, N09:W opens;
+	# the Logs keep a [compacted] line and the hall keeps its last search
 	Game.flags = {}
 	Game.tools = {}
 	if not r.skip_boss():
 		fail(res, "skip boss refused")
 	var n := 0
-	while r.fight.state != "done" and n < 1800:
+	var spoke_at := -1
+	while r.fight.state != "done" and n < 3600:
 		r.player.inv = 99.0
+		if n > 200:
+			r.player.x = cb.core_px - 30.0                     # walk up to it: it speaks
 		r.step(Game.STEP)
+		if spoke_at < 0 and cb.speak_t >= 0.0:
+			spoke_at = n
 		n += 1
+	if spoke_at < 0 or spoke_at > 260:
+		fail(res, "it did not speak when Clawd came near (frame %d)" % spoke_at)
+	if not Game.flag("compacted:CRAWLER"):
+		fail(res, "no compacted trace")
 	if not Game.flag("ability:curl") or not Game.flag("boss:CRAWLER") or not Game.tools.get("curl", false):
 		fail(res, "reward missing (state %s)" % r.fight.state)
 	r.update_doors()

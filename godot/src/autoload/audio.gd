@@ -1,7 +1,8 @@
 extends Node
 # Audio: sound effects (a pool of players, the same minimum gap per name as the JS game) and looping music with a crossfade.
 
-const SFX := ["jump", "djump", "walljump", "land", "swipe", "swipeBig", "hit", "clang", "squish", "kill", "hurt", "die", "token", "spark", "heal", "dash", "spring", "crumble", "brk", "checkpoint", "shoot", "bossHit", "explode", "bigExplode", "uiMove", "uiOk", "uiBack", "text", "textLow", "textSys", "key", "gate", "agent", "agentHit", "warn", "charge", "laser", "drip", "splash", "thud", "roar", "glitch", "tick", "tock", "pause", "flap", "logo", "stamp"]
+const SFX := ["jump", "djump", "walljump", "land", "swipe", "swipeBig", "hit", "clang", "squish", "kill", "hurt", "die", "token", "spark", "heal", "dash", "spring", "crumble", "brk", "checkpoint", "shoot", "bossHit", "explode", "bigExplode", "uiMove", "uiOk", "uiBack", "text", "textLow", "textSys", "key", "gate", "agent", "agentHit", "warn", "charge", "laser", "drip", "splash", "thud", "roar", "glitch", "tick", "tock", "pause", "flap", "logo", "stamp", "modem", "kbd", "hdd", "degauss", "chirp"]
+const VOICE := ["crawler_intro", "crawler_p2", "crawler_p3", "crawler_die"]
 const MIN_GAP_MS := 28
 const MUSIC_LINEAR := 0.7
 
@@ -25,6 +26,12 @@ func _ready() -> void:
 		var s = load("res://assets/sfx/%s.wav" % n)
 		if s != null:
 			streams[n] = s
+	for n in VOICE:                                  # spoken lines play like sounds (and reach the guest the same way)
+		if ResourceLoader.exists("res://assets/voice/%s.ogg" % n):
+			var v = load("res://assets/voice/%s.ogg" % n)
+			if v is AudioStreamOggVorbis:
+				v.loop = false
+			streams[n] = v
 	for i in range(12):
 		var p := AudioStreamPlayer.new()
 		add_child(p)

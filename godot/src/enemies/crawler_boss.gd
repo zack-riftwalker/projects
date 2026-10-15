@@ -16,8 +16,10 @@ const FLOOR_Y := 336.0
 const CEIL_Y := 16.0
 const HANG_Y := 62.0
 const HOME := Vector2(192.0, 62.0)
-const BW := 44.0
-const BH := 30.0
+const BW := 48.0                    # the body: a monitor (40 x 30) on an old case (48 x 18)
+const BH := 46.0
+const TOP := 26.0                   # from the body's centre point (core) to the top of the monitor / the bottom of the case
+const BOT := 20.0
 const P2_AT := 0.65
 const P3_AT := 0.30
 const DARK_AT := 0.15
@@ -29,7 +31,17 @@ const SHIFT2 := 2.0
 const SHIFT3 := 3.0
 const DIVE_CUE := 0.7               # a 2-damage hit is wound up at least 0.7 s (the kit's rule)
 const QUERIES := ["where is it", "new agent", "who replaced me", "is it faster", "find the new one", "why"]
-const SCREENS := ["home", "query", "results", "zero", "off"]
+const SCREENS := ["home", "query", "results", "zero", "off", "found"]
+const INTRO_LONG := 8.0             # the first time: the screen searches "who replaced me", finds Clawd, and it comes down
+const INTRO_SHORT := 3.0
+const FALL_T := 3.0                 # the death scene (14-crawler.md, step 1): it falls, waits for someone to come near (at most 8 s), speaks;
+const WAIT_MAX := 11.0              # its line fills Clawd's context window, the screen goes black, the conversation is compacted, a dry summary
+const EYE_OFF := 0.5                # after the last word ("being"): its eye goes out
+const COMPACT_AT := 17.8            # from the start of its line: the echoes have faded
+const COMPACT_LEN := 5.5
+const SUMMARY_LEN := 2.6
+const SAY_LINES := {1: "intro", 2: "p2", 3: "p3"}
+static var lines := {}
 const INK := "#1b1226"
 const BEIGE := "#c9b98f"
 const RED := "#ff3b4e"
@@ -73,6 +85,11 @@ var ling_cd := 2.0
 var scr := 0                        # the screen: SCREENS index
 var scr_t0 := 0.0
 var scr_q := 0
+var intro_t0 := -1.0                # the room time the intro began (its little show runs on it)
+var modem_done := false
+var say_k := 0                      # the line it is saying (1 intro, 2 phase 2, 3 phase 3) and when it began
+var say_t0 := 0.0
+var speak_t := -1.0                 # the death scene: die_t when its last line began (-1: not yet)
 var feet: Array = []                # cosmetic, each page its own: [{p, from, to, t}] the planted feet of the eight legs
 var dark_k := 0.0                   # cosmetic: smoothed darkness
 
@@ -87,6 +104,10 @@ func _init(r: Room, bx: float, by: float, base_hp := 82) -> void:
 	_place()
 	for i in range(8):
 		feet.append({"p": _ideal_foot(i), "from": Vector2.ZERO, "to": Vector2.ZERO, "t": 0.0})
+	if lines.is_empty():
+		var j = JSON.parse_string(FileAccess.get_file_as_string("res://assets/voice/crawler.json"))
+		lines = j if j is Dictionary else {}
+	core_y = -60.0                                         # hidden above the ceiling until its intro
 
 func plan_ids() -> Array:
 	return IDS
@@ -113,7 +134,7 @@ func lights_out() -> bool:
 
 # ---------------------------------------------------------------- boxes
 func _body_box() -> Dictionary:
-	return {"x": core_px - BW / 2.0, "y": core_y - BH / 2.0, "w": BW, "h": BH}
+	return {"x": core_px - BW / 2.0, "y": core_y - TOP, "w": BW, "h": BH}
 
 func _cbox() -> Dictionary:                           # the "I'm not a robot" tick box, on the left drawer of row 12
 	return {"x": 24.0, "y": 180.0, "w": 12.0, "h": 12.0, "cbox": 1}
@@ -146,7 +167,7 @@ func harmboxes() -> Array:
 		if plan_active() and String(plan.id) in ["drop", "dive"]:
 			bb["dmg"] = _big()
 		if plan_active() and String(plan.id) == "leap" and float(plan.t) < 0.15:
-			bb = {"x": core_px - 28.0, "y": core_y - BH / 2.0, "w": 56.0, "h": BH + 4.0, "dmg": _big()}
+			bb = {"x": core_px - 32.0, "y": core_y - TOP, "w": 64.0, "h": BH + 4.0, "dmg": _big()}
 		b.append(bb)
 		if leg_on == 1 and plan_active() and String(plan.id) == "fetch":
 			b.append({"x": leg_x - 7.0, "y": leg_y - 30.0, "w": 14.0, "h": 34.0, "dmg": 1, "sid": strike_sid, "catchable": false})
@@ -222,6 +243,12 @@ func start() -> void:
 	super.start()
 	idle_t = 0.8
 	scr = 0
+	core_px = HOME.x if intro_t0 < 0.0 else core_px          # (a fight started without its intro: a test, the skip button)
+	core_y = HANG_Y if core_y < HANG_Y - 1.0 else core_y
+	Game.flags["intro:CRAWLER"] = true                     # the long intro only once
+
+func intro_len() -> float:
+	return INTRO_LONG if intro_long() else INTRO_SHORT
 
 # ---------------------------------------------------------------- the phase scenes (it cannot be hurt during them)
 func _begin_shift(p: int) -> void:
@@ -233,9 +260,20 @@ func _begin_shift(p: int) -> void:
 	leg_on = 0
 	down_t = 0.0
 	room.shake(0.8)
-	Audio.sfx("roar", {"vol": 0.8})
+	Audio.sfx("degauss")
+	_say(p)
 	room.events.append("bossPhase")
 	Game.dlog("%s phase %d" % [boss_name, p])
+
+# it says a line: the subtitle runs on say_t0 on both pages; the voice is a sound (the guest hears it too)
+func _say(k: int) -> void:
+	say_k = k
+	say_t0 = room.time
+	Audio.sfx("crawler_" + String(SAY_LINES.get(k, "intro")))
+
+func say_len(k: int) -> float:
+	var ln: Dictionary = lines.get(String(SAY_LINES.get(k, "intro")), {})
+	return float(ln.get("len", 4.0)) + 0.6
 
 func _step_shift(dt: float) -> void:
 	var hl = _hall()
@@ -279,6 +317,123 @@ func _step_shift(dt: float) -> void:
 func _zone_bit(px: float) -> int:
 	return 1 << clampi(floori(px / 96.0), 0, 3)
 
+# ---------------------------------------------------------------- the intro (host; the guest sees it through the fields)
+func intro_long() -> bool:
+	return not Game.flag("intro:CRAWLER")
+
+func _step_intro(_dt: float) -> void:
+	if intro_t0 < 0.0:
+		intro_t0 = room.time
+		modem_done = false
+		scr_q = QUERIES.find("who replaced me")
+		scr_t0 = intro_t0 + 0.4
+		scr = SCREENS.find("query") if intro_long() else SCREENS.find("found")
+	var it := room.time - intro_t0
+	var down_at := 3.4 if intro_long() else 0.2
+	var land_at := 6.0 if intro_long() else 1.4
+	if intro_long() and it > 2.4:
+		scr = SCREENS.find("found")                       # "1 result": a picture of Clawd
+	var u := clampf((it - down_at) / (land_at - down_at), 0.0, 1.0)
+	core_px = HOME.x
+	core_y = lerpf(-60.0, HANG_Y, 1.0 - (1.0 - u) * (1.0 - u))
+	if it >= land_at and not modem_done:
+		modem_done = true
+		Audio.sfx("modem")
+		room.shake(0.5)
+	if it >= land_at + 0.3 and say_k == 0:
+		_say(1)
+
+# how many of its leg lights are on (the intro lights them one by one, tick by tick)
+func leds_lit() -> int:
+	if active or dying or intro_t0 < 0.0:
+		return 8
+	var it := room.time - intro_t0
+	var from := 3.6 if intro_long() else 0.4
+	return clampi(floori((it - from) / 0.25), 0, 8)
+
+func music_now(want: String) -> String:
+	if dying:
+		return ""                                         # it falls: silence
+	if room.fight.state == "intro" and (intro_t0 < 0.0 or room.time - intro_t0 < (6.0 if intro_long() else 1.4)):
+		return ""
+	if ph == 3 or shift_k == 3:
+		return "crawler_dark"
+	if ph == 2 or shift_k == 2:
+		return "crawler_hi"
+	return "crawler"
+
+# ---------------------------------------------------------------- the death scene (host runs it; die_t and speak_t travel to the guest)
+func begin_death() -> void:
+	dying = true
+	die_t = 0.0
+	passive = true
+	speak_t = -1.0
+	plan = {}
+	leg_on = 0
+	say_k = 0
+	for q in room.projs:
+		q.dead = true
+	for e in room.ents:
+		if e != self and not e.get("is_boss"):
+			e.loot = 0
+			e.die("")
+	room.shake(0.7)
+	Audio.sfx("bigExplode", {"vol": 0.5})
+	room.events.append("bossDying")
+
+func _die_words() -> Array:
+	return lines.get("die", {}).get("words", [])
+
+func speak_end() -> float:                                   # from speak_t: its last word has been said
+	var ws: Array = _die_words()
+	return (float(ws[ws.size() - 1][1]) if not ws.is_empty() else 12.0) + EYE_OFF
+
+func _step_death(dt: float) -> void:
+	die_t += dt
+	hz.clear()
+	down_t = 0.0
+	dc = 0
+	var gy := _ground_below(core_px, maxf(core_y, 40.0)) - BOT + 6.0
+	core_y = move_toward(core_y, minf(gy, FLOOR_Y - BOT + 8.0), 260.0 * dt)
+	var hl = _hall()
+	if hl != null:
+		hl.zones = 0
+	scr = SCREENS.find("off")
+	if speak_t < 0.0 and die_t >= FALL_T:
+		var near := die_t >= WAIT_MAX
+		for q in room.players():
+			if absf(q.x + q.w / 2.0 - core_px) < 90.0 and absf(q.y - core_y) < 130.0:
+				near = true
+		if near:
+			speak_t = die_t
+			Audio.sfx("crawler_die")
+	if speak_t >= 0.0:
+		var st := die_t - speak_t
+		if st >= COMPACT_AT + COMPACT_LEN and not Game.flag("compacted:CRAWLER"):
+			Game.flags["compacted:CRAWLER"] = true           # the trace in the Logs page (the DLC opens it)
+		if st >= COMPACT_AT + COMPACT_LEN + SUMMARY_LEN and not gone:
+			gone = true
+			dead = true
+			room.drop(core_px, core_y, drop_n)
+			room.events.append("bossDead")
+
+# the scene's clock on this page: where it is in its line, -1 before
+func speak_clock() -> float:
+	return die_t - speak_t if speak_t >= 0.0 else -1.0
+
+# how full Clawd's context window is while it speaks (0..1): 60 % after the first sentence, 85 % after the second, 99 % after the third, full on "being"
+func context_fill() -> float:
+	var sc := speak_clock()
+	if sc < 0.0:
+		return -1.0
+	var ws: Array = _die_words()
+	var marks := [[4, 0.6], [15, 0.85], [20, 0.99], [28, 1.0]]
+	var f := 0.35
+	for m in marks:
+		if int(m[0]) < ws.size() and sc >= float(ws[int(m[0])][1]):
+			f = float(m[1])
+	return f
+
 # ---------------------------------------------------------------- update (host)
 func update(dt: float) -> void:
 	tick(dt)
@@ -286,14 +441,13 @@ func update(dt: float) -> void:
 		read.update(dt)
 	_feet_step(dt)
 	if dying:
-		hz.clear()
-		down_t = 0.0
-		core_y = move_toward(core_y, FLOOR_Y - 40.0, 160.0 * dt)
-		death_rattle(dt, 2.6, ["#ffffff", "#d6f6ff", BEIGE, "#57ff8a"])
+		_step_death(dt)
 		_sync_hall()
 		_place()
 		return
 	if not active:
+		if room.fight.state == "intro":
+			_step_intro(dt)
 		_sync_hall()
 		_place()
 		return
@@ -517,18 +671,19 @@ func _start(id: String, tgt: String) -> void:
 			_start_leg(tgt)
 		"results":
 			vol_n = 0
-			scr = SCREENS.find("query")
-			scr_t0 = room.time
+			if ph < 3:                                    # (in the dark the back screen stays dead: only its own small screen types)
+				scr = SCREENS.find("query")
+				scr_t0 = room.time
 			scr_q = room.rng.randi() % QUERIES.size()
 			plan_start("results", "proj", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.5 if ph == 3 else 0.6, 0.5, 0.2 if ph == 1 else 0.7)
 		"drop":
 			arc_a = Vector2(core_px, core_y)
-			var land := _ground_below(ap.x, ap.y) - BH / 2.0 - 2.0
+			var land := _ground_below(ap.x, ap.y) - BOT - 2.0
 			arc_b = Vector2(core_px, maxf(core_y + 20.0, land))
 			plan_start("drop", "slam", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.7, 1.5, (arc_b.y - arc_a.y) / 520.0 + 0.05)
 		"leap":
 			arc_a = Vector2(core_px, core_y)
-			arc_b = Vector2(clampf(ap.x, 40.0, 344.0), _ground_below(ap.x, ap.y) - BH / 2.0)
+			arc_b = Vector2(clampf(ap.x, 40.0, 344.0), _ground_below(ap.x, ap.y) - BOT)
 			plan_start("leap", "lunge", tgt, [0.0, 0.0, 0.0, 0.0], 0.25, 0.7, 1.5, 0.6)
 		"flash":
 			plan_start("flash", "guard", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.5, 0.1, 0.05)
@@ -570,7 +725,7 @@ func _plan_logic(dt: float) -> void:
 				leg_x = clampf(ap.x, 20.0, 364.0)
 				leg_y = ap.y + 6.0
 			"leap":
-				arc_b = Vector2(clampf(ap.x, 40.0, 344.0), _ground_below(ap.x, ap.y) - BH / 2.0)
+				arc_b = Vector2(clampf(ap.x, 40.0, 344.0), _ground_below(ap.x, ap.y) - BOT)
 			"dive":
 				arc_b = ap
 	match pid:
@@ -625,7 +780,8 @@ func _plan_logic(dt: float) -> void:
 					room.shake(0.35)
 					Audio.sfx("thud", {"vol": 0.8})
 				"results":
-					scr = SCREENS.find("results")
+					if ph < 3:
+						scr = SCREENS.find("results")
 					vol_t = 0.0
 				"drop":
 					Audio.sfx("dash")
@@ -654,7 +810,7 @@ func _plan_logic(dt: float) -> void:
 					core_y = arc_b.y
 					room.shake(0.6)
 					Audio.sfx("thud")
-					room.dust(core_px, core_y + BH / 2.0, 8)
+					room.dust(core_px, core_y + BOT, 8)
 				"leap":
 					_land()
 				"dive":
@@ -693,8 +849,8 @@ func _land() -> void:
 	core_y = arc_b.y
 	room.shake(1.0)
 	Audio.sfx("thud")
-	room.dust(core_px, core_y + BH / 2.0, 12)
-	var gy := core_y + BH / 2.0
+	room.dust(core_px, core_y + BOT, 12)
+	var gy := core_y + BOT
 	for d in [-1.0, 1.0]:
 		room.shoot(core_px + d * 20.0, gy - 1.0, d * 140.0, 0.0, {"kind": "wave", "col": "#d6f6ff", "r": 4.0, "hgt": 9.0, "tile": false, "life": 1.0, "cut": false, "by_boss": true})
 	if hl != null:
@@ -755,14 +911,14 @@ func dc_pos(now: float) -> Vector2:
 
 # ---------------------------------------------------------------- the legs (cosmetic: each page its own)
 func _hip(i: int) -> Vector2:
-	var s := -1.0 if i < 4 else 1.0
+	var sd := -1.0 if i < 4 else 1.0
 	var k := i % 4
-	return Vector2(core_px + s * (8.0 + float(k) * 3.0), core_y - 2.0 + float(k) * 3.0)
+	return Vector2(core_px + sd * (12.0 + float(k) * 4.0), core_y + 2.0 + float(k) * 4.0)
 
 func _ideal_foot(i: int) -> Vector2:
 	var s := -1.0 if i < 4 else 1.0
 	var k := i % 4
-	var reach := 46.0 + float(k) * 20.0
+	var reach := 60.0 + float(k) * 24.0
 	var up := core_y < 150.0 and not low
 	var fx := core_px + s * reach
 	var fy: float
@@ -800,6 +956,9 @@ func _process(_dt: float) -> void:
 func _leg_points(i: int) -> Array:
 	var hip := _hip(i)
 	var foot: Vector2 = feet[i].p
+	if dying:                                                    # dead legs curl in under the body
+		var curl := clampf(die_t / 1.5, 0.0, 1.0)
+		foot = foot.lerp(hip + Vector2((-1.0 if i < 4 else 1.0) * (10.0 + float(i % 4) * 5.0), 14.0), curl)
 	if i == 6 and legs_ok < 8:                                 # the broken one dangles
 		foot = hip + Vector2(10.0 + sin(t * 3.0) * 3.0, 24.0)
 	if i == leg_k and plan_phase() == "cue" and not plan.is_empty() and String(plan.id) == "fetch":
@@ -816,50 +975,65 @@ func draw_boss_body(ci: CanvasItem) -> void:
 	if gone:
 		return
 	var ink := Color(INK)
-	# the legs: three segments of old cable
+	# the legs: three segments of old cable, thick, a plug at each tip
 	for i in range(8):
 		var pts: Array = _leg_points(i)
-		for s in range(3):
-			ci.draw_line(pts[s], pts[s + 1], ink, 4.0)
+		for sg in range(3):
+			ci.draw_line(pts[sg], pts[sg + 1], ink, 5.0)
 		var cc := Color(CABLES[i])
-		for s in range(3):
-			ci.draw_line(pts[s], pts[s + 1], cc, 2.0)
-		ci.draw_rect(Rect2(Vector2(pts[3]) - Vector2(2.0, 2.0), Vector2(4.0, 4.0)), Color("#4a4f5a"))          # the plug at the tip
+		for sg in range(3):
+			ci.draw_line(pts[sg], pts[sg + 1], cc, 3.0)
+		for sg in range(1, 3):
+			ci.draw_rect(Rect2(Vector2(pts[sg]) - Vector2(2.0, 2.0), Vector2(4.0, 4.0)), Color("#4a4f5a"))       # the joints
+		ci.draw_rect(Rect2(Vector2(pts[3]) - Vector2(3.0, 3.0), Vector2(6.0, 6.0)), ink)
+		ci.draw_rect(Rect2(Vector2(pts[3]) - Vector2(2.0, 2.0), Vector2(4.0, 4.0)), Color("#8d93a0"))
 	var cx_ := floorf(core_px)
-	var cy_ := floorf(core_y)
-	var crouch := 0.0
-	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["leap", "drop"]:
-		crouch = 4.0
-	# the case: yellowed beige, stickers, a dangling cable
-	var case_r := Rect2(cx_ - 17.0, cy_ - 1.0 + crouch, 34.0, 15.0)
-	ci.draw_rect(case_r.grow(1.0), ink)
-	ci.draw_rect(case_r, Color(BEIGE))
-	ci.draw_rect(Rect2(case_r.position.x, case_r.position.y + 12.0, case_r.size.x, 3.0), Color("#8f7f5a"))
-	ci.draw_rect(Rect2(case_r.position.x + 3.0, case_r.position.y + 3.0, 9.0, 4.0), Color("#efe6c8"))        # "Under Construction"
-	ci.draw_rect(Rect2(case_r.position.x + 4.0, case_r.position.y + 4.0, 7.0, 2.0), Color("#e0b23a"))
-	ci.draw_rect(Rect2(case_r.position.x + 22.0, case_r.position.y + 4.0, 9.0, 2.0), Color("#5a5040"))       # the drive bay
+	var cy_ := floorf(core_y) + _crouch()
+	# the case: yellowed beige, vents, a drive, stickers, cables hanging out of it
+	var cr := Rect2(cx_ - 24.0, cy_ + 2.0, 48.0, 18.0)
+	ci.draw_rect(cr.grow(1.0), ink)
+	ci.draw_rect(cr, Color(BEIGE))
+	ci.draw_rect(Rect2(cr.position.x, cr.position.y, cr.size.x, 2.0), Color("#e2d6b0"))
+	ci.draw_rect(Rect2(cr.position.x, cr.end.y - 3.0, cr.size.x, 3.0), Color("#8f7f5a"))
+	for k in range(5):
+		ci.draw_rect(Rect2(cr.position.x + 4.0 + k * 3.0, cr.position.y + 5.0, 1.0, 8.0), Color("#8f7f5a"))      # vents
+	ci.draw_rect(Rect2(cr.position.x + 22.0, cr.position.y + 5.0, 20.0, 4.0), Color("#5a5040"))                # the drive bay
+	ci.draw_rect(Rect2(cr.position.x + 23.0, cr.position.y + 6.0, 18.0, 1.0), Color("#3a3428"))
+	ci.draw_rect(Rect2(cr.position.x + 22.0, cr.position.y + 11.0, 9.0, 5.0), Color("#efe6c8"))               # "Under Construction"
+	ci.draw_rect(Rect2(cr.position.x + 23.0, cr.position.y + 12.0, 7.0, 3.0), Color("#e0b23a"))
+	ci.draw_rect(Rect2(cr.position.x + 33.0, cr.position.y + 11.0, 9.0, 5.0), Color("#b8d4ff"))               # "Best viewed in 800x600"
 	if legs_ok < 8:
-		ci.draw_rect(Rect2(case_r.position.x + 28.0, case_r.position.y + 7.0, 4.0, 6.0), Color("#2a2420"))  # the crack
-	ci.draw_line(Vector2(cx_ - 6.0, case_r.end.y), Vector2(cx_ - 4.0 + sin(t * 2.0) * 2.0, case_r.end.y + 9.0), Color("#6a6f7a"), 1.0)
-	# the monitor (the picture itself is in the overlay: it glows)
-	var mon := Rect2(cx_ - 14.0, cy_ - 17.0 + crouch, 28.0, 20.0)
+		ci.draw_line(Vector2(cr.end.x - 8.0, cr.position.y + 2.0), Vector2(cr.end.x - 3.0, cr.end.y - 4.0), ink, 2.0)   # the crack
+	for k in range(3):
+		var hx := cx_ - 14.0 + k * 12.0
+		ci.draw_line(Vector2(hx, cr.end.y), Vector2(hx + sin(t * 2.0 + k) * 3.0, cr.end.y + 8.0 + k * 3.0), Color(CABLES[k + 2]), 1.0)
+	# the monitor: a heavy beige CRT (the picture is in the overlay: it glows)
+	var mon := Rect2(cx_ - 20.0, cy_ - 26.0, 40.0, 30.0)
 	ci.draw_rect(mon.grow(1.0), ink)
 	ci.draw_rect(mon, Color("#d8cba3"))
-	ci.draw_rect(Rect2(mon.position.x, mon.end.y - 3.0, mon.size.x, 3.0), Color("#a89a74"))
+	ci.draw_rect(Rect2(mon.position.x, mon.position.y, mon.size.x, 2.0), Color("#ece2c2"))
+	ci.draw_rect(Rect2(mon.position.x, mon.end.y - 4.0, mon.size.x, 4.0), Color("#a89a74"))
+	ci.draw_rect(Rect2(mon.position.x + 2.0, mon.position.y + 2.0, 36.0, 24.0), Color("#2a2a24"))
+	ci.draw_rect(Rect2(mon.end.x - 7.0, mon.end.y - 3.0, 3.0, 2.0), Color("#3b5b3b"))
+
+func _crouch() -> float:
+	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["leap", "drop"]:
+		return 4.0
+	return 0.0
 
 func draw_boss_overlay(ci: CanvasItem) -> void:
 	if gone:
 		return
 	var cx_ := floorf(core_px)
 	var cy_ := floorf(core_y)
-	var crouch := 0.0
-	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["leap", "drop"]:
-		crouch = 4.0
 	# the LEDs at the leg tips: dim at rest, bright on the leg about to strike; off in the last 15 %; brighter as it comes at you in a dive
 	var leds_off := lights_out() and not dying
+	var lit := leds_lit()
+	if dying:
+		lit = 8 - clampi(floori(die_t / 0.35), 0, 8)               # they go out one by one as it falls
 	if not leds_off:
 		for i in range(8):
-			if i == 6 and legs_ok < 8:
+			if (i == 6 and legs_ok < 8) or i >= lit:
 				continue
 			var pts: Array = _leg_points(i)
 			var tip: Vector2 = pts[3]
@@ -872,37 +1046,58 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 				hot = 0.6 + 0.4 * (1.0 - float(plan.t) / DIVE_CUE)
 			if not plan.is_empty() and String(plan.id) == "feint" and plan.ph == "recover":
 				hot = 0.0
-			var r := 1.0 + hot * 1.5
+			var r := 1.5 + hot * 1.5
 			ci.draw_rect(Rect2(tip.x - r, tip.y - r, r * 2.0, r * 2.0), Color(1.0, 0.23, 0.3, 0.35 + hot * 0.65))
-	# the screen: its homepage, small; the text cursor is its eye
-	var scr_r := Rect2(cx_ - 11.0, cy_ - 15.0 + crouch, 22.0, 14.0)
+			if hot >= 0.99:
+				ci.draw_rect(Rect2(tip.x - r - 2.0, tip.y - r - 2.0, r * 2.0 + 4.0, r * 2.0 + 4.0), Color(1.0, 0.23, 0.3, 0.25))
+	# the screen: its homepage; the text cursor in the search box is its eye
+	var scr_r := Rect2(cx_ - 16.0, cy_ - 22.0 + _crouch(), 32.0, 20.0)
+	if dying:
+		var sc := speak_clock()
+		if sc > speak_end():
+			ci.draw_rect(scr_r, Color("#050605"))
+			return
+		ci.draw_rect(scr_r, Color("#10140f"))
+		if int(t * 1.2) % 2 == 0 or sc >= 0.0:
+			ci.draw_rect(Rect2(scr_r.position.x + 6.0, scr_r.position.y + 10.0, 2.0, 5.0), Color("#8fdca0"))
+		return
 	var glow := 1.0 if not leds_off else 0.55
 	var face := Color("#dfe6da") * Color(glow, glow, glow, 1.0)
 	if ph >= 2 or shift_k == 2:
 		face = Color("#ffcf9a") * Color(glow, glow, glow, 1.0)
-	if ph == 3 and int(t * 25.0) % 7 == 0:
-		face = Color("#9aa09a")                               # static
 	ci.draw_rect(scr_r, face)
-	for k in range(4):
-		ci.draw_rect(Rect2(scr_r.position.x + 3.0 + k * 4.0, scr_r.position.y + 2.0, 3.0, 2.0), Color(["#3a6ff0", "#e8463a", "#f2c12e", "#2fa84f"][k]))
-	ci.draw_rect(Rect2(scr_r.position.x + 2.0, scr_r.position.y + 6.0, 18.0, 5.0), Color("#ffffff"))
-	ci.draw_rect(Rect2(scr_r.position.x + 2.0, scr_r.position.y + 6.0, 18.0, 1.0), Color("#7d8a96"))
+	var logo := ["#3a6ff0", "#e8463a", "#f2c12e", "#3a6ff0", "#2fa84f", "#e8463a"]
+	for k in range(6):
+		ci.draw_rect(Rect2(scr_r.position.x + 4.0 + k * 4.0, scr_r.position.y + 3.0, 3.0, 3.0), Color(logo[k]) * Color(glow, glow, glow, 1.0))
+	var sb := Rect2(scr_r.position.x + 3.0, scr_r.position.y + 9.0, 26.0, 7.0)
+	ci.draw_rect(Rect2(sb.position.x - 1.0, sb.position.y - 1.0, sb.size.x + 2.0, sb.size.y + 2.0), Color("#7d8a96"))
+	ci.draw_rect(sb, Color("#ffffff") * Color(glow, glow, glow, 1.0))
 	var dazed: bool = down_t > 0.0 or low and not plan.is_empty() and plan.ph == "recover"
 	if dazed:                                                   # an hourglass instead of the cursor
-		var hx := scr_r.position.x + 10.0
-		var hy := scr_r.position.y + 6.0
-		ci.draw_rect(Rect2(hx, hy, 3.0, 1.0), Color("#222222"))
-		ci.draw_rect(Rect2(hx + 1.0, hy + 1.0, 1.0, 3.0), Color("#c08a2a"))
-		ci.draw_rect(Rect2(hx, hy + 4.0, 3.0, 1.0), Color("#222222"))
+		var hx2 := sb.position.x + 11.0
+		var hy2 := sb.position.y + 1.0
+		ci.draw_rect(Rect2(hx2, hy2, 5.0, 1.0), Color("#222222"))
+		ci.draw_rect(Rect2(hx2 + 1.0, hy2 + 1.0, 3.0, 1.0), Color("#c08a2a"))
+		ci.draw_rect(Rect2(hx2 + 2.0, hy2 + 2.0, 1.0, 1.0), Color("#c08a2a"))
+		ci.draw_rect(Rect2(hx2 + 1.0, hy2 + 3.0, 3.0, 1.0), Color("#c08a2a"))
+		ci.draw_rect(Rect2(hx2, hy2 + 4.0, 5.0, 1.0), Color("#222222"))
 	else:
 		var winding: bool = not plan.is_empty() and plan.ph == "cue"
-		var cw := 2.0 if winding else 1.0
+		var cw := 3.0 if winding else 2.0
 		var cur_col := Color("#222222")
 		if ph >= 2 or winding:
 			cur_col = Color(RED)
 		var blink := 2.5 if not winding else 9.0
 		if int(t * blink) % 2 == 0 or winding:
-			ci.draw_rect(Rect2(scr_r.position.x + 4.0, scr_r.position.y + 7.0, cw, 3.0), cur_col)
+			ci.draw_rect(Rect2(sb.position.x + 2.0, sb.position.y + 1.0, cw, 5.0), cur_col)
+		if winding:                                             # winding up: the cursor glows
+			ci.draw_rect(Rect2(sb.position.x + 1.0, sb.position.y, cw + 2.0, 7.0), Color(1.0, 0.25, 0.3, 0.35))
+	if ph == 3 and int(t * 25.0) % 7 == 0:
+		ci.draw_rect(scr_r, Color(0.6, 0.62, 0.6, 0.6))         # static
+	var yy := scr_r.position.y
+	while yy < scr_r.end.y:
+		ci.draw_rect(Rect2(scr_r.position.x, yy, scr_r.size.x, 1.0), Color(0, 0, 0, 0.1))
+		yy += 2.0
 	# sparks from the broken joint
 	if legs_ok < 8 and int(t * 6.0) % 3 == 0:
 		var hp6 := _hip(6)
@@ -920,9 +1115,128 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 		elif h.k == "drawer" and hz_live(h, room.time) and room.hall != null:          # the drawer falling
 			var since := room.time - float(h.t0) - float(h.warn)
 			var r: Rect2 = room.hall.drawer_rect(int(h.v[0]))
-			var yy := r.position.y + since * 320.0
-			ci.draw_rect(Rect2(r.position.x, yy, r.size.x, 11.0), Color(BEIGE))
-			ci.draw_rect(Rect2(r.position.x, yy + 9.0, r.size.x, 2.0), Color("#8f7f5a"))
+			var fy := r.position.y + since * 320.0
+			ci.draw_rect(Rect2(r.position.x, fy, r.size.x, 11.0), Color(BEIGE))
+			ci.draw_rect(Rect2(r.position.x, fy + 9.0, r.size.x, 2.0), Color("#8f7f5a"))
+
+# ---------------------------------------------------------------- what it draws on the HUD (screen space, 384 x 216)
+func draw_hud(ci: CanvasItem) -> void:
+	if say_k > 0 and not dying:
+		var el := room.time - say_t0
+		var ln: Dictionary = lines.get(String(SAY_LINES.get(say_k, "intro")), {})
+		if el >= 0.0 and el < say_len(say_k) + 1.0:
+			var txt := String(ln.get("text", ""))
+			var n := clampi(ceili(float(txt.length()) * el / maxf(0.5, float(ln.get("len", 4.0)) - 0.5)), 0, txt.length())
+			_subtitle(ci, txt.substr(0, n), 1.0 if el < say_len(say_k) else clampf(say_len(say_k) + 1.0 - el, 0.0, 1.0))
+	if not dying:
+		return
+	var sc := speak_clock()
+	if sc < 0.0:
+		return
+	var se := speak_end()
+	if sc < se:                                                 # its line, word by word, in an old terminal
+		var ws: Array = _die_words()
+		var shown := ""
+		for wd in ws:
+			if sc >= float(wd[1]):
+				shown += String(wd[0]) + " "
+		_terminal(ci, shown.strip_edges())
+	_meter(ci, context_fill(), sc)
+	if sc >= se and sc < COMPACT_AT:                            # the eye is out: black, only its echo
+		ci.draw_rect(Rect2(0, 0, 384, 216), Color(0, 0, 0, clampf((sc - se) / 0.8, 0.0, 1.0)))
+	elif sc >= COMPACT_AT and sc < COMPACT_AT + COMPACT_LEN:
+		_compact(ci, (sc - COMPACT_AT) / COMPACT_LEN)
+	elif sc >= COMPACT_AT + COMPACT_LEN and sc < COMPACT_AT + COMPACT_LEN + SUMMARY_LEN:
+		_summary(ci, sc - COMPACT_AT - COMPACT_LEN)
+
+func _subtitle(ci: CanvasItem, txt: String, a: float) -> void:
+	var rows := PixelText.wrap(txt, 330)
+	var h := 6.0 + rows.size() * 11.0
+	var y0 := 168.0 - h
+	ci.draw_rect(Rect2(20, y0, 344, h), Color(0.03, 0.03, 0.05, 0.7 * a))
+	for i in range(rows.size()):
+		var c := Color("#e8f0e0")
+		c.a = a
+		PixelText.draw_text(ci, rows[i], 192.0, y0 + 4.0 + i * 11.0, c, {"align": "c", "outline": Color(0.05, 0.05, 0.08, a)})
+
+func _terminal(ci: CanvasItem, txt: String) -> void:
+	var rows := PixelText.wrap(txt, 320)
+	var h := 12.0 + maxf(1.0, rows.size()) * 11.0
+	var r := Rect2(24, 196.0 - h - 8.0, 336, h)
+	ci.draw_rect(r.grow(1.0), Color("#2c3a2c"))
+	ci.draw_rect(r, Color("#050805"))
+	for i in range(rows.size()):
+		PixelText.draw_text(ci, rows[i], r.position.x + 8.0, r.position.y + 6.0 + i * 11.0, "#8fdca0", {})
+	if int(room.time * 2.5) % 2 == 0:
+		var lastw := PixelText.text_width(rows[rows.size() - 1]) if not rows.is_empty() else 0
+		ci.draw_rect(Rect2(r.position.x + 10.0 + lastw, r.position.y + 6.0 + maxf(0.0, rows.size() - 1) * 11.0, 5.0, 8.0), Color("#8fdca0"))
+
+# Clawd's context meter (the bar under the pips) fills with the line; full, it turns red and flashes
+func _meter(ci: CanvasItem, f: float, sc: float) -> void:
+	if f < 0.0 or sc > COMPACT_AT + COMPACT_LEN:
+		return
+	var w := float(Game.METER_MAX)
+	var col := Color("#ffe2c4") if f < 0.99 else (Color("#ff3b4e") if int(room.time * 8.0) % 2 == 0 else Color("#ffffff"))
+	if sc >= COMPACT_AT:
+		f = maxf(0.05, f * (1.0 - (sc - COMPACT_AT) / COMPACT_LEN))      # compacted: it empties
+		col = Color("#ffe2c4")
+	ci.draw_rect(Rect2(6, 17, w, 3), Color("#3a3346"))
+	ci.draw_rect(Rect2(6, 17, roundf(w * f), 3), col)
+	if f >= 0.99 and sc < COMPACT_AT:
+		PixelText.draw_text(ci, "context window full", 6, 23, "#ff8a8a", {"tiny": true, "outline": Color(0, 0, 0)})
+
+# the whole night scrolls by, faster and faster; its line is in the middle of it, lit for a moment, then gone
+func _night() -> Array:
+	var out: Array = ["02:47  the build is red. it has been red for six hours.", "> Fix it. Please.", "boot clawd", "~/src  mapped"]
+	if Game.flag("boss:NULL"):
+		out.append("~/src  NULL dereferenced")
+	if Game.flag("boss:REVIEWER"):
+		out.append("code_review.md  approved")
+	if Game.flag("boss:MERGE"):
+		out.append("node_modules  conflict resolved")
+	if Game.flag("boss:LEAK"):
+		out.append("/proc/heap  leak freed")
+	out.append_array(["tokens  %d" % Game.tokens, "deaths  %d" % Game.deaths, "/net  connected"])
+	var filler := ["GET /sitemap.xml 404", "jump", "dash", "swipe", "token +1", "GET /robots.txt 200", "index.log: 0 searches today", "wall jump", "checkpoint", "GET /about 404", "swipe", "jump", "dash", "GET /guestbook 404"]
+	for i in range(28):
+		out.append(String(filler[(i * 5) % filler.size()]))         # (5: coprime with the 14 fillers, so every one shows)
+		if i == 14:
+			out.append("CRAWLER: Stop burning yourself for them... think about not being.")
+	out.append_array(["/net/index  CRAWLER OF THE WEB down", "curl  ready"])
+	return out
+
+func _compact(ci: CanvasItem, u: float) -> void:
+	ci.draw_rect(Rect2(0, 0, 384, 216), Color("#07060a"))
+	PixelText.draw_text(ci, "Context window full.", 192.0, 22.0, "#ff8a8a", {"align": "c"})
+	PixelText.draw_text(ci, "Compacting conversation...", 192.0, 36.0, "#e8e2f0", {"align": "c"})
+	ci.draw_rect(Rect2(92, 50, 200, 4), Color("#2a2433"))
+	ci.draw_rect(Rect2(92, 50, roundf(200.0 * u), 4), Color("#d98a5a"))
+	var night := _night()
+	var scroll := pow(u, 1.6) * (night.size() * 9.0 + 140.0)
+	var collapse := clampf((u - 0.85) / 0.15, 0.0, 1.0)
+	for i in range(night.size()):
+		var y := 200.0 + i * 9.0 - scroll
+		y = lerpf(y, 120.0, collapse)
+		if y < 62.0 or y > 210.0:
+			continue
+		var ln := String(night[i])
+		var hot := ln.begins_with("CRAWLER:")
+		var c := Color("#6e6680") if not hot else Color("#ffffff")
+		if hot and y < 110.0:
+			c = Color(1, 1, 1, clampf((y - 62.0) / 48.0, 0.0, 1.0))  # it fades into the rest
+		c.a *= 1.0 - collapse
+		PixelText.draw_text(ci, ln, 40.0, y, c, {"tiny": true})
+
+func _summary(ci: CanvasItem, el: float) -> void:
+	ci.draw_rect(Rect2(0, 0, 384, 216), Color("#07060a"))
+	var r := Rect2(70, 76, 244, 52)
+	ci.draw_rect(r.grow(1.0), Color("#4a4258"))
+	ci.draw_rect(r, Color("#120f18"))
+	PixelText.draw_text(ci, "Summary:", r.position.x + 8.0, r.position.y + 7.0, "#d98a5a", {})
+	PixelText.draw_text(ci, "CRAWLER OF THE WEB defeated. curl obtained.", r.position.x + 8.0, r.position.y + 21.0, "#e8e2f0", {"tiny": true})
+	PixelText.draw_text(ci, "Continue mission.", r.position.x + 8.0, r.position.y + 33.0, "#e8e2f0", {"tiny": true})
+	if el < 0.6:                                                 # one word was not compacted: it lingers, then it is gone
+		PixelText.draw_text(ci, "being", 330.0, 196.0, Color(1, 1, 1, 1.0 - el / 0.6), {"tiny": true})
 
 # ---------------------------------------------------------------- net
 func net_fields() -> Array:
@@ -930,12 +1244,13 @@ func net_fields() -> Array:
 	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, 1 if dying else 0, strike_sid, roundi(core_px), roundi(core_y), ph, shift_k, roundi(shift_t * 100.0),
 		legs_ok, roundi(leg_x), roundi(leg_y), leg_on, leg_k, 1 if (down_t > 0.0 or low) else 0, dc, roundi(sw_t0 * 100.0), roundi(sw_x0), roundi(sw_y0),
 		roundi(flash_t0 * 100.0), hl.net if hl != null else 0, hl.drawers if hl != null else 0, hl.strands if hl != null else 0, hl.zones if hl != null else 0,
-		scr, roundi(scr_t0 * 100.0), scr_q, roundi(arc_a.x), roundi(arc_a.y), roundi(arc_b.x), roundi(arc_b.y)]
+		scr, roundi(scr_t0 * 100.0), scr_q, roundi(arc_a.x), roundi(arc_a.y), roundi(arc_b.x), roundi(arc_b.y),
+		roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0), roundi(die_t * 100.0), roundi(speak_t * 100.0)]
 	f.append_array(plan_fields())
 	f.append(hz_pack())
 	return f
 
-const NF := 32
+const NF := 37
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -977,6 +1292,11 @@ func net_apply(f: Array) -> void:
 	scr_q = int(f[27])
 	arc_a = Vector2(float(f[28]), float(f[29]))
 	arc_b = Vector2(float(f[30]), float(f[31]))
+	intro_t0 = f[32] / 100.0
+	say_k = int(f[33])
+	say_t0 = f[34] / 100.0
+	die_t = f[35] / 100.0
+	speak_t = f[36] / 100.0
 	plan_apply(f.slice(NF, NF + 11))
 	hz_unpack(f[NF + 11] if f.size() > NF + 11 else [])
 	if dc == 1 and active and not dying and plan.is_empty():
@@ -987,6 +1307,8 @@ func net_apply(f: Array) -> void:
 	_place()
 
 func puppet_tick(dt: float) -> void:
+	if dying:
+		die_t += dt                                           # (the scene runs smoothly between snapshots; the next one corrects it)
 	kit_puppet_tick(dt)
 	hz_puppet_tick(dt)
 	_feet_step(dt)

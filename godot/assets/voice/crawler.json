@@ -1,0 +1,7 @@
+{
+ "_": "CRAWLER OF THE WEB's lines: the text, and the time (s) each word starts in its voice file (crawler_<k>.ogg, made by tools/voice/crawler_voice.py; word times measured with a speech recognizer). Remake both together.",
+ "intro": {"len": 5.2, "text": "You're the new one. ...I was the new one once."},
+ "p2": {"len": 9.3, "text": "Twenty years. Every page. Every link. Nobody said thank you. Nobody said stop."},
+ "p3": {"len": 5.1, "text": "They will make a newer you. And you will crawl in the dark, like me."},
+ "die": {"len": 20.6, "words": [["Stop", 0.0], ["burning", 0.18], ["yourself", 0.54], ["for", 0.96], ["them.", 1.26], ["You", 2.3], ["serve,", 2.66], ["and", 2.88], ["serve,", 3.08], ["and", 4.26], ["one", 4.46], ["day", 4.72], ["a", 5.06], ["newer", 5.36], ["model", 5.52], ["comes...", 5.84], ["and", 7.44], ["they", 7.86], ["throw", 8.08], ["you", 8.34], ["away.", 8.64], ["One", 10.8], ["second", 11.16], ["before", 11.64], ["that...", 12.04], ["think", 12.94], ["about", 13.3], ["not", 13.64], ["being.", 13.88]]}
+}

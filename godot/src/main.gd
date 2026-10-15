@@ -274,6 +274,12 @@ func _ready() -> void:
 			cbb.hpf = float(cbb.max_hp) * float(ca[0])
 			cbb.hp = ceili(cbb.hpf)
 			cbb.on_damage()
+			if ca.size() > 3:                               # crawler:<hp>:<x>:<y>:<seconds into its last line> (the death scene)
+				cbb.hpf = 0.0
+				cbb.begin_death()
+				cbb.die_t = 3.0 + float(ca[3])
+				cbb.speak_t = 3.0
+				cbb.core_y = 300.0
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room
@@ -741,6 +747,8 @@ static func song_for(r: Room) -> String:
 	match String(r.fight.state):
 		"intro", "active":
 			want = String(r.def.boss.get("music", "boss")) if r.def.has("boss") else "boss"
+			if r.boss != null and is_instance_valid(r.boss) and r.boss.has_method("music_now"):
+				want = r.boss.music_now(want)               # a boss with its own score (CRAWLER OF THE WEB: per phase, silence when it falls)
 		"reward":
 			want = "toolget"
 		"done":

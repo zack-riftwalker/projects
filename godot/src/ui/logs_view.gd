@@ -89,6 +89,12 @@ func rebuild() -> void:
 		for id in mem:
 			_add_text(String(Game.MEMORIES[id]), "#fff3e4")
 		_y += 4.0
+	if Game.flag("compacted:CRAWLER"):                    # what a boss said that the compaction took (14-crawler.md); the DLC opens it
+		any = true
+		_add_head("compacted", Game.COL.dim)
+		_add_text("CRAWLER OF THE WEB: [compacted]", "#8a8494")
+		_add_text("This part of the conversation was summarized.", Game.COL.dim, true)
+		_y += 4.0
 	var pages: Array = []
 	for n in range(1, 7):
 		if Game.flag("page:%d" % n):

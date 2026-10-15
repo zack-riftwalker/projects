@@ -161,6 +161,9 @@ func _draw() -> void:
 		draw_rect(Rect2(floori(clampf(s.x - room.cam.x, bx + 4, bx + bw - 6)), by + bh, 3, 2), Color(Game.COL.paper))
 		for i in range(lines.size()):
 			PixelText.draw_text(self, lines[i], bx + 6, by + 6 + i * 13, Game.COL.paper)
+	# last, over everything else (the room tab, toasts): CRAWLER OF THE WEB's lines, and the scene when it falls
+	if b != null and is_instance_valid(b) and b.has_method("draw_hud"):
+		b.draw_hud(self)
 
 # the partner's (and our own) pings as arrows at the screen edge: [{id, pos, dir, word, secs, by, ack, on_screen}]
 func ping_arrows() -> Array:
