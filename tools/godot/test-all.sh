@@ -4,7 +4,8 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
 GODOT=$(bash tools/godot/setup-godot.sh | tail -1) || { echo "FAIL setup"; exit 1; }
-TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+# logs stay after the run (they used to vanish with a temp dir), so a failure can be read in full later
+TMP="$ROOT/.test-logs/godot"; rm -rf "$TMP"; mkdir -p "$TMP"
 declare -a NAMES RES
 rec() { NAMES+=("$1"); RES+=("$2"); }
 run() { local name=$1; shift; if "$@" > "$TMP/$name.log" 2>&1; then rec "$name" PASS; else rec "$name" FAIL; echo "---- $name ----"; tail -25 "$TMP/$name.log"; fi; }
@@ -36,13 +37,15 @@ run relay node tools/coop-harness.js mv-serve mv-coop mv-title mv-phone cache
 ALLC=$(grep -E '^ALL=' tools/godot/coop-test.sh | sed -e 's/^ALL="//' -e 's/"$//')
 LANE1=""; LANE2=""; i=0
 for sc in $ALLC; do if [ $((i % 2)) = 0 ]; then LANE1="$LANE1 $sc"; else LANE2="$LANE2 $sc"; fi; i=$((i + 1)); done
-COOP_PORT=3120 COOP_CODE=246810 bash tools/godot/coop-test.sh $LANE1 > "$TMP/coop1.log" 2>&1 & P1=$!
-COOP_PORT=3121 COOP_CODE=135790 bash tools/godot/coop-test.sh $LANE2 > "$TMP/coop2.log" 2>&1 & P2=$!
+KEEP="$TMP" COOP_PORT=3120 COOP_CODE=246810 bash tools/godot/coop-test.sh $LANE1 > "$TMP/coop1.log" 2>&1 & P1=$!
+KEEP="$TMP" COOP_PORT=3121 COOP_CODE=135790 bash tools/godot/coop-test.sh $LANE2 > "$TMP/coop2.log" 2>&1 & P2=$!
 if wait $P1 && wait $P2; then rec coop PASS; else rec coop FAIL; grep -hE "^FAIL|COOP|INVARIANT|SCRIPT ERROR" "$TMP/coop1.log" "$TMP/coop2.log" | tail -40; fi
 
 echo
 echo "================ summary ================"
+# only the failures: ~190 PASS rows cost a reader a lot and say nothing
 bad=0
-for i in "${!NAMES[@]}"; do printf '%-26s %s\n' "${NAMES[$i]}" "${RES[$i]}"; [ "${RES[$i]}" = PASS ] || bad=1; done
-[ $bad -eq 0 ] && echo "ALL PASS" || echo "SOME FAILED"
+for i in "${!NAMES[@]}"; do [ "${RES[$i]}" = PASS ] || { printf '%-26s %s\n' "${NAMES[$i]}" "${RES[$i]}"; bad=1; }; done
+[ $bad -eq 0 ] && echo "ALL PASS (${#NAMES[@]} checks)" || echo "SOME FAILED"
+echo "logs: .test-logs/godot/"
 exit $bad

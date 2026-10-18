@@ -1,0 +1,7 @@
+# Keeps broad searches (ripgrep, the agent's Grep) out of history and generated files.
+# Naming a directory still searches it, e.g. `rg RTT docs/reports`.
+docs/PLAN-*.md
+docs/reports/
+docs/metroidvania/*-data/
+public/mv/
+*.uid

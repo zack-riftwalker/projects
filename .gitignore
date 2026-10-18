@@ -5,3 +5,4 @@ coop-config.json
 version.txt
 _update/
 *.zip
+.test-logs/

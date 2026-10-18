@@ -27,6 +27,12 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 | `docs/PROTOCOL.md` | Network protocol. |
 | `docs/PLAN-*.md`, `docs/reports/` | History of the work. |
 
+## Reading the repo cheaply
+- `public/index.html` is ~120k tokens; don't read it whole. `grep -nE '^// js/|// -{10}' public/index.html` lists its modules and sections with line numbers; then read only that range.
+- Big `.gd` files (`room.gd`, `coop.gd`, the test files): `grep -nE '^# (-{4}|={4})' <file>` lists sections, `grep -n '^func <name>' <file>` finds a function.
+- History (`docs/PLAN-*`, `docs/reports/`, `docs/metroidvania/*-data/`, ~580k tokens): read it only when the task points there or you need why something was decided. Current truth is the code, this file, `docs/PROTOCOL.md` and `docs/metroidvania/07-js-vs-godot.md`; `docs/metroidvania/README.md` indexes the rest.
+- `.ignore` keeps that history, `public/mv/` and `*.uid` out of broad searches. To search one of them, name its path.
+
 ## Co-op architecture (short)
 - **Ownership:**
   - The host browser owns the world: creatures, items, tiles.
@@ -64,7 +70,7 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 - Kill only the servers you started. `pkill -f "node server.js"` can kill your own shell.
 
 ## Godot version (`godot/`, branch `ph1`, served at `/mv/`)
-- Godot: `GODOT=$(bash tools/godot/setup-godot.sh | tail -1)`. Full check: `bash tools/godot/test-all.sh` (~25 min: unit tests, parity tapes, web export into `public/mv`, browser checks, every co-op scenario incl. a 90 s soak on a bad line). One co-op scenario: `bash tools/godot/coop-test.sh co-<name>`; one unit test: `$GODOT --headless --path godot -- --test=<name>`.
+- Godot: `GODOT=$(bash tools/godot/setup-godot.sh | tail -1)`. Full check: `bash tools/godot/test-all.sh` (~25 min; prints only failures, full logs in `.test-logs/godot/`: unit tests, parity tapes, web export into `public/mv`, browser checks, every co-op scenario incl. a 90 s soak on a bad line). One co-op scenario: `bash tools/godot/coop-test.sh co-<name>`; one unit test: `$GODOT --headless --path godot -- --test=<name>`.
 - Co-op rules (details: `docs/metroidvania/07-js-vs-godot.md` §3):
   - State over events: anything that must be right now (music, locks, deaths) is derived each frame or carried in snapshots.
   - Host-side damage to P2 goes through `room.harm_zone` (the guest checks its own body).
