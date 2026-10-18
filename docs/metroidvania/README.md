@@ -62,4 +62,4 @@
 | [`13-bosses-v3.md`](13-bosses-v3.md) | باس‌های بعد از THE LEAK، دور سوم: چرا هنوز حس باس نمی‌دن (کیت تک‌حمله‌ای، ترتیب ثابت، آرنای جعبه‌ای، بدن کوچیک)، قرارداد باس نسخه‌ی ۳، و نسخه‌ی ۳ شش باس | Claude | پیشنهاد، منتظر تأیید |
 | [`14-crawler.md`](14-crawler.md) | CRAWLER OF THE WEB (WEB CRAWLER سابق، یه موتور جستجوی قدیمی) از نو، گام به گام با زکریا: پایه‌ی داستان (Clawd یه ایجنت با مأموریت، جمله‌های فلسفی که compact می‌شن، پل به DLC)، داستان و دیالوگ CRAWLER، صحنه‌ی compact | Claude | ساخته شد (ph1) |
 | [`15-boss-process.md`](15-boss-process.md) | روند ساخت باس (از روی کرالر): گام‌های طراحی با زکریا، قانون‌های داستان و مبارزه، چک‌لیست فنی، چیزهایی که وقت گرفت؛ ورودی اسکیل‌های boss-design و boss-build | Claude | آماده |
-| [`16-firewall.md`](16-firewall.md) | THE FIREWALL از نو، گام به گام با زکریا (اسکیل boss-design، دومین باس بعد از CRAWLER) | Claude | گام ۱: HONEYPOT انتخاب شد، جزئیات منتظر تأیید |
+| [`16-firewall.md`](16-firewall.md) | THE FIREWALL از نو، گام به گام با زکریا (اسکیل boss-design، دومین باس بعد از CRAWLER) | Claude | گام ۱ تأیید شد (HONEYPOT)؛ گام ۲ پیشنهاد شد |
