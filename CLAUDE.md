@@ -27,6 +27,11 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 | `docs/PROTOCOL.md` | Network protocol. |
 | `docs/PLAN-*.md`, `docs/reports/` | History of the work. |
 
+## Staying current
+- Several sessions push to `ph1` in parallel, so a session's clone goes stale. A SessionStart hook (`.claude/hooks/session-start.sh`) fast-forwards `ph1` and prints its newest commits at the start.
+- In a long session, run `git pull origin ph1` before starting a new task and before committing.
+- The boss skills and the Godot docs exist only on `ph1`. A session opened on `main` has neither: `git fetch origin ph1 && git checkout ph1`.
+
 ## Reading the repo cheaply
 - `public/index.html` is ~120k tokens; don't read it whole. `grep -nE '^// js/|// -{10}' public/index.html` lists its modules and sections with line numbers; then read only that range.
 - Big `.gd` files (`room.gd`, `coop.gd`, the test files): `grep -nE '^# (-{4}|={4})' <file>` lists sections, `grep -n '^func <name>' <file>` finds a function.
