@@ -81,12 +81,24 @@ func _draw() -> void:
 		var bw := 190
 		var bx := (W - bw) / 2
 		var byy := H - 12
-		PixelText.draw_text(self, b.boss_name, bx, byy - 9, Game.COL.paper, {"tiny": true, "outline": Game.COL.ink})
+		var bar_f: float = maxf(0.0, b.hpf) / maxf(1.0, float(b.max_hp))
+		var bar_c := Color(Game.COL.hazard)
+		var bar_bg := Color("#5a1630")
+		var bar_hi := Color("#ff9aab")
+		var bar_name: String = b.boss_name
+		if b.has_method("hud_bar"):                      # a boss with bars of its own (THE FIREWALL: [fraction, colour, name])
+			var hb: Array = b.hud_bar()
+			bar_f = float(hb[0])
+			bar_c = Color(hb[1])
+			bar_bg = bar_c.darkened(0.75)
+			bar_hi = bar_c.lightened(0.45)
+			bar_name = String(hb[2])
+		PixelText.draw_text(self, bar_name, bx, byy - 9, Game.COL.paper, {"tiny": true, "outline": Game.COL.ink})
 		Gfx.panel(self, bx - 2, byy - 2, bw + 4, 7, "#231d2e", Game.COL.ink)
-		draw_rect(Rect2(bx, byy, bw, 3), Color("#5a1630"))
-		var fw := roundi(bw * maxf(0.0, b.hpf) / maxf(1.0, float(b.max_hp)))
-		draw_rect(Rect2(bx, byy, fw, 3), Color.WHITE if b.flash > 0.0 else Color(Game.COL.hazard))
-		draw_rect(Rect2(bx, byy, fw, 1), Color("#ff9aab"))
+		draw_rect(Rect2(bx, byy, bw, 3), bar_bg)
+		var fw := roundi(bw * bar_f)
+		draw_rect(Rect2(bx, byy, fw, 3), Color.WHITE if b.flash > 0.0 else bar_c)
+		draw_rect(Rect2(bx, byy, fw, 1), bar_hi)
 	if b != null and room.fight.state == "intro":
 		var k := _ease_out(clampf((1.5 - room.fight.t - 0.3) / 0.5, 0.0, 1.0))
 		if k > 0.0:

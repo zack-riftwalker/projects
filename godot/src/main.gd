@@ -299,6 +299,21 @@ func _ready() -> void:
 				fh.pk_dir = 1 if fh.stage == 2 else 0
 				for hc in [[6, 0.7], [8, 1.7], [10, 2.6], [12, 3.5]]:       # the hot floor at each of its moments
 					fh.heat[hc[0]] = fr.time - float(hc[1])
+		elif Game.scene == "fwintro" or Game.scene.begins_with("fwtell:"):      # screenshot helpers: THE FIREWALL's intro (the card shows in its last 1.2 s), or phase 1 with an attack just begun (fwtell:<cookies|hold|mat|crack>[:<x>])
+			var ta := Game.scene.split(":")
+			manager.swap_to("N15", Vector2(140.0, 150.0))
+			var tp = manager.player
+			tp.x = float(ta[2]) if ta.size() > 2 else 140.0
+			tp.y = 176.0 - tp.h
+			tp.inv = 999.0
+			var tr: Room = manager.room
+			tr._start_intro()
+			if ta[0] == "fwtell":
+				tr.fight.t = 0.0
+				tr._begin_fight()
+				var tb = tr.boss
+				tb.idle_t = 999.0
+				tb._start(ta[1], "p1")
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room

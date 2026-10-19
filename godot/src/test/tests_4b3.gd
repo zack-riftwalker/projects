@@ -1107,6 +1107,7 @@ func t_fightsim() -> bool:
 	var counts := {}
 	var seen := {}
 	var hits := 0
+	var p1_end := -1.0
 	var hp_start: int = r.player.hp
 	for f in range(int(secs * 60.0)):
 		if OS.get_environment("GODMODE") != "":
@@ -1130,7 +1131,9 @@ func t_fightsim() -> bool:
 				counts[key] = int(counts.get(key, 0)) + 1
 		if b != null and (b.dying or b.dead):
 			break
-	print("FIGHTSIM %s %.0f s: attacks %s, hp %.1f/%d, hits taken %d" % [rid, secs, str(counts), b.hpf if b != null else -1.0, b.max_hp if b != null else 0, hits])
+		if b != null and rid == "N15" and p1_end < 0.0 and b.hpf <= float(b.max_hp) * 0.70 + 0.01:
+			p1_end = float(f) / 60.0                       # (THE FIREWALL: how long its first bar lasts for this bot; the plan's target is ~60 s for a good player)
+	print("FIGHTSIM %s %.0f s: attacks %s, hp %.1f/%d, hits taken %d%s" % [rid, secs, str(counts), b.hpf if b != null else -1.0, b.max_hp if b != null else 0, hits, (", phase 1 over at %.0f s" % p1_end) if p1_end >= 0.0 else ""])
 	Game.fresh()
 	return report("fightsim", true, "")
 
@@ -1386,9 +1389,235 @@ func t_firewall3() -> bool:
 			fail(res, "the guest's masks differ: stage %d body %d west %d" % [q.stage, q.body_c0, q.west_c1])
 	r2.queue_free()
 	r.queue_free()
+	fw3_phase1(res)
 	Game.fresh()
 	Controls.script_input = null
 	return report("firewall3", res.ok, res.info)
+
+# a fight room of N15 with the player on the lobby floor, invulnerable
+func fw3_fight() -> Room:
+	var r := new_room("N15")
+	r.player.x = 200.0
+	r.player.y = 176.0 - r.player.h
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	return r
+
+func fw3_step(r: Room, n: int) -> void:
+	for f in range(n):
+		r.player.inv = 99.0
+		r.player.hp = r.player.max_hp
+		step_keys(r, {})
+
+# M2: the exit door and phase 1
+func fw3_phase1(res: Dictionary) -> void:
+	Game.diff = "normal"
+	Game.flags.erase("intro:FIREWALL")
+	# 1. the attacks: the first cycle is the fixed order, then all four are seen, never the same one twice in a row, no contact damage, no on-screen marker
+	var r := fw3_fight()
+	var fw: FirewallBoss = r.boss
+	if fw.hurtboxes().size() < 2 or not fw.harmboxes().is_empty():
+		fail(res, "the idle door has harm boxes or no screen")
+	var ids: Array = []
+	var seq := -1
+	var contact := 0
+	for f in range(60 * 150):
+		fw3_step(r, 1)
+		if not fw.plan.is_empty() and int(fw.plan.seq) != seq:
+			seq = int(fw.plan.seq)
+			ids.append(String(fw.plan.id))
+		if fw.plan.is_empty() or String(fw.plan.ph) == "cue":
+			contact += fw.harmboxes().size() - fw.hz_harm().size()          # (a note or a bite is a hazard of its own, not the door)
+		if ids.size() >= 24:
+			break
+	if ids.size() < 8 or ids.slice(0, 4) != ["cookies", "mat", "hold", "crack"]:
+		fail(res, "the first cycle was %s" % str(ids.slice(0, 4)))
+	for id in FirewallBoss.IDS:
+		if not ids.has(id):
+			fail(res, "attack %s never came in %d attacks" % [id, ids.size()])
+	for i in range(1, ids.size()):
+		if ids[i] == ids[i - 1]:
+			fail(res, "%s twice in a row" % ids[i])
+	if contact > 0:
+		fail(res, "the door hurt outside an active attack %d times" % contact)
+	r.queue_free()
+	# 2. each attack on its own: what it throws, how it moves, what it can do
+	r = fw3_fight()
+	fw = r.boss
+	fw.idle_t = 999.0
+	fw._start("cookies", "p1")
+	var n := 0
+	while not fw.plan_active() and n < 200:
+		fw3_step(r, 1)
+		n += 1
+	fw3_step(r, 2)
+	var cookies: Array = []
+	for q in r.projs:
+		if q.get("cookie", false):
+			cookies.append(q)
+	var gold := 0
+	for q in cookies:
+		if q.get("catchable", false):
+			gold += 1
+	if cookies.size() != 3 or gold != 1:
+		fail(res, "%d cookies, %d gold" % [cookies.size(), gold])
+	else:                                                   # catch the gold one: it flies back at the screen and dazes the shell
+		var gq: Dictionary = {}
+		for q in cookies:
+			if q.get("catchable", false):
+				gq = q
+		var hp0 := fw.hpf
+		r.catch_proj(gq, r.player)
+		fw3_step(r, 6)                                         # (the catch stops the room for 0.06 s)
+		if not gq.get("steered", false) or not is_zero_approx(float(gq.g)):
+			fail(res, "the caught cookie was not steered at the screen")
+		var got := false
+		for f in range(90):
+			fw3_step(r, 1)
+			if fw.daze_t > 0.0:
+				got = true
+				break
+		if not got or fw.hpf >= hp0:
+			fail(res, "a cookie caught back did not daze the shell (daze %.2f, hp %.1f -> %.1f)" % [fw.daze_t, hp0, fw.hpf])
+		var seq2 := fw.plan_seq
+		fw3_step(r, 60)
+		if fw.plan_seq != seq2:
+			fail(res, "the shell attacked while dazed")
+	r.queue_free()
+	# hold: four notes leave the speaker 0.3 s apart, a hit pops one, no new hold while two are alive
+	r = fw3_fight()
+	fw = r.boss
+	fw.idle_t = 999.0
+	fw._start("hold", "p1")
+	var most := 0
+	for f in range(60 * 3):
+		fw3_step(r, 1)
+		most = maxi(most, fw._notes_alive())
+	if most != FirewallBoss.NOTE_N:
+		fail(res, "%d notes at most, want %d" % [most, FirewallBoss.NOTE_N])
+	for h in fw.hz:
+		if h.k == "note" and not fw.hz_boxes(h, r.time).is_empty() and fw.hz_boxes(h, r.time)[0].dmg != 1:
+			fail(res, "a note does not hurt for 1")
+	var alive0 := fw._notes_alive()
+	var popped := ""
+	for b in fw.hurtboxes():
+		if b.has("note") and popped == "":
+			popped = fw.hit(1, 1.0, 0.0, "swipe", b)
+	if alive0 > 0 and (popped != "kill" or fw._notes_alive() != alive0 - 1):
+		fail(res, "a hit did not pop a note (%s, %d -> %d)" % [popped, alive0, fw._notes_alive()])
+	fw.hz.clear()
+	for k in range(2):
+		fw.hz.append({"k": "note", "t0": r.time, "warn": 0.6, "v": [100, 100, k]})
+	fw.cyc = 99
+	var holds := 0
+	for k in range(60):
+		fw.plan = {}
+		fw.last_id = ""
+		fw._choose()
+		if not fw.plan.is_empty() and String(fw.plan.id) == "hold":
+			holds += 1
+	if holds > 0:
+		fail(res, "hold started with two notes alive (%d times)" % holds)
+	r.queue_free()
+	# the carpet wave runs west at 160 px/s from the door, 24 x 12 above the floor; the flame from the crack is 2 damage after a cue of at least 0.7 s
+	r = fw3_fight()
+	fw = r.boss
+	fw.idle_t = 999.0
+	fw._start("mat", "p1")
+	n = 0
+	while not fw.plan_active() and n < 200:
+		fw3_step(r, 1)
+		n += 1
+	var w0: Dictionary = fw.harmboxes()[0]
+	fw3_step(r, 30)
+	var w1: Dictionary = fw.harmboxes()[0]
+	if w0.dmg != 1 or w0.w != 24.0 or w0.h != 12.0 or absf((float(w0.x) - float(w1.x)) - 80.0) > 6.0:
+		fail(res, "the carpet wave: %s then %s" % [str(w0), str(w1)])
+	fw.plan = {}
+	fw._start("crack", "p1")
+	var cue := float(fw.plan.t)
+	n = 0
+	while not fw.plan_active() and n < 200:
+		fw3_step(r, 1)
+		n += 1
+	var cb: Array = fw.harmboxes()
+	if cue < 0.7 or cb.is_empty() or int(cb[0].dmg) != int(Game.dv("big_hit")) or cb[0].x != 208.0 or cb[0].w != 96.0:
+		fail(res, "the flame: cue %.2f, boxes %s" % [cue, str(cb)])
+	r.queue_free()
+	# 3. bites: resting 2 s on a piece of the lobby bites it (the cushions twitch 0.6 s first), then it rests 3 s; the bare floor never bites
+	r = fw3_fight()
+	fw = r.boss
+	var bites := 0
+	var first_at := -1.0
+	var t_on := r.time
+	r.player.x = 60.0
+	r.player.y = 144.0 - r.player.h
+	for f in range(60 * 7):
+		fw.idle_t = 999.0
+		r.player.vx = 0.0
+		fw3_step(r, 1)
+		for h in fw.hz:
+			if h.k == "bite" and float(h.t0) > first_at:
+				if first_at < 0.0:
+					first_at = float(h.t0) - t_on
+				bites += 1
+				first_at = maxf(first_at, float(h.t0) - t_on) if bites == 1 else first_at
+				break
+	var bite_n := 0
+	for h in fw.hz:
+		if h.k == "bite":
+			bite_n += 1
+	if first_at < 1.9 or first_at > 2.6 or bites < 1:
+		fail(res, "the sofa bit after %.2f s (bites seen %d)" % [first_at, bites])
+	r.queue_free()
+	r = fw3_fight()
+	fw = r.boss
+	for f in range(60 * 6):
+		fw.idle_t = 999.0
+		fw3_step(r, 1)
+	var bare := 0
+	for h in fw.hz:
+		if h.k == "bite":
+			bare += 1
+	if bare > 0:
+		fail(res, "the bare floor bit")
+	r.queue_free()
+	# 4. bar 1: green, 100 % to 70 % of the hp; the shell holds at 70 % (phase 2 comes with M3); a skip ends the fight
+	r = fw3_fight()
+	fw = r.boss
+	var bar: Array = fw.hud_bar()
+	if absf(float(bar[0]) - 1.0) > 0.001 or String(bar[2]) != "GUEST SERVICES":
+		fail(res, "full bar %s" % str(bar))
+	fw.hpf = float(fw.max_hp) * 0.85
+	if absf(float(fw.hud_bar()[0]) - 0.5) > 0.001:
+		fail(res, "bar at 85 %%: %s" % str(fw.hud_bar()))
+	fw.hit(10000 - 9999 + 400, 1.0, 0.0, "swipe", fw)
+	if absf(fw.hpf - float(fw.max_hp) * 0.70) > 0.01 or fw.dying or float(fw.hud_bar()[0]) != 0.0:
+		fail(res, "the shell did not hold at 70 %% (hp %.1f of %d)" % [fw.hpf, fw.max_hp])
+	if not r.skip_boss() and not fw.dying:
+		fail(res, "the skip button did not end the fight")
+	r.queue_free()
+	# 5. the intro: 6 s the first time, 2.5 s after; the door's click, then the warm line (a subtitle on both pages)
+	Game.flags.erase("intro:FIREWALL")
+	r = new_room("N15")
+	fw = r.boss
+	if absf(fw.intro_len() - 6.0) > 0.001:
+		fail(res, "first intro %.1f s" % fw.intro_len())
+	r.player.x = 200.0
+	r.player.y = 176.0 - r.player.h
+	r._start_intro()
+	for f in range(100):
+		r.player.inv = 99.0
+		step_keys(r, {})
+	if fw.say_k != 1 or fw.intro_t0 < 0.0 or absf(fw.say_t0 - fw.intro_t0 - 0.8) > 0.1:
+		fail(res, "the welcome line did not start at 0.8 s (say %d)" % fw.say_k)
+	r.fight.t = 0.0
+	r._begin_fight()
+	if not Game.flag("intro:FIREWALL") or absf(fw.intro_len() - 2.5) > 0.001:
+		fail(res, "the intro stayed long")
+	r.queue_free()
+	Game.flags.erase("intro:FIREWALL")
 
 # MVB3-08: THE REVIEWER #2 v2 (the pad and reward checks are the 4B-2 ones)
 func t_reviewer2b() -> bool:
@@ -1685,6 +1914,7 @@ func t_bosspresets() -> bool:
 		# [room, id, expected cue, expected rec (or -1: not checked, or the family's: negative family rec)]
 		var table: Array = [
 			["N09", "results", 0.6, 0.5], ["N09", "drop", 0.7, 1.5], ["N09", "leap", 0.7, 1.5], ["N09", "flash", 0.5, 0.1], ["N09", "dive", 0.7, 1.0], ["N09", "feint", 0.7, 0.35],
+			["N15", "cookies", 0.6, 0.5], ["N15", "hold", 0.7, 0.6], ["N15", "mat", 0.6, 0.5], ["N15", "crack", 0.8, 1.0],
 			["N22", "cached", 1.0, -0.4], ["N22", "double", 0.75, 0.6], ["N22", "verdict", 0.6, 0.6], ["N22", "nitpick", 0.7, 0.6], ["N22", "cross", 0.9, 0.6], ["N22", "signoff", 0.75, 0.2], ["N22", "slash", 0.45, 0.2], ["N22", "sdiamond", 0.45, 0.7], ["N22", "riposte", 0.75, -0.9]]
 		wanted += table.size()
 		var rooms := {}

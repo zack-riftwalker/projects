@@ -17,11 +17,23 @@ Read before every session: this file, [`15-boss-process.md`](15-boss-process.md)
 | milestone | what | status |
 |---|---|---|
 | M1 | arena: map, HoneypotHall, packets, hot floor, camera, lights | **done** (notes below) |
-| M2 | boss body + phase 1 + intro + two-bar HUD | not started |
+| M2 | boss body + phase 1 + intro + two-bar HUD | **done** (notes below) |
 | M3 | fake-victory cutscene + phase 2 + rate limit | not started |
 | M4 | phase 3 + last 15 % | not started |
 | M5 | death scene, voices, sounds, music, logs, crawler compact line | not started |
 | M6 | loss menu, NETWORK foreshadow (N01 scene, signal icon, signs), after-state, full tests, web export | not started |
+
+### M2 notes (what changed from the plan while building it)
+
+- The shell holds at 70 % (`on_damage` clamps), so until M3 the fight cannot end by damage; the pause menu's skip button still ends it (a hit of 9999+ is a skip). M3 replaces the hold with the fake-victory cutscene.
+- `hud_bar()` returns `[fraction, colour, name]`; `hud.gd` uses it for any boss that has it (the bar's back is the colour darkened). Bar 1 is green and runs from 100 % to 70 % of the hp; the two-bar fill animation is M3.
+- A caught cookie is steered at the door's screen (the lob it was thrown with would not find it) and dazes the shell for 1.5 s on any `catch` hit: the only catchable thing in this fight is a cookie, so "hits the door" and "hits the screen" are the same event. The screen is still its own hurtbox for claws.
+- The reception tray is at (177, 122), where the hall draws it (the plan said (168, 124)).
+- The welcome line has no voice yet: its subtitle runs on `say_t0` with a stand-in length (4.6 s); M5 brings the file and the real length. The intro uses the generic name card (it shows in the last 1.2 s of the 6 s intro).
+- New glyph `∞` in `pixel_text.gd` (big and tiny) for the LED text `requests remaining: ∞`.
+- Music is `w1` for the whole shell (placeholder, see 5.10). Stand-in sounds: `uiOk` (ding), `gate` (door click, hinge), `chirp` (hold music), `tick` (mat, bite), `dash`, `roar`.
+- `fightsim BOSS=N15` now also prints when the first bar ends: ~55 s on normal, ~73 s on hard for the test bot (target ~60 s on normal): `T` stays.
+- Screenshot helpers: `fwintro` (the intro; WAIT 345 shows the card) and `fwtell:<cookies|hold|mat|crack>[:<x>]` (phase 1 with that attack just begun).
 
 ### M1 notes (what changed from the plan while building it)
 

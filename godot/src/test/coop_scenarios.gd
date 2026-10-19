@@ -2301,34 +2301,54 @@ func sc_co_crawler() -> Array:
 	await wait_secs(1.0)
 	return [has and seen2.size() >= 6 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and int(st2.get("hz_hits", 0)) >= 1 and deep, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, hazard hits taken %d, phase 3 seen %s, violations '%s' '%s'" % [seen2.size(), short, mine, int(st2.get("hz_hits", 0)), deep, pup.kit_violation, pup.arena_violation]]
 
-# THE FIREWALL, M1: the arena. The host walks the hall through its stages (lobby, furnace, two walls, after); the guest has to build the same hall, camera and
-# packets from the boss's net fields alone, with both bodies falling into the furnace and walking on its packets. Later milestones add the fight.
+# THE FIREWALL. M2: phase 1 (the shell) for 24 s, attacks forced at both players, the guest's own page judges every cue and hazard it is hurt by. M1: then the host
+# walks the hall through its stages (lobby, furnace, two walls, after); the guest has to build the same hall, camera and packets from the boss's net fields alone.
 func sc_co_firewall() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
 	var secs := 6.0 * slow
+	var p1_secs := 24.0 * slow
 	if role == "host":
+		Game.tools.catch = true
 		await wait_secs(1.0)
 		var r := boss_arena("N15", 130.0, 210.0)
 		var p = mgr().player
 		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
 		var fw: FirewallBoss = r.boss
 		var hp: HoneypotHall = r.hpot
+		var seen := {}
+		var st := {}
+		var forced := [[2.0, "cookies", "p2"], [7.0, "hold", "p2"], [12.0, "mat", "p2"], [16.0, "crack", "p2"], [20.0, "cookies", "p1"]]
 		var locked0: bool = r.cam.lock != null
-		for st in [1, 2, 3]:
-			if st == 1:
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		while Time.get_ticks_msec() - t0 < p1_secs * 1000.0:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			Controls.script_input = {"attack": f % 50 < 3}
+			f += 1
+			plan_stats(fw, seen)
+			boss_phase_script(fw, float(Time.get_ticks_msec() - t0) / 1000.0 / slow, st, forced, [])
+			await get_tree().physics_frame
+		Controls.script_input = {}
+		var tg := {"p1": 0, "p2": 0}
+		for sq in seen:
+			tg[seen[sq]] += 1
+		for stg in [1, 2, 3]:
+			if stg == 1:
 				hp.pk_t0 = r.time
-			elif st == 3:
+			elif stg == 3:
 				hp.pk_t0 = HoneypotHall.NO_PK
-			hp.set_stage(st)
-			var t0 := Time.get_ticks_msec()
+			hp.set_stage(stg)
+			t0 = Time.get_ticks_msec()
 			while Time.get_ticks_msec() - t0 < secs * 1000.0:
 				p.inv = 999.0
 				p.hp = p.max_hp
+				fw.idle_t = 999.0
 				await get_tree().physics_frame
 		var free1: bool = r.cam.lock == null
 		await wait_secs(1.0)
-		return [started and locked0 and free1 and fw != null, "host: started %s, lobby camera locked %s, furnace camera free %s, seed %d" % [started, locked0, free1, hp.seed]]
+		return [started and locked0 and free1 and fw != null and seen.size() >= 5 and tg.p2 >= 2, "host: started %s, %d plans (p1 %d, p2 %d), lobby camera locked %s, furnace camera free %s, seed %d" % [started, seen.size(), tg.p1, tg.p2, locked0, free1, hp.seed]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("N15", 130.0, 210.0)
 	var found := {"b": null}
@@ -2340,20 +2360,39 @@ func sc_co_firewall() -> Array:
 	var pup: FirewallBoss = found.b
 	if pup == null:
 		return [false, "no firewall puppet"]
-	var seen := {}
+	var seen2 := {}
+	var st2 := {}
+	var shots := 0
+	var notes := 0
 	var packets := 0
 	var cam_ok := true
 	var cam_bad := 0
 	var below := 0
+	var seen_st := {}
 	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < secs * 3.0 * 1000.0 + 4000.0:
+	while Time.get_ticks_msec() - t1 < p1_secs * 1000.0 + secs * 3.0 * 1000.0 + 4000.0:
 		var g = mgr().player
 		if not is_instance_valid(pup):
 			break
 		var hl: HoneypotHall = mgr().room.hpot
-		g.inv = 999.0
-		g.hp = g.max_hp
-		seen[hl.stage] = true
+		var el2 := float(Time.get_ticks_msec() - t1) / 1000.0 / slow
+		if hl.stage == 0:
+			plan_stats(pup, seen2)
+			for q in mgr().room.projs:
+				if not q.dead and String(q.kind) in ["orb", "diamond"]:
+					shots += 1
+			notes = maxi(notes, pup._notes_alive())
+			Controls.script_input = {}
+			hazard_probe(g, pup, st2)
+		else:
+			g.inv = 999.0
+			g.hp = g.max_hp
+			if not seen_st.has(1) and hl.stage == 1:                 # (the probe may have left it on a stub: the floor goes under the middle of the room)
+				g.x = 190.0
+				g.y = 150.0
+				g.vx = 0.0
+				g.vy = 0.0
+		seen_st[hl.stage] = true
 		var wrong: bool = (hl.stage == 0 and mgr().room.cam.lock == null) or (hl.stage >= 1 and mgr().room.cam.lock != null)
 		cam_bad = cam_bad + 1 if wrong else 0                       # (the lock follows the stage within a frame or two, never for good)
 		if cam_bad > 6:
@@ -2364,11 +2403,22 @@ func sc_co_firewall() -> Array:
 				live += 1
 		if hl.stage == 1:
 			packets = maxi(packets, live)
-		if hl.stage == 1 and g.y > 300.0:
-			below += 1
+			if g.y > 300.0:
+				below += 1
 		await get_tree().physics_frame
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
+			short += 1
+	var mine := 0
+	for sq in seen2:
+		if seen2[sq] == "p2":
+			mine += 1
 	await wait_secs(1.0)
-	return [seen.has(1) and seen.has(2) and seen.has(3) and packets >= 3 and cam_ok and below > 0, "guest: stages seen %s, up to %d packets on screen, camera %s, %d frames down in the furnace" % [str(seen.keys()), packets, "ok" if cam_ok else "WRONG", below]]
+	var ok2: bool = seen_st.has(1) and seen_st.has(2) and seen_st.has(3) and packets >= 3 and cam_ok and below > 0
+	var ok1: bool = seen2.size() >= 5 and mine >= 2 and short == 0 and pup.kit_violation == "" and pup.arena_violation == "" and shots > 0 and notes >= 1 and int(st2.get("hz_hits", 0)) >= 1
+	return [ok1 and ok2, "guest: phase 1 saw %d plans (%d on me), %d active shown < 0.30 s, %d shots, %d notes, hazard hits %d, violations '%s' '%s'; stages %s, up to %d packets, camera %s, %d frames down in the furnace" % [seen2.size(), mine, short, shots, notes, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation, str(seen_st.keys()), packets, "ok" if cam_ok else "WRONG", below]]
 
 # the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 40 s of fight, nobody is lost
 func sc_co_reviewer2() -> Array:
