@@ -172,7 +172,7 @@ func apply() -> void:
 	var want := {}                           # cell index -> tile (everything else owned is air)
 	for tx in range(1, C_MAX + 1):           # the lobby floor: the middle goes with floor_on; the stubs stay, solid in the lobby and one-way after
 		var stub: bool = tx <= 3 or tx >= 20
-		if stub:
+		if stub and (stage == 0 or stairs == 1):          # (the stubs burn with the floor and come back with the stairs: no safe ledge in the fight)
 			want[_idx(tx, FLOOR_ROW)] = TileGrid.SOLID if stage == 0 else TileGrid.ONEWAY
 		elif floor_on:
 			want[_idx(tx, FLOOR_ROW)] = TileGrid.SOLID
@@ -486,7 +486,7 @@ func draw_static(ci: CanvasItem) -> void:
 		while xx < 366.0:
 			ci.draw_rect(Rect2(xx, FLOOR_Y + 3.0, 6.0, 2.0), Color("#c24b4b"))
 			xx += 22.0
-	else:
+	elif stairs == 1:
 		for stub in [[16.0, 48.0], [320.0, 48.0]]:                          # the stubs keep their charred carpet
 			var sx: float = stub[0]
 			ci.draw_rect(Rect2(sx, FLOOR_Y, stub[1], 14.0), Color("#1d1210"))

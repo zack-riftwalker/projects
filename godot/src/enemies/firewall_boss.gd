@@ -75,6 +75,8 @@ const PUNCH_LEN := 96.0
 const FLAME_CUE := 0.5
 const FLAME_ACT := 0.4
 const FLAME_LEN := 80.0
+const DOOR_PUSH := 3.0                                   # px per frame the door / a burning wall top shoves a body that touches it
+const TOP_Y := 160.0                                     # the burning wall tops reach from here down to the wall's top row
 const SPLIT_CUE := 0.7
 const DROP_EVERY := 6.0
 const DROP_WARN := 0.9
@@ -293,13 +295,10 @@ func hurtboxes() -> Array:
 		return b
 	b.append({"x": SCREEN.position.x, "y": SCREEN.position.y, "w": SCREEN.size.x, "h": SCREEN.size.y, "screen": 1})      # (first: a caught cookie finds the screen before the door)
 	b.append({"x": DOOR.position.x, "y": DOOR.position.y, "w": DOOR.size.x, "h": DOOR.size.y})
-	for h in hz:
-		if h.k == "note" and hz_live(h, room.time):
-			var p := note_pos(h, room.time)
-			b.append({"x": p.x - 5.0, "y": p.y - 5.0, "w": 10.0, "h": 10.0, "note": hz_key(h)})
-	return b
+	return b                                                # (the hold notes cannot be popped: a pogo off them was a free ride over the door)
 
-# no contact damage from the door (it is a door); the face and the things the lobby throws do hurt
+# the door is a thing you bump into: touching it hurts and shoves you west (`sx` the knockback's source, `push` px per frame while
+# touching), so nobody stands on it or hides behind it. In the furnace the wall tops burn the same way, back into the furnace.
 func harmboxes() -> Array:
 	var b: Array = []
 	if active and not dying and shift_k == 0:
@@ -309,7 +308,9 @@ func harmboxes() -> Array:
 				b.append({"x": MAT_X0 - u * 160.0, "y": HoneypotHall.FLOOR_Y - 12.0, "w": 24.0, "h": 12.0, "dmg": 1})
 			if plan_active() and String(plan.id) == "crack":
 				b.append({"x": 208.0, "y": 144.0, "w": 96.0, "h": 32.0, "dmg": _big()})
+			b.append({"x": DOOR.position.x, "y": DOOR.position.y, "w": DOOR.size.x, "h": DOOR.size.y, "dmg": 1, "sx": DOOR.end.x + 40.0, "push": -DOOR_PUSH})
 		else:
+			b.append_array(wall_tops())
 			for fc in faces():
 				var fr := _face_rect_at(int(fc[0]), float(fc[1]))
 				b.append({"x": fr.position.x, "y": fr.position.y, "w": fr.size.x, "h": fr.size.y, "dmg": 1})
@@ -327,6 +328,20 @@ func harmboxes() -> Array:
 						b.append(_flame_box())
 	b.append_array(hz_harm())
 	return b
+
+# the burning tops of the walls (phase 2: the east body; phase 3: both): standing up there was out of every attack's reach
+func wall_tops() -> Array:
+	var hl := _hall()
+	if hl == null:
+		return []
+	var out: Array = []
+	if hl.body_c0 > 0:
+		var ex := hl.east_surface()
+		out.append({"x": ex, "y": TOP_Y, "w": float(HoneypotHall.C_MAX + 1) * 16.0 - ex, "h": HoneypotHall.FLOOR_Y + 16.0 - TOP_Y, "dmg": 1, "sx": 400.0, "push": -DOOR_PUSH})
+	if hl.west_c1 > 0:
+		var wx := hl.west_surface()
+		out.append({"x": 16.0, "y": TOP_Y, "w": wx - 16.0, "h": HoneypotHall.FLOOR_Y + 16.0 - TOP_Y, "dmg": 1, "sx": -16.0, "push": DOOR_PUSH})
+	return out
 
 # the flame: 80 x 20 from the face's edge, straight out over the furnace (plan fields: wall, centre height)
 func _flame_box() -> Dictionary:
@@ -431,14 +446,8 @@ func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
 		skipping = true                                           # (the pause menu's skip button: it ends the fight at once, in a scene too)
 	elif shift_k != 0:
 		return ""                                                 # (it cannot be hurt during the fake victory)
-	if b is Dictionary and b.has("note"):
-		for h in hz.duplicate():
-			if hz_key(h) == String(b.note):
-				var p := note_pos(h, room.time)
-				room.burst(p.x, p.y, 5, ["#fff3b0", GREEN], 80.0, 160.0)
-				hz.erase(h)
-		Audio.sfx("squish", {"vol": 0.6})
-		return "kill"
+	elif blocks(dx, dy, how):
+		return "block"
 	if ph >= 2 and not skipping and how != "catch":                   # the rate limit: each player has two free hits in 2 s
 		var at := face_center()
 		if b is Dictionary and b.has("face"):
@@ -461,6 +470,10 @@ func hit(d: int, dx: float, dy: float, how: String, b = null) -> String:
 			room.shake(0.4)
 			Audio.sfx("brk")
 	return super.hit(d, dx, dy, how, b)
+
+# the door from above is a clang (the pogo still bounces): the shell is hit from the front, at its screen and its body
+func blocks(_dx: float, dy: float, how: String) -> bool:
+	return ph == 1 and active and not dying and dy > 0.0 and (how == "swipe" or how == "stomp")
 
 # per-player rate limit. true: the hit counts; false: it is wasted (a `tock`, the cooldown restarts at 5 s, or the 429 itself)
 func _rate_ok(key: String, at: Vector2) -> bool:
@@ -1617,6 +1630,15 @@ func _draw_death_overlay(ci: CanvasItem) -> void:
 
 # the furnace's things: the 429 blast, the hop's trail, the punch's bulge, the flame, the split's heat, DROP ALL, the west wall cracking
 func _draw_overlay2(ci: CanvasItem, now: float) -> void:
+	if active and not dying and shift_k == 0:
+		for wt in wall_tops():                                   # the wall tops burn: low flames that lick up and down
+			var x := float(wt.x)
+			while x < float(wt.x) + float(wt.w):
+				var fh := 6.0 + 5.0 * (0.5 + 0.5 * sin(now * 9.0 + x * 0.37))
+				var by := HoneypotHall.FLOOR_Y + 16.0
+				ci.draw_rect(Rect2(x, by - fh, 4.0, fh), Color(1.0, 0.35, 0.1, 0.85))
+				ci.draw_rect(Rect2(x + 1.0, by - fh * 0.55, 2.0, fh * 0.55), Color(1.0, 0.85, 0.4, 0.9))
+				x += 4.0
 	for h in hz:
 		var kind := String(h.k)
 		var since := now - float(h.t0)

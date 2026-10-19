@@ -2308,6 +2308,8 @@ func interact_combat(p) -> void:
 				continue
 			if not Game.overlap(hb, b):
 				continue
+			if b is Dictionary and b.has("push"):         # a thing that shoves a body out of itself, hurt or not (the firewall's door)
+				grid.move_x(p, float(b.push))
 			if e.passive:                       # a corpse hurts nobody, but a stomp still finishes it
 				if e.stompable and p.vy > 30.0 and p.prev_bottom <= b.y + minf(8.0, b.h * 0.6):
 					var res4: String = _hit_entity(e, maxi(1, e.hp), 0.0, 1.0, "stomp", b)
@@ -2339,7 +2341,7 @@ func interact_combat(p) -> void:
 				if res3 != "":
 					stop(0.05)
 			elif p.grace <= 0.0 and not (lenient and e.get_meta("ex", false)):
-				if p.hurt(int(b.get("dmg", e.dmg)) if b is Dictionary else e.dmg, b.x + b.w / 2.0) and e.has_method("on_contact"):
+				if p.hurt(int(b.get("dmg", e.dmg)) if b is Dictionary else e.dmg, float(b.get("sx", b.x + b.w / 2.0))) and e.has_method("on_contact"):
 					e.on_contact()
 			break
 	# spikes, liquid, pits

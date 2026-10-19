@@ -1204,7 +1204,7 @@ func t_firewall3() -> bool:
 		r.step(Game.STEP)
 	if hp.static_rev != rev0:
 		fail(res, "the static drawing was redone %d times while nothing changed" % (hp.static_rev - rev0))
-	# 4. stage 1 (the furnace): the middle of the floor is gone, the stubs are one-way, the body is solid
+	# 4. stage 1 (the furnace): the floor is gone, the stubs too (they come back with the stairs), the body is solid
 	hp.set_stage(1)
 	r.step(Game.STEP)
 	if hp.static_rev != rev0 + 1:
@@ -1215,8 +1215,8 @@ func t_firewall3() -> bool:
 		if g.tile(tx, 11) != TileGrid.E:
 			fail(res, "stage 1 floor still at %d" % tx)
 	for tx in [1, 2, 3, 20, 21, 22]:
-		if g.tile(tx, 11) != TileGrid.ONEWAY:
-			fail(res, "stub %d is not one-way" % tx)
+		if g.tile(tx, 11) != TileGrid.E:
+			fail(res, "stub %d is still there in the fight (a safe ledge)" % tx)
 	for pc in [[3, 9], [9, 8], [13, 5]]:
 		if g.tile(pc[0], pc[1]) != TileGrid.E:
 			fail(res, "furniture stayed in the furnace")
@@ -1395,6 +1395,7 @@ func t_firewall3() -> bool:
 	fw3_phase3(res)
 	fw3_phase5(res)
 	fw3_phase6(res)
+	fw3_ledges(res)
 	Game.fresh()
 	Controls.script_input = null
 	return report("firewall3", res.ok, res.info)
@@ -1422,8 +1423,8 @@ func fw3_phase1(res: Dictionary) -> void:
 	# 1. the attacks: the first cycle is the fixed order, then all four are seen, never the same one twice in a row, no contact damage, no on-screen marker
 	var r := fw3_fight()
 	var fw: FirewallBoss = r.boss
-	if fw.hurtboxes().size() < 2 or not fw.harmboxes().is_empty():
-		fail(res, "the idle door has harm boxes or no screen")
+	if fw.hurtboxes().size() < 2 or fw.harmboxes().size() != 1 or not fw.harmboxes()[-1].has("push"):
+		fail(res, "the idle door is not just the door to bump into, or has no screen")
 	var ids: Array = []
 	var seq := -1
 	var contact := 0
@@ -1433,7 +1434,7 @@ func fw3_phase1(res: Dictionary) -> void:
 			seq = int(fw.plan.seq)
 			ids.append(String(fw.plan.id))
 		if fw.plan.is_empty() or String(fw.plan.ph) == "cue":
-			contact += fw.harmboxes().size() - fw.hz_harm().size()          # (a note or a bite is a hazard of its own, not the door)
+			contact += fw.harmboxes().size() - fw.hz_harm().size() - 1      # (a note or a bite is a hazard of its own; the door's own body is 1)
 		if ids.size() >= 24:
 			break
 	if ids.size() < 8 or ids.slice(0, 4) != ["cookies", "mat", "hold", "crack"]:
@@ -1490,7 +1491,7 @@ func fw3_phase1(res: Dictionary) -> void:
 		if fw.plan_seq != seq2:
 			fail(res, "the shell attacked while dazed")
 	r.queue_free()
-	# hold: four notes leave the speaker 0.3 s apart, a hit pops one, no new hold while two are alive
+	# hold: four notes leave the speaker 0.3 s apart, they cannot be popped (or pogoed), no new hold while two are alive
 	r = fw3_fight()
 	fw = r.boss
 	fw.idle_t = 999.0
@@ -1504,13 +1505,9 @@ func fw3_phase1(res: Dictionary) -> void:
 	for h in fw.hz:
 		if h.k == "note" and not fw.hz_boxes(h, r.time).is_empty() and fw.hz_boxes(h, r.time)[0].dmg != 1:
 			fail(res, "a note does not hurt for 1")
-	var alive0 := fw._notes_alive()
-	var popped := ""
 	for b in fw.hurtboxes():
-		if b.has("note") and popped == "":
-			popped = fw.hit(1, 1.0, 0.0, "swipe", b)
-	if alive0 > 0 and (popped != "kill" or fw._notes_alive() != alive0 - 1):
-		fail(res, "a hit did not pop a note (%s, %d -> %d)" % [popped, alive0, fw._notes_alive()])
+		if b.has("note"):
+			fail(res, "a note can be hit")
 	fw.hz.clear()
 	for k in range(2):
 		fw.hz.append({"k": "note", "t0": r.time, "warn": 0.6, "v": [100, 100, k]})
@@ -1623,6 +1620,52 @@ func fw3_phase1(res: Dictionary) -> void:
 		fail(res, "the intro stayed long")
 	r.queue_free()
 	Game.flags.erase("intro:FIREWALL")
+
+# no safe spot: the door shoves a body west and a pogo on it is a clang; in the furnace the wall tops burn and shove back in
+func fw3_ledges(res: Dictionary) -> void:
+	Game.diff = "normal"
+	Game.flags["intro:FIREWALL"] = true
+	var r := fw3_fight()
+	var fw: FirewallBoss = r.boss
+	var p = r.player
+	fw.idle_t = 999.0
+	p.x = 330.0
+	p.y = 80.0 - p.h
+	p.vy = 0.0
+	fw3_step(r, 40)
+	if p.x + p.w > FirewallBoss.DOOR.position.x + 1.0:
+		fail(res, "a body on the door was not shoved off it (x %.1f)" % p.x)
+	var hp0 := fw.hpf
+	var res_p := fw.hit(1, 0.0, 1.0, "swipe", fw.hurtboxes()[1])
+	if res_p != "block" or fw.hpf != hp0 or not fw.blocks(0.0, 1.0, "swipe") or fw.blocks(1.0, 0.0, "swipe"):
+		fail(res, "a pogo on the door was %s (hp %.1f -> %.1f), or a side hit is blocked" % [res_p, hp0, fw.hpf])
+	p.x = 320.0
+	p.y = 150.0
+	p.inv = 0.0
+	p.grace = 0.0
+	var php: int = p.hp
+	step_keys(r, {})
+	if p.hp >= php or p.vx >= 0.0:
+		fail(res, "touching the door did not hurt and knock west (hp %d -> %d, vx %.0f)" % [php, p.hp, p.vx])
+	fw3_to_p2(r)
+	var hl: HoneypotHall = r.hpot
+	fw.idle_t = 999.0
+	fw.plan = {}
+	if fw.wall_tops().size() != 1:
+		fail(res, "phase 2 has %d burning wall tops, want 1" % fw.wall_tops().size())
+	for tx in [1, 2, 3, 20, 21, 22]:
+		if r.grid.tile(tx, 11) != TileGrid.E:
+			fail(res, "stub %d is a ledge in phase 2" % tx)
+	p.x = 340.0
+	p.y = 192.0 - p.h
+	p.vy = 0.0
+	fw3_step(r, 60)
+	if p.x + p.w > hl.east_surface() + 1.0 and p.y + p.h <= 193.0:
+		fail(res, "a body on the east wall's top stayed there (x %.1f y %.1f)" % [p.x, p.y])
+	fw3_to_p3(r)
+	if fw.wall_tops().size() != 2:
+		fail(res, "phase 3 has %d burning wall tops, want 2" % fw.wall_tops().size())
+	r.queue_free()
 
 # M3: the fake victory, the furnace, the rate limit
 func fw3_to_p2(r: Room, long_ := false) -> void:
@@ -2253,7 +2296,7 @@ func fw3_phase3(res: Dictionary) -> void:
 		fw3_step(r, 1)
 		if fw._hopping():
 			hopped = true
-			if not fw.hurtboxes().is_empty() or not fw.faces().is_empty() or fw.harmboxes().size() != fw.hz_harm().size():
+			if not fw.hurtboxes().is_empty() or not fw.faces().is_empty() or fw.harmboxes().size() != fw.hz_harm().size() + fw.wall_tops().size():
 				fail(res, "the hopping face can be hit / hurts")
 			break
 	if not hopped:
