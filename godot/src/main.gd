@@ -280,6 +280,25 @@ func _ready() -> void:
 				cbb.die_t = 3.0 + float(ca[3])
 				cbb.speak_t = 3.0
 				cbb.core_y = 300.0
+		elif Game.scene.begins_with("firewall:"):      # screenshot helper: THE FIREWALL's arena (firewall:<hp>:<x>:<y>[:<secs>]); 1.0 lobby, 0.6 furnace, 0.3 two walls, 0 the burned shell (M1: the hall alone, the boss inert)
+			var fa := Game.scene.substr(9).split(":")
+			var fhp := float(fa[0])
+			manager.swap_to("N15", Vector2(float(fa[1]) if fa.size() > 1 else 60.0, float(fa[2]) if fa.size() > 2 else 150.0))
+			var fp = manager.player
+			fp.x = float(fa[1]) if fa.size() > 1 else 60.0
+			fp.y = float(fa[2]) if fa.size() > 2 else 150.0
+			fp.inv = 999.0
+			var fr: Room = manager.room
+			fr.fight.state = "done"
+			var fh: HoneypotHall = fr.hpot
+			fh.set_stage(0 if fhp >= 0.7 else (1 if fhp > 0.35 else (2 if fhp > 0.0 else 3)))
+			if fh.stage == 1 or fh.stage == 2:
+				var fsec := float(fa[3]) if fa.size() > 3 else 6.0
+				fh.seed = 4242
+				fh.pk_t0 = fr.time - fsec
+				fh.pk_dir = 1 if fh.stage == 2 else 0
+				for hc in [[6, 0.7], [8, 1.7], [10, 2.6], [12, 3.5]]:       # the hot floor at each of its moments
+					fh.heat[hc[0]] = fr.time - float(hc[1])
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room

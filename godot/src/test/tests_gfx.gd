@@ -75,7 +75,7 @@ func t_moods() -> bool:
 		ok = false
 		info += " %d N rooms;" % n
 	# the table of the plan
-	for pair in [["N09", "lair", 1.0], ["N12", "loss", 1.0], ["N15", "heat", 1.0], ["N22", "review", 1.0], ["N08", "lair", 0.6], ["N20", "loss", 0.5], ["N01", "stable", 1.0]]:
+	for pair in [["N09", "lair", 1.0], ["N12", "loss", 1.0], ["N15", "stable", 1.0], ["N22", "review", 1.0], ["N08", "lair", 0.6], ["N20", "loss", 0.5], ["N01", "stable", 1.0]]:
 		var mm := Look.resolve(Game.rooms_meta.rooms[pair[0]])
 		if mm[0] != pair[1] or not is_equal_approx(float(mm[1]), float(pair[2])):
 			ok = false
@@ -282,10 +282,13 @@ func block_mean(lum: PackedFloat32Array, x0: int, y0: int, w: int, h: int) -> fl
 
 # which parts of a room are drawn: the backdrop (sky + landmarks), the terrain tiles, everything else (decor, furniture, creatures, players, ...)
 func show_parts(r: Room, bg: bool, terr: bool, rest: bool) -> void:
-	for n in ["NetBackdrop", "Landmarks", "HallWall"]:
+	for n in ["NetBackdrop", "Landmarks", "HallWall", "HpotWall"]:
 		var c = r.view.get_node_or_null(n)
 		if c != null:
 			c.visible = bg
+	var hst = r.get_node_or_null("HpotStatic")                # (the honeypot hall's floor, furniture, walls and stairs are terrain: their tiles are its own)
+	if hst != null:
+		hst.visible = terr
 	r.view.tiles.visible = terr
 	r.view.decor.visible = rest
 	r.view.dynamic.visible = rest
@@ -322,6 +325,12 @@ func cam_positions(r: Room) -> Array:
 # tier 2 terrain: its tiles' mean L is at least 0.06 above the background behind them; floor cap rows (the top 2 pixel rows of a tile with air above) >= 0.40
 func contrast_room(id: String, mood = null, label := "", fight_phase := 0) -> Dictionary:
 	var r := new_room(id)
+	var lobby := false                                       # N15's lobby is warm and bright on purpose (16-firewall.md): its wall must cover the room, not be dark
+	if r.hpot != null:
+		if fight_phase >= 2:
+			r.hpot.set_stage(fight_phase - 1)
+		r.hpot.apply()
+		lobby = r.hpot.stage == 0
 	if fight_phase > 0:
 		r._start_intro()
 		r.fight.t = 0.0
@@ -411,10 +420,14 @@ func contrast_room(id: String, mood = null, label := "", fight_phase := 0) -> Di
 			res.ok = false
 			res.info += " %s%s %s L %.2f vs terrain %.2f;" % [id, label, a[0], a[1], a[2]]
 	res.line = "GFX contrast %s%s bg_mean %.3f bg_bright %.3f terrain_gain %.3f cap %.2f" % [id, label, bgm, bgh, gain, cap]
-	if bgm > 0.16 or bgh > 0.02:
+	if lobby:
+		if bgm < 0.30:
+			res.ok = false
+			res.info += " %s%s the lobby's wall does not cover the room (%.3f);" % [id, label, bgm]
+	elif bgm > 0.16 or bgh > 0.02:
 		res.ok = false
 		res.info += " %s%s background %.3f/%.3f;" % [id, label, bgm, bgh]
-	if gain < 0.06:
+	if gain < 0.06 and not lobby:
 		res.ok = false
 		res.info += " %s%s terrain gain %.3f;" % [id, label, gain]
 	if cap < 0.40:
@@ -759,7 +772,7 @@ func t_moodshift() -> bool:
 		info += " the chase look stayed;"
 	r.queue_free()
 	await frames(1)
-	# N15
+	# N15: the lobby is calm, the furnace is in heat, phase 3 has its own look, and skipping the boss leaves the furnace's heat
 	var f := new_room("N15")
 	f._start_intro()
 	f.fight.t = 0.0
@@ -767,9 +780,14 @@ func t_moodshift() -> bool:
 	await frames(2)
 	run_follow(f, 0.5)
 	var heat := Look.mixed("heat", 1.0)
+	if not (f.look.out.sky_far as Color).is_equal_approx(Look.mixed("stable", 1.0).sky_far):
+		ok = false
+		info += " N15's lobby is not calm;"
+	f.hpot.set_stage(1)
+	run_follow(f, 2.3)
 	if not (f.look.out.sky_far as Color).is_equal_approx(heat.sky_far):
 		ok = false
-		info += " N15 does not start in heat;"
+		info += " N15 does not go to heat in the furnace;"
 	f.boss.phase = 3
 	run_follow(f, 2.3)
 	if not (f.look.out.sky_far as Color).is_equal_approx(Look.mixed("heat_p3", 1.0).sky_far):
@@ -938,6 +956,10 @@ func t_ambient() -> bool:
 	Game.gfx_url = 2
 	for pair in [["N12", "shards", 160], ["N09", "spores", 160], ["N15", "embers", 160], ["N22", "paper", 160]]:
 		var r2 := new_room(pair[0])
+		if pair[0] == "N15":                                  # (embers are the furnace's: the lobby is calm)
+			r2.hpot.set_stage(1)
+			r2.hpot.apply()
+			r2.look.set_target("heat", 1.0, true)
 		await frames(3)
 		var am2: RoomAmbient = r2.get_node("Ambient")
 		if am2.kind != pair[1] or am2.n != pair[2]:
@@ -1186,6 +1208,9 @@ func start_fight(id: String, phase := 1) -> Room:
 	r._begin_fight()
 	if phase > 1:
 		r.boss.phase = phase
+		if r.hpot != null:
+			r.hpot.set_stage(phase - 1)                      # (the hall follows the boss's phase: the furnace, then its two walls)
+			r.hpot.apply()
 	return r
 
 # MVGN-13: each arena's own lights and effects; bosses and their telegraphs are never darkened (unshaded); the ambient floor of 35 %
@@ -1231,21 +1256,16 @@ func t_arenas() -> bool:
 			if ratio < 0.35 - 0.001:
 				ok = false
 				info += " %s ambient below 35 %% (%.2f);" % [pair[0], ratio]
-			if pair[0] == "N15":
-				var hz: RoomHaze = r.get_node_or_null("Haze")
-				if hz == null or hz.rects.is_empty() or not hz.visible:
+			if pair[0] == "N15":                                 # the hall's own lights: the lobby's two lamps and window, the furnace's grates and packets
+				var hl: HoneypotHall = r.hpot
+				var c3: Array = []
+				(r.get_node("Lights") as RoomLights)._hpot_lights(c3)
+				if (phase == 1 and c3.size() != 3) or (phase == 3 and c3.size() < 3):
 					ok = false
-					info += " N15 haze missing;"
-				Game.reduce_flash = true
-				hz._apply()
-				if hz.visible:
+					info += " N15 phase %d: %d hall lights;" % [phase, c3.size()]
+				if phase == 3 and r.get_node_or_null("Haze") != null:
 					ok = false
-					info += " haze with Reduce flashing;"
-				Game.reduce_flash = false
-				hz._apply()
-				if (r.get_node("Ambient") as RoomAmbient).fe.is_empty():
-					ok = false
-					info += " no embers off the bricks;"
+					info += " N15 still has its brick haze;"
 			if pair[0] == "N09":
 				var eyes := 0
 				var rl: RoomLights = r.get_node("Lights")

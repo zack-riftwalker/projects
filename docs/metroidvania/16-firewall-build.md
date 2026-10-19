@@ -16,12 +16,24 @@ Read before every session: this file, [`15-boss-process.md`](15-boss-process.md)
 
 | milestone | what | status |
 |---|---|---|
-| M1 | arena: map, HoneypotHall, packets, hot floor, camera, lights | not started |
+| M1 | arena: map, HoneypotHall, packets, hot floor, camera, lights | **done** (notes below) |
 | M2 | boss body + phase 1 + intro + two-bar HUD | not started |
 | M3 | fake-victory cutscene + phase 2 + rate limit | not started |
 | M4 | phase 3 + last 15 % | not started |
 | M5 | death scene, voices, sounds, music, logs, crawler compact line | not started |
 | M6 | loss menu, NETWORK foreshadow (N01 scene, signal icon, signs), after-state, full tests, web export | not started |
+
+### M1 notes (what changed from the plan while building it)
+
+- `rooms.json` N15: `"mood": ["stable", 1]` (the lobby is calm); the hall asks for `heat` in stages 1-2 (`look.gd`), `heat_p3` stays the boss's phase 3. `world-phase45.json` N15 `h: 28`. The room file has no trailing newline (the loader counts one as a row).
+- The hall also draws the **base bricks** of the two bodies and their four port holes (static, redrawn only when a mask changes); the boss (M2-M4) draws only what moves on them: the face, arms, glows, the LED row.
+- `pk_t0` is `HoneypotHall.NO_PK` (-1000) when no packets run: a real room time can be small, so `-1` was not a safe sentinel. Packets are anchored at fixed x (`SURF_E` 288 for the east face, west face base 16 or 64), so a wall stepping in (`429`) never moves a packet; a packet that is entirely inside a wall is `off`.
+- The 1.0 s gap rule: green packets are never cancelled, but they count as drops for the *normal* ones (a normal drop within 1.0 s of a green one is cancelled).
+- A hot-floor cell's clock is `HoneypotHall.heat_phase(age, burn)` (dim 1.4 s, warning 0.6 s, fire, 1.0 s cooling); the boss's `heat` hazard (M3) follows it and mirrors its cells into `hpot.heat`.
+- The boss is an inert door for now (`FirewallBoss`: no attacks, no contact damage, hurt like any boss). Its net fields already carry the hall's masks and the packets' clock (`NF` = 19). M2 rewrites it.
+- `RoomHaze` (heat haze over the old bricks) and the old N15 brick glows/embers are gone with the bricks; the old v2 tests (`firewall2`, the shield check in `plugins5a`, `fw_until`, the N15 rows of `bosspresets`) are gone; `bosspresets` now requires every row of its table to give a plan.
+- Gfx tests: the lobby is bright on purpose, so `gfxcontrast` asks of the lobby that its wall covers the room (mean L >= 0.30) instead of being dark; the furnace (stages 1-2) keeps the dark-room rules. `arenas`, `moodshift`, `ambient` read the hall's stage.
+- Screenshot helper (M1 form): `firewall:<hp>:<x>:<y>[:<secs>]`, 1.0 lobby, 0.6 furnace, 0.3 two walls, 0 the burned shell; `<secs>` = how long the packets have run.
 
 ---
 

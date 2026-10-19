@@ -435,9 +435,9 @@
                  {"id": "N14:E", "side": "E", "a": 9, "b": 12, "to": "N15:W", "lock": "fight"},
                  {"id": "N14:N", "side": "N", "a": 24, "b": 27, "to": "N18:S"}
              ] },
-    "N15": { "file": "N15.txt", "mood": ["heat", 1], "title": "FIREWALL", "size": [24, 14], "origin": [1498, -2], "world": 6, "music": "w6", "zone": "net",
+    "N15": { "file": "N15.txt", "hall": "honeypot", "mood": ["stable", 1], "title": "FIREWALL", "size": [24, 28], "origin": [1498, -2], "world": 6, "music": "w6", "zone": "net",
              "signs": [],
-             "boss": {"id": "FIREWALL", "class": "FirewallBoss", "name": "THE FIREWALL", "sub": "deny by default", "trigger_x": 80, "T": 109.4, "u": 0.75, "reward": "ssh", "banner": "ssh", "banner_sub": "keep pushing into a thin red firewall: you tunnel through", "music": "boss", "drop": 40},
+             "boss": {"id": "FIREWALL", "class": "FirewallBoss", "name": "GUEST SERVICES", "sub": "welcome, guest", "trigger_x": 96, "cam": "free", "T": 109.4, "u": 0.75, "reward": "ssh", "banner": "ssh", "banner_sub": "keep pushing into a thin red firewall: you tunnel through", "music": "boss", "drop": 40},
              "doors": [
                  {"id": "N15:W", "side": "W", "a": 7, "b": 10, "to": "N14:E", "lock": "fight"},
                  {"id": "N15:E", "side": "E", "a": 7, "b": 10, "to": "N16:W", "lock": "until:boss:FIREWALL"}

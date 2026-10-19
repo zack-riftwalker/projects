@@ -2,7 +2,7 @@ extends Tests4b2
 class_name Tests4b3
 # Unit tests of phase 4B-3 (THE NETWORK made hard). run_tests.gd hands names it does not know to run().
 
-const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler3", "firewall2", "reviewer2b", "bosspresets", "hardrooms", "fightsim"]
+const NAMES3 := ["kit4b3", "w6enemies2", "w6enemies", "net4b3", "crawler3", "firewall3", "reviewer2b", "bosspresets", "hardrooms", "fightsim"]
 
 # a boss with one hazard kind, to prove the arena-hazard rules of the kit
 class HzBoss extends Boss:
@@ -24,7 +24,7 @@ func run(name: String):
 		"w6enemies": return t_w6enemies()
 		"net4b3": return t_net4b3()
 		"crawler3": return t_crawler3()
-		"firewall2": return t_firewall2()
+		"firewall3": return t_firewall3()
 		"reviewer2b": return t_reviewer2b()
 		"bosspresets": return t_bosspresets()
 		"hardrooms": return t_hardrooms()
@@ -1134,8 +1134,16 @@ func t_fightsim() -> bool:
 	Game.fresh()
 	return report("fightsim", true, "")
 
-# MVB3-07: THE FIREWALL v2
-func t_firewall2() -> bool:
+# THE FIREWALL (16-firewall-build.md), grows with the milestones. M1: the honeypot hall of N15: its map, the stages, the packets, the hot floor, the camera
+func fw_signature(hp: HoneypotHall, nk: int) -> Array:
+	var out: Array = []
+	for L in range(HoneypotHall.LANES):
+		for k in range(nk):
+			var inf: Dictionary = hp.packet_info(L, k, hp.spawn_t(L, k) + 1.0)
+			out.append([bool(inf.drop), snappedf(float(inf.td), 0.0001), bool(inf.green)])
+	return out
+
+func t_firewall3() -> bool:
 	Game.persist = false
 	Game.net_role = ""
 	Game.fresh()
@@ -1147,313 +1155,240 @@ func t_firewall2() -> bool:
 	for e in r.ents:
 		if e is FirewallBoss:
 			fw = e
-	if fw == null or r.boss != fw:
-		fail(res, "N15 has no FirewallBoss")
+	if fw == null or r.boss != fw or r.hpot == null:
+		fail(res, "N15 has no FirewallBoss / honeypot hall")
 		r.queue_free()
-		return report("firewall2", false, res.info)
-	if fw.max_hp != 82:
-		fail(res, "hp %d, want 82" % fw.max_hp)
-	r.player.x = 100.0
-	r.player.y = 150.0
-	var n := 0
-	while r.fight.state != "active" and n < 400:
-		r.player.inv = 99.0
-		r.step(Game.STEP)
-		n += 1
-	if r.fight.state != "active":
-		fail(res, "the fight never started")
-	fw.plan = {}
-	fw.idle_t = 999.0
-	fw.x = 280.0
-	fw.y = Boss.FLOOR - fw.h
-	fw.face = -1.0
-	r.attacker = r.player
-	# the shield: a swipe from the front is blocked, from behind it lands, from above (dx 0) it lands
-	var hp0 := fw.hpf
-	if fw.hit(1, 1.0, 0.0, "swipe", fw) != "block" or fw.hpf != hp0:
-		fail(res, "a front swipe was not blocked")
-	if fw.hit(1, -1.0, 0.0, "swipe", fw) == "block" or fw.hpf >= hp0:
-		fail(res, "a back swipe did not land")
-	hp0 = fw.hpf
-	fw.hit(1, 0.0, 1.0, "swipe", fw)
-	if fw.hpf >= hp0:
-		fail(res, "a pogo from above did not land")
-	# rule 8: hit from the right while facing left -> after the recovery it faces right
-	r.player.x = 340.0
-	r.player.y = 146.0
-	fw.read.update(0.2)
-	fw.face = -1.0
-	fw.turn_t = 0.0
-	fw.hit(1, -1.0, 0.0, "swipe", fw)
-	fw._turn()
-	if fw.face != 1.0 or fw.turn_t <= 0.0:
-		fail(res, "rule 8: face %s turn %.2f" % [str(fw.face), fw.turn_t])
-	fw.turn_t = 0.0
-	# throw -> return: out along the low band (jump it), back along the high band (stay low); the shield is away from the throw's active to the return's end
-	fw.face = -1.0
-	fw.x = 280.0
-	fw.read.last_key = ""
-	fw.hpf = float(fw.max_hp)
-	var stand := {"x": 100.0, "y": Boss.FLOOR - 10.0, "w": 8.0, "h": 9.0}                 # a standing player
-	var jump_ := {"x": 100.0, "y": Boss.FLOOR - 40.0, "w": 8.0, "h": 9.0}                 # one in the air
-	r.player.x = 40.0
-	r.player.y = 146.0
-	fw._start("throw", "p1")
-	if absf(float(fw.plan.t) - 0.75) > 0.001:
-		fail(res, "throw cue %.2f" % fw.plan.t)
-	var out_stand := false
-	var out_jump := false
-	var back_stand := false
-	var back_jump := false
-	var dmg_out := 0
-	var chained := false
-	var pos := Vector2(40.0, 146.0)
-	for f in range(600):
-		r.player.inv = 99.0
-		r.player.x = pos.x
-		r.player.y = pos.y
-		r.step(Game.STEP)
-		fw.idle_t = 999.0
-		if fw.plan.is_empty():
-			continue
-		fw.plan_seen(int(fw.plan.seq))
-		if fw.plan_active():
-			if OS.get_environment("FWDBG") != "":
-				print("fw ", fw.plan.id, " t=", fw.plan.t, " boxes ", fw.harmboxes().map(func(b): return [roundi(b.x), roundi(b.y), roundi(b.w), roundi(b.h)]))
-			for hb in fw.harmboxes():
-				if String(fw.plan.id) == "throw":
-					out_stand = out_stand or Game.overlap(stand, hb)
-					out_jump = out_jump or Game.overlap(jump_, hb)
-					dmg_out = maxi(dmg_out, int(hb.get("dmg", 1)))
-				elif String(fw.plan.id) == "return":
-					back_stand = back_stand or Game.overlap(stand, hb)
-					back_jump = back_jump or Game.overlap(jump_, hb)
-			if fw.shield_on or fw.blocks(1.0, 0.0, "swipe"):
-				fail(res, "the shield is on while thrown")
-		if String(fw.plan.id) == "return":
-			chained = true
-		if chained and fw.plan.is_empty():
-			break
-	if not (out_stand and not out_jump and back_jump and not back_stand) or dmg_out != 2:
-		fail(res, "throw/return: out hits stand %s jump %s, back hits stand %s jump %s, throw damage %d" % [str(out_stand), str(out_jump), str(back_stand), str(back_jump), dmg_out])
-	if not chained:
-		fail(res, "the throw was not followed by a return")
-	for f in range(200):
-		r.step(Game.STEP)
-		fw.idle_t = 999.0
-		r.player.inv = 99.0
-		if fw.plan.is_empty():
-			break
-	if not fw.shield_on:
-		fail(res, "the shield did not come back after the return")
-	# scan: the three lanes burn in order, away from the boss, 0.6 s apart in phase 1 and 0.35 s in phase 2
-	for cfg in [[1, 0.6, 330.0], [2, 0.35, 330.0], [2, 0.35, 40.0]]:
-		fw.plan = {}
-		fw.hpf = float(fw.max_hp) * (1.0 if cfg[0] == 1 else 0.5)
-		fw.on_damage()
-		fw.x = float(cfg[2]) - fw.w / 2.0
-		fw.y = Boss.FLOOR - fw.h
-		fw._start("scan", "p1")
-		var want: Array = [0, 1, 2] if cfg[2] < 100.0 else [2, 1, 0]
-		if fw.scan_order != want or absf(fw.scan_gap - float(cfg[1])) > 0.001:
-			fail(res, "scan order %s gap %.2f at boss x %.0f (want %s, %.2f)" % [str(fw.scan_order), fw.scan_gap, cfg[2], str(want), cfg[1]])
-		fw.plan.t = 0.001
-		fw.plan_step(Game.STEP * 2.0)
-		if not fw.plan_active():
-			fail(res, "scan did not turn active")
-			continue
-		var burn_times := {}
-		var guard := 0
-		while fw.plan_active() and guard < 400:
-			var el := fw._scan_elapsed()
-			for i in range(3):
-				var l: Array = FirewallBoss.LANES[i]
-				for hb in fw.harmboxes():
-					if hb.x < l[1] and hb.x + hb.w > l[0] and hb.h > 100.0 and not burn_times.has(i):
-						burn_times[i] = el
-			fw.plan_step(Game.STEP)
-			guard += 1
-		var order_seen: Array = []
-		for i in want:
-			order_seen.append(burn_times.get(i, -1.0))
-		if burn_times.size() != 3 or not (order_seen[0] < order_seen[1] and order_seen[1] < order_seen[2]) or absf((order_seen[1] - order_seen[0]) - float(cfg[1])) > 0.05:
-			fail(res, "scan burn starts %s (want gap %.2f)" % [str(order_seen), cfg[1]])
-	fw.plan = {}
-	# a caught packet: 2 damage, the shield is off for 2 s
-	fw.hpf = float(fw.max_hp)
-	fw.on_damage()
-	fw.x = 280.0
-	fw.face = -1.0
-	fw.shield_on = true
-	fw.shield_t = 0.0
-	fw.turn_t = 0.0
-	hp0 = fw.hpf
-	fw.hit(2, 1.0, 0.0, "catch", fw)
-	if fw.hpf > hp0 - 2.0 + 0.01 or fw.shield_t < 1.99 or fw.blocks(1.0, 0.0, "swipe"):
-		fail(res, "caught packet: hp %.1f -> %.1f shield_t %.2f" % [hp0, fw.hpf, fw.shield_t])
-	fw.shield_t = 0.0
-	# deny: one catchable orb in phase 1, two later
-	for ph in [1, 2]:
-		fw.plan = {}
-		fw.hpf = float(fw.max_hp) * (1.0 if ph == 1 else 0.5)
-		fw.on_damage()
-		for q in r.projs:
-			q.dead = true
-		fw._start("deny", "p1")
-		fw.plan.t = 0.01
-		if not fw_until(r, fw, "deny", "active", Vector2(60.0, 146.0)):
-			fail(res, "deny never active")
-		var orbs := 0
-		for q in r.projs:
-			if q.get("catchable", false) and not q.dead:
-				orbs += 1
-		if orbs != ph:
-			fail(res, "deny in phase %d made %d orbs" % [ph, orbs])
-	fw.plan = {}
-	for q in r.projs:
-		q.dead = true
-	# phase 2: the deny walls stop at 96 and 288 and push inward; the boxes are the same on a guest
-	fw.hz.clear()
-	fw.walls_on = false
-	for i in range(30):
-		r.player.inv = 99.0
-		r.step(Game.STEP)
-		fw.idle_t = 999.0
-	if not fw.walls_on or fw.hz.size() < 2:
-		fail(res, "no deny walls in phase 2 (%d hazards)" % fw.hz.size())
-	var t_end: float = r.time + 8.5
-	var left_front := -1.0
-	var right_front := -1.0
-	for hb in fw.hz_all_boxes(t_end):
-		if hb.x + hb.w <= 200.0:
-			left_front = hb.x + hb.w
-		else:
-			right_front = hb.x
-	if absf(left_front - 96.0) > 0.5 or absf(right_front - 288.0) > 0.5:
-		fail(res, "the deny walls end at %.1f and %.1f" % [left_front, right_front])
-	r.player.inv = 0.0
-	r.player.hp = r.player.max_hp
-	r.player.x = 100.0
-	r.player.y = 150.0
-	r.player.hurt(1, 88.0)                                # the left wall's middle is at x 88: the player on its inner side is pushed inward
-	if r.player.vx <= 0.0:
-		fail(res, "the wall pushes the wrong way (vx %.0f)" % r.player.vx)
-	r.player.inv = 99.0
-	# DROP ALL: the port is announced 0.9 s before, everything but the port burns for 0.4 s
-	fw.hpf = float(fw.max_hp) * 0.2
-	fw.on_damage()
-	fw.hz = fw.hz.filter(func(h): return h.k == "deny")
-	var tn := r.time
-	if OS.get_environment("FWDBG") != "":
-		print("DROPDBG phase ", fw._phase_now(), " walls ", fw.walls_on, " active ", fw.active, " dying ", fw.dying, " hpf ", fw.hpf)
-	fw.drop_cd = 0.0
-	fw.plan = {}
-	fw.idle_t = 999.0
-	var drop: Dictionary = {}
+		return report("firewall3", false, res.info)
+	r.fight.state = "done"                                  # (no fight here: the hall alone)
+	var hp: HoneypotHall = r.hpot
+	var def: Dictionary = Game.rooms_meta.rooms["N15"]
+	# 1. the room: 24 x 28, the hall, the name of the shell, a free camera in the fight
+	if r.w != 24 or r.h != 28 or int(def.size[0]) != 24 or int(def.size[1]) != 28 or String(def.hall) != "honeypot":
+		fail(res, "N15 is %dx%d" % [r.w, r.h])
+	if String(def.boss.name) != "GUEST SERVICES" or String(def.boss.sub) != "welcome, guest" or String(def.boss.get("cam", "")) != "free" or int(def.boss.trigger_x) != 96:
+		fail(res, "N15 boss entry")
+	if hp.stage != 0 or fw.max_hp != 82 or fw.boss_name != "GUEST SERVICES":
+		fail(res, "start: stage %d hp %d name %s" % [hp.stage, fw.max_hp, fw.boss_name])
+	# 2. stage 0: the lobby floor, the furniture, the doors
+	var g = r.grid
+	for tx in range(1, 23):
+		if g.tile(tx, 11) != TileGrid.SOLID:
+			fail(res, "lobby floor open at %d" % tx)
+	for pc in [[3, 9, 4], [9, 8, 3], [13, 5, 4]]:
+		for k in range(pc[2]):
+			if g.tile(pc[0] + k, pc[1]) != TileGrid.ONEWAY:
+				fail(res, "furniture cell %d,%d" % [pc[0] + k, pc[1]])
+	for ty in range(7, 11):
+		if g.tile(0, ty) != TileGrid.E or g.tile(23, ty) != TileGrid.E:
+			fail(res, "door gap row %d" % ty)
+	if g.tile(0, 6) != TileGrid.SOLID or g.tile(23, 11) != TileGrid.SOLID or g.tile(5, 25) != TileGrid.SOLID:
+		fail(res, "outer walls")
+	var pooled := 0
+	for m in r.plats:
+		if m.has("fw"):
+			pooled += 1
+			if not m.off:
+				fail(res, "a packet before the packets started")
+	if pooled != HoneypotHall.LANES * HoneypotHall.SLOTS:
+		fail(res, "%d packets in the pool" % pooled)
+	# 3. the camera: the lobby shows no furnace; the fall releases it (derived from the stage, every frame)
+	r.step(Game.STEP)
+	if r.cam.lock == null or float(r.cam.lock.y) != 0.0:
+		fail(res, "camera not locked to the lobby")
+	var rev0 := hp.static_rev
 	for f in range(30):
 		r.step(Game.STEP)
-		fw.idle_t = 999.0
-		for h in fw.hz:
-			if h.k == "drop":
-				drop = h
-		if not drop.is_empty():
-			break
-	if drop.is_empty() or absf(float(drop.warn) - 0.9) > 0.001:
-		fail(res, "no DROP ALL announced (%s)" % str(drop))
-	else:
-		var tt: float = float(drop.t0)
-		if not fw.hz_all_boxes(tt + 0.89).filter(func(b): return b.y > Boss.FLOOR - 8.0).is_empty():
-			fail(res, "DROP ALL burns before the 0.9 s are over")
-		var bn := fw.bounds(tt + 1.0)
-		var px: float = FirewallBoss.PORT_X[int(drop.v[0])]
-		var covered := 0.0
-		var port_hit := false
-		for b in fw.hz_all_boxes(tt + 1.0):
-			if b.y > Boss.FLOOR - 8.0:
-				covered += b.w
-				if b.x < px + 32.0 and b.x + b.w > px - 32.0:
-					port_hit = true
-		if port_hit or absf(covered - ((bn.y - bn.x) - 64.0)) > 1.0:
-			fail(res, "DROP ALL covers %.0f px (want %.0f), port hit %s" % [covered, (bn.y - bn.x) - 64.0, str(port_hit)])
-		if not fw.hz_all_boxes(tt + 1.5).filter(func(b): return b.y > Boss.FLOOR - 8.0).is_empty():
-			fail(res, "DROP ALL still burns after 0.4 s")
-	# phase 3: the shield turns on its own every 1.5 s
-	fw.plan = {}
-	fw.shield_on = true
-	fw.face = -1.0
-	fw.auto_t = 1.5
-	fw.hz = fw.hz.filter(func(h): return h.k == "deny")
-	var turns := 0
-	var last_face: float = fw.face
-	for f in range(int(5.0 / Game.STEP)):
-		r.player.inv = 99.0
-		fw.drop_cd = 99.0
-		fw.idle_t = 999.0
-		fw.plan = {}
+	if hp.static_rev != rev0:
+		fail(res, "the static drawing was redone %d times while nothing changed" % (hp.static_rev - rev0))
+	# 4. stage 1 (the furnace): the middle of the floor is gone, the stubs are one-way, the body is solid
+	hp.set_stage(1)
+	r.step(Game.STEP)
+	if hp.static_rev != rev0 + 1:
+		fail(res, "a stage change did not redo the static drawing once (%d)" % (hp.static_rev - rev0))
+	if r.cam.lock != null:
+		fail(res, "camera still locked in the furnace")
+	for tx in range(4, 20):
+		if g.tile(tx, 11) != TileGrid.E:
+			fail(res, "stage 1 floor still at %d" % tx)
+	for tx in [1, 2, 3, 20, 21, 22]:
+		if g.tile(tx, 11) != TileGrid.ONEWAY:
+			fail(res, "stub %d is not one-way" % tx)
+	for pc in [[3, 9], [9, 8], [13, 5]]:
+		if g.tile(pc[0], pc[1]) != TileGrid.E:
+			fail(res, "furniture stayed in the furnace")
+	for ty in range(12, 25):
+		for tx in range(18, 23):
+			if g.tile(tx, ty) != TileGrid.SOLID:
+				fail(res, "body cell %d,%d" % [tx, ty])
+		if g.tile(17, ty) != TileGrid.E or g.tile(3, ty) != TileGrid.E:
+			fail(res, "furnace not empty at row %d" % ty)
+	if hp.inner_x() != Vector2(16.0, 288.0):
+		fail(res, "inner x %s" % str(hp.inner_x()))
+	# stage 2: two walls; a step in (429) moves both faces by one tile and the furnace never gets under 10 tiles
+	hp.set_stage(2)
+	r.step(Game.STEP)
+	if hp.inner_x() != Vector2(64.0, 288.0) or g.tile(3, 20) != TileGrid.SOLID or g.tile(4, 20) != TileGrid.E:
+		fail(res, "stage 2 walls %s" % str(hp.inner_x()))
+	hp.body_c0 = 16
+	hp.west_c1 = 5
+	r.step(Game.STEP)
+	if (hp.inner_x().y - hp.inner_x().x) / 16.0 != 10.0 or g.tile(16, 12) != TileGrid.SOLID or g.tile(15, 12) != TileGrid.E or g.tile(5, 12) != TileGrid.SOLID or g.tile(6, 12) != TileGrid.E:
+		fail(res, "the walls at their closest %s" % str(hp.inner_x()))
+	# a fist is a temporary one-way top; solid wins over it
+	hp.fist = Rect2(64.0, 20.0 * 16.0, 96.0, 24.0)
+	r.step(Game.STEP)
+	for tx in range(6, 10):
+		if g.tile(tx, 20) != TileGrid.ONEWAY:
+			fail(res, "fist top at %d" % tx)
+	if g.tile(5, 20) != TileGrid.SOLID or g.tile(10, 20) != TileGrid.E:
+		fail(res, "the fist replaced a wall cell or reached too far")
+	hp.fist = Rect2()
+	r.step(Game.STEP)
+	if g.tile(8, 20) != TileGrid.E:
+		fail(res, "the fist top stayed")
+	# stage 3 (after): stairs both sides, 3 cells wide, the stubs; steps are at most 3 tiles
+	hp.set_stage(3)
+	r.step(Game.STEP)
+	var rows_e: Array = []
+	for st in HoneypotHall.STAIRS_E:
+		for tx in range(st[0], st[1] + 1):
+			if g.tile(tx, st[2]) != TileGrid.ONEWAY:
+				fail(res, "east stair %d,%d" % [tx, st[2]])
+		rows_e.append(st[2])
+	for st in HoneypotHall.STAIRS_W:
+		for tx in range(st[0], st[1] + 1):
+			if g.tile(tx, st[2]) != TileGrid.ONEWAY:
+				fail(res, "west stair %d,%d" % [tx, st[2]])
+	for rows in [rows_e, [22, 19, 16, 13]]:
+		var prev := 25
+		for rw in rows:
+			if prev - int(rw) > 3:
+				fail(res, "a stair step of %d tiles" % (prev - int(rw)))
+			prev = int(rw)
+		if prev - 11 > 3:
+			fail(res, "the last stair is %d tiles under the stub" % (prev - 11))
+	for tx in range(4, 20):
+		if g.tile(tx, 11) != TileGrid.E:
+			fail(res, "the lobby floor is back after the fight")
+	var lane_ys: Array = [25]
+	for L in range(HoneypotHall.LANES):
+		lane_ys.append(HoneypotHall.LANE_ROW[L])
+	lane_ys.append(11)
+	for i in range(1, lane_ys.size()):
+		if int(lane_ys[i - 1]) - int(lane_ys[i]) > 3:
+			fail(res, "packet lanes %d -> %d are more than 3 tiles apart" % [lane_ys[i - 1], lane_ys[i]])
+	# 5. packets: the same on two computations with the same seed (host, another host, a guest copy), different with another seed
+	hp.set_stage(1)
+	hp.seed = 4242
+	hp.pk_t0 = 3.0
+	var r2 := new_room("N15")
+	r2.fight.state = "done"
+	var f_net: Array = fw.net_fields()
+	if f_net.size() != FirewallBoss.NF + 11 + 1:
+		fail(res, "net_fields has %d values" % f_net.size())
+	var gb: FirewallBoss = r2.boss                          # (a copy that only knows the net fields, as the guest's puppet does)
+	gb.net_apply(f_net)
+	var ref := fw_signature(hp, 70)
+	if ref != fw_signature(r2.hpot, 70):
+		fail(res, "a copy built from the net fields disagrees about the packets")
+	r2.hpot.seed = 4243
+	if ref == fw_signature(r2.hpot, 70):
+		fail(res, "another seed gave the same packets")
+	# drops: some, never two in a row in a lane, never two within 1.0 s anywhere, an inspection point inside the path, the red warning 0.6 s before
+	var drops: Array = []
+	var total := 0
+	for L in range(HoneypotHall.LANES):
+		var was := false
+		for k in range(70):
+			var inf: Dictionary = hp.packet_info(L, k, hp.spawn_t(L, k))
+			total += 1
+			if bool(inf.drop):
+				if was:
+					fail(res, "lane %d dropped packets %d and %d in a row" % [L, k - 1, k])
+				var fr: float = (float(inf.td) - hp.spawn_t(L, k)) / hp.travel_t(L)
+				if fr < 0.3 - 1e-6 or fr > 0.7 + 1e-6:
+					fail(res, "drop point at %.2f of the path" % fr)
+				drops.append(float(inf.td))
+				var tdv: float = float(inf.td)
+				var w1: Dictionary = hp.packet_info(L, k, tdv - 0.3)
+				var w0: Dictionary = hp.packet_info(L, k, tdv - 0.7)
+				var w2: Dictionary = hp.packet_info(L, k, tdv + 0.05)
+				if not w1.warn or w1.lost or w0.warn or not w2.lost or w2.warn:
+					fail(res, "warn/lost around a drop: %s %s %s" % [str(w0.warn), str(w1.warn), str(w2.lost)])
+			was = bool(inf.drop)
+	drops.sort()
+	for i in range(1, drops.size()):
+		if drops[i] - drops[i - 1] < 1.0 - 1e-6:
+			fail(res, "two drops %.2f s apart" % (drops[i] - drops[i - 1]))
+	if drops.size() < 8 or drops.size() > total / 4:
+		fail(res, "%d drops in %d packets" % [drops.size(), total])
+	if HoneypotHall.HEAT_LIVE - HoneypotHall.HEAT_DIM < Boss.HZ_WARN_MIN or HoneypotHall.WARN_T < Boss.HZ_WARN_MIN:
+		fail(res, "a build-up under %.1f s" % Boss.HZ_WARN_MIN)
+	# green packets (the last 15 %): every one that is green drops, at 0.5..0.8 of its path; the others follow the normal rule
+	hp.green_t0 = hp.spawn_t(0, 20)
+	var greens := 0
+	for L in range(HoneypotHall.LANES):
+		for k in range(70):
+			var gi: Dictionary = hp.packet_info(L, k, hp.spawn_t(L, k))
+			var want: bool = hp.spawn_t(L, k) >= hp.green_t0 and (k + L) % 3 == 0
+			if bool(gi.green) != want:
+				fail(res, "green %d,%d is %s" % [L, k, str(gi.green)])
+			if want:
+				greens += 1
+				var fr2: float = (float(gi.td) - hp.spawn_t(L, k)) / hp.travel_t(L)
+				if not gi.drop or fr2 < 0.5 - 1e-6 or fr2 > 0.8 + 1e-6:
+					fail(res, "a green packet %d,%d did not drop at 0.5..0.8 (%.2f)" % [L, k, fr2])
+	if greens < 20:
+		fail(res, "%d green packets" % greens)
+	hp.green_t0 = -1.0
+	# 6. the hot floor: dim 1.4 s, a 0.6 s warning, 1.2 s of fire (1.6 in phase 3), 1.0 s cooling
+	for row in [[0.5, 1.2, "dim"], [1.5, 1.2, "warn"], [2.1, 1.2, "live"], [3.1, 1.2, "live"], [3.3, 1.2, "cool"], [4.1, 1.2, "cool"], [4.3, 1.2, ""], [3.5, 1.6, "live"], [3.7, 1.6, "cool"], [-0.1, 1.2, ""]]:
+		if HoneypotHall.heat_phase(row[0], row[1]) != row[2]:
+			fail(res, "heat at %.1f s (burn %.1f) is '%s', want '%s'" % [row[0], row[1], HoneypotHall.heat_phase(row[0], row[1]), row[2]])
+	# 7. riding: a player on a packet of lane 0 is carried with it (lane 0 goes east to west at 100 px/s)
+	hp.pk_t0 = r.time
+	hp.seed = 4242
+	for f in range(60):
 		r.step(Game.STEP)
-		if fw.face != last_face:
-			turns += 1
-			last_face = fw.face
-	if turns != 3:
-		fail(res, "the shield turned %d times in 5 s" % turns)
-	fw.plan = {}
-	# rule: a 16x32 block slides at 200 px/s from the boss's side; two of them, 0.5 s apart, in phase 2+
-	fw.hz.clear()
-	fw.walls_on = true
-	fw.x = 300.0
-	fw.hpf = float(fw.max_hp) * 0.5
-	fw.on_damage()
-	fw._start("rule", "p1")
-	var blocks: Array = fw.hz.filter(func(h): return h.k == "block")
-	if blocks.size() != 2 or absf((float(blocks[1].warn) - float(blocks[0].warn)) - 0.5) > 0.001 or float(blocks[0].warn) < 0.69:
-		fail(res, "rule made %d blocks" % blocks.size())
+	var pk: Dictionary = {}
+	for m in r.plats:
+		if m.has("fw") and int(m.lane) == 0 and not m.off:
+			pk = m
+	if pk.is_empty():
+		fail(res, "no packet in lane 0 after 1 s")
 	else:
-		var tb: float = float(blocks[0].t0) + float(blocks[0].warn)
-		var b0: float = fw.block_x(blocks[0], tb + 0.5)
-		var b1: float = fw.block_x(blocks[0], tb + 1.5)
-		if absf(absf(b1 - b0) - 200.0) > 1.0 or fw.hz_all_boxes(tb - 0.01).size() != 0:
-			fail(res, "block speed %.1f" % absf(b1 - b0))
-		var bx: Array = fw.hz_boxes(blocks[0], tb + 0.5)
-		if bx.size() != 1 or bx[0].w != 16.0 or bx[0].h != 32.0:
-			fail(res, "block box %s" % str(bx))
-	fw.hz.clear()
-	fw.plan = {}
-	# phase (P2): the boss ends up on the other side of a membrane, with a 2 damage slash at the exit
-	fw.x = 180.0
-	fw.y = Boss.FLOOR - fw.h
-	fw.face = 1.0
-	var side0 := fw.cx
-	fw._start("phase", "p1")
-	if absf(float(fw.plan.t) - 0.75) > 0.001:
-		fail(res, "phase cue %.2f" % fw.plan.t)
-	if not fw_until(r, fw, "phase", "active", Vector2(300.0, 146.0), 900):
-		fail(res, "phase never active")
-	var mid_boxes: Array = fw.harmboxes().filter(func(b): return b.has("sid"))
-	if not fw_until(r, fw, "phase", "recover", Vector2(300.0, 146.0), 200):
-		fail(res, "phase never recovered")
-	var crossed: bool = (side0 < 112.0 and fw.cx > 128.0) or (side0 > 128.0 and side0 < 256.0 and (fw.cx > 272.0 or fw.cx < 112.0)) or (side0 > 272.0 and fw.cx < 256.0)
-	if not crossed or mid_boxes.size() != 1 or int(mid_boxes[0].dmg) != 2:
-		fail(res, "phase: cx %.0f -> %.0f, %d slash boxes" % [side0, fw.cx, mid_boxes.size()])
-	fw.plan = {}
-	# the kill: ssh, boss:FIREWALL, N15:E opens
-	Game.flags = {}
-	Game.tools = {}
-	if not r.skip_boss():
-		fail(res, "skip boss refused")
-	n = 0
-	while r.fight.state != "done" and n < 900:
-		r.player.inv = 99.0
-		r.step(Game.STEP)
-		n += 1
-	if not Game.flag("ability:ssh") or not Game.flag("boss:FIREWALL") or not Game.tools.get("ssh", false):
-		fail(res, "reward missing (state %s)" % r.fight.state)
-	r.update_doors()
-	for d in r.grid.doors:
-		if String(d.to).begins_with("N16") and not d.open:
-			fail(res, "N15:E stayed shut")
+		var pl = r.player
+		pl.inv = 99.0
+		pl.x = float(pk.x) + 24.0
+		pl.y = float(pk.y) - pl.h
+		pl.vx = 0.0
+		pl.vy = 0.0
+		var x0: float = pl.x
+		for f in range(30):
+			pl.inv = 99.0
+			step_keys(r, {})
+		if pl.ride == null or not pl.ride.has("fw"):
+			fail(res, "the player did not ride a packet")
+		var moved: float = x0 - pl.x
+		if moved < 35.0 or moved > 65.0:
+			fail(res, "carried %.0f px in 0.5 s, want ~50" % moved)
+	# 8. the guest builds the same masks from the net fields
+	hp.set_stage(2)
+	hp.burn_t0 = 7.25
+	hp.fist = Rect2(64.0, 320.0, 96.0, 24.0)
+	hp.pk_dir = 1
+	hp.green_t0 = 12.5
+	var f2: Array = fw.net_fields()
+	if gb != null:
+		gb.net_apply(f2)
+		var q: HoneypotHall = r2.hpot
+		if q.stage != 2 or q.body_c0 != 18 or q.west_c1 != 3 or q.pk_dir != 1 or q.seed != 4242 or not is_equal_approx(q.burn_t0, 7.25) or not is_equal_approx(q.green_t0, 12.5) or q.fist != hp.fist:
+			fail(res, "the guest's masks differ: stage %d body %d west %d" % [q.stage, q.body_c0, q.west_c1])
+	r2.queue_free()
 	r.queue_free()
 	Game.fresh()
-	return report("firewall2", res.ok, res.info)
+	Controls.script_input = null
+	return report("firewall3", res.ok, res.info)
 
 # MVB3-08: THE REVIEWER #2 v2 (the pad and reward checks are the 4B-2 ones)
 func t_reviewer2b() -> bool:
@@ -1741,6 +1676,7 @@ func t_bosspresets() -> bool:
 	Game.load_meta()
 	var res := checker()
 	var tested := 0
+	var wanted := 0                                           # (every row of the table must give a plan, on every difficulty)
 	for diff in ["easy", "normal", "hard", "nightmare"]:
 		Game.diff = diff
 		var tm := float(Game.dv("telegraph_mult"))
@@ -1749,8 +1685,8 @@ func t_bosspresets() -> bool:
 		# [room, id, expected cue, expected rec (or -1: not checked, or the family's: negative family rec)]
 		var table: Array = [
 			["N09", "results", 0.6, 0.5], ["N09", "drop", 0.7, 1.5], ["N09", "leap", 0.7, 1.5], ["N09", "flash", 0.5, 0.1], ["N09", "dive", 0.7, 1.0], ["N09", "feint", 0.7, 0.35],
-			["N15", "throw", 0.75, 0.1], ["N15", "return", 0.25, 0.7], ["N15", "rule", 0.7, 0.6], ["N15", "scan", 0.6, 0.6], ["N15", "deny", 0.6, 0.7], ["N15", "phase", 0.75, 0.7], ["N15", "bash", 0.45, 0.6],
 			["N22", "cached", 1.0, -0.4], ["N22", "double", 0.75, 0.6], ["N22", "verdict", 0.6, 0.6], ["N22", "nitpick", 0.7, 0.6], ["N22", "cross", 0.9, 0.6], ["N22", "signoff", 0.75, 0.2], ["N22", "slash", 0.45, 0.2], ["N22", "sdiamond", 0.45, 0.7], ["N22", "riposte", 0.75, -0.9]]
+		wanted += table.size()
 		var rooms := {}
 		for row in table:
 			var rid: String = row[0]
@@ -1816,8 +1752,8 @@ func t_bosspresets() -> bool:
 				fail(res, "%s %s: damage %d on a preset with big hits of %d" % [diff, id, max_dmg, big])
 		for rid in rooms:
 			rooms[rid][0].queue_free()
-	if tested < 84:
-		fail(res, "only %d attacks tested" % tested)
+	if tested < wanted:
+		fail(res, "only %d of %d attacks tested" % [tested, wanted])
 	Game.diff = "normal"
 	Game.fresh()
 	return report("bosspresets", res.ok, res.info)

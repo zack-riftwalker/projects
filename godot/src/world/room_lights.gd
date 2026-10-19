@@ -44,10 +44,6 @@ func _ready() -> void:
 			"N": p = Vector2(mid, 10.0)
 			"S": p = Vector2(mid, float(room.ph) - 10.0)
 		statics.append({"x": p.x, "y": p.y, "r": 40.0, "e": 0.5, "k": 0})
-	if room.id == "N15":                                      # the firewall's bricks glow (every third one: the budget is for the fight)
-		for i in range(0, room.fire_cells.size(), 3):
-			var fc: Array = room.fire_cells[i]
-			statics.append({"x": float(fc[0]) * 16.0 + 8.0, "y": float(fc[1]) * 16.0 + 8.0, "r": 38.0, "e": 0.55, "k": 1})
 	# the LEDs of the towers are in the backdrop (far away): they are not lights; terminals come from the signs / stations above
 
 func _light(i: int) -> PointLight2D:
@@ -84,6 +80,8 @@ func _process(_dt: float) -> void:
 		_arena(c, bs, ca, cb)
 	if room.hall != null:
 		_hall_lights(c)
+	if room.hpot != null:
+		_hpot_lights(c)
 	for e in extra:
 		c.append([int(e.get("prio", 1)), 0.0, float(e.x), float(e.y), float(e.r), float(e.e), e.col, e.get("cone", null), false])
 	if tier >= 1:
@@ -165,10 +163,6 @@ func _arena(c: Array, bs, ca: Color, cb: Color) -> void:
 						c.append([2, 0.0, tip.x, tip.y, 16.0, 0.8, Color(1.0, 0.25, 0.3), null, false])
 				if room.time - cb2.flash_t0 < 0.22:                 # the flash: the whole hall, for a moment
 					c.append([0, 0.0, 192.0, 170.0, 420.0, 1.6 * (1.0 - (room.time - cb2.flash_t0) / 0.22), Color.WHITE, null, false])
-		"N15":
-			if bs is FirewallBoss:
-				var sp: Vector2 = bs.shield_pos()
-				c.append([1, 0.0, sp.x, sp.y - 8.0, 56.0, 0.85, cb.lerp(Color.WHITE, 0.35), null, false])       # the shield's rim light
 		"N22":
 			if bs is Reviewer2:
 				for i in range(3):                                # three cold overheads (shadows on Ultra)
@@ -186,3 +180,29 @@ func _hall_lights(c: Array) -> void:
 		c.append([2, 0.0, IndexHall.SCREEN.get_center().x, IndexHall.SCREEN.get_center().y, 90.0, 0.7 * (1.0 - hl.dark * 0.7), Color("#d6f6e0"), null, false])
 	for co in IndexHall.COCOONS:
 		c.append([3, 0.0, co[0], co[1], 18.0, 0.35, Color(0.8, 0.95, 0.75), null, false])
+
+# the honeypot hall (HoneypotHall): two warm lamps and the sunny window in the lobby; the furnace's grates, a glow per packet and the hot floor after it.
+# From the hall's own state, so the lobby is lit before the fight and the burned shell after it
+func _hpot_lights(c: Array) -> void:
+	var hp: HoneypotHall = room.hpot
+	if hp.stage == 0:
+		c.append([2, 0.0, 124.0, 140.0, 44.0, 0.3, Color("#ffcf8a"), null, false])
+		c.append([2, 0.0, 152.0, 112.0, 44.0, 0.3, Color("#ffcf8a"), null, false])
+		c.append([2, 0.0, 130.0, 62.0, 70.0, 0.18, Color("#cfe8ff"), null, false])
+		return
+	if hp.stage == 3:
+		c.append([2, 0.0, 130.0, 58.0, 90.0, 0.5, Color("#cfe8ff"), null, false])
+		return
+	var ix: Vector2 = hp.inner_x()
+	var x: float = ix.x + 40.0
+	while x < ix.y - 20.0:                                   # the grates in the furnace floor
+		c.append([3, 0.0, x, HoneypotHall.FURN_Y - 6.0, 46.0, 0.5, Color("#ff7a2a"), null, false])
+		x += 72.0
+	for m in hp.pool:
+		if not m.off and not m.lost:
+			var col := Color("#58f0c8")
+			if m.green:
+				col = Color("#57ff8a")
+			if m.warn:
+				col = Color("#ff5a4a")
+			c.append([2, 0.0, float(m.x) + 32.0, float(m.y), 28.0, 0.45, col, null, false])

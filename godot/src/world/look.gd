@@ -271,6 +271,8 @@ func follow_room(dt: float) -> void:
 	if id == "N09" and (fighting or hall_dark > 0.0):
 		# the crawler's hall goes dark with the fight: 45 % lit, darker as its tubes break, almost black in phase 3 (only its own lights show)
 		ambient_mul = lerpf(0.45, 0.07 if Game.gfx_tier >= 1 else 0.18, hall_dark)
+	if id == "N15" and room.hpot != null and (room.hpot.stage == 1 or room.hpot.stage == 2):
+		want = "heat"                                               # the furnace (the lobby and its burned shell are the room's own calm mood)
 	if p3:
 		if id == "N15":
 			want = "heat_p3"

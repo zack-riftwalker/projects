@@ -69,6 +69,12 @@ func build(rm: Room) -> void:
 			bw.name = "HallWall"
 			bw.cb = room.hall.draw_wall
 			add_child(bw)
+		if room.hpot != null:                           # the honeypot hall: the lobby's wallpaper, then the furnace's bricks (redrawn only when its stage changes)
+			var hw := DrawProxy.new()
+			hw.name = "HpotWall"
+			hw.cb = room.hpot.draw_wall
+			add_child(hw)
+			room.hpot.static_nodes.append(hw)
 	else:
 		var bg := Parallax2D.new()                      # (made only here: one made for a network room was never freed, a leak per visit)
 		bg.name = "Background"
@@ -182,6 +188,8 @@ func _process(_dt: float) -> void:
 func _put_cell(g: TileGrid, tx: int, ty: int) -> void:
 	if room.hall != null and room.hall.owns(tx, ty):
 		return                                  # the hall draws its own drawers, net and strands (their tiles come and go)
+	if room.hpot != null and room.hpot.owns(tx, ty):
+		return                                  # the honeypot hall draws its own floor, furniture, walls and stairs
 	var t := g.tile(tx, ty)
 	if t == TileGrid.DEAD:
 		if Game.flag("dead:" + room.id):

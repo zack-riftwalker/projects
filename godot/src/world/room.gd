@@ -57,6 +57,7 @@ var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the ti
 var blink_period := 1.5
 var hall_nodes: Array = []
 var hall: IndexHall = null                # N09: the crawler's hall (drawers, web net, strands, the back wall screen), 14-crawler.md
+var hpot: HoneypotHall = null             # N15: the firewall's lobby / furnace (floor, furniture, walls, packets), 16-firewall-build.md
 var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
 var iter := 0                              # T09's loop room: which pass this is (0..3)
 var boss_cells: Array = []                 # every `B` cell: [{x, y}] (a two-bodied boss starts its bodies on them)
@@ -328,6 +329,8 @@ func load_room(room_id: String, snap = null) -> void:
 	tower.load_all()
 	if IndexHall.wanted(def):
 		hall = IndexHall.new(self)
+	if HoneypotHall.wanted(def):
+		hpot = HoneypotHall.new(self)
 	if def.has("loop"):
 		iter = clampi(int(Game.loop_iter.get(id, 0)), 0, 3)
 		if mode != "guest" and not Game.flag("boss:LOOP"):
@@ -1052,6 +1055,26 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 			hg.material = Look.unshaded()
 		add_child(hg)
 		hall_nodes = [hs, hg]
+	if hpot != null:                                        # the honeypot hall: what changes rarely is drawn when a mask changes; packets, heat and the burning carpet every frame
+		var ps := DrawProxy.new()
+		ps.name = "HpotStatic"
+		ps.cb = hpot.draw_static
+		ps.z_index = 1
+		add_child(ps)
+		hpot.static_nodes.append(ps)
+		var hs2 := DrawProxy.new()
+		hs2.name = "HpotShaded"
+		hs2.cb = hpot.draw_shaded
+		hs2.z_index = 1
+		add_child(hs2)
+		var hg2 := DrawProxy.new()
+		hg2.name = "HpotGlow"
+		hg2.cb = hpot.draw_glow
+		hg2.z_index = 1
+		if look != null:
+			hg2.material = Look.unshaded()
+		add_child(hg2)
+		hall_nodes = [hs2, hg2]
 	for spec in [["furniture", 1], ["top", 4]]:
 		var layer := RoomLayer.new()
 		layer.room = self
@@ -1070,11 +1093,6 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		oc.name = "Occluders"
 		oc.room = self
 		add_child(oc)
-		if id == "N15":
-			var hz := RoomHaze.new()
-			hz.name = "Haze"
-			hz.room = self
-			add_child(hz)
 		var gl := RoomGloss.new()
 		gl.name = "Gloss"
 		gl.room = self
@@ -1562,6 +1580,8 @@ func step_guest(dt: float) -> void:
 	_move_platforms()
 	if hall != null:
 		hall.step(dt)
+	if hpot != null:
+		hpot.step(dt)
 	if tower != null:
 		tower.step(dt, players())
 		_tick_sound()
@@ -1631,6 +1651,8 @@ func step_guest(dt: float) -> void:
 			if not Game.flag("crack:%s:%d:%d" % [id, tx, ty]):
 				grid.tiles[ty * w + tx] = TileGrid.CRACK
 				view.dynamic.set_cell(Vector2i(tx, ty), 0, Vector2i(2, 5))
+	if hpot != null:
+		cam.lock = hpot.cam_lock()                         # (the lobby shows no furnace: derived from the hall's state every frame, both pages)
 	if cam.lock == null:
 		update_cam(dt)
 	else:
@@ -1715,9 +1737,11 @@ func apply_tile(tx: int, ty: int) -> void:
 # ---------------------------------------------------------------- simulation (js: Level.update, same order)
 func _move_platforms() -> void:
 	_move_packets()
+	if hpot != null:
+		hpot.move_packets()
 	_update_ports(bodies())
 	for m in plats:
-		if m.get("packet", false) or m.has("gear"):
+		if m.get("packet", false) or m.has("gear") or m.has("fw"):
 			continue
 		var span := absf(m.b - m.a)
 		if span < 1.0:
@@ -1824,6 +1848,8 @@ func step(dt: float) -> void:
 	_move_platforms()
 	if hall != null:
 		hall.step(dt)
+	if hpot != null:
+		hpot.step(dt)
 	if tower != null:
 		tower.step(dt, live)
 		_tick_sound()
@@ -1886,6 +1912,8 @@ func step(dt: float) -> void:
 		ents = keep
 	_step_fight(dt)
 	_step_pad()
+	if hpot != null:
+		cam.lock = hpot.cam_lock()                         # (the lobby shows no furnace: derived from the hall's state every frame, both pages)
 	if cam.lock == null:
 		update_cam(dt)
 	else:
@@ -3231,6 +3259,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 				Fx._disc(ci, sxp, syp, 5, swc)
 				PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
+			if m.has("fw"):
+				continue                                    # the honeypot hall moves and draws its own packets
 			if m.get("packet", false):
 				_draw_packet(ci, m)
 				continue

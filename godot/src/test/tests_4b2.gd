@@ -808,20 +808,6 @@ func same_boxes(a: Array, b: Array) -> bool:
 
 # MVB2-07: WEB CRAWLER
 # runs the room until the boss's plan reaches `ph` (or ends); the player is kept alive and where it was put
-func fw_until(r: Room, fw: FirewallBoss, id: String, ph: String, keep: Vector2, max_f := 600) -> bool:
-	for f in range(max_f):
-		r.player.inv = 99.0
-		r.player.hp = r.player.max_hp
-		r.player.x = keep.x
-		r.player.y = keep.y
-		r.player.vx = 0.0
-		r.player.vy = 0.0
-		r.step(Game.STEP)
-		fw.idle_t = 999.0
-		if not fw.plan.is_empty() and String(fw.plan.id) == id and String(fw.plan.ph) == ph:
-			return true
-	return false
-
 func on_pad(r: Room) -> void:
 	r.player.x = 11.0 * 16.0 + 8.0 - r.player.w / 2.0
 	r.player.y = 176.0 - r.player.h

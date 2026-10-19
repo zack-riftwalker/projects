@@ -1390,28 +1390,6 @@ func t_plugins5a() -> bool:
 		fail(res, "lock_free: a guard's front still blocks a claw")
 	if gd.hit(1, 1.0, 0.0, "agent", gd) != "block":
 		fail(res, "lock_free let an agent through")
-	var r3 := new_room("N15")
-	var fw: FirewallBoss = null
-	for e in r3.ents:
-		if e is FirewallBoss:
-			fw = e
-	if fw != null:
-		var guard := 0
-		r3.player.x = 100.0
-		while r3.fight.state != "active" and guard < 400:
-			r3.player.inv = 99.0
-			r3.step(Game.STEP)
-			guard += 1
-		fw.face = -1.0
-		fw.shield_on = true
-		fw.shield_t = 0.0
-		fw.turn_t = 0.0
-		r3.attacker = r3.player
-		if not fw.blocks(1.0, 0.0, "swipe"):
-			fail(res, "lock_free went through a boss's shield")
-	else:
-		fail(res, "no FirewallBoss in N15")
-	r3.queue_free()
 	Game.equipped = []
 	r.queue_free()
 	r2.queue_free()
