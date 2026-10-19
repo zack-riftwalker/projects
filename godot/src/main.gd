@@ -314,6 +314,91 @@ func _ready() -> void:
 				var tb = tr.boss
 				tb.idle_t = 999.0
 				tb._start(ta[1], "p1")
+		elif Game.scene.begins_with("fwcut:"):          # screenshot helper: THE FIREWALL's fake victory `secs` seconds in (fwcut:<secs>[:short])
+			var ua := Game.scene.split(":")
+			manager.swap_to("N15", Vector2(200.0, 150.0))
+			var up = manager.player
+			up.x = 200.0
+			up.y = 176.0 - up.h
+			up.inv = 999.0
+			var ur: Room = manager.room
+			if ua.size() > 2:
+				Game.flags["reveal:FIREWALL"] = true
+			else:
+				Game.flags.erase("reveal:FIREWALL")
+			ur._start_intro()
+			ur.fight.t = 0.0
+			ur._begin_fight()
+			var ub = ur.boss
+			ur.time = 20.0                                  # (a real fight is never at room time 0)
+			ub.hpf = float(ub.max_hp) * 0.70
+			ub._begin_cut()
+			ub.shift_t0 = ur.time - float(ua[1])           # (its events up to that second run in the first frame)
+			ur.hpot.burn_t0 = ub.shift_t0 + ub._mark("burn")
+		elif Game.scene.begins_with("fwp2:"):           # screenshot helper: the furnace in phase 2, an attack just begun (fwp2:<x>:<y>[:<slam|sweep|banlist|429>[:<secs the packets have run>]])
+			var pa2 := Game.scene.split(":")
+			manager.swap_to("N15", Vector2(200.0, 150.0))
+			var pp = manager.player
+			pp.x = float(pa2[1]) if pa2.size() > 1 else 120.0
+			pp.y = float(pa2[2]) if pa2.size() > 2 else 300.0
+			pp.inv = 999.0
+			var pr: Room = manager.room
+			Game.flags["reveal:FIREWALL"] = true
+			pr._start_intro()
+			pr.fight.t = 0.0
+			pr._begin_fight()
+			var pb = pr.boss
+			pr.hpot.set_stage(1)
+			pb._end_cut()
+			pr.hpot.seed = 4242
+			pr.hpot.pk_t0 = pr.time - (float(pa2[4]) if pa2.size() > 4 else 6.0)
+			pb.idle_t = 999.0
+			if pa2.size() > 3:
+				if pa2[3] == "429":
+					pr.attacker = pp
+					for k in range(3):
+						pb._rate_ok("p1")
+						pr.time += 0.1
+				else:
+					pb._start(pa2[3], "p1")
+		elif Game.scene.begins_with("fwp3:"):           # screenshot helper: phase 3 (fwp3:<x>:<y>[:<punch|flame|split|dropall|green|slam>[:<secs the packets have run>]])
+			var qa := Game.scene.split(":")
+			manager.swap_to("N15", Vector2(200.0, 150.0))
+			var qp = manager.player
+			qp.x = float(qa[1]) if qa.size() > 1 else 120.0
+			qp.y = float(qa[2]) if qa.size() > 2 else 300.0
+			qp.inv = 999.0
+			var qr: Room = manager.room
+			Game.flags["reveal:FIREWALL"] = true
+			qr._start_intro()
+			qr.fight.t = 0.0
+			qr._begin_fight()
+			var qb = qr.boss
+			qr.hpot.set_stage(1)
+			qb._end_cut()
+			qr.hpot.set_stage(2)
+			qb.hpf = float(qb.max_hp) * 0.3
+			qb._end_scene3()
+			qr.hpot.seed = 4242
+			qr.hpot.pk_t0 = qr.time - (float(qa[4]) if qa.size() > 4 else 6.0)
+			qb.idle_t = 999.0
+			qb.hop_cd = 999.0
+			qb.drop_t = 999.0
+			if qa.size() > 3:
+				match qa[3]:
+					"split":
+						qb._begin_split()
+						qb.face2_y = 330.0
+						qb.face_y = 260.0
+					"dropall":
+						var ix: Vector2 = qr.hpot.inner_x()
+						var dh: Dictionary = qb.hz_add("dropall", 0.9, [roundi(ix.x), roundi(ix.y)])
+						dh.t0 = qr.time - 0.45
+					"green":
+						qr.hpot.green_t0 = qr.time - 30.0
+						qb.hpf = float(qb.max_hp) * 0.09
+					_:
+						qb._start(qa[3], "p1")
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room

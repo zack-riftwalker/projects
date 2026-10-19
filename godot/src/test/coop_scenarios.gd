@@ -2306,19 +2306,21 @@ func sc_co_crawler() -> Array:
 func sc_co_firewall() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
-	var secs := 6.0 * slow
-	var p1_secs := 24.0 * slow
+	var p1_secs := 14.0 * slow
+	var p2_secs := 12.0 * slow
+	var p3_secs := 14.0 * slow
 	if role == "host":
 		Game.tools.catch = true
+		Game.flags.erase("reveal:FIREWALL")
 		await wait_secs(1.0)
-		var r := boss_arena("N15", 130.0, 210.0)
+		var r := boss_arena("N15", 130.0, 150.0)
 		var p = mgr().player
 		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
 		var fw: FirewallBoss = r.boss
 		var hp: HoneypotHall = r.hpot
 		var seen := {}
 		var st := {}
-		var forced := [[2.0, "cookies", "p2"], [7.0, "hold", "p2"], [12.0, "mat", "p2"], [16.0, "crack", "p2"], [20.0, "cookies", "p1"]]
+		var forced := [[1.5, "cookies", "p2"], [4.5, "hold", "p2"], [7.5, "mat", "p2"], [10.0, "crack", "p2"], [12.5, "cookies", "p1"]]
 		var locked0: bool = r.cam.lock != null
 		var t0 := Time.get_ticks_msec()
 		var f := 0
@@ -2334,23 +2336,99 @@ func sc_co_firewall() -> Array:
 		var tg := {"p1": 0, "p2": 0}
 		for sq in seen:
 			tg[seen[sq]] += 1
-		for stg in [1, 2, 3]:
-			if stg == 1:
-				hp.pk_t0 = r.time
-			elif stg == 3:
-				hp.pk_t0 = HoneypotHall.NO_PK
-			hp.set_stage(stg)
-			t0 = Time.get_ticks_msec()
-			while Time.get_ticks_msec() - t0 < secs * 1000.0:
-				p.inv = 999.0
-				p.hp = p.max_hp
-				fw.idle_t = 999.0
-				await get_tree().physics_frame
-		var free1: bool = r.cam.lock == null
+		# the fake victory (the long one): both fall into the furnace, phase 2 begins
+		fw.plan = {}
+		fw.hz.clear()
+		p.x = 190.0                                                    # (the summon put the host at the door: stand in the middle, over the floor that goes)
+		p.y = 140.0
+		p.vx = 0.0
+		p.vy = 0.0
+		fw.hpf = float(fw.max_hp) * 0.70
+		fw.hp = ceili(fw.hpf)
+		fw._begin_cut()
+		var fl := {"froze": false}                                     # (a lambda gets its own copy of a plain local)
+		var cut_ok := await wait_until(func():
+			p.inv = 999.0
+			p.hp = p.max_hp
+			fl.froze = fl.froze or p.frozen
+			return fw.ph == 2, 40.0 * slow)
+		var froze_host: bool = fl.froze
 		await wait_secs(1.0)
-		return [started and locked0 and free1 and fw != null and seen.size() >= 5 and tg.p2 >= 2, "host: started %s, %d plans (p1 %d, p2 %d), lobby camera locked %s, furnace camera free %s, seed %d" % [started, seen.size(), tg.p1, tg.p2, locked0, free1, hp.seed]]
+		var free1: bool = r.cam.lock == null and hp.stage == 1
+		# phase 2: the face's attacks on both players, packets, the hot floor, the guest's rate limit
+		var seen2 := {}
+		var st2 := {}
+		var forced2 := [[1.0, "banlist", "p2"], [4.5, "slam", "p2"], [8.0, "sweep", "p2"], [10.5, "slam", "p1"]]
+		var heat_max := 0
+		var packets_max := 0
+		var p2_hit := false
+		var p2_429 := false
+		var waves := 0
+		t0 = Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < p2_secs * 1000.0:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			Controls.script_input = {}
+			plan_stats(fw, seen2)
+			boss_phase_script(fw, float(Time.get_ticks_msec() - t0) / 1000.0 / slow, st2, forced2, [])
+			var hn := 0
+			for h in fw.hz:
+				if h.k == "heat":
+					hn += 1
+				if h.k == "wave":
+					waves += 1
+			heat_max = maxi(heat_max, hn)
+			var live := 0
+			for m in r.plats:
+				if m.has("fw") and not m.off:
+					live += 1
+			packets_max = maxi(packets_max, live)
+			p2_hit = p2_hit or float(fw.rl["p2"][1]) > 0.0
+			p2_429 = p2_429 or float(fw.rl["p2"][2]) > r.time
+			await get_tree().physics_frame
+		var tg2 := {"p1": 0, "p2": 0}
+		for sq in seen2:
+			tg2[seen2[sq]] += 1
+		# phase 3: the scene (the west wall grows), the hops, a punch, a split (two faces), DROP ALL
+		fw.plan = {}
+		fw.hz.clear()
+		fw.hpf = float(fw.max_hp) * 0.35
+		fw.hp = ceili(fw.hpf)
+		fw.on_damage()
+		var scene3 := fw.shift_k == 3
+		var p3_ok := await wait_until(func():
+			p.inv = 999.0
+			p.hp = p.max_hp
+			return fw.ph == 3, 12.0 * slow)
+		var seen3 := {}
+		var st3 := {}
+		var forced3 := [[1.0, "punch", "p2"], [4.0, "split", "p2"], [12.0, "flame", "p1"]]
+		var fist_host := false
+		var split_host := false
+		var drop_host := false
+		var west_host: bool = hp.west_c1 > 0
+		t0 = Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t0 < p3_secs * 1000.0:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			Controls.script_input = {}
+			plan_stats(fw, seen3)
+			boss_phase_script(fw, float(Time.get_ticks_msec() - t0) / 1000.0 / slow, st3, forced3, [])
+			fist_host = fist_host or hp.fist.size.x > 0.0
+			split_host = split_host or fw.face2_y >= 0.0
+			for h in fw.hz:
+				if h.k == "dropall":
+					drop_host = true
+			await get_tree().physics_frame
+		var tg3 := {"p1": 0, "p2": 0}
+		for sq in seen3:
+			tg3[seen3[sq]] += 1
+		await wait_secs(1.0)
+		var ok: bool = started and locked0 and free1 and cut_ok and froze_host and seen.size() >= 5 and tg.p2 >= 2 and seen2.size() >= 4 and tg2.p2 >= 2 and heat_max >= 1 and packets_max >= 3 and p2_hit and p2_429
+		var ok3: bool = scene3 and p3_ok and west_host and seen3.size() >= 4 and tg3.p2 >= 2 and fist_host and split_host and drop_host
+		return [ok and ok3, "host: started %s, phase 1 %d plans (p1 %d, p2 %d), lobby camera locked %s, scene ok %s (host frozen %s, furnace camera free %s), phase 2 %d plans (p1 %d, p2 %d), up to %d heat cells, %d packets, guest hit %s, guest 429 %s (%d blasts); phase 3: scene %s, reached %s, west wall %s, %d plans (p1 %d, p2 %d), fist %s, split %s, DROP ALL %s, seed %d" % [started, seen.size(), tg.p1, tg.p2, locked0, cut_ok, froze_host, free1, seen2.size(), tg2.p1, tg2.p2, heat_max, packets_max, p2_hit, p2_429, waves, scene3, p3_ok, west_host, seen3.size(), tg3.p1, tg3.p2, fist_host, split_host, drop_host, hp.seed]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
-	var r2 := boss_arena("N15", 130.0, 210.0)
+	var r2 := boss_arena("N15", 130.0, 150.0)
 	var found := {"b": null}
 	await wait_until(func():
 		for e in mgr().room.ents:
@@ -2368,15 +2446,30 @@ func sc_co_firewall() -> Array:
 	var cam_ok := true
 	var cam_bad := 0
 	var below := 0
-	var seen_st := {}
+	var froze := false
+	var ph2_seen := 0
+	var rode := false
+	var ride_x0 := -1.0
+	var ride_f := 0
+	var mashed := 0
+	var west_packets := 0
+	var fist_g := false
+	var split_g := false
+	var drop_g := false
+	var wall_g := false
+	var hop_g := false
+	var pdrop_g := false
+	var ph3_frames := 0
 	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < p1_secs * 1000.0 + secs * 3.0 * 1000.0 + 4000.0:
+	var t_p2 := -1.0
+	var limit := (p1_secs + p2_secs + p3_secs) * 1000.0 + 30000.0
+	while Time.get_ticks_msec() - t1 < limit:
 		var g = mgr().player
 		if not is_instance_valid(pup):
 			break
 		var hl: HoneypotHall = mgr().room.hpot
-		var el2 := float(Time.get_ticks_msec() - t1) / 1000.0 / slow
-		if hl.stage == 0:
+		var tnow := float(Time.get_ticks_msec() - t1) / 1000.0
+		if pup.ph == 1 and pup.shift_k == 0:
 			plan_stats(pup, seen2)
 			for q in mgr().room.projs:
 				if not q.dead and String(q.kind) in ["orb", "diamond"]:
@@ -2387,24 +2480,64 @@ func sc_co_firewall() -> Array:
 		else:
 			g.inv = 999.0
 			g.hp = g.max_hp
-			if not seen_st.has(1) and hl.stage == 1:                 # (the probe may have left it on a stub: the floor goes under the middle of the room)
-				g.x = 190.0
-				g.y = 150.0
-				g.vx = 0.0
-				g.vy = 0.0
-		seen_st[hl.stage] = true
+			if pup.shift_k == 2:
+				froze = froze or g.frozen
+			if g.y > 300.0:
+				below += 1
+			if pup.ph == 2 and pup.shift_k == 0:
+				if t_p2 < 0.0:
+					t_p2 = tnow
+				var dt2 := (tnow - t_p2) / slow
+				ph2_seen += 1
+				var live := 0
+				for m in mgr().room.plats:
+					if m.has("fw") and not m.off:
+						live += 1
+				packets = maxi(packets, live)
+				if dt2 > 1.5 and dt2 < 5.5:                           # mash the attack key at the face from just outside its wall: the third quick hit is a 429
+					g.x = pup._wall_x(0) - 44.0
+					g.y = pup.face_y - 6.0
+					g.vx = 0.0
+					g.vy = 0.0
+					Controls.script_input = {"attack": int(dt2 * 60.0) % 10 < 3, "right": true}
+					mashed += 1
+				elif dt2 > 6.0 and dt2 < 11.0:                        # ride a packet: stand on one and be carried
+					Controls.script_input = {}
+					if ride_x0 < 0.0:
+						for m in mgr().room.plats:
+							if m.has("fw") and not m.off and not m.lost and not m.warn and float(m.x) > 80.0 and float(m.x) + 64.0 < 270.0:
+								g.x = float(m.x) + 28.0
+								g.y = float(m.y) - g.h - 1.0
+								g.vx = 0.0
+								g.vy = 0.0
+								ride_x0 = g.x
+								ride_f = 0
+								break
+					else:
+						ride_f += 1
+						if ride_f > 50 and absf(g.x - ride_x0) > 25.0 and g.y < 395.0:
+							rode = true
+				else:
+					Controls.script_input = {}
+			elif pup.ph == 3:
+				ph3_frames += 1
+				Controls.script_input = {}
+				fist_g = fist_g or hl.fist.size.x > 0.0
+				split_g = split_g or pup.face2_y >= 0.0
+				wall_g = wall_g or hl.west_c1 > 0
+				hop_g = hop_g or pup.hop_t0 > 0.0
+				for h in pup.hz:
+					if h.k == "dropall" and pup.hz_live(h, mgr().room.time):
+						drop_g = true
+					if h.k == "pdrop":
+						pdrop_g = true
+				for m in mgr().room.plats:
+					if m.has("fw") and not m.off and int(m.lane) % 2 == 1 and hl.pk_dir == 1:
+						west_packets += 1
 		var wrong: bool = (hl.stage == 0 and mgr().room.cam.lock == null) or (hl.stage >= 1 and mgr().room.cam.lock != null)
 		cam_bad = cam_bad + 1 if wrong else 0                       # (the lock follows the stage within a frame or two, never for good)
 		if cam_bad > 6:
 			cam_ok = false
-		var live := 0
-		for m in mgr().room.plats:
-			if m.has("fw") and not m.off:
-				live += 1
-		if hl.stage == 1:
-			packets = maxi(packets, live)
-			if g.y > 300.0:
-				below += 1
 		await get_tree().physics_frame
 	Controls.script_input = {}
 	var short := 0
@@ -2416,9 +2549,10 @@ func sc_co_firewall() -> Array:
 		if seen2[sq] == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	var ok2: bool = seen_st.has(1) and seen_st.has(2) and seen_st.has(3) and packets >= 3 and cam_ok and below > 0
-	var ok1: bool = seen2.size() >= 5 and mine >= 2 and short == 0 and pup.kit_violation == "" and pup.arena_violation == "" and shots > 0 and notes >= 1 and int(st2.get("hz_hits", 0)) >= 1
-	return [ok1 and ok2, "guest: phase 1 saw %d plans (%d on me), %d active shown < 0.30 s, %d shots, %d notes, hazard hits %d, violations '%s' '%s'; stages %s, up to %d packets, camera %s, %d frames down in the furnace" % [seen2.size(), mine, short, shots, notes, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation, str(seen_st.keys()), packets, "ok" if cam_ok else "WRONG", below]]
+	var ok2: bool = froze and ph2_seen > 60 and packets >= 3 and cam_ok and below > 0 and mashed > 60
+	var ok3: bool = ph3_frames > 120 and wall_g and fist_g and split_g and drop_g and west_packets > 30
+	var ok1: bool = seen2.size() >= 4 and mine >= 2 and short == 0 and pup.kit_violation == "" and pup.arena_violation == "" and shots > 0 and notes >= 1 and int(st2.get("hz_hits", 0)) >= 1
+	return [ok1 and ok2 and ok3, "guest: phase 1 saw %d plans (%d on me), %d active shown < 0.30 s, %d shots, %d notes, hazard hits %d, violations '%s' '%s'; scene frozen %s, phase 2 frames %d, up to %d packets, rode a packet %s, mashed %d frames, camera %s, %d frames down in the furnace; phase 3 frames %d: west wall %s, fist %s, split %s, DROP ALL %s, hop %s, pdrop %s, %d frames of west-wall packets" % [seen2.size(), mine, short, shots, notes, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation, froze, ph2_seen, packets, rode, mashed, "ok" if cam_ok else "WRONG", below, ph3_frames, wall_g, fist_g, split_g, drop_g, hop_g, pdrop_g, west_packets]]
 
 # the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 40 s of fight, nobody is lost
 func sc_co_reviewer2() -> Array:

@@ -18,10 +18,38 @@ Read before every session: this file, [`15-boss-process.md`](15-boss-process.md)
 |---|---|---|
 | M1 | arena: map, HoneypotHall, packets, hot floor, camera, lights | **done** (notes below) |
 | M2 | boss body + phase 1 + intro + two-bar HUD | **done** (notes below) |
-| M3 | fake-victory cutscene + phase 2 + rate limit | not started |
-| M4 | phase 3 + last 15 % | not started |
+| M3 | fake-victory cutscene + phase 2 + rate limit | **done** (notes below) |
+| M4 | phase 3 + last 15 % | **done** (notes below) |
 | M5 | death scene, voices, sounds, music, logs, crawler compact line | not started |
 | M6 | loss menu, NETWORK foreshadow (N01 scene, signal icon, signs), after-state, full tests, web export | not started |
+
+### M4 notes (what changed from the plan while building it)
+
+- The phase-3 scene (`shift_k` 3, 3.0 s, `S3` marks): at 0.0 the cold line's subtitle starts (`say_k` 3), the packets stop (`pk_t0` = none; players on one just fall, no damage), the west wall glows and cracks (drawn by the boss), at 1.5 s the hall's masks become stage 2 (`west_c1` 3), the face shows a doubled image 2.0-2.5 s, at 3.0 s `ph` = 3 and the packets start again with `pk_dir` 1 from `room.time`. Invulnerable, no boxes.
+- The face is no longer one rectangle: `faces()` lists the faces out on a wall (`[wall, y]` each; none while it hops or in the scenes; two in a split). Hurtboxes carry `face` (1 or 2), `wall` and `fy`, so a `429` blast is centred on the face that was hit. `face_wall`/`face_y` is the main face, `face2_y` the second one (on the other wall, -1 = none).
+- `punch`: the wall nearer the target throws it (not necessarily where the face is). The fist's top is row-aligned (`fy` = a multiple of 16, from the target's feet - 6) so the one-way tile and the drawn fist agree. A packet under the target drops with the punch: the `pdrop` hazard is created at the cue with warn = the cue, `_sync_heat()` mirrors it into `hall.pdrops` (time = hazard t0 + warn) on both pages. In a split a punch stays out 0.6 s, not 1.0 s, so the chain runs 4-5 s.
+- `split`: its plan is the tell (cue 0.7: both walls heat, two beeps). On its `active` the host sets `face2_y` and `split_left` (3-4); each strike is its own plan (punch 60 % / flame 40 %, a random wall, aimed at `kit_pick_target()` at its cue); the plan gaps (rec 0.5-0.6 + cue 0.5-0.75) keep the active moments > 0.35 s apart (the test measures it). When the last strike is done: `_end_split()` merges the faces on the east wall at y 368, dazed 1.0 s.
+- `hop`: every 2-4 s when nothing is running (not in a split, not dazed) the face jumps to the wall nearer a target (25 % the other one) at its height; `hop_t0/hop_fw/hop_fy` carry where it came from; for `HOP_T` 0.4 s it has no boxes and an orange trail is drawn (the old spot goes dark).
+- DROP ALL: the `dropall` hazard (warn 0.9, burn 1.6, 12 px tall over the whole inner floor) every 6 s from 5 s into the phase, never during a split (it waits and starts right after); while one exists no new heat is added.
+- 429 in phase 3 steps both walls in (`_on_429`), 18/3 -> 17/4 -> 16/5 (14, 12, 10 tiles); `HoneypotHall._push_out()` pushes this page's own player out of the new column (each page moves only its own body, so nobody is trapped in bricks and nothing is crushed).
+- Feint: 1 in 4 slams in phase 3 has a cue of 1.0 s (`SLAM_CUE` + 0.25); a phase-3 slam recovers in 1.0 s. A slam, sweep and banlist come from the face's wall; the slam's arm comes out of the wall in its plan field.
+- The last 15 % (`hpf <= 0.105 * max_hp`, once): the plea (`say_k` 4, subtitle only until M5) and `green_t0` (state).
+- Phase-3 lights: a red alarm strobe (1 Hz, prio 0) and a red light at each face (`room_lights.gd`).
+- Screenshot helper: `fwp3:<x>:<y>[:<punch|flame|split|dropall|green|slam>[:<secs of packets>]]`.
+- `co-firewall` now runs phase 3 too (the host forces the scene at 35 %, then a punch, a split, a flame; the guest checks the west wall, the fist, the second face, DROP ALL and the west-wall packets) and the whole scenario fits the bad line (`BADLINE_ALL=1`).
+
+### M3 notes (what changed from the plan while building it)
+
+- The scene is derived from `shift_t0` (room time) on both pages (`shift_k` 2, `shift_long`); the marks are two constants (`CUT_LONG`, `CUT_SHORT`). The host steps the events (sounds, `set_stage(1)` at the fall, the reveal line, the end); the guest only draws and freezes its own body. Each page freezes **its own** player (`_freeze_own`, from the scene's clock), never the partner's.
+- Marks (first time, 12 s): `200 OK` chime 0.0, tape stops 1.2 (music `""`), `ACCESS DENIED` 2.0, carpet burns from 2.6, floor and furniture go + body bricks 4.0 (players unfrozen), the door slides 4.0-5.0, the reveal 5.0 (name, line, name card), bar 2 fills 6.0-7.0, phase 2 at 12.0. Short version (3 s): the floor burns at 0.0, goes at 0.5, the face slides 1.0-2.0 (with the reveal), bar 2 fills 1.0-2.0, phase 2 at 3.0; nobody is frozen. The banner is drawn by `draw_hud`.
+- **The arm breaks at 2 hits, not 3** (`ARM_BREAK`): the planted fist is out 1.5 s, a player has only 2 free hits in 2 s, so a third hit would always be a 429 and a solo player could never break it. The slam's arm comes out of the wall at y 232 (`SLAM_TOP`), not 200: with the camera at the furnace floor the picture starts at y 232, so the root's glow (the tell) must be there; the harm box runs from 232 to the floor.
+- Caught things (`how == "catch"`) are not rate-limited and not counted: they are a counter-attack, not requests. The skip button (`d >= 9999`) goes through the scene and the limit.
+- The rate limit's state per player is `rl[key] = [hit time, hit time, cooldown end, blink]` (all carried in the net fields). A hit during the cooldown restarts it at 5.0 s (`tock`), the third hit within 2.0 s is the `429`: the counter blast is the `wave` hazard (0.7 s build-up: a glow grows round the face and `429` shows in it; then 96 x 96 for 0.3 s, `_big()`).
+- Hot floor: `_heat_watch()` adds a `heat` hazard (warn 2.0) for a floor column under a player standing on the furnace floor; `_sync_heat()` mirrors the hazards into `hall.heat` on both pages so the hall draws the dim / bright / flame / cool cell from the hazard's own clock. Burn 1.2 s (1.6 s in phase 3), then 1.0 s cooling.
+- Phase 2 holds at 35 % (`on_damage`) until M4 brings phase 3. `phase` (the base class's, used by `look.gd`) follows `ph`.
+- Stand-in sounds until M5: `uiOk` (200 OK), `degauss` (the tape), `explode` (the carpet), `crumble` + `bigExplode` (the floor), `roar` (the reveal), `charge` (hiss), `warn` (the 429), `tock` (cooldown), `thud` (the slam), `dash` (the sweep).
+- Screenshot helpers: `fwcut:<secs>[:short]` (the scene that many seconds in; the first frame runs its events up to there) and `fwp2:<x>:<y>[:<slam|sweep|banlist|429>[:<secs of packets>]]`.
+- `co-firewall` now runs the real scene (the host starts it at 70 %), checks both pages fall and the guest was frozen, then 34 s of phase 2: attacks on both players, packets, the hot floor, the guest rides a packet and mashes the attack key at the face until its 429 (the host reads the guest's rate-limit state).
 
 ### M2 notes (what changed from the plan while building it)
 

@@ -223,6 +223,17 @@ func _redraw_static() -> void:
 # every frame, both pages (the room's step; the packets move earlier, with the other platforms)
 func step(_dt: float) -> void:
 	apply()
+	_push_out()
+
+# a wall that steps in must not trap this page's own body in its bricks: it is pushed out of the new column (each page moves only its own player)
+func _push_out() -> void:
+	var p = room.player
+	if p == null or p.dead or p.y + p.h <= float((FLOOR_ROW + 1) * T):
+		return
+	if body_c0 > 0 and p.x + p.w > float(body_c0 * T):
+		p.x = float(body_c0 * T) - p.w
+	if west_c1 > 0 and p.x < float((west_c1 + 1) * T):
+		p.x = float((west_c1 + 1) * T)
 
 # ---------------------------------------------------------------- packets (a pure function of room.time, pk_t0 and seed)
 func lane_dir(lane: int) -> int:
@@ -557,7 +568,7 @@ func _wall_body(ci: CanvasItem, x0: int, x1: int, east: bool) -> void:
 # shaded: what the room's lights darken (packets, a fist, the carpet burning)
 func draw_shaded(ci: CanvasItem) -> void:
 	var now: float = room.time
-	if stage == 0 and burn_t0 >= 0.0 and floor_on:
+	if stage == 0 and burn_t0 >= 0.0 and floor_on and now >= burn_t0:
 		_draw_carpet_burn(ci, now)
 	var wx: float = west_surface()
 	var ex: float = east_surface()

@@ -183,6 +183,9 @@ func _hall_lights(c: Array) -> void:
 
 # the honeypot hall (HoneypotHall): two warm lamps and the sunny window in the lobby; the furnace's grates, a glow per packet and the hot floor after it.
 # From the hall's own state, so the lobby is lit before the fight and the burned shell after it
+func _face_light_x(fw: FirewallBoss, wall: int) -> float:
+	return fw._wall_x(wall) + (-16.0 if wall == 0 else 16.0)
+
 func _hpot_lights(c: Array) -> void:
 	var hp: HoneypotHall = room.hpot
 	if hp.stage == 0:
@@ -198,6 +201,14 @@ func _hpot_lights(c: Array) -> void:
 	while x < ix.y - 20.0:                                   # the grates in the furnace floor
 		c.append([3, 0.0, x, HoneypotHall.FURN_Y - 6.0, 46.0, 0.5, Color("#ff7a2a"), null, false])
 		x += 72.0
+	var fb = room.boss
+	if fb is FirewallBoss and not fb.gone and not fb.dying:
+		var fw: FirewallBoss = fb
+		for fc in fw.faces():                                 # the faces glow red on their walls
+			c.append([1, 0.0, _face_light_x(fw, int(fc[0])), float(fc[1]), 80.0, 0.9, Color("#ff5a3a"), null, false])
+		if fw.ph == 3 and fw.shift_k == 0:                    # phase 3: a red alarm strobe, 1 Hz
+			var pulse := 0.5 + 0.5 * sin(room.time * TAU)
+			c.append([0, 0.0, 192.0, 300.0, 400.0, 0.12 + 0.4 * pulse, Color("#ff3a2a"), null, false])
 	for m in hp.pool:
 		if not m.off and not m.lost:
 			var col := Color("#58f0c8")

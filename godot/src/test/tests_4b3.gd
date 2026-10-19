@@ -1390,6 +1390,8 @@ func t_firewall3() -> bool:
 	r2.queue_free()
 	r.queue_free()
 	fw3_phase1(res)
+	fw3_phase2(res)
+	fw3_phase3(res)
 	Game.fresh()
 	Controls.script_input = null
 	return report("firewall3", res.ok, res.info)
@@ -1433,7 +1435,7 @@ func fw3_phase1(res: Dictionary) -> void:
 			break
 	if ids.size() < 8 or ids.slice(0, 4) != ["cookies", "mat", "hold", "crack"]:
 		fail(res, "the first cycle was %s" % str(ids.slice(0, 4)))
-	for id in FirewallBoss.IDS:
+	for id in FirewallBoss.P1_IDS:
 		if not ids.has(id):
 			fail(res, "attack %s never came in %d attacks" % [id, ids.size()])
 	for i in range(1, ids.size()):
@@ -1583,7 +1585,7 @@ func fw3_phase1(res: Dictionary) -> void:
 	if bare > 0:
 		fail(res, "the bare floor bit")
 	r.queue_free()
-	# 4. bar 1: green, 100 % to 70 % of the hp; the shell holds at 70 % (phase 2 comes with M3); a skip ends the fight
+	# 4. bar 1: green, 100 % to 70 % of the hp; at 70 % the fake victory starts (M3); a skip ends the fight, even in the scene
 	r = fw3_fight()
 	fw = r.boss
 	var bar: Array = fw.hud_bar()
@@ -1593,8 +1595,8 @@ func fw3_phase1(res: Dictionary) -> void:
 	if absf(float(fw.hud_bar()[0]) - 0.5) > 0.001:
 		fail(res, "bar at 85 %%: %s" % str(fw.hud_bar()))
 	fw.hit(10000 - 9999 + 400, 1.0, 0.0, "swipe", fw)
-	if absf(fw.hpf - float(fw.max_hp) * 0.70) > 0.01 or fw.dying or float(fw.hud_bar()[0]) != 0.0:
-		fail(res, "the shell did not hold at 70 %% (hp %.1f of %d)" % [fw.hpf, fw.max_hp])
+	if absf(fw.hpf - float(fw.max_hp) * 0.70) > 0.01 or fw.dying or fw.shift_k != 2 or float(fw.hud_bar()[0]) != 0.0:
+		fail(res, "the shell did not hold at 70 %% and start the scene (hp %.1f of %d, shift %d)" % [fw.hpf, fw.max_hp, fw.shift_k])
 	if not r.skip_boss() and not fw.dying:
 		fail(res, "the skip button did not end the fight")
 	r.queue_free()
@@ -1618,6 +1620,668 @@ func fw3_phase1(res: Dictionary) -> void:
 		fail(res, "the intro stayed long")
 	r.queue_free()
 	Game.flags.erase("intro:FIREWALL")
+
+# M3: the fake victory, the furnace, the rate limit
+func fw3_to_p2(r: Room, long_ := false) -> void:
+	var fw: FirewallBoss = r.boss
+	if long_:
+		Game.flags.erase("reveal:FIREWALL")
+	else:
+		Game.flags["reveal:FIREWALL"] = true
+	fw.hpf = float(fw.max_hp) * 0.70
+	fw._begin_cut()
+	var n := 0
+	while fw.ph < 2 and n < 60 * 14:
+		fw3_step(r, 1)
+		n += 1
+
+func fw3_phase2(res: Dictionary) -> void:
+	Game.diff = "normal"
+	Game.flags.erase("intro:FIREWALL")
+	Game.flags.erase("reveal:FIREWALL")
+	# 1. the long scene (the first time): frozen 0-4 s, the music stops at 1.2, the carpet burns from 2.6, the floor goes at 4.0, the real name at 5.0, bar 2 fills 6-7, phase 2 at 12
+	var r := fw3_fight()
+	var fw: FirewallBoss = r.boss
+	var hl: HoneypotHall = r.hpot
+	fw.hpf = float(fw.max_hp) * 0.71
+	fw.hit(40, 1.0, 0.0, "swipe", fw)
+	if fw.shift_k != 2 or not fw.shift_long or absf(fw.hpf - float(fw.max_hp) * 0.70) > 0.01:
+		fail(res, "the fake victory did not start (shift %d, hp %.1f)" % [fw.shift_k, fw.hpf])
+	var t0 := fw.shift_t0
+	var seen := {}
+	var hp_in := fw.hpf
+	var guard := 0
+	while fw.shift_k == 2 and guard < 60 * 14:
+		fw3_step(r, 1)
+		guard += 1
+		var el := r.time - t0
+		if el >= 1.0 and not seen.has("a"):
+			seen["a"] = true
+			if not r.player.frozen:
+				fail(res, "the player was not frozen at 1 s")
+			if fw.music_now("boss") != "w1" or fw.hit(5, 1.0, 0.0, "swipe", fw) != "" or absf(fw.hpf - hp_in) > 0.001 or not fw.harmboxes().is_empty() or not fw.hurtboxes().is_empty():
+				fail(res, "the scene was not harmless / the music had stopped early")
+		if el >= 1.5 and not seen.has("b"):
+			seen["b"] = true
+			if fw.music_now("boss") != "":
+				fail(res, "the music did not stop at 1.2 s")
+		if el >= 3.0 and not seen.has("c"):
+			seen["c"] = true
+			if hl.stage != 0 or r.grid.tile(8, 11) != TileGrid.SOLID or absf(hl.burn_t0 - (t0 + 2.6)) > 0.02:
+				fail(res, "before the fall: stage %d, burn_t0 %.2f (scene began %.2f)" % [hl.stage, hl.burn_t0, t0])
+			if fw.hud_bar()[2] != "GUEST SERVICES":
+				fail(res, "the name changed early")
+		if el >= 4.2 and not seen.has("d"):
+			seen["d"] = true
+			if hl.stage != 1 or r.grid.tile(8, 11) != TileGrid.E or r.grid.tile(20, 14) != TileGrid.SOLID or r.player.frozen:
+				fail(res, "after the fall: stage %d, floor tile %d, frozen %s" % [hl.stage, r.grid.tile(8, 11), str(r.player.frozen)])
+			if hl.cam_lock() != null:
+				fail(res, "the camera stayed locked after the fall")
+		if el >= 5.2 and not seen.has("e"):
+			seen["e"] = true
+			if fw.boss_name != "THE FIREWALL" or fw.sub != "deny by default" or fw.say_k != 2 or fw.hud_bar()[2] != "THE FIREWALL":
+				fail(res, "at the reveal the name was %s / %s, say %d" % [fw.boss_name, fw.sub, fw.say_k])
+		if el >= 6.5 and not seen.has("f"):
+			seen["f"] = true
+			var bf := float(fw.hud_bar()[0])
+			if bf < 0.4 or bf > 0.6 or String(fw.hud_bar()[1]) != FirewallBoss.RED:
+				fail(res, "bar 2 at 6.5 s: %s" % str(fw.hud_bar()))
+		if el >= 11.5 and not seen.has("g"):
+			seen["g"] = true
+			if hl.pk_t0 > HoneypotHall.NO_PK * 0.5:
+				fail(res, "the packets started before phase 2")
+	var took := r.time - t0
+	if fw.ph != 2 or absf(took - 12.0) > 0.1 or not Game.flag("reveal:FIREWALL"):
+		fail(res, "phase 2 began after %.2f s (ph %d)" % [took, fw.ph])
+	if absf(hl.pk_t0 - r.time) > 0.1 or fw.face_wall != 0:
+		fail(res, "the packets began at %.2f (room time %.2f)" % [hl.pk_t0, r.time])
+	fw3_step(r, 60)
+	if absf(r.player.y + r.player.h - HoneypotHall.FURN_Y) > 2.0 or not r.player.on_ground:
+		fail(res, "the player did not fall to the furnace floor (feet %.1f)" % (r.player.y + r.player.h))
+	if fw.hud_bar()[2] != "THE FIREWALL" or absf(float(fw.hud_bar()[0]) - 1.0) > 0.001:
+		fail(res, "bar 2 not full at the start of phase 2: %s" % str(fw.hud_bar()))
+	r.queue_free()
+	# 2. the short scene (every time after): 3 s, nobody frozen, the floor goes at 0.5 s
+	r = fw3_fight()
+	fw = r.boss
+	hl = r.hpot
+	Game.flags["reveal:FIREWALL"] = true
+	fw.hpf = float(fw.max_hp) * 0.70
+	fw._begin_cut()
+	t0 = fw.shift_t0
+	if fw.shift_long:
+		fail(res, "the second scene was long")
+	var froze := false
+	var floor_gone := -1.0
+	guard = 0
+	while fw.shift_k == 2 and guard < 60 * 5:
+		fw3_step(r, 1)
+		guard += 1
+		froze = froze or r.player.frozen
+		if floor_gone < 0.0 and r.grid.tile(8, 11) == TileGrid.E:
+			floor_gone = r.time - t0
+	if froze or absf(r.time - t0 - 3.0) > 0.1 or floor_gone < 0.4 or floor_gone > 0.7 or fw.ph != 2:
+		fail(res, "short scene: frozen %s, %.2f s, floor gone at %.2f, ph %d" % [str(froze), r.time - t0, floor_gone, fw.ph])
+	r.queue_free()
+	# 3. phase 2's attacks: the first cycle banlist, slam, sweep; then a weighted mix, never the same twice; the furnace's boxes (the arm and the sweep hurt, the face hurts)
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	var ids: Array = []
+	var seq := -1
+	for f in range(60 * 160):
+		fw3_step(r, 1)
+		if not fw.plan.is_empty() and int(fw.plan.seq) != seq:
+			seq = int(fw.plan.seq)
+			ids.append(String(fw.plan.id))
+		if ids.size() >= 24:
+			break
+	if ids.size() < 12 or ids.slice(0, 3) != FirewallBoss.FIRST2:
+		fail(res, "phase 2 first cycle %s" % str(ids.slice(0, 3)))
+	for id in ["slam", "sweep", "banlist"]:
+		if not ids.has(id):
+			fail(res, "phase 2 never used %s in %d attacks" % [id, ids.size()])
+	for i in range(1, ids.size()):
+		if ids[i] == ids[i - 1]:
+			fail(res, "%s twice in a row" % ids[i])
+	r.queue_free()
+	# slam: x +-16 from y 200 to the floor for _big() after a cue of 0.75; the planted fist is a hurtbox for 1.5 s and the second hit breaks it (the face slides down)
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	r.player.x = 120.0
+	fw3_step(r, 5)
+	fw._start("slam", "p1")
+	var cue := float(fw.plan.t)
+	var ax := float(fw.plan.fp[0])
+	n_until_active(r, fw)
+	var sb: Array = fw.harmboxes()
+	var slam_box := {}
+	for hb in sb:
+		if absf(float(hb.w) - 32.0) < 0.1 and float(hb.y) == FirewallBoss.SLAM_TOP:
+			slam_box = hb
+	if cue < 0.7 or slam_box.is_empty() or int(slam_box.dmg) != int(Game.dv("big_hit")) or absf(float(slam_box.x) - (ax - 16.0)) > 0.1 or absf(float(slam_box.h) - (HoneypotHall.FURN_Y - FirewallBoss.SLAM_TOP)) > 0.1:
+		fail(res, "the slam: cue %.2f, box %s, arm x %.0f" % [cue, str(slam_box), ax])
+	var guard2 := 0
+	while String(fw.plan.ph) != "recover" and guard2 < 120:
+		fw3_step(r, 1)
+		guard2 += 1
+	var arm_b := {}
+	for hb in fw.hurtboxes():
+		if hb.has("arm"):
+			arm_b = hb
+	if arm_b.is_empty() or absf(float(arm_b.x) - (ax - 16.0)) > 0.1 or absf(float(arm_b.y) - 376.0) > 0.1 or absf(float(arm_b.h) - 24.0) > 0.1:
+		fail(res, "no planted fist hurtbox: %s" % str(arm_b))
+	else:
+		r.attacker = r.player
+		fw.hit(1, 1.0, 0.0, "swipe", arm_b)
+		if fw.arm_hits != 1 or fw.low_t > 0.0:
+			fail(res, "the first hit on the fist: hits %d, low %.2f" % [fw.arm_hits, fw.low_t])
+		fw3_step(r, 4)
+		fw.hit(1, 1.0, 0.0, "swipe", arm_b)
+		if fw.arm_hits != 2 or fw.low_t <= 0.0:
+			fail(res, "the fist did not break at its second hit: hits %d, low %.2f" % [fw.arm_hits, fw.low_t])
+		fw3_step(r, 10)
+		if fw.face_y < FirewallBoss.FACE_LOW - 120.0 and fw.face_y < 300.0:
+			pass
+		var hb2: Array = fw.hurtboxes()
+		for hb in hb2:
+			if hb.has("arm"):
+				fail(res, "a broken fist is still a hurtbox")
+	r.queue_free()
+	# sweep: 24 x 20 above the floor, from the wall to the far wall in 0.6 s, 1 damage
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw._start("sweep", "p1")
+	n_until_active(r, fw)
+	var s0: Dictionary = {}
+	for hb in fw.harmboxes():
+		if absf(float(hb.h) - 20.0) < 0.1 and absf(float(hb.w) - 24.0) < 0.1:
+			s0 = hb
+	fw3_step(r, 18)
+	var s1: Dictionary = {}
+	for hb in fw.harmboxes():
+		if absf(float(hb.h) - 20.0) < 0.1 and absf(float(hb.w) - 24.0) < 0.1:
+			s1 = hb
+	if s0.is_empty() or s1.is_empty() or int(s0.dmg) != 1 or float(s1.x) >= float(s0.x) - 60.0 or absf(float(s0.y) + 20.0 - HoneypotHall.FURN_Y) > 0.1:
+		fail(res, "the sweep: %s then %s" % [str(s0), str(s1)])
+	r.queue_free()
+	# banlist: three bricks, one yellow, aimed round the target; a caught brick is steered at the face and dazes it (the face sags)
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw._start("banlist", "p1")
+	n_until_active(r, fw)
+	fw3_step(r, 2)
+	var bricks: Array = []
+	for q in r.projs:
+		if q.get("fwb", false):
+			bricks.append(q)
+	var bgold := 0
+	var gq2: Dictionary = {}
+	for q in bricks:
+		if q.get("catchable", false):
+			bgold += 1
+			gq2 = q
+	if bricks.size() != 3 or bgold != 1:
+		fail(res, "%d bricks, %d yellow" % [bricks.size(), bgold])
+	else:
+		r.catch_proj(gq2, r.player)
+		fw3_step(r, 6)
+		var daze_ok := false
+		for f in range(120):
+			fw3_step(r, 1)
+			if fw.daze_t > 0.0:
+				daze_ok = true
+				break
+		if not gq2.get("steered", false) or not daze_ok:
+			fail(res, "a caught brick did not daze the face (steered %s)" % str(gq2.get("steered", false)))
+	r.queue_free()
+	# 4. the rate limit: two free hits in 2 s, the third is 429 (no damage, a counter blast), a hit in the cooldown restarts it at 5 s; the players are counted apart
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.arm_hits = 0
+	r.attacker = r.player
+	var fb: Dictionary = fw.hurtboxes()[0]
+	var h0 := fw.hpf
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	fw3_step(r, 10)
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	if absf(fw.hpf - (h0 - 2.0)) > 0.01:
+		fail(res, "two quick hits did not both land (%.1f -> %.1f)" % [h0, fw.hpf])
+	fw3_step(r, 10)
+	var h2 := fw.hpf
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	var waves := 0
+	for h in fw.hz:
+		if h.k == "wave":
+			waves += 1
+	var cd1 := float(fw.rl["p1"][2])
+	if fw.hpf != h2 or waves != 1 or absf(cd1 - r.time - 3.0) > 0.05 or int(fw.rl["p1"][3]) != 0:
+		fail(res, "the third quick hit: hp %.1f -> %.1f, %d waves, cooldown %.2f s" % [h2, fw.hpf, waves, cd1 - r.time])
+	for h in fw.hz:
+		if h.k == "wave" and (fw.hz_live(h, r.time) or float(h.warn) < 0.7):
+			fail(res, "the counter blast has no build-up")
+	fw3_step(r, 30)
+	fw.hit(1, 1.0, 0.0, "swipe", fb)                       # in the cooldown: nothing, and it restarts at 5 s
+	var cd2 := float(fw.rl["p1"][2])
+	if fw.hpf != h2 or absf(cd2 - r.time - 5.0) > 0.05 or int(fw.rl["p1"][3]) != 1:
+		fail(res, "a hit in the cooldown: hp %.1f -> %.1f, cooldown %.2f s, blink %d" % [h2, fw.hpf, cd2 - r.time, int(fw.rl["p1"][3])])
+	if not fw._rate_ok("p2", Vector2(288.0, 300.0)) or not fw._rate_ok("p2", Vector2(288.0, 300.0)) or fw._rate_ok("p2", Vector2(288.0, 300.0)):
+		fail(res, "the other player shares the first player's rate limit")
+	fw3_step(r, 60 * 6)
+	h2 = fw.hpf
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	if absf(fw.hpf - (h2 - 1.0)) > 0.01:
+		fail(res, "a hit after the cooldown did not land")
+	fw3_step(r, 60 * 3)
+	h2 = fw.hpf
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	fw3_step(r, 60 * 3)
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	fw3_step(r, 60 * 3)
+	fw.hit(1, 1.0, 0.0, "swipe", fb)
+	if absf(fw.hpf - (h2 - 3.0)) > 0.01:
+		fail(res, "slow hits (3 s apart) were limited (%.1f -> %.1f)" % [h2, fw.hpf])
+	# the counter blast: 96 x 96 around the face for 0.3 s after 0.7 s, _big() damage
+	fw.hz.clear()
+	fw.rl["p1"] = [-9.0, -9.0, -1.0, 0]
+	fw.hz_add("wave", 0.7, [300, 300])
+	var wh: Dictionary = fw.hz[0]
+	var before: Array = fw.hz_boxes(wh, wh.t0 + 0.69)
+	var during: Array = fw.hz_boxes(wh, float(wh.t0) + 0.75)
+	var after: Array = fw.hz_boxes(wh, float(wh.t0) + 1.1)
+	if fw.hz_live(wh, float(wh.t0) + 0.69) or during.size() != 1 or int(during[0].dmg) != int(Game.dv("big_hit")) or absf(float(during[0].w) - 96.0) > 0.1 or not after.is_empty():
+		fail(res, "the counter blast boxes: live early %s, %s, then %s (%s)" % [str(fw.hz_live(wh, float(wh.t0) + 0.69)), str(during), str(after), str(before)])
+	r.queue_free()
+	# 5. the hot floor: a cell somebody stands on glows, burns 2 s later for 1.2 s, cools 1 s and can heat again; walking on is safe, nothing is added while standing nowhere
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	hl = r.hpot
+	r.player.x = 120.0
+	r.player.vx = 0.0
+	fw3_step(r, 30)
+	var col := floori((r.player.x + r.player.w / 2.0) / 16.0)
+	var hz_h: Dictionary = {}
+	for h in fw.hz:
+		if h.k == "heat" and int(h.v[0]) == col:
+			hz_h = h
+	if hz_h.is_empty() or absf(float(hz_h.warn) - 2.0) > 0.001:
+		fail(res, "no heat hazard under the player (column %d, %d hazards)" % [col, fw.hz.size()])
+	else:
+		if not hl.heat.has(col):
+			fail(res, "the hall does not show the heat")
+		var hs := float(hz_h.t0)
+		if not fw.hz_boxes(hz_h, hs + 1.9).is_empty() or fw.hz_boxes(hz_h, hs + 2.1).size() != 1 or not fw.hz_boxes(hz_h, hs + 3.3).is_empty():
+			fail(res, "the heat box timing")
+		var hb3: Dictionary = fw.hz_boxes(hz_h, hs + 2.1)[0]
+		if hb3.dmg != 1 or absf(float(hb3.y) + float(hb3.h) - HoneypotHall.FURN_Y) > 0.1 or absf(float(hb3.x) - float(col * 16)) > 0.1:
+			fail(res, "the heat box: %s" % str(hb3))
+		r.player.x = 40.0                                          # walk away: the old cell burns out and goes
+		r.player.vx = 0.0
+		var gone_ok := false
+		for f in range(60 * 6):
+			fw3_step(r, 1)
+			r.player.x = 40.0 + 3.0 * float(f % 2) if f % 70 < 35 else 40.0           # (stay near but move on, so the new cells are not stood on for 2 s)
+			if not hl.heat.has(col):
+				gone_ok = true
+				break
+		if not gone_ok:
+			fail(res, "the burned cell never cooled")
+	r.queue_free()
+	# 6. the net: the fields round-trip (NetClasses/parity check the rest)
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p2(r)
+	var nf: Array = fw.net_fields()
+	if nf.size() != FirewallBoss.NF + 12:
+		fail(res, "net fields %d, want %d" % [nf.size(), FirewallBoss.NF + 12])
+	r.queue_free()
+
+# M4: phase 3, two walls
+func fw3_to_p3(r: Room) -> void:
+	var fw: FirewallBoss = r.boss
+	if fw.ph < 2:
+		fw3_to_p2(r)
+	fw.plan = {}
+	fw.hpf = float(fw.max_hp) * 0.35 + 0.5
+	r.attacker = r.player
+	fw.hit(1, 1.0, 0.0, "swipe", fw.hurtboxes()[0])
+	var n := 0
+	while fw.ph < 3 and n < 60 * 6:
+		fw3_step(r, 1)
+		n += 1
+
+func fw3_phase3(res: Dictionary) -> void:
+	Game.diff = "normal"
+	Game.flags["intro:FIREWALL"] = true
+	# 1. the scene (3 s, harmless): the west wall's bricks at 1.5 s, the cold line, the packets stop and start again from both walls
+	var r := fw3_fight()
+	var fw: FirewallBoss = r.boss
+	var hl: HoneypotHall = r.hpot
+	fw3_to_p2(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw3_step(r, 60)
+	fw.hpf = float(fw.max_hp) * 0.35 + 0.5
+	r.attacker = r.player
+	fw.hit(1, 1.0, 0.0, "swipe", fw.hurtboxes()[0])
+	if fw.shift_k != 3 or absf(fw.hpf - float(fw.max_hp) * 0.35) > 0.01:
+		fail(res, "the phase-3 scene did not start (shift %d, hp %.1f)" % [fw.shift_k, fw.hpf])
+	var t0 := fw.shift_t0
+	var hp_in := fw.hpf
+	var seen := {}
+	var guard := 0
+	while fw.shift_k == 3 and guard < 60 * 5:
+		fw3_step(r, 1)
+		guard += 1
+		var el := r.time - t0
+		if el >= 0.5 and not seen.has("a"):
+			seen["a"] = true
+			if hl.west_c1 != 0 or hl.pk_t0 > HoneypotHall.NO_PK * 0.5 or fw.say_k != 3 or fw.music_now("boss") != "boss":
+				fail(res, "scene 0.5 s: west %d, packets %.1f, say %d" % [hl.west_c1, hl.pk_t0, fw.say_k])
+			if fw.hit(5, 1.0, 0.0, "swipe", fw) != "" or absf(fw.hpf - hp_in) > 0.001 or not fw.harmboxes().is_empty() or not fw.hurtboxes().is_empty():
+				fail(res, "the phase-3 scene was not harmless")
+		if el >= 1.7 and not seen.has("b"):
+			seen["b"] = true
+			if hl.stage != 2 or hl.west_c1 != 3 or r.grid.tile(2, 15) != TileGrid.SOLID or r.grid.tile(20, 15) != TileGrid.SOLID:
+				fail(res, "the walls at 1.7 s: stage %d west %d" % [hl.stage, hl.west_c1])
+	if fw.ph != 3 or fw.phase != 3 or absf(r.time - t0 - 3.0) > 0.1 or hl.pk_dir != 1 or absf(hl.pk_t0 - r.time) > 0.1:
+		fail(res, "phase 3 began after %.2f s (ph %d, pk_dir %d)" % [r.time - t0, fw.ph, hl.pk_dir])
+	if absf(float(fw.hud_bar()[0]) - 0.5) > 0.01 or String(fw.hud_bar()[2]) != "THE FIREWALL":
+		fail(res, "bar 2 at the start of phase 3: %s" % str(fw.hud_bar()))
+	r.queue_free()
+	# 2. the mix: punch and split first, then a weighted mix; the strikes of a split are 0.35 s apart at least; DROP ALL never starts during a split; the walls
+	r = fw3_fight()
+	fw = r.boss
+	hl = r.hpot
+	fw3_to_p3(r)
+	var ids: Array = []
+	var seq := -1
+	var act_t := {}
+	var in_split_ids: Array = []
+	var drops: Array = []
+	var drop_in_split := 0
+	var seen_dr := {}
+	var splits := 0
+	var strikes_per: Array = []
+	var cur_strikes := 0
+	var was_split := false
+	var ev_last := -1.0
+	var gap_bad := 0
+	for f in range(60 * 200):
+		fw3_step(r, 1)
+		var in_split: bool = fw.face2_y >= 0.0
+		if not fw.plan.is_empty() and int(fw.plan.seq) != seq:
+			seq = int(fw.plan.seq)
+			if not in_split or String(fw.plan.id) == "split":
+				ids.append(String(fw.plan.id))
+			if String(fw.plan.id) == "split":
+				splits += 1
+		if in_split and not fw.plan.is_empty() and String(fw.plan.id) in ["punch", "flame"] and String(fw.plan.ph) == "active" and not act_t.has(fw.plan.seq):
+			act_t[fw.plan.seq] = r.time
+			if ev_last >= 0.0 and r.time - ev_last < 0.349:
+				gap_bad += 1
+			ev_last = r.time
+			cur_strikes += 1
+		if was_split and not in_split:
+			strikes_per.append(cur_strikes)
+			cur_strikes = 0
+			ev_last = -1.0
+		was_split = in_split
+		for h in fw.hz:
+			if h.k == "dropall" and not seen_dr.has(h.t0):
+				seen_dr[h.t0] = true
+				drops.append(float(h.t0))
+				if in_split:
+					drop_in_split += 1
+			if in_split and h.k == "heat" and false:
+				pass
+		if ids.size() >= 70:
+			break
+	if ids.slice(0, 2) != FirewallBoss.FIRST3:
+		fail(res, "phase 3 first cycle %s" % str(ids.slice(0, 2)))
+	for id in ["split", "punch", "flame", "slam", "sweep", "banlist"]:
+		if not ids.has(id) and id != "punch" and id != "flame":
+			fail(res, "phase 3 never used %s in %d attacks" % [id, ids.size()])
+	for i in range(1, ids.size()):
+		if ids[i] == ids[i - 1] and ids[i] != "punch":
+			fail(res, "%s twice in a row (%s)" % [ids[i], str(ids.slice(maxi(0, i - 3), i + 1))])
+	if splits < 2 or strikes_per.is_empty() or gap_bad > 0 or drop_in_split > 0:
+		fail(res, "splits %d, strikes per split %s, strike gaps under 0.35 s: %d, DROP ALL during a split: %d" % [splits, str(strikes_per), gap_bad, drop_in_split])
+	for k in strikes_per:
+		if k < 3 or k > 4:
+			fail(res, "a split with %d strikes" % k)
+	if drops.size() < 3:
+		fail(res, "only %d DROP ALLs in 200 s" % drops.size())
+	for i in range(1, drops.size()):
+		if drops[i] - drops[i - 1] < 5.9:
+			fail(res, "DROP ALL twice within %.1f s" % (drops[i] - drops[i - 1]))
+	r.queue_free()
+	# 3. punch: a cue of 0.75, a 96 x 24 fist at the target's height out of the nearer wall (2 damage while it shoots), then 1 s as a one-way top and a hurtbox; a packet under the target drops
+	r = fw3_fight()
+	fw = r.boss
+	hl = r.hpot
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.hop_cd = 999.0
+	fw.drop_t = 999.0
+	fw3_step(r, 60 * 3)
+	var pk: Dictionary = {}
+	for m in r.plats:
+		if m.has("fw") and not m.off and not m.lost and not m.warn and float(m.x) > 60.0 and float(m.x) + 64.0 < 250.0:
+			pk = m
+			break
+	if pk.is_empty():
+		fail(res, "no packet to stand on in phase 3")
+	else:
+		r.player.x = float(pk.x) + 28.0
+		r.player.y = float(pk.y) - r.player.h
+		r.player.vx = 0.0
+		r.player.vy = 0.0
+	fw._start("punch", "p1")
+	var pcue := float(fw.plan.t)
+	var pd := 0
+	for h in fw.hz:
+		if h.k == "pdrop":
+			pd += 1
+	n_until_active(r, fw)
+	var fr := fw.fist_rect()
+	var pb := {}
+	for hb in fw.harmboxes():
+		if absf(float(hb.w) - 96.0) < 0.1 and absf(float(hb.h) - 24.0) < 0.1:
+			pb = hb
+	if pcue < 0.7 or pb.is_empty() or int(pb.dmg) != int(Game.dv("big_hit")) or hl.fist != fr or absf(float(fr.size.x) - 96.0) > 0.1:
+		fail(res, "the punch: cue %.2f, box %s, fist %s (%s)" % [pcue, str(pb), str(hl.fist), str(fr)])
+	if pd != 1 and not pk.is_empty():
+		fail(res, "no pdrop for the packet under the target (%d)" % pd)
+	if absf(fr.position.y - 16.0 * floorf(fr.position.y / 16.0)) > 0.01:
+		fail(res, "the fist is not on a tile row")
+	var guard3 := 0
+	while String(fw.plan.ph) != "recover" and guard3 < 60:
+		fw3_step(r, 1)
+		guard3 += 1
+	var fb := {}
+	for hb in fw.hurtboxes():
+		if hb.has("fist"):
+			fb = hb
+	if fb.is_empty() or r.grid.tile(floori((fr.position.x + 8.0) / 16.0), floori(fr.position.y / 16.0)) != TileGrid.ONEWAY:
+		fail(res, "the fist is not a hurtbox / a one-way top while it stays out")
+	var fist_t := 0.0
+	while hl.fist.size.x > 0.0 and fist_t < 3.0:
+		fw3_step(r, 1)
+		fist_t += Game.STEP
+	if fist_t < 0.7 or fist_t > 1.2:
+		fail(res, "the fist stayed out %.2f s" % fist_t)
+	r.queue_free()
+	# flame: 80 x 20 from the face's edge, 1 damage, a cue of 0.5
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.hop_cd = 999.0
+	fw.drop_t = 999.0
+	fw._start("flame", "p1")
+	var fcue := float(fw.plan.t)
+	n_until_active(r, fw)
+	var fbx := {}
+	for hb in fw.harmboxes():
+		if absf(float(hb.w) - 80.0) < 0.1 and absf(float(hb.h) - 20.0) < 0.1:
+			fbx = hb
+	var frr := fw.face_rect()
+	if fcue < 0.45 or fbx.is_empty() or int(fbx.dmg) != 1 or absf(float(fbx.x) + 80.0 - frr.position.x) > 0.5:
+		fail(res, "the flame: cue %.2f, box %s, face %s" % [fcue, str(fbx), str(frr)])
+	r.queue_free()
+	# 4. the walls: each 429 steps both in one tile (18/3 -> 17/4 -> 16/5), never closer than 10 tiles; the body of this page is pushed out of the new column
+	r = fw3_fight()
+	fw = r.boss
+	hl = r.hpot
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.drop_t = 999.0
+	fw.hop_cd = 999.0
+	var steps: Array = []
+	for k in range(5):
+		fw.rl["p1"] = [-9.0, -9.0, -1.0, 0]
+		fw._rate_ok("p1", Vector2(288.0, 300.0))
+		fw._rate_ok("p1", Vector2(288.0, 300.0))
+		fw._rate_ok("p1", Vector2(288.0, 300.0))
+		steps.append([hl.body_c0, hl.west_c1])
+	if steps[0] != [17, 4] or steps[1] != [16, 5] or steps[4] != [16, 5]:
+		fail(res, "the walls stepped %s" % str(steps))
+	if hl.body_c0 - (hl.west_c1 + 1) < 10:
+		fail(res, "the furnace is under 10 tiles wide")
+	r.player.x = float(hl.body_c0 * 16) - 4.0
+	r.player.y = 400.0 - r.player.h
+	fw3_step(r, 2)
+	if r.player.x + r.player.w > float(hl.body_c0 * 16) + 0.01:
+		fail(res, "the east wall left the player inside its bricks (x %.1f)" % r.player.x)
+	r.queue_free()
+	# 5. DROP ALL: red for 0.9 s, then the whole floor burns 1.6 s (12 px tall, 1 damage); no new heat while it burns
+	r = fw3_fight()
+	fw = r.boss
+	hl = r.hpot
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.hop_cd = 999.0
+	fw.drop_t = 0.0
+	fw3_step(r, 2)
+	var da := {}
+	for h in fw.hz:
+		if h.k == "dropall":
+			da = h
+	if da.is_empty() or absf(float(da.warn) - 0.9) > 0.001 or not fw.hz_boxes(da, float(da.t0) + 0.5).is_empty():
+		fail(res, "DROP ALL: %s" % str(da))
+	else:
+		var db: Array = fw.hz_boxes(da, float(da.t0) + 1.2)
+		var ix := hl.inner_x()
+		if db.size() != 1 or absf(float(db[0].w) - (ix.y - ix.x)) > 1.0 or absf(float(db[0].h) - 12.0) > 0.01 or int(db[0].dmg) != 1 or not fw.hz_boxes(da, float(da.t0) + 2.7).is_empty():
+			fail(res, "DROP ALL box %s (inner %s)" % [str(db), str(ix)])
+		var heat0 := 0
+		for h in fw.hz:
+			if h.k == "heat":
+				heat0 += 1
+		fw3_step(r, 40)
+		var heat1 := 0
+		for h in fw.hz:
+			if h.k == "heat":
+				heat1 += 1
+		if heat1 > heat0:
+			fail(res, "heat was added while DROP ALL burned")
+	r.queue_free()
+	# 6. the last 15 %: the plea, and green packets that always drop
+	r = fw3_fight()
+	fw = r.boss
+	hl = r.hpot
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.hop_cd = 999.0
+	fw.drop_t = 999.0
+	fw3_step(r, 5)
+	if hl.green_t0 >= 0.0 or fw.say_k == 4:
+		fail(res, "the plea came too early")
+	fw.hpf = float(fw.max_hp) * 0.10
+	fw3_step(r, 5)
+	if fw.say_k != 4 or hl.green_t0 < 0.0:
+		fail(res, "no plea at 10 %% (say %d, green %.1f)" % [fw.say_k, hl.green_t0])
+	var green_drops := 0
+	var green_seen := 0
+	var green_keys := {}
+	for f in range(60 * 30):
+		fw3_step(r, 1)
+		for m in hl.pool:
+			if not m.off and m.green and not green_keys.has("%d:%d" % [m.lane, m.k]):
+				green_keys["%d:%d" % [m.lane, m.k]] = true
+				green_seen += 1
+				var info := hl.packet_info(int(m.lane), int(m.k), r.time)
+				if info.drop:
+					green_drops += 1
+	if green_seen < 3 or green_drops != green_seen:
+		fail(res, "green packets: %d seen, %d drop" % [green_seen, green_drops])
+	r.queue_free()
+	# 7. the hop: between attacks the face jumps to a wall and a height near a target; it cannot be hit or hurt during the 0.4 s
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.drop_t = 999.0
+	fw.hop_cd = 0.1
+	var hopped := false
+	for f in range(60 * 4):
+		fw3_step(r, 1)
+		if fw._hopping():
+			hopped = true
+			if not fw.hurtboxes().is_empty() or not fw.faces().is_empty() or fw.harmboxes().size() != fw.hz_harm().size():
+				fail(res, "the hopping face can be hit / hurts")
+			break
+	if not hopped:
+		fail(res, "the face never hopped")
+	r.queue_free()
+	# 8. the net: the new fields round-trip
+	r = fw3_fight()
+	fw = r.boss
+	fw3_to_p3(r)
+	fw.face2_y = 280.0
+	fw.hop_t0 = 12.34
+	fw.hop_fw = 1
+	fw.hop_fy = 250.0
+	fw.rl["p2"] = [1.5, 2.5, 7.25, 1]
+	var nf: Array = fw.net_fields()
+	if nf.size() != FirewallBoss.NF + 12:
+		fail(res, "net fields %d, want %d" % [nf.size(), FirewallBoss.NF + 12])
+	var r2 := new_room("N15")
+	var fw2: FirewallBoss = r2.boss
+	fw2.net_apply(nf)
+	if fw2.ph != 3 or fw2.face2_y != 280.0 or absf(fw2.hop_t0 - 12.34) > 0.01 or fw2.hop_fw != 1 or fw2.hop_fy != 250.0 or float(fw2.rl["p2"][2]) != 7.25 or int(fw2.rl["p2"][3]) != 1 or r2.hpot.west_c1 != r.hpot.west_c1 or r2.hpot.pk_dir != 1:
+		fail(res, "the phase-3 net fields did not round-trip")
+	r2.queue_free()
+	r.queue_free()
+
+# steps until the boss's plan is active (at most 4 s)
+func n_until_active(r: Room, fw) -> void:
+	var n := 0
+	while not fw.plan_active() and n < 240:
+		fw3_step(r, 1)
+		n += 1
 
 # MVB3-08: THE REVIEWER #2 v2 (the pad and reward checks are the 4B-2 ones)
 func t_reviewer2b() -> bool:
@@ -1915,6 +2579,7 @@ func t_bosspresets() -> bool:
 		var table: Array = [
 			["N09", "results", 0.6, 0.5], ["N09", "drop", 0.7, 1.5], ["N09", "leap", 0.7, 1.5], ["N09", "flash", 0.5, 0.1], ["N09", "dive", 0.7, 1.0], ["N09", "feint", 0.7, 0.35],
 			["N15", "cookies", 0.6, 0.5], ["N15", "hold", 0.7, 0.6], ["N15", "mat", 0.6, 0.5], ["N15", "crack", 0.8, 1.0],
+			["N15", "slam", 0.75, 1.5], ["N15", "sweep", 0.5, 0.6], ["N15", "banlist", 0.5, 0.5], ["N15", "punch", 0.75, 1.0], ["N15", "flame", 0.5, 0.5], ["N15", "split", 0.7, 0.35],
 			["N22", "cached", 1.0, -0.4], ["N22", "double", 0.75, 0.6], ["N22", "verdict", 0.6, 0.6], ["N22", "nitpick", 0.7, 0.6], ["N22", "cross", 0.9, 0.6], ["N22", "signoff", 0.75, 0.2], ["N22", "slash", 0.45, 0.2], ["N22", "sdiamond", 0.45, 0.7], ["N22", "riposte", 0.75, -0.9]]
 		wanted += table.size()
 		var rooms := {}
@@ -1944,6 +2609,8 @@ func t_bosspresets() -> bool:
 			rb[0].player.x = 100.0
 			rb[0].player.y = Boss.FLOOR - 10.0
 			var id: String = row[1]
+			if boss is FirewallBoss:
+				boss.ph = 1 if FirewallBoss.P1_IDS.has(id) else (3 if ["punch", "flame", "split"].has(id) else 2)             # (the furnace's attacks hurt only from phase 2)
 			boss._start(id, "p1")
 			if boss.plan.is_empty() or String(boss.plan.id) != id:
 				fail(res, "%s %s: no plan %s" % [diff, rid, id])
