@@ -58,6 +58,7 @@ func run(name: String) -> bool:
 		"merge": return t_merge()
 		"agents": return t_agents()
 		"shop": return t_shop()
+		"safedoor": return t_safedoor()
 		"skipboss": return t_skipboss()
 		"bossfree": return t_bossfree()
 		"sidunique": return t_sidunique()
@@ -421,6 +422,54 @@ func t_rooms() -> bool:
 	Controls.script_input = null
 	Controls.locked = false
 	return report("rooms", ok, info)
+
+# a hazard right after a door puts Clawd back in THIS room: the safe spot of the last room meant nothing here (N02 -> up into
+# N07, a web before the first landing sent Clawd to N02's coordinates, outside ttl's narrow shaft)
+func t_safedoor() -> bool:
+	var m := new_manager()
+	var p = m.player
+	m.swap_to("N02", Vector2(29 * 16 + 3, 9 * 16 - 10))
+	p.vx = 0.0
+	p.vy = 0.0
+	for f in range(30):
+		m.tick(Game.STEP)
+	var up = null
+	for d in m.room.grid.doors:
+		if d.side == "N":
+			up = d
+	p.x = 29 * 16 + 3
+	p.y = -2.0
+	p.vy = -300.0
+	m._on_door_crossed(up, m.room)
+	var n := 0
+	while (m.room.id != "N07" or m.trans.on) and n < 120:
+		m.tick(Game.STEP)
+		n += 1
+	var info := "safe in N02 (%.0f,%.0f), room %s" % [p.safe.x, p.safe.y, m.room.id]
+	var ok: bool = m.room.id == "N07"
+	var hp0: int = p.hp
+	for f in range(20):                                  # into the web on the shaft's west wall (col 4, row 24)
+		if p.hp < hp0 or p.gone:
+			break
+		p.x = 4 * 16 + 4
+		p.y = 24 * 16 + 2
+		p.vx = 0.0
+		p.vy = 0.0
+		p.inv = 0.0
+		m.tick(Game.STEP)
+	var r: Room = m.room
+	var inside: bool = p.x >= 0.0 and p.x + p.w <= r.pw and p.y >= 0.0 and p.y + p.h <= r.ph
+	var clear: bool = not r.grid.solid(floori(p.x / 16.0), floori(p.y / 16.0)) and not r.grid.solid(floori((p.x + p.w - 1) / 16.0), floori((p.y + p.h - 1) / 16.0))
+	info += ", hurt %d -> %d, back at (%.0f,%.0f) inside=%s clear=%s" % [hp0, p.hp, p.x, p.y, inside, clear]
+	ok = ok and p.hp == hp0 - 1 and inside and clear
+	for f in range(150):                                 # it drops back down the floor door and lands in loopback
+		m.tick(Game.STEP)
+	r = m.room
+	clear = not r.grid.solid(floori(p.x / 16.0), floori(p.y / 16.0)) and not r.grid.solid(floori((p.x + p.w - 1) / 16.0), floori((p.y + p.h - 1) / 16.0))
+	info += ", 2.5 s later %s (%.0f,%.0f) ground=%s clear=%s hp=%d" % [r.id, p.x, p.y, p.on_ground, clear, p.hp]
+	ok = ok and r.id == "N02" and p.on_ground and clear and p.hp == hp0 - 1
+	m.queue_free()
+	return report("safedoor", ok, info)
 
 func t_doors() -> bool:
 	Game.flags.erase("boss:NULL")

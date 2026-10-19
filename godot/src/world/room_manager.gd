@@ -285,6 +285,21 @@ func _push_to_ledge(t_door: Dictionary) -> void:
 		break
 	player.jumping = false
 
+# a new room: the safe spot of the last one is somewhere else here (N07's shaft: a web before the first landing put Clawd
+# inside its wall). Come up from below: the arrival spot, so a hazard drops Clawd back through the floor door to the room
+# below. Otherwise the arrival spot if it has footing, else the nearest floor.
+func _safe_on_entry(from_below: bool) -> void:
+	var p = player
+	var g := room.grid
+	var under := g.tile(floori((p.x + p.w / 2.0) / TileGrid.T), floori((p.y + p.h + 1.0) / TileGrid.T))
+	var f = null
+	if not from_below and under != TileGrid.SOLID and under != TileGrid.ONEWAY:
+		f = g.find_safe(p.x, p.y, room.liquid_y)
+	if f != null:
+		p.set_safe(f.x, f.y)
+	else:
+		p.set_safe(p.x, p.y)
+
 # ---------------------------------------------------------------- transitions
 func _on_door_crossed(d: Dictionary, from_room: Room) -> void:
 	if trans.on or from_room != room:
@@ -381,6 +396,7 @@ func _place_in_target() -> void:
 		player.atk_t = 0.0
 		door_blend = true
 		swap_to(target_room, Vector2(nx, ny))
+		_safe_on_entry(d.side == "N")
 		if d.side == "N":
 			_push_to_ledge(t_door)
 		return
@@ -391,6 +407,7 @@ func _place_in_target() -> void:
 	player.atk_t = 0.0
 	door_blend = true
 	swap_to(target_room, Vector2(new_x, new_y), null, wrap_rebuild)
+	_safe_on_entry(false)
 	if trans.has("ssh") and float(trans.ssh[0]) > 0.0:
 		player.ssh_t = float(trans.ssh[0])
 		player.ssh_dir = float(trans.ssh[1])
