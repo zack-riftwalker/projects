@@ -353,6 +353,8 @@ FIREWALL اول میاد و compact مال CRAWLER ـه، پس اینجا compac
 
 ## پلن ساخت (Build plan)
 
+> **For the builder (boss-build):** the complete build plan is [`16-firewall-build.md`](16-firewall-build.md) (English). Follow that file; this section is only Zakaria's Persian summary of it.
+
 برای اسکیل `boss-build`: **هر milestone توی یه session جدا.** مرجع ساخت CRAWLER ـه (`godot/src/enemies/crawler_boss.gd`، `godot/src/world/index_hall.gd`). هر چیزی که بازیکن می‌بینه و این پلن تعیینش نکرده: بپرس، حدس نزن.
 
 ### عددها
@@ -426,12 +428,12 @@ FIREWALL اول میاد و compact مال CRAWLER ـه، پس اینجا compac
 **M6 · منوی باخت، پیش‌نمایش، بعدش، تست کامل، خروجی وب** — منوی `retry` / `back to last commit` (فقط برای این باس؛ میزبان انتخاب می‌کنه، حالت منو توی snapshot). صحنه‌ی `Connection refused` توی N01 (یه بار، flag)، تابلوهای سبز (`alt` با `!boss:FIREWALL`) توی N03، N22، N12، N13، N14؛ تابلوی سبز `EXIT` پشت پنجره‌ی N13؛ کاغذ N21. بعد از بردن: لابی سوخته، تابلوها خاکستری. بعد کل `bash tools/godot/test-all.sh`، و خروجی وب `public/mv` به‌عنوان آخرین commit جدا.
 - تست‌هایی که احتمالاً از خود تغییر می‌شکنن و باید درست بشن (نه رد شدن): `t_firewall2` (جاش `t_firewall3`)، تست‌های 5A و 4B2 که `FirewallBoss` رو می‌خونن (`tests_5a.gd` حدود خط ۱۳۹۴، `fw_until` در `tests_4b2.gd`)، `tests_gfx.gd` (حال‌وهوای فاز ۳، خط ۴۹۹ و ۷۱۸)، `arenas`، `gfxcontrast`، `tick5a`. خراب‌های قبلی که مال این باس نیستن: `co-loopboss`، `co-shop`، `gfxother`.
 
-### سؤال‌های باز (هر کدوم پیش اومد، از زکریا بپرس)
+### سؤال‌های باز: همه جواب گرفتن (زکریا، ۲۰۲۶-۱۰-۱۹)
 
-1. **N01 «آیکون شبکه‌ی Clawd قرمز می‌شه»:** HUD الان آیکون شبکه نداره. پیشنهاد: یه آیکون کوچیک سیگنال روی HUD، قرمز با ضربدر از N01 تا مرگ FIREWALL، بعد سبز.
-2. **شکل منوی باخت:** پیشنهاد: کادر ترمینال، `> retry` و `  back to last commit`.
-3. **افتادن از بسته‌ی drop‌شده:** بدون آسیب (پیشنهاد، تأیید نشده).
-4. **موسیقی صنعتی فاز ۲ و ۳:** ساختن از نو یا یه نسخه‌ی تند و داغ از `boss`؟ قبل از M5 دو نمونه بفرست.
+1. **آیکون شبکه:** آره. یه آیکون کوچیک سیگنال کنار context meter: از N01 تا مرگ FIREWALL قرمز با ضربدر، بعد ۳ ث سبز و بعد محو.
+2. **منوی باخت:** کادر ترمینال، `> retry` و `  back to last commit`.
+3. **افتادن از بسته‌ی drop‌شده:** بی‌آسیب.
+4. **موسیقی:** فعلاً از آهنگ‌های موجود: ورود و فاز ۱ `w1` (آهنگ آشنای دنیای اول؛ honeypot چیزی پخش می‌کنه که حس امنیت بده)، کات‌سین سکوت، فاز ۲ `boss`، فاز ۳ `boss_hi`، مرگ سکوت. موسیقی خودش بعداً.
 
 ### چیزهایی که نباید
 
