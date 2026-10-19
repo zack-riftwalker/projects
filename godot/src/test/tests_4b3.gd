@@ -1047,6 +1047,7 @@ func t_crawler3() -> bool:
 	Game.tools = {}
 	if not r.skip_boss():
 		fail(res, "skip boss refused")
+	Game.flags["boss:FIREWALL"] = true                         # (THE FIREWALL's line is lost in the compaction too)
 	var n := 0
 	var spoke_at := -1
 	while r.fight.state != "done" and n < 3600:
@@ -1059,7 +1060,7 @@ func t_crawler3() -> bool:
 		n += 1
 	if spoke_at < 0 or spoke_at > 260:
 		fail(res, "it did not speak when Clawd came near (frame %d)" % spoke_at)
-	if not Game.flag("compacted:CRAWLER"):
+	if not Game.flag("compacted:CRAWLER") or not Game.flag("compacted:FIREWALL"):
 		fail(res, "no compacted trace")
 	if not Game.flag("ability:curl") or not Game.flag("boss:CRAWLER") or not Game.tools.get("curl", false):
 		fail(res, "reward missing (state %s)" % r.fight.state)
@@ -1392,6 +1393,7 @@ func t_firewall3() -> bool:
 	fw3_phase1(res)
 	fw3_phase2(res)
 	fw3_phase3(res)
+	fw3_phase5(res)
 	Game.fresh()
 	Controls.script_input = null
 	return report("firewall3", res.ok, res.info)
@@ -2275,6 +2277,91 @@ func fw3_phase3(res: Dictionary) -> void:
 		fail(res, "the phase-3 net fields did not round-trip")
 	r2.queue_free()
 	r.queue_free()
+
+# M5: the death scene, the voices and the compact
+func fw3_phase5(res: Dictionary) -> void:
+	Game.diff = "normal"
+	Game.flags["intro:FIREWALL"] = true
+	# 1. the voice files exist and their json has the line lengths and phrase times (the subtitles and the scene's clock run on them)
+	for key in ["refused", "sorry", "intro", "reveal", "p3", "plead", "die", "fine"]:
+		if not ResourceLoader.exists("res://assets/voice/firewall_%s.ogg" % key):
+			fail(res, "no voice file for %s" % key)
+		var ln: Dictionary = FirewallBoss.lines.get(key, {})
+		if float(ln.get("len", 0.0)) < 1.0 or String(ln.get("text", "")) == "" or (key == "die" and ln.get("phrases", []).size() != 5):
+			fail(res, "the json has no usable line for %s: %s" % [key, str(ln)])
+	for sfx in ["fw_ding", "fw_ok200", "fw_deny", "fw_tock", "fw_hiss", "fw_whoosh", "fw_tapestop"]:
+		if not Audio.streams.has(sfx):
+			fail(res, "no sound %s" % sfx)
+	# 2. the death: the fires go out (0.8 s), the line, the shell's flicker, the collapse into stairs, then the reward (the flag, the doors, the ssh banner)
+	var r := fw3_fight()
+	var fw: FirewallBoss = r.boss
+	var hl: HoneypotHall = r.hpot
+	fw3_to_p3(r)
+	fw.plan = {}
+	fw.idle_t = 999.0
+	fw.hop_cd = 999.0
+	fw.drop_t = 999.0
+	fw.hpf = 1.0
+	r.attacker = r.player
+	var dmg_ok := fw.hit(1, 1.0, 0.0, "swipe", fw.hurtboxes()[0]) == "kill"
+	if not dmg_ok or not fw.dying or fw.dead:
+		fail(res, "the last hit did not start the death (dying %s)" % str(fw.dying))
+	var t_shell := fw._shell_t0()
+	var t_col := fw._collapse_t0()
+	var t_end := fw._collapse_t1()
+	var die_len: float = float(FirewallBoss.lines.get("die", {}).get("len", 12.0))
+	if absf(t_shell - (0.8 + float(die_len) + 0.5) + 0.0) > 0.01 or absf(t_col - t_shell - 1.5) > 0.01 or absf(t_end - t_col - 2.0) > 0.01:
+		fail(res, "the death marks %.2f %.2f %.2f" % [t_shell, t_col, t_end])
+	var seen := {}
+	var n := 0
+	while not fw.dead and n < 60 * 40:
+		fw3_step(r, 1)
+		n += 1
+		if fw.die_t >= 0.5 and not seen.has("a"):
+			seen["a"] = true
+			if hl.dim < 0.5 or fw.music_now("boss") != "" or not fw.hz.is_empty() or not fw.harmboxes().is_empty() or not fw.hurtboxes().is_empty():
+				fail(res, "at 0.5 s: dim %.2f, music '%s', %d hazards" % [hl.dim, fw.music_now("boss"), fw.hz.size()])
+		if fw.die_t >= t_shell + 0.2 and not seen.has("b"):
+			seen["b"] = true
+			if not Game.flag("fwline:FIREWALL") or hl.stage == 3 or not fw._in_shell():
+				fail(res, "at the shell: flag %s, stage %d, in shell %s" % [str(Game.flag("fwline:FIREWALL")), hl.stage, str(fw._in_shell())])
+		if fw.die_t >= t_col + 0.2 and not seen.has("c"):
+			seen["c"] = true
+			if hl.stage != 3 or hl.stairs != 1 or hl.body_c0 != 0 or r.grid.tile(15, 22) != TileGrid.ONEWAY or r.grid.tile(2, 13) != TileGrid.ONEWAY or r.grid.tile(20, 15) != TileGrid.E:
+				fail(res, "at the collapse: stage %d, stairs %d, east wall tile %d" % [hl.stage, hl.stairs, r.grid.tile(20, 15)])
+	var took := fw.die_t
+	if not fw.dead or absf(took - t_end) > 0.1 or not fw.gone:
+		fail(res, "the boss was not gone after %.2f s (end %.2f)" % [took, t_end])
+	var fs := 0
+	while r.fight.state != "done" and fs < 60 * 6:
+		fw3_step(r, 1)
+		fs += 1
+	if r.fight.state != "done" or not Game.flag("boss:FIREWALL") or not Game.flag("ability:ssh"):
+		fail(res, "no reward (state %s, boss flag %s)" % [r.fight.state, str(Game.flag("boss:FIREWALL"))])
+	r.queue_free()
+	# 3. coming back: with the flag the hall starts in its after-state
+	var r2 := new_room("N15")
+	if r2.hpot.stage != 3 or r2.hpot.stairs != 1:
+		fail(res, "the after-state: stage %d" % r2.hpot.stage)
+	r2.queue_free()
+	# 4. the crawler's compact: without the flag as before, with it the net's story and the firewall's lost line in the middle of the night
+	Game.flags = {}
+	var rc := new_room("N09")
+	var cb: CrawlerBoss = rc.boss
+	var night: Array = cb._night()
+	if not night.has("/net  connected") or night.has("dmz  verified"):
+		fail(res, "the night changed without the firewall flag")
+	Game.flags["boss:FIREWALL"] = true
+	night = cb._night()
+	var idx_net := night.find("/net  connection refused")
+	if night.has("/net  connected") or idx_net < 0 or night[idx_net + 1] != "dmz  verified" or night[idx_net + 2] != "ssh  ready":
+		fail(res, "the night's net lines: %s" % str(night.slice(maxi(0, idx_net - 1), idx_net + 3)))
+	var fl := night.find("FIREWALL: Are you what you say you are? Do you even know?")
+	var cl := night.find("CRAWLER: Stop burning yourself for them... think about not being.")
+	if fl < 0 or cl < 0 or fl >= cl:
+		fail(res, "the firewall's lost line is at %d, the crawler's at %d" % [fl, cl])
+	rc.queue_free()
+	Game.flags = {}
 
 # steps until the boss's plan is active (at most 4 s)
 func n_until_active(r: Room, fw) -> void:

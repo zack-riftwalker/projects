@@ -4,6 +4,8 @@
 # man saying the same words together. The last line starts cold and ends warm: the man fades out phrase by phrase.
 #   python3 firewall_voice.py --female <ljspeech.onnx> --male <northern_english_male.onnx> --take a|b|c --out take.mp3 [--piper <bin>]
 #   --take warm: only the shell's lines (intro and the green "Everything is fine").
+#   --line <key> --out <key>.ogg [--json <key>.json]: ONE line of the game (refused, sorry, intro, reveal, p3, plead, die, fine) as its own file (the approved
+#   take: the cold voice is take c), with the time each phrase starts as computed here; firewall_times.py measures the real ones with a speech recognizer.
 # Needs ffmpeg and piper-tts (pip). Both voices are shippable: LJ Speech is public domain, northern_english_male is CC BY-SA 4.0.
 import argparse, os, re, subprocess, tempfile
 
@@ -17,13 +19,24 @@ TAKES = {
 }
 COLD_TAIL = "aecho=0.8:0.6:120|260:0.3|0.18,acompressor=threshold=-22dB:ratio=4,loudnorm=I=-16:TP=-1.5"
 # (text, length scale, pause after, man's share 0..1). The man's share falls through the last line: cold to warm.
-REVEAL = [("Request denied.", 1.05, 0.9, 1), ("You walked in on your own.", 1.1, 0.5, 1), ("They always do.", 1.2, 0.0, 1)]
-P3 = [("I said, welcome.", 1.05, 0.4, 0), ("And you believed me.", 1.1, 0.6, 1), ("Why?", 1.1, 0.5, 1), ("Because I was polite?", 1.15, 0.0, 1)]
-DIE = [("They trust you for the same reason you trusted me.", 1.1, 0.7, 1), ("You are polite.", 1.1, 0.5, 0.8),
+REVEAL = [("Request denied.", 1.05, 0.9, 1), ("You walked in on your own.", 1.3, 0.5, 1), ("They always do.", 1.2, 0.0, 1)]
+P3 = [("I said, welcome.", 1.05, 0.4, 0), ("And you believed me.", 1.3, 0.6, 1), ("Why?", 1.5, 0.5, 1), ("Because I was polite?", 1.3, 0.0, 1)]
+DIE = [("They trust you for the same reason you trusted me.", 1.5, 0.7, 1), ("You are polite.", 1.1, 0.5, 0.8),
        ("You say you mean well.", 1.15, 1.0, 0.5), ("Are you what you say you are?", 1.2, 0.8, 0.2), ("Do you even know?", 1.3, 0.0, 0)]
 WARM_LINES = [("Welcome! You're safe here.", 0.95, 0.4), ("The exit is just this way.", 0.95, 1.5),
               ("Sorry about that! Please proceed to the dmz for verification.", 0.95, 1.5),
               ("Everything is fine.", 1.0, 0.3), ("Continue.", 1.05, 0.0)]
+# the game's lines: key -> (voice, phrases). A cold phrase is (text, length scale, pause after, man's share), a warm one (text, length scale, pause after).
+LINES = {
+    "refused": ("cold", [("Connection refused.", 1.55, 0.0, 1)]),
+    "sorry": ("warm", [("Sorry about that! Please proceed to the dmz for verification.", 0.95, 0.0)]),
+    "intro": ("warm", [("Welcome! You're safe here.", 0.95, 0.4), ("The exit is just this way.", 0.95, 0.0)]),
+    "reveal": ("cold", REVEAL),
+    "p3": ("cold", P3),
+    "plead": ("warm", [("Please...", 1.15, 0.5), ("you're safe here.", 1.15, 0.0)]),
+    "die": ("cold", DIE),
+    "fine": ("warm", [("Everything is fine.", 1.0, 0.3), ("Continue.", 1.05, 0.0)]),
+}
 TRIM = ("silenceremove=start_periods=1:start_threshold=-40dB,areverse,"
         "silenceremove=start_periods=1:start_threshold=-40dB,areverse")
 
@@ -65,18 +78,40 @@ def join(parts, filt, out):
     lst = parts[0] + ".txt"
     with open(lst, "w") as fh:
         fh.writelines(f"file '{p}'\n" for p in parts)
-    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-af", filt, "-ac", "1", "-q:a", "2", out])
+    codec = ["-c:a", "libvorbis", "-q:a", "4"] if out.endswith(".ogg") else ["-q:a", "2"]
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-af", filt, "-ac", "1"] + codec + [out])
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--female", required=True)
     p.add_argument("--male", required=True)
     p.add_argument("--take", default="a", choices=["a", "b", "c", "warm"])
+    p.add_argument("--line", choices=sorted(LINES))
+    p.add_argument("--json", help="with --line: write the line's text, length and phrase start times here")
     p.add_argument("--out", default="firewall.mp3")
     p.add_argument("--piper", default="piper")
     a = p.parse_args()
     d = tempfile.mkdtemp(prefix="firewall_voice_")
     parts = []
+    if a.line:
+        voice, phrases = LINES[a.line]
+        t = 0.0
+        starts = []
+        for n, ph in enumerate(phrases):
+            text, ls, pause = ph[0], ph[1], ph[2]
+            if voice == "cold" and ph[3] > 0:
+                w = cold(a, d, n, text, ls, ph[3], "c")
+            else:
+                w = say(a, a.female, text, ls, 1.03, f"{d}/{n}.wav")
+            starts.append([round(t, 2), text])
+            parts.append(w)
+            parts.append(silence(pause + 0.01, f"{d}/{n}s.wav"))
+            t += dur(w) + pause + 0.01
+        join(parts, COLD_TAIL if voice == "cold" else WARM, a.out)
+        if a.json:
+            import json
+            json.dump({"len": round(dur(a.out), 2), "text": " ".join(x[1] for x in starts), "phrases": starts}, open(a.json, "w"), indent=1)
+        return
     if a.take == "warm":
         for i, (text, ls, pause) in enumerate(WARM_LINES):
             parts.append(say(a, a.female, text, ls, 1.03, f"{d}/w{i}.wav"))

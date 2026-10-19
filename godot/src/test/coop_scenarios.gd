@@ -2554,6 +2554,79 @@ func sc_co_firewall() -> Array:
 	var ok1: bool = seen2.size() >= 4 and mine >= 2 and short == 0 and pup.kit_violation == "" and pup.arena_violation == "" and shots > 0 and notes >= 1 and int(st2.get("hz_hits", 0)) >= 1
 	return [ok1 and ok2 and ok3, "guest: phase 1 saw %d plans (%d on me), %d active shown < 0.30 s, %d shots, %d notes, hazard hits %d, violations '%s' '%s'; scene frozen %s, phase 2 frames %d, up to %d packets, rode a packet %s, mashed %d frames, camera %s, %d frames down in the furnace; phase 3 frames %d: west wall %s, fist %s, split %s, DROP ALL %s, hop %s, pdrop %s, %d frames of west-wall packets" % [seen2.size(), mine, short, shots, notes, int(st2.get("hz_hits", 0)), pup.kit_violation, pup.arena_violation, froze, ph2_seen, packets, rode, mashed, "ok" if cam_ok else "WRONG", below, ph3_frames, wall_g, fist_g, split_g, drop_g, hop_g, pdrop_g, west_packets]]
 
+# THE FIREWALL's death on both pages: the fires go out, its line, the shell flickers back, the body collapses into stairs, the reward (the earlier phases have co-firewall)
+func sc_co_firewalldeath() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.catch = true
+		Game.flags["reveal:FIREWALL"] = true
+		await wait_secs(1.0)
+		var r := boss_arena("N15", 130.0, 150.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		var fw: FirewallBoss = r.boss
+		var hl: HoneypotHall = r.hpot
+		hl.set_stage(1)                                                # (the scenes have their own scenario: straight to phase 3)
+		fw._end_cut()
+		hl.set_stage(2)
+		fw._end_scene3()
+		fw.idle_t = 999.0
+		fw.hop_cd = 999.0
+		fw.drop_t = 999.0
+		p.x = 190.0
+		p.y = 140.0
+		await wait_secs(4.0)
+		p.inv = 999.0
+		fw.hpf = 1.0
+		r.attacker = p
+		fw.hit(1, 1.0, 0.0, "swipe", fw.hurtboxes()[0])
+		var dying := fw.dying
+		var dead_ok := await wait_until(func():
+			p.inv = 999.0
+			p.hp = p.max_hp
+			return r.fight.state == "reward" or r.fight.state == "done", 30.0)       # (the boss is freed with its death)
+		var done_ok := await wait_until(func(): return r.fight.state == "done", 12.0)
+		await wait_secs(2.0)
+		var ok: bool = started and dying and dead_ok and done_ok and hl.stage == 3 and hl.stairs == 1 and Game.flag("boss:FIREWALL") and Game.flag("fwline:FIREWALL")
+		return [ok, "host: started %s, dying %s, dead %s, reward done %s, hall stage %d stairs %d, flags boss %s line %s" % [started, dying, dead_ok, done_ok, hl.stage, hl.stairs, str(Game.flag("boss:FIREWALL")), str(Game.flag("fwline:FIREWALL"))]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r2 := boss_arena("N15", 130.0, 150.0)
+	var found := {"b": null}
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is FirewallBoss:
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: FirewallBoss = found.b
+	if pup == null:
+		return [false, "no firewall puppet"]
+	var dying_g := false
+	var die_max := 0.0
+	var shell_g := false
+	var dim_g := 0.0
+	var stairs_g := false
+	var cam_free := false
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 52000.0:
+		var g = mgr().player
+		g.inv = 999.0
+		g.hp = g.max_hp
+		Controls.script_input = {}
+		var hl2: HoneypotHall = mgr().room.hpot
+		if is_instance_valid(pup) and pup.dying:                   # (the boss is freed with its death)
+			dying_g = true
+			die_max = maxf(die_max, pup.die_t)
+			shell_g = shell_g or pup._in_shell()
+			dim_g = maxf(dim_g, hl2.dim)
+		if hl2.stage == 3 and hl2.stairs == 1:
+			stairs_g = true
+			cam_free = mgr().room.cam.lock == null
+		await get_tree().physics_frame
+	await wait_secs(1.0)
+	var ok2: bool = dying_g and die_max > 15.0 and shell_g and dim_g > 0.9 and stairs_g and cam_free
+	return [ok2, "guest: dying %s, die clock up to %.1f s, saw the shell %s, fires out %.2f, stairs %s, camera free %s" % [dying_g, die_max, shell_g, dim_g, stairs_g, cam_free]]
+
 # the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 40 s of fight, nobody is lost
 func sc_co_reviewer2() -> Array:
 	if not await wait_joined():

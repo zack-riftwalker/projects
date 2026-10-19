@@ -7,3 +7,12 @@ Google), licensed CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/
 
 The lines were processed (pitch, echo, resonance) by `tools/voice/crawler_voice.py`.
 These audio files are shared under the same license, CC BY-SA 4.0.
+
+`firewall_*.ogg` (THE FIREWALL) are made with two Piper text-to-speech voices: the warm one (a woman) is
+`en_US-ljspeech-high`, trained on the LJ Speech dataset, which is in the public domain
+(https://keithito.com/LJ-Speech-Dataset/); the cold one (a woman and a man together) adds
+`en_GB-northern_english_male-medium`, CC BY-SA 4.0 like the CRAWLER's voice (see above).
+
+The lines were processed (pitch, echo, ring, bit-crush) by `tools/voice/firewall_voice.py`; the phrase times in
+`firewall.json` come from `tools/voice/firewall_times.py`. These audio files are shared under the same license,
+CC BY-SA 4.0.

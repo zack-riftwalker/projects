@@ -199,7 +199,7 @@ func _hpot_lights(c: Array) -> void:
 	var ix: Vector2 = hp.inner_x()
 	var x: float = ix.x + 40.0
 	while x < ix.y - 20.0:                                   # the grates in the furnace floor
-		c.append([3, 0.0, x, HoneypotHall.FURN_Y - 6.0, 46.0, 0.5, Color("#ff7a2a"), null, false])
+		c.append([3, 0.0, x, HoneypotHall.FURN_Y - 6.0, 46.0, 0.5 * (1.0 - hp.dim), Color("#ff7a2a"), null, false])
 		x += 72.0
 	var fb = room.boss
 	if fb is FirewallBoss and not fb.gone and not fb.dying:

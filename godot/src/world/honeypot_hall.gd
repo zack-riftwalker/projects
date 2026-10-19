@@ -63,6 +63,7 @@ var pk_t0 := NO_PK                       # room time the packets started; NO_PK 
 var seed := 0
 var green_t0 := -1.0
 var pk_dir := 0                          # 0 all lanes east to west, 1 lanes 1 and 3 west to east
+var dim := 0.0                           # 0..1: the fires go out (the boss derives it from its death clock, both pages)
 var heat := {}                           # column -> room time (the hot floor)
 var heat_burn := 1.2                     # how long a heated cell burns (1.6 in phase 3)
 var pdrops := {}                         # lane * 1000000 + k -> room time a punch dropped that packet
@@ -358,7 +359,7 @@ func move_packets() -> void:
 			if info.warn and not _beeped.has(_key(L, k2)):
 				_beeped[_key(L, k2)] = true
 				if room.mode != "guest" and room.is_local:
-					Audio.local_sfx("warn", 0.25)           # (a stand-in for the deny beep until the sounds exist)
+					Audio.local_sfx("fw_deny", 0.25)
 
 # ---------------------------------------------------------------- drawing: shared pieces
 func _bricks(ci: CanvasItem, r: Rect2, base: Color, mortar: Color, hi: Color, sd: int) -> void:
@@ -654,7 +655,7 @@ func draw_glow(ci: CanvasItem) -> void:
 	var x := wx
 	while x < ex - 2.0:                                # the furnace floor's grates
 		var pulse: float = 0.5 + 0.5 * sin(now * 2.0 + x * 0.05)
-		ci.draw_rect(Rect2(x + 3.0, FURN_Y + 3.0, 10.0, 2.0), Color(1.0, 0.45 + 0.2 * pulse, 0.1, 0.55 + 0.25 * pulse))
+		ci.draw_rect(Rect2(x + 3.0, FURN_Y + 3.0, 10.0, 2.0), Color(1.0, 0.45 + 0.2 * pulse, 0.1, (0.55 + 0.25 * pulse) * (1.0 - dim)))
 		x += 16.0
 	for c in heat.keys():
 		var age: float = now - float(heat[c])

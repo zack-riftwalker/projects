@@ -1,8 +1,8 @@
 extends Node
 # Audio: sound effects (a pool of players, the same minimum gap per name as the JS game) and looping music with a crossfade.
 
-const SFX := ["jump", "djump", "walljump", "land", "swipe", "swipeBig", "hit", "clang", "squish", "kill", "hurt", "die", "token", "spark", "heal", "dash", "spring", "crumble", "brk", "checkpoint", "shoot", "bossHit", "explode", "bigExplode", "uiMove", "uiOk", "uiBack", "text", "textLow", "textSys", "key", "gate", "agent", "agentHit", "warn", "charge", "laser", "drip", "splash", "thud", "roar", "glitch", "tick", "tock", "pause", "flap", "logo", "stamp", "modem", "kbd", "hdd", "degauss", "chirp"]
-const VOICE := ["crawler_intro", "crawler_p2", "crawler_p3", "crawler_die"]
+const SFX := ["jump", "djump", "walljump", "land", "swipe", "swipeBig", "hit", "clang", "squish", "kill", "hurt", "die", "token", "spark", "heal", "dash", "spring", "crumble", "brk", "checkpoint", "shoot", "bossHit", "explode", "bigExplode", "uiMove", "uiOk", "uiBack", "text", "textLow", "textSys", "key", "gate", "agent", "agentHit", "warn", "charge", "laser", "drip", "splash", "thud", "roar", "glitch", "tick", "tock", "pause", "flap", "logo", "stamp", "modem", "kbd", "hdd", "degauss", "chirp", "fw_ding", "fw_ok200", "fw_deny", "fw_tock", "fw_hiss", "fw_whoosh", "fw_tapestop"]
+const VOICE := ["crawler_intro", "crawler_p2", "crawler_p3", "crawler_die", "firewall_refused", "firewall_sorry", "firewall_intro", "firewall_reveal", "firewall_p3", "firewall_plead", "firewall_die", "firewall_fine"]
 const MIN_GAP_MS := 28
 const MUSIC_LINEAR := 0.7
 

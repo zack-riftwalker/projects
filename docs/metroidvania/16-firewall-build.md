@@ -20,8 +20,17 @@ Read before every session: this file, [`15-boss-process.md`](15-boss-process.md)
 | M2 | boss body + phase 1 + intro + two-bar HUD | **done** (notes below) |
 | M3 | fake-victory cutscene + phase 2 + rate limit | **done** (notes below) |
 | M4 | phase 3 + last 15 % | **done** (notes below) |
-| M5 | death scene, voices, sounds, music, logs, crawler compact line | not started |
+| M5 | death scene, voices, sounds, music, logs, crawler compact line | **done** (notes below) |
 | M6 | loss menu, NETWORK foreshadow (N01 scene, signal icon, signs), after-state, full tests, web export | not started |
+
+### M5 notes (what changed from the plan while building it)
+
+- **Voices** (`godot/assets/voice/firewall_<key>.ogg` + `firewall.json`, ~0.4 MB in all): made by `tools/voice/firewall_voice.py --line <key> --json <key>.json` (the cold voice is the approved take **c**; warm is the LJ Speech voice alone), phrase times by `tools/voice/firewall_times.py`. The times in the JSON are the ones the build used (the file is a join of phrases of known length and pauses, so they are exact); the recognizer (faster-whisper `base.en`, one phrase at a time) is used only to say which phrases it could **not** understand. Slower (length scale up to 1.5) fixed most of them, but the recognizer still misses these cold phrases: `Connection refused.`, `And you believed me.`, `Why?`, `Because I was polite?`, `They trust you for the same reason you trusted me.`, `You are polite.` (it hears the metallic voice badly, it may be fine for a human): **Zakaria should listen to the cold lines** (refused, reveal, p3, die) and say if one must be remade. Credits are in `CREDITS.md`; the voices are in `Audio.VOICE`; `_say(k)` plays the voice (a sound: the guest hears it too) and the subtitle runs from the same line in the JSON.
+- **Sounds**: `tools/godot/sfx/make_firewall_sfx.py` writes `fw_ding`, `fw_ok200`, `fw_deny`, `fw_tock`, `fw_hiss`, `fw_whoosh`, `fw_tapestop` (prefixed `fw_` because the game already has a `tock`); they replace the stand-ins (200 OK, the tape, the carpet, the hiss of the arms and the punch, the two deny beeps of a 429 and of a packet about to be dropped, the dry knock of a hit in the cooldown, the hop).
+- **Death** (`begin_death`, `_step_death`; both pages draw it from `die_t`): 0-0.8 s the fires go out (`hall.dim` fades the grates and their lights), the face's eyes go out; 0.8 s the line (`firewall_die`, 12.1 s) with its subtitle phrase by phrase, the colour turning from cold to warm; the line's end + 0.5 s the shell flickers back for 1.5 s (the lobby's wall drawn over the furnace at 60 %, blinking, and the green `Everything is fine. Continue.`; `firewall_fine`; flag `fwline:FIREWALL`); then the bricks come down (the hall goes to stage 3 with its stairs at once, falling bricks drawn for 2.0 s), then `gone`, `dead`, the drop and `bossDead` (the room's reward flow: flag `boss:FIREWALL`, the `ssh` banner, the doors). The skip button in an earlier phase turns the fight into phase 3 first so the scene always plays in the furnace.
+- **CRAWLER's compact** (`_night()`): with `boss:FIREWALL` the net's three lines and the firewall's last line (lost among the other lines, not highlighted); `compacted:FIREWALL` is set with `compacted:CRAWLER`, and the Logs show `THE FIREWALL: [compacted]` (`crawler3` checks both).
+- Screenshot helpers: `fwdie:<secs>[:<x>:<y>]`, and `crawler:<hp>:<x>:<y>:<secs>:fw` (the crawler's compaction with the firewall flag).
+- New co-op scenario `co-firewalldeath` (host kills it from phase 3; the guest sees the fires go out, the shell, the stairs, the free camera).
 
 ### M4 notes (what changed from the plan while building it)
 

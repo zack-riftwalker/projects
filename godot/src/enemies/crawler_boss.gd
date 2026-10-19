@@ -411,6 +411,8 @@ func _step_death(dt: float) -> void:
 		var st := die_t - speak_t
 		if st >= COMPACT_AT + COMPACT_LEN and not Game.flag("compacted:CRAWLER"):
 			Game.flags["compacted:CRAWLER"] = true           # the trace in the Logs page (the DLC opens it)
+			if Game.flag("boss:FIREWALL"):
+				Game.flags["compacted:FIREWALL"] = true
 		if st >= COMPACT_AT + COMPACT_LEN + SUMMARY_LEN and not gone:
 			gone = true
 			dead = true
@@ -1196,10 +1198,16 @@ func _night() -> Array:
 		out.append("node_modules  conflict resolved")
 	if Game.flag("boss:LEAK"):
 		out.append("/proc/heap  leak freed")
-	out.append_array(["tokens  %d" % Game.tokens, "deaths  %d" % Game.deaths, "/net  connected"])
+	out.append_array(["tokens  %d" % Game.tokens, "deaths  %d" % Game.deaths])
+	if Game.flag("boss:FIREWALL"):                         # (THE FIREWALL's story: the net refused, the dmz verified, the way in)
+		out.append_array(["/net  connection refused", "dmz  verified", "ssh  ready"])
+	else:
+		out.append("/net  connected")
 	var filler := ["GET /sitemap.xml 404", "jump", "dash", "swipe", "token +1", "GET /robots.txt 200", "index.log: 0 searches today", "wall jump", "checkpoint", "GET /about 404", "swipe", "jump", "dash", "GET /guestbook 404"]
 	for i in range(28):
 		out.append(String(filler[(i * 5) % filler.size()]))         # (5: coprime with the 14 fillers, so every one shows)
+		if i == 7 and Game.flag("boss:FIREWALL"):              # (its last line, in the middle of the night: the compaction takes it)
+			out.append("FIREWALL: Are you what you say you are? Do you even know?")
 		if i == 14:
 			out.append("CRAWLER: Stop burning yourself for them... think about not being.")
 	out.append_array(["/net/index  CRAWLER OF THE WEB down", "curl  ready"])

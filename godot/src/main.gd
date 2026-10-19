@@ -267,6 +267,9 @@ func _ready() -> void:
 			cp.y = float(ca[2]) if ca.size() > 2 else 300.0
 			cp.inv = 999.0
 			var cr: Room = manager.room
+			if ca.size() > 4:                               # crawler:<hp>:<x>:<y>:<secs>:fw: THE FIREWALL is dead too (its story shows in the compaction)
+				Game.flags["boss:FIREWALL"] = true
+				Game.flags["boss:NULL"] = true
 			cr._start_intro()
 			cr.fight.t = 0.0
 			cr._begin_fight()
@@ -399,6 +402,33 @@ func _ready() -> void:
 						qb.hpf = float(qb.max_hp) * 0.09
 					_:
 						qb._start(qa[3], "p1")
+		elif Game.scene.begins_with("fwdie:"):          # screenshot helper: THE FIREWALL's death scene `secs` seconds in (fwdie:<secs>[:<x>:<y>])
+			var da := Game.scene.split(":")
+			manager.swap_to("N15", Vector2(200.0, 150.0))
+			var dp = manager.player
+			dp.x = float(da[2]) if da.size() > 2 else 150.0
+			dp.y = float(da[3]) if da.size() > 3 else 300.0
+			dp.inv = 999.0
+			var dr: Room = manager.room
+			Game.flags["reveal:FIREWALL"] = true
+			dr._start_intro()
+			dr.fight.t = 0.0
+			dr._begin_fight()
+			var db = dr.boss
+			dr.hpot.set_stage(1)
+			db._end_cut()
+			dr.hpot.set_stage(2)
+			db._end_scene3()
+			dr.hpot.seed = 4242
+			dr.hpot.pk_t0 = dr.time - 6.0
+			db.hpf = 0.0
+			db.begin_death()
+			db.die_t = float(da[1])
+			db.spoke = true                                  # (no sounds on the way)
+			db.fine_said = true
+			db.collapsed = db.die_t >= db._collapse_t0()
+			if db.collapsed:
+				dr.hpot.set_stage(3)
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room

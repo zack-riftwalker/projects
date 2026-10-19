@@ -1,0 +1,131 @@
+{
+ "_": "THE FIREWALL's lines: the text shown, the length (s) of each voice file (firewall_<key>.ogg, made by tools/voice/firewall_voice.py) and the time (s) each spoken phrase starts, measured with a speech recognizer (tools/voice/firewall_times.py). Remake both together.",
+ "refused": {
+  "len": 2.27,
+  "text": "Connection refused.",
+  "phrases": [
+   [
+    0.0,
+    "Connection refused."
+   ]
+  ]
+ },
+ "sorry": {
+  "len": 3.85,
+  "text": "Sorry about that! Please proceed to the dmz for verification.",
+  "phrases": [
+   [
+    0.0,
+    "Sorry about that! Please proceed to the dmz for verification."
+   ]
+  ]
+ },
+ "intro": {
+  "len": 3.36,
+  "text": "Welcome! You're safe here. The exit is just this way.",
+  "phrases": [
+   [
+    0.0,
+    "Welcome! You're safe here."
+   ],
+   [
+    1.76,
+    "The exit is just this way."
+   ]
+  ]
+ },
+ "reveal": {
+  "len": 5.7,
+  "text": "Request denied. ...You walked in on your own. They always do.",
+  "phrases": [
+   [
+    0.0,
+    "Request denied."
+   ],
+   [
+    2.02,
+    "You walked in on your own."
+   ],
+   [
+    4.09,
+    "They always do."
+   ]
+  ]
+ },
+ "p3": {
+  "len": 6.3,
+  "text": "I said \"welcome\" and you believed me. Why? Because I was polite?",
+  "phrases": [
+   [
+    0.0,
+    "I said, welcome."
+   ],
+   [
+    1.47,
+    "And you believed me."
+   ],
+   [
+    3.24,
+    "Why?"
+   ],
+   [
+    4.29,
+    "Because I was polite?"
+   ]
+  ]
+ },
+ "plead": {
+  "len": 2.04,
+  "text": "Please... you're safe here.",
+  "phrases": [
+   [
+    0.0,
+    "Please..."
+   ],
+   [
+    1.05,
+    "you're safe here."
+   ]
+  ]
+ },
+ "die": {
+  "len": 12.1,
+  "text": "They trust you for the same reason you trusted me. You are polite. You say you mean well. ...Are you what you say you are? Do you even know?",
+  "phrases": [
+   [
+    0.0,
+    "They trust you for the same reason you trusted me."
+   ],
+   [
+    4.67,
+    "You are polite."
+   ],
+   [
+    6.26,
+    "You say you mean well."
+   ],
+   [
+    8.65,
+    "Are you what you say you are?"
+   ],
+   [
+    10.86,
+    "Do you even know?"
+   ]
+  ]
+ },
+ "fine": {
+  "len": 2.08,
+  "text": "Everything is fine. Continue.",
+  "phrases": [
+   [
+    0.0,
+    "Everything is fine."
+   ],
+   [
+    1.45,
+    "Continue."
+   ]
+  ]
+ }
+}

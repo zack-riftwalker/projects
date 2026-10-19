@@ -28,7 +28,7 @@ const INTRO_LONG := 6.0
 const INTRO_SHORT := 2.5
 const SAY_LINES := {1: "intro", 2: "reveal", 3: "p3", 4: "plead"}
 const LINE_TEXT := {"intro": "Welcome! You're safe here. The exit is just this way.", "reveal": "Request denied. ...You walked in on your own. They always do.", "p3": "I said \"welcome\" and you believed me. Why? Because I was polite?", "plead": "Please... you're safe here."}
-const LINE_LEN := {"intro": 4.6, "reveal": 6.5, "p3": 6.0, "plead": 3.0}          # (stand-ins until the voice files exist: their real lengths come with M5)
+const LINE_LEN := {"intro": 4.6, "reveal": 6.5, "p3": 6.0, "plead": 3.0}          # (a stand-in when assets/voice/firewall.json is missing)
 const LINE_TINT := {"intro": GREEN, "reveal": COLD, "p3": COLD, "plead": GREEN}
 const CRACK_CUE := 0.8
 const MAT_ACT := 1.7
@@ -59,6 +59,9 @@ const SWEEP_ACT := 0.6
 const BAN_CUE := 0.5
 const ARM_BREAK := 2
 const DAZE_T := 1.5
+const DIE_START := 0.8                                   # the death scene: the fires go out, then the line begins
+const DIE_FLICKER := 1.5                                 # the honeypot's shell flickers back over everything
+const DIE_COLLAPSE := 2.0                                # then the body collapses into stairs
 
 # phase 3: two walls (the scene, the hops, the punch, the flame, the split, DROP ALL, the plea)
 const S3 := {"crack": 0.0, "grow": 1.5, "double0": 2.0, "double1": 2.5, "end": 3.0}
@@ -117,6 +120,10 @@ var drop_t := 5.0                  # host: seconds to the next DROP ALL
 var split_left := 0                # host: strikes still to come in this split
 var rl := {"p1": [-9.0, -9.0, -1.0, 0], "p2": [-9.0, -9.0, -1.0, 0]}    # per player: the room times of its last two hits, the end of its cooldown, blinking (1) or not
 var frozen_self := false           # this page froze its own player for the scene
+var spoke := false                 # host: the death line has begun / the shell's line has begun / the body has collapsed
+var fine_said := false
+var collapsed := false
+static var lines := {}             # the voice files' text, length and phrase times (assets/voice/firewall.json, made by tools/voice)
 
 func _init(r: Room, bx: float, by: float, base_hp := 82) -> void:
 	super(r, bx, by, 64, 96, base_hp)
@@ -127,6 +134,9 @@ func _init(r: Room, bx: float, by: float, base_hp := 82) -> void:
 	x = DOOR.position.x
 	y = DOOR.position.y
 	kit_init()
+	if lines.is_empty():
+		var j = JSON.parse_string(FileAccess.get_file_as_string("res://assets/voice/firewall.json")) if FileAccess.file_exists("res://assets/voice/firewall.json") else {}
+		lines = j if j is Dictionary else {"_": ""}
 
 func plan_ids() -> Array:
 	return IDS
@@ -174,6 +184,27 @@ func _derive_names() -> void:
 	sub = "deny by default" if rv else "welcome, guest"
 	col = RED if rv else GREEN
 	phase = ph
+	var hl := _hall()
+	if hl != null:
+		hl.dim = clampf(die_t / DIE_START, 0.0, 1.0) if dying else 0.0           # (the fires go out)
+	if overlay != null:                                                              # the honeypot's shell flickers back over everything at 60 %
+		var a := 1.0
+		if dying and _in_shell():
+			a = 0.6 if Game.hash3(int(room.time * 25.0), 4, 9) > 0.25 else 0.18
+		overlay.modulate = Color(1.0, 1.0, 1.0, a)
+
+# the death scene's marks, on the death clock (both pages): the line starts at DIE_START, the shell flickers 0.5 s after it ends, the body collapses after that
+func _shell_t0() -> float:
+	return DIE_START + _line_len("die") + 0.5
+
+func _collapse_t0() -> float:
+	return _shell_t0() + DIE_FLICKER
+
+func _collapse_t1() -> float:
+	return _collapse_t0() + DIE_COLLAPSE
+
+func _in_shell() -> bool:
+	return die_t >= _shell_t0() and die_t < _collapse_t0()
 
 # ---------------------------------------------------------------- the bar (the HUD asks every boss that has one)
 # bar 1: the shell, green, from 100 % to 70 % of the hp (empty during the fake victory); bar 2: the real one, red, 70 % to 0 (it fills at the reveal)
@@ -212,7 +243,7 @@ func _hopping() -> bool:
 
 # the faces that are out on a wall right now, [wall, centre y] each (none while the face hops between the walls; two in a split)
 func faces() -> Array:
-	if shift_k == 2 or _hopping():
+	if shift_k == 2 or _hopping() or (dying and die_t >= _collapse_t0()):
 		return []
 	var out: Array = [[face_wall, face_cy()]]
 	if face2_y >= 0.0:
@@ -432,7 +463,7 @@ func _rate_ok(key: String, at: Vector2) -> bool:
 	if now < float(s[2]):                                            # still in the cooldown: it restarts, longer
 		s[2] = now + RL_CD2
 		s[3] = 1
-		Audio.sfx("tock", {"vol": 0.7})
+		Audio.sfx("fw_tock", {"vol": 0.8})
 		return false
 	if now - float(s[0]) <= RL_WIN:                                   # the third hit in 2 s: 429 Too Many Requests
 		s[0] = -9.0
@@ -440,7 +471,7 @@ func _rate_ok(key: String, at: Vector2) -> bool:
 		s[2] = now + RL_CD
 		s[3] = 0
 		hz_add("wave", WAVE_WARN, [roundi(at.x), roundi(at.y)])       # the counter blast (it also pushes the walls in during phase 3)
-		Audio.sfx("warn", {"vol": 0.7})
+		Audio.sfx("fw_deny", {"vol": 0.8})
 		_on_429()
 		return false
 	s[0] = s[1]
@@ -517,10 +548,17 @@ func _step_intro(_dt: float) -> void:
 
 func _say(k: int) -> void:
 	say_k = k
-	say_t0 = room.time                                           # (the voice itself comes with M5; the subtitle runs on say_t0 on both pages)
+	say_t0 = room.time                                           # (the subtitle runs on say_t0 on both pages; the voice is a sound, the guest hears it too)
+	Audio.sfx("firewall_" + String(SAY_LINES.get(k, "intro")))
+
+func _line_len(key: String) -> float:
+	return float(lines.get(key, {}).get("len", LINE_LEN.get(key, 4.0)))
+
+func _line_text(key: String) -> String:
+	return String(lines.get(key, {}).get("text", LINE_TEXT.get(key, "")))
 
 func say_len(k: int) -> float:
-	return float(LINE_LEN.get(String(SAY_LINES.get(k, "intro")), 4.0)) + 0.6
+	return _line_len(String(SAY_LINES.get(k, "intro"))) + 0.6
 
 # placeholders until the firewall has its own music: the friendly first-world theme (the honeypot plays what feels safe), silence while the tape stops
 func music_now(_want: String) -> String:
@@ -615,11 +653,11 @@ func _step_cut(_dt: float) -> void:
 	cut_prev = el
 	var hl := _hall()
 	if _crossed(prev, el, _mark("open")):
-		Audio.sfx("uiOk", {"vol": 0.8})                          # 200 OK (a stand-in chime until the sounds exist)
+		Audio.sfx("fw_ok200", {"vol": 0.8})
 	if _crossed(prev, el, _mark("tape")):
-		Audio.sfx("degauss", {"vol": 0.7})                       # the tape stops
+		Audio.sfx("fw_tapestop", {"vol": 0.8})
 	if _crossed(prev, el, _mark("burn")) and shift_long:
-		Audio.sfx("explode", {"vol": 0.4})
+		Audio.sfx("fw_whoosh", {"vol": 0.7})
 	if _crossed(prev, el, _mark("fall")) and hl != null:
 		hl.set_stage(1)                                          # the carpet and the furniture go, the body's bricks come up, everyone falls
 		room.shake(0.8)
@@ -672,8 +710,7 @@ func update(dt: float) -> void:
 	_derive_names()
 	_freeze_own()
 	if dying:
-		hz.clear()
-		death_rattle(dt, 1.0, ["#ffffff", GREEN, "#2e9a52"])
+		_step_death(dt)
 		_sync_heat()
 		return
 	if not active:
@@ -720,6 +757,66 @@ func update(dt: float) -> void:
 		else:
 			_plan_logic2(dt)
 	_place()
+
+# ---------------------------------------------------------------- death (host runs it; both pages draw it from the death clock)
+func begin_death() -> void:
+	dying = true
+	die_t = 0.0
+	passive = true
+	plan = {}
+	hz.clear()
+	say_k = 0
+	split_left = 0
+	face2_y = -1.0
+	daze_t = 0.0
+	low_t = 0.0
+	spoke = false
+	fine_said = false
+	collapsed = false
+	if ph < 3 or shift_k != 0:                                   # (the skip button in an earlier phase: the death plays in the furnace all the same)
+		shift_k = 0
+		ph = 3
+		phase = 3
+		var hl0 := _hall()
+		if hl0 != null and hl0.stage != 2:
+			hl0.set_stage(2)
+	for q in room.projs:
+		q.dead = true
+	for e in room.ents:
+		if e != self and not e.get("is_boss"):
+			e.loot = 0
+			e.die("")
+	var hl := _hall()
+	if hl != null:
+		hl.fist = Rect2()
+	room.shake(0.5)
+	Audio.sfx("degauss", {"vol": 0.6})
+	room.events.append("bossDying")
+
+# fires go out (0 - 0.8), the line (cold, turning warm), the shell flickers back and says it is fine, the body collapses into stairs, the reward
+func _step_death(dt: float) -> void:
+	die_t += dt
+	hz.clear()
+	var hl := _hall()
+	if not spoke and die_t >= DIE_START:
+		spoke = true
+		Audio.sfx("firewall_die")
+	if not fine_said and die_t >= _shell_t0():
+		fine_said = true
+		Audio.sfx("firewall_fine")
+		Game.flags["fwline:FIREWALL"] = true                     # the line has been heard (the crawler's compact shows it, lost)
+	if not collapsed and die_t >= _collapse_t0():
+		collapsed = true
+		if hl != null:
+			hl.set_stage(3)                                      # the bricks come down as stairs on both sides
+		room.shake(0.9)
+		Audio.sfx("crumble")
+		Audio.sfx("brk", {"vol": 0.7})
+	if die_t >= _collapse_t1() and not gone:
+		gone = true
+		dead = true
+		room.drop(192.0, HoneypotHall.FURN_Y - 40.0, drop_n)
+		room.events.append("bossDead")
 
 # the boss's box follows its face once the shell is gone (the kit measures distances from it)
 func _place() -> void:
@@ -793,7 +890,7 @@ func _start(id: String, tgt: String) -> void:
 	match id:
 		"cookies":
 			plan_start("cookies", "proj", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.6, 0.5, 0.2)
-			Audio.sfx("uiOk", {"vol": 0.6})                          # the ding (a stand-in until the sounds exist)
+			Audio.sfx("fw_ding", {"vol": 0.7})
 		"hold":
 			note_aim = kit_aim(tgt)
 			plan_start("hold", "proj", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, 0.7, 0.6, 0.3 * float(NOTE_N - 1) + 0.1)
@@ -966,7 +1063,7 @@ func _start_phase2(id: String, tgt: String) -> void:
 			arm_hits = 0
 			var feint: bool = ph == 3 and room.rng.randi() % 4 == 0               # 1 in 4 slams in phase 3 holds its cue 0.25 s longer
 			plan_start("slam", "slam", tgt, [roundf(ax), float(face_wall), 0.0, 0.0], 0.0, SLAM_CUE + (0.25 if feint else 0.0), 1.0 if ph == 3 else SLAM_REC, SLAM_ACT)
-			Audio.sfx("charge", {"vol": 0.5})                        # the hiss (a stand-in until the sounds exist)
+			Audio.sfx("fw_hiss", {"vol": 0.6})
 		"sweep":
 			plan_start("sweep", "sweep", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, SWEEP_CUE, 0.6, SWEEP_ACT)
 			Audio.sfx("tick", {"vol": 0.6})
@@ -979,8 +1076,7 @@ func _start_phase2(id: String, tgt: String) -> void:
 			_start_flame(tgt, face_wall, face_y)
 		"split":
 			plan_start("split", "guard", tgt, [0.0, 0.0, 0.0, 0.0], 0.0, SPLIT_CUE, 0.35, 0.3)
-			Audio.sfx("warn", {"vol": 0.7})                          # two deep beeps (a stand-in until the sounds exist)
-			Audio.sfx("warn", {"vol": 0.7})
+			Audio.sfx("fw_deny", {"vol": 0.8})                       # two deep beeps
 	if not plan.is_empty():
 		Game.dlog("%s attack %s on %s (plan %d)" % [boss_name, id, tgt, plan.seq])
 
@@ -1050,7 +1146,7 @@ func _hop() -> void:
 	face_wall = to_wall
 	face_y = to_y
 	idle_t = maxf(idle_t, 0.45)
-	Audio.sfx("whoosh" if Audio.SFX.has("whoosh") else "dash", {"vol": 0.5})
+	Audio.sfx("fw_whoosh", {"vol": 0.5})
 
 # the wall facing the target throws a fist at its height; if it stands on a packet, that packet drops with the punch (its tell is the punch's)
 func _start_punch(tgt: String, wall: int, rec: float) -> void:
@@ -1063,7 +1159,7 @@ func _start_punch(tgt: String, wall: int, rec: float) -> void:
 		wl = 0 if absf(ax - ix.y) < absf(ax - ix.x) else 1
 	var fy := clampf(floorf((feet - 6.0) / 16.0) * 16.0, 208.0, 376.0)
 	plan_start("punch", "lunge", tgt, [float(wl), fy, 0.0, 0.0], 0.0, PUNCH_CUE, rec, PUNCH_ACT)
-	Audio.sfx("charge", {"vol": 0.6})                                # the hiss
+	Audio.sfx("fw_hiss", {"vol": 0.7})
 	if q != null:
 		for m in room.plats:
 			if m.has("fw") and not m.off and not m.lost and int(m.k) >= 0 and absf(feet - float(m.y)) <= 2.5 and q.x + q.w > float(m.x) and q.x < float(m.x) + 64.0:
@@ -1233,7 +1329,7 @@ func _draw_body2(ci: CanvasItem) -> void:
 			var dy := _slide_y(el) - DOOR.get_center().y
 			_draw_door(ci, dy, gap, red, false)
 			return
-	var open_eyes: bool = ph >= 2 or (_el() - _mark("reveal")) > 0.4
+	var open_eyes: bool = (ph >= 2 or (_el() - _mark("reveal")) > 0.4) and not (dying and die_t > 0.3)
 	var fl := flash > 0.0
 	if shift_k == 0 and not plan.is_empty():
 		match String(plan.id):
@@ -1392,6 +1488,9 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 	var now := room.time
 	var hl := _hall()
 	var lobby: bool = hl == null or hl.stage == 0
+	if dying:
+		_draw_death_overlay(ci)
+		return
 	if ph >= 2 or shift_k == 2:
 		_draw_overlay2(ci, now)
 		if shift_k == 2 and lobby:
@@ -1460,6 +1559,26 @@ func _draw_lobby_things(ci: CanvasItem, now: float, lobby: bool) -> void:
 					while x2 < r.end.x - 2.0:
 						ci.draw_colored_polygon(PackedVector2Array([Vector2(x2, r.position.y), Vector2(x2 + 4.0, r.position.y), Vector2(x2 + 2.0, r.position.y - 8.0)]), Color("#f4f0e0"))
 						x2 += 5.0
+
+# the honeypot's shell shows through for a moment (the lobby's wall over the furnace, a tinted copy: the overlay is drawn at 60 %), then bricks fall as the body collapses
+func _draw_death_overlay(ci: CanvasItem) -> void:
+	var hl := _hall()
+	if hl != null and _in_shell():
+		ci.draw_set_transform(Vector2(0.0, room.cam.y + 4.0), 0.0, Vector2.ONE)
+		hl._lobby_wall(ci, false)
+		ci.draw_rect(Rect2(16.0, 176.0, 352.0, 16.0), Color("#a33a3a"))
+		ci.draw_rect(Rect2(16.0, 176.0, 352.0, 2.0), Color("#fff2b8"))
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var ct := die_t - _collapse_t0()
+	if ct >= 0.0 and ct < DIE_COLLAPSE:
+		var fade := 1.0 - clampf((ct - 1.2) / 0.8, 0.0, 1.0)
+		for i in range(44):
+			var east := i % 2 == 0
+			var bx := (290.0 + Game.hash3(i, 1, 61) * 76.0) if east else (18.0 + Game.hash3(i, 1, 62) * 76.0)
+			var by0 := 196.0 + Game.hash3(i, 2, 63) * 190.0
+			var by := minf(by0 + 0.5 * 420.0 * ct * ct * (0.5 + Game.hash3(i, 3, 64)), 396.0)
+			ci.draw_rect(Rect2(bx, by, 7.0, 4.0), Color(0.55, 0.3, 0.22, fade))
+			ci.draw_rect(Rect2(bx, by, 7.0, 1.0), Color(0.85, 0.5, 0.3, fade))
 
 # the furnace's things: the 429 blast, the hop's trail, the punch's bulge, the flame, the split's heat, DROP ALL, the west wall cracking
 func _draw_overlay2(ci: CanvasItem, now: float) -> void:
@@ -1547,16 +1666,42 @@ func _draw_overlay2(ci: CanvasItem, now: float) -> void:
 func draw_hud(ci: CanvasItem) -> void:
 	if shift_k == 2 and active and not dying:
 		_draw_cut_hud(ci)
-	if say_k <= 0 or dying:
+	if dying:
+		_draw_death_hud(ci)
+		return
+	if say_k <= 0:
 		return
 	var key := String(SAY_LINES.get(say_k, "intro"))
 	var el := room.time - say_t0
 	var len_ := say_len(say_k)
 	if el < 0.0 or el > len_ + 1.0:
 		return
-	var txt := String(LINE_TEXT.get(key, ""))
+	var txt := _line_text(key)
 	var n := clampi(ceili(float(txt.length()) * el / maxf(0.5, len_ - 1.1)), 0, txt.length())
 	_subtitle(ci, txt.substr(0, n), 1.0 if el < len_ else clampf(len_ + 1.0 - el, 0.0, 1.0), String(LINE_TINT.get(key, GREEN)))
+
+# the death line phrase by phrase (cold, turning warm), then the shell's `Everything is fine. Continue.` in green
+func _draw_death_hud(ci: CanvasItem) -> void:
+	var dl: Dictionary = lines.get("die", {})
+	var phr: Array = dl.get("phrases", [])
+	var el := die_t - DIE_START
+	var len_ := _line_len("die")
+	if not phr.is_empty() and el >= 0.0 and el < len_ + 0.5:
+		var idx := 0
+		for i in range(phr.size()):
+			if el >= float(phr[i][0]):
+				idx = i
+		var t0 := float(phr[idx][0])
+		var t1 := float(phr[idx + 1][0]) if idx + 1 < phr.size() else len_
+		var txt := String(phr[idx][1])
+		var n := clampi(ceili(float(txt.length()) * (el - t0) / maxf(0.4, t1 - t0 - 0.6)), 0, txt.length())
+		var tint := Color(COLD).lerp(Color(GREEN), float(idx) / maxf(1.0, float(phr.size() - 1)))
+		_subtitle(ci, txt.substr(0, n), 1.0 if el < len_ else clampf(len_ + 0.5 - el, 0.0, 1.0), "#" + tint.to_html(false))
+	var fs := die_t - _shell_t0()
+	if fs >= 0.0 and fs < DIE_FLICKER + 0.4:
+		var c := Color(GREEN)
+		c.a = 1.0 if fs < DIE_FLICKER else clampf(1.0 - (fs - DIE_FLICKER) / 0.4, 0.0, 1.0)
+		PixelText.draw_text(ci, "Everything is fine. Continue.", float(Game.W) / 2.0 + (Game.hash3(int(room.time * 30.0), 6, 9) - 0.5) * 2.0, 92.0, c, {"align": "c", "scale": 2, "outline": Color(0.05, 0.12, 0.07, c.a)})
 
 func _subtitle(ci: CanvasItem, txt: String, a: float, tint: String) -> void:
 	var rows := PixelText.wrap(txt, 330)
