@@ -15,6 +15,10 @@ var partner_text := ""           # "down", "back in 4"
 var me_text := ""                # my own body is down: "DOWN - BACK IN 4", "BOTH DOWN"
 var ping_hits: Array = []        # [{id, rect}] the ping arrows of the last draw (a tap on one acknowledges it)
 var toasts: Array = []           # small panels at the bottom for a few seconds (the terminal's changelog line): [{text, t}]
+var refused_t := -1.0            # N01's first-entry scene (16-firewall-build.md 7.2): its clock, -1 when it is not running
+var refused_say := [false, false]
+var fw_prev = null               # the signal icon: was boss:FIREWALL set a frame ago (null: not seen yet)
+var fw_green_t := 0.0            # ... green for 3 s when it has just been set
 
 func toast(text: String, secs: float) -> void:
 	toasts.append({"text": text, "t": secs})
@@ -27,6 +31,7 @@ func set_room(r: Room) -> void:
 
 func _process(dt: float) -> void:
 	age += dt
+	_net_scene(dt)
 	for tq in toasts:
 		tq.t -= dt
 	toasts = toasts.filter(func(q): return q.t > 0.0)
@@ -48,6 +53,7 @@ func _draw() -> void:
 			Gfx.spr_at(self, "pipOff", 6 + i * 9, hud_y)
 		if low:
 			draw_rect(Rect2(6 + i * 9, hud_y, 8, 8), Color(1, 1, 1, 0.55))
+	_draw_signal_icon(6 + Game.METER_MAX + 6, hud_y + 9)
 	# the context meter under the pips: 99 wide, marks at 33 and 66
 	var meter_y := hud_y + 11
 	draw_rect(Rect2(6, meter_y, Game.METER_MAX, 3), Color("#3a3346"))
@@ -173,9 +179,83 @@ func _draw() -> void:
 		draw_rect(Rect2(floori(clampf(s.x - room.cam.x, bx + 4, bx + bw - 6)), by + bh, 3, 2), Color(Game.COL.paper))
 		for i in range(lines.size()):
 			PixelText.draw_text(self, lines[i], bx + 6, by + 6 + i * 13, Game.COL.paper)
+	_draw_net_scene()
 	# last, over everything else (the room tab, toasts): CRAWLER OF THE WEB's lines, and the scene when it falls
 	if b != null and is_instance_valid(b) and b.has_method("draw_hud"):
 		b.draw_hud(self)
+
+# ---- THE NETWORK's first words (16-firewall-build.md 7.2), shown on each page for its own player's first entry into N01
+func _net_scene(dt: float) -> void:
+	var done: bool = Game.flag("boss:FIREWALL")
+	if fw_prev != null and done and not fw_prev and Game.flag("net:refused"):
+		fw_green_t = 3.0                                          # THE FIREWALL has just died: the signal is back for a moment
+	fw_prev = done
+	fw_green_t = maxf(0.0, fw_green_t - dt)
+	if room == null or room.player == null:
+		return
+	if refused_t < 0.0 and room.id == "N01" and not Game.flag("net:refused") and not done:
+		Game.flags["net:refused"] = true
+		refused_t = 0.0
+		refused_say = [false, false]
+		FirewallBoss.ensure_lines()
+	if refused_t < 0.0:
+		return
+	refused_t += dt
+	if not refused_say[0]:
+		refused_say[0] = true
+		Audio.local_sfx("fw_deny", 0.8)
+		Audio.local_sfx("firewall_refused", 1.0)
+	if not refused_say[1] and refused_t >= 1.6:
+		refused_say[1] = true
+		Audio.local_sfx("firewall_sorry", 1.0)
+	if refused_t > 4.0:
+		refused_t = -1.0
+
+func _draw_net_scene() -> void:
+	if refused_t < 0.0:
+		return
+	if refused_t < 0.15 or (refused_t >= 0.3 and refused_t < 0.45):       # a red brick pattern flickers over the screen, twice
+		draw_rect(Rect2(0, 0, W, H), Color(0.45, 0.07, 0.06, 0.62))
+		for row in range(H / 8 + 1):
+			draw_rect(Rect2(0, row * 8, W, 1), Color(0.12, 0.02, 0.02, 0.8))
+			var off := 0 if row % 2 == 0 else 8
+			for col in range(W / 16 + 2):
+				draw_rect(Rect2(col * 16 + off, row * 8, 1, 8), Color(0.12, 0.02, 0.02, 0.8))
+	var key := "refused" if refused_t < 1.6 else "sorry"
+	var ln: Dictionary = FirewallBoss.lines.get(key, {})
+	var txt := String(ln.get("text", "Connection refused." if key == "refused" else "Sorry about that! Please proceed to the dmz for verification."))
+	var t0 := 0.0 if key == "refused" else 1.6
+	var t1 := 1.6 if key == "refused" else 4.0
+	var a := clampf(minf(refused_t - t0 + 0.2, t1 - refused_t) / 0.3, 0.0, 1.0)
+	var tint := Color(FirewallBoss.COLD if key == "refused" else FirewallBoss.GREEN)
+	var rows := PixelText.wrap(txt, 330)
+	var h := 6.0 + rows.size() * 11.0
+	var y0 := 168.0 - h
+	draw_rect(Rect2(20, y0, 344, h), Color(0.03, 0.03, 0.05, 0.7 * a))
+	for i in range(rows.size()):
+		var c := tint
+		c.a = a
+		PixelText.draw_text(self, rows[i], 192.0, y0 + 4.0 + i * 11.0, c, {"align": "c", "outline": Color(0.05, 0.05, 0.08, a)})
+
+# three signal bars (9 x 7): red with a small x while the network refuses us and THE FIREWALL lives, green for 3 s when it dies, then never again
+func _draw_signal_icon(x: int, y: int) -> void:
+	var done: bool = Game.flag("boss:FIREWALL")
+	var col := Color("#ff5a4a")
+	if Game.flag("net:refused") and not done:
+		pass
+	elif fw_green_t > 0.0:
+		col = Color("#57ff8a")
+	else:
+		return
+	draw_rect(Rect2(x, y + 4, 2, 3), col)
+	draw_rect(Rect2(x + 3, y + 2, 2, 5), col)
+	draw_rect(Rect2(x + 6, y, 2, 7), col)
+	if col.r > 0.9:
+		draw_rect(Rect2(x, y, 1, 1), col)                          # the small x over the short bar
+		draw_rect(Rect2(x + 2, y, 1, 1), col)
+		draw_rect(Rect2(x + 1, y + 1, 1, 1), col)
+		draw_rect(Rect2(x, y + 2, 1, 1), col)
+		draw_rect(Rect2(x + 2, y + 2, 1, 1), col)
 
 # the partner's (and our own) pings as arrows at the screen edge: [{id, pos, dir, word, secs, by, ack, on_screen}]
 func ping_arrows() -> Array:

@@ -940,6 +940,8 @@ func _host_down_logic(dt: float) -> void:
 	var host_down: bool = hp_.dead and hp_.downed
 	var guest_down_: bool = guest_here and remote != null and remote.dead and guest_home_t < 0.0
 	if host_down and not guest_here:     # nobody left to bring the host back: same as dying alone
+		if _loss_open():                 # (a boss that asks first: THE FIREWALL's menu)
+			return
 		hp_.downed = false
 		mgr.respawn(true)
 		return
@@ -947,7 +949,7 @@ func _host_down_logic(dt: float) -> void:
 		if both_t < 0.0:
 			both_t = 1.2
 		both_t -= dt
-		if both_t <= 0.0:
+		if both_t <= 0.0 and not _loss_open():
 			_respawn_both()
 		return
 	both_t = -1.0
@@ -991,6 +993,19 @@ func _revive_guest() -> void:
 	Net.rel("revive", {"x4": NetClasses.x4(rx), "y4": NetClasses.x4(ry), "hp": 3, "same": same})
 	log_("host: guest revive sent")
 
+# a boss that asks "retry or back to the last commit" before everybody is sent home (THE FIREWALL): true while its menu is open (the host decides, in Main)
+func _loss_open() -> bool:
+	var b = mgr.room.boss if mgr.room != null else null
+	return b != null and is_instance_valid(b) and b.has_method("open_loss") and b.open_loss()
+
+# THE FIREWALL's `retry`: both back at the arena's door, full hp, a fresh fight, nothing else lost (the guest is moved by the same event as a respawn)
+func retry_both(rid: String, pos: Vector2) -> void:
+	both_t = -1.0
+	log_("host: retry in %s, both at the door" % rid)
+	_send_guest_to(rid, pos.x, pos.y)
+	mgr.player.downed = false
+	mgr.respawn(true, rid, pos)
+
 # also the host's "Restart room" (count_death false): the guest owns its body, so it is moved by the same event, not left behind
 func _respawn_both(count_death := true) -> void:
 	both_t = -1.0
@@ -1007,6 +1022,10 @@ func _send_guest_home() -> void:
 	var sp = Game.bench_spawn(rid) if guest_bench != "" else null
 	var gx: float = sp.x if sp != null else float(pos[0])
 	var gy: float = sp.y if sp != null else float(pos[1])
+	_send_guest_to(rid, gx, gy)
+
+func _send_guest_to(rid: String, gx: float, gy: float) -> void:
+	guest_home_t = -1.0
 	_host_remote_to_room(rid)
 	remote.dead = false
 	remote.down_t = -1.0

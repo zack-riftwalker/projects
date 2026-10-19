@@ -278,10 +278,22 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 			var wh: float = float(d.get("h", 1)) * 16.0
 			ci.draw_rect(Rect2(wx, wy, ww, wh), Color("#0b0f24"))
 			if String(d.get("shadow", "")) == "firewall":
-				if not Game.flag("boss:FIREWALL"):
-					var sx: float = sin(t * 0.7) * 12.0
-					ci.draw_rect(Rect2(wx + ww / 2.0 - 11.0 + sx, wy + 4, 22, wh - 8), Color(0.35, 0.08, 0.15, 0.55))
-					ci.draw_rect(Rect2(wx + ww / 2.0 + 4.0 + sx, wy + 6, 4, wh - 12), Color(0.6, 0.15, 0.25, 0.6))
+				if not Game.flag("boss:FIREWALL"):                       # a small green EXIT sign that flickers behind a red brick pattern (THE FIREWALL is a honeypot: the way out it shows is a lie)
+					if Game.hash3(int(t * 7.0), 3, 5) > 0.3:
+						ci.draw_rect(Rect2(wx + ww / 2.0 - 11.0, wy + wh / 2.0 - 6.0, 22, 12), Color("#103a22"))
+						ci.draw_rect(Rect2(wx + ww / 2.0 - 10.0, wy + wh / 2.0 - 5.0, 20, 10), Color("#1d6a3a"))
+						PixelText.draw_text(ci, "EXIT", wx + ww / 2.0, wy + wh / 2.0 - 3.0, "#a8ffc0", {"align": "c", "tiny": true})
+					ci.draw_rect(Rect2(wx, wy, ww, wh), Color(0.45, 0.07, 0.06, 0.62))
+					var by := wy
+					var row := 0
+					while by < wy + wh:
+						ci.draw_rect(Rect2(wx, by, ww, 1), Color(0.1, 0.02, 0.02, 0.8))
+						var bx := wx + (0.0 if row % 2 == 0 else 8.0)
+						while bx < wx + ww:
+							ci.draw_rect(Rect2(bx, by, 1, 8), Color(0.1, 0.02, 0.02, 0.8))
+							bx += 16.0
+						by += 8.0
+						row += 1
 				else:
 					PixelText.draw_text(ci, "200", wx + ww / 2.0, wy + wh / 2.0 - 4.0, "#2f6a3c", {"align": "c"})
 			ci.draw_rect(Rect2(wx, wy, ww, 1), Color("#3a4a9a"))

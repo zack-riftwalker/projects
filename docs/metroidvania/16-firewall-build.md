@@ -21,7 +21,17 @@ Read before every session: this file, [`15-boss-process.md`](15-boss-process.md)
 | M3 | fake-victory cutscene + phase 2 + rate limit | **done** (notes below) |
 | M4 | phase 3 + last 15 % | **done** (notes below) |
 | M5 | death scene, voices, sounds, music, logs, crawler compact line | **done** (notes below) |
-| M6 | loss menu, NETWORK foreshadow (N01 scene, signal icon, signs), after-state, full tests, web export | not started |
+| M6 | loss menu, NETWORK foreshadow (N01 scene, signal icon, signs), after-state, full tests, web export | **done** (notes below) |
+
+### M6 notes (what changed from the plan while building it)
+
+- **The loss menu** lives in the boss (`loss_on`, `loss_sel`, two more net fields; `NF` 46) and is drawn by its `draw_hud` (a black terminal box with a 1 px green border, `> retry` / `  back to last commit`, the keys under it; the guest sees `host decides`). It opens through `boss.open_loss()`: the room's solo death timer (`room.gd`), and co-op's `_host_down_logic` (both down, or the host down with nobody else) ask it before sending anybody home; it answers `false` when the boss is not in an active fight or is dying, so every other death is as before. The host chooses in `main.gd` (`_loss_step`: up/down, jump / start / attack; a tap on a row), `[start]` chooses there and does not pause.
+- **retry** = `RoomManager.respawn(true, "N15", Vector2(24, 144))`: a death is counted, the progress is **kept** (no `load_meta`, no loss record: dying used to throw the uncommitted progress away, that is what `back to last commit` is for), a fresh player with full hp and a fresh copy of the room (phase 1, the hall at stage 0, the short intro and cutscene because their flags are set). Co-op: `Coop.retry_both()` moves the guest with the existing `respawn` reliable event (`_send_guest_to`), so no new event kind; the room's new `fight_hold` (1.5 s) keeps the fight from starting on the partner's stale position before its page has moved it (the first run of `co-firewallretry` found this: the fight restarted at once).
+- **N01's first words** and the **signal icon** are in `hud.gd` (`_net_scene`, `_draw_net_scene`, `_draw_signal_icon`): per page, per player, flag `net:refused`; the red brick pattern flickers twice (0.15 on / 0.15 off), `fw_deny`, `firewall_refused` and the cold subtitle, then `firewall_sorry` at 1.6 s with the green one; the voices are local sounds (each page plays its own). The icon is red while `net:refused` is set and `boss:FIREWALL` is not, green for 3 s when the HUD sees the flag turn on, never again after that. `FirewallBoss.ensure_lines()` loads the voice json for the HUD.
+- **Signs** (rooms.json, the existing `alt` mechanism with `!boss:FIREWALL`): N03, N12, N13 sign 1, N14 sign 1 smile until the firewall dies; N21's sign got its second line (`script for guests: smile, then deny.`) in both states. The logs still list the same number of signs. **N13's window**: a small green `EXIT` sign flickering behind a red brick pattern until the firewall dies, then the `200` as before.
+- **After-state**: the hall starts in stage 3 (burned lobby wall with the cracked sunny window, charred stubs, stairs on both sides, no body, no packets) when `boss:FIREWALL` is set (M1), and the signs show their after texts.
+- Screenshot helpers: `fwloss`, `n01scene:<secs>`, `fwicon:<red|green>`, `sign:<room>:<n>[:after]`, `fwafter[:<x>:<y>]`.
+- New co-op scenario `co-firewallretry` (both die, both pages show the menu, the host picks `retry`, both are back at the door with a fresh fight, a death counted).
 
 ### M5 notes (what changed from the plan while building it)
 

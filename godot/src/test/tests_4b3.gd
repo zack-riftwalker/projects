@@ -1394,6 +1394,7 @@ func t_firewall3() -> bool:
 	fw3_phase2(res)
 	fw3_phase3(res)
 	fw3_phase5(res)
+	fw3_phase6(res)
 	Game.fresh()
 	Controls.script_input = null
 	return report("firewall3", res.ok, res.info)
@@ -2362,6 +2363,116 @@ func fw3_phase5(res: Dictionary) -> void:
 		fail(res, "the firewall's lost line is at %d, the crawler's at %d" % [fl, cl])
 	rc.queue_free()
 	Game.flags = {}
+
+# M6: the loss menu, N01's scene and the signal icon, the friendly signs
+func fw3_phase6(res: Dictionary) -> void:
+	Game.diff = "normal"
+	Game.flags["intro:FIREWALL"] = true
+	Game.flags["reveal:FIREWALL"] = true
+	# 1. the loss menu: the player's death in the fight does not restart at once, the boss asks; `retry` is a fresh fight at the west door with the progress kept,
+	# and a death counted; `back to last commit` is what dying always did
+	var m := RoomManager.new(main.world, null)
+	main.add_child(m)
+	m.start_game()
+	m.swap_to("N15", Vector2(200.0, 150.0))
+	var r: Room = m.room
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	var fw: FirewallBoss = r.boss
+	var emitted := {"n": 0}
+	m.restart_requested.connect(func(): emitted.n += 1)
+	r.player.hp = 0
+	r.player.die()
+	for f in range(60 * 3):
+		m.tick(Game.STEP)
+	if not fw.loss_on or emitted.n != 0:
+		fail(res, "the death did not open the menu (menu %s, restart requests %d)" % [str(fw.loss_on), emitted.n])
+	if fw.loss_row_at(Vector2(150.0, 70.0 + 6.0 + 3.0)) != 0 or fw.loss_row_at(Vector2(150.0, 70.0 + 6.0 + 14.0 + 3.0)) != 1 or fw.loss_row_at(Vector2(5.0, 5.0)) != -1:
+		fail(res, "the menu's rows are not where they are drawn")
+	var deaths0 := Game.deaths
+	Game.flags["test:progress"] = true
+	m.respawn(true, "N15", Vector2(24.0, 144.0))
+	r = m.room
+	fw = r.boss
+	if r.id != "N15" or fw == null or fw.ph != 1 or fw.active or fw.loss_on or r.hpot.stage != 0:
+		fail(res, "retry: room %s, boss phase %d, active %s" % [r.id, fw.ph if fw != null else -1, str(fw.active if fw != null else false)])
+	if absf(m.player.x - 24.0) > 3.0 or absf(m.player.y + m.player.h - 160.0) > 40.0 or m.player.hp != m.player.max_hp or m.player.dead:
+		fail(res, "retry: the player is at %.0f,%.0f with %d hp" % [m.player.x, m.player.y, m.player.hp])
+	if Game.deaths != deaths0 + 1 or not Game.flag("test:progress"):
+		fail(res, "retry: deaths %d -> %d, progress kept %s" % [deaths0, Game.deaths, str(Game.flag("test:progress"))])
+	r._start_intro()
+	if absf(r.boss.intro_len() - 2.5) > 0.001:
+		fail(res, "the intro after a retry is the long one")
+	m.respawn(true)                                                  # back to the last commit: the start (no bench yet), the arena is gone
+	if m.room.id == "N15":
+		fail(res, "back to the last commit stayed in N15")
+	m.queue_free()
+	# the menu's two fields travel with the boss
+	var r2 := new_room("N15")
+	var f2: FirewallBoss = r2.boss
+	f2.loss_on = true
+	f2.loss_sel = 1
+	var r3 := new_room("N15")
+	var f3: FirewallBoss = r3.boss
+	f3.net_apply(f2.net_fields())
+	if not f3.loss_on or f3.loss_sel != 1:
+		fail(res, "the loss menu's fields did not round-trip")
+	r2.queue_free()
+	r3.queue_free()
+	# 2. N01's first words: the scene on this page's first entry (a flag), 4 s, the red bricks twice, the voices; the signal icon: red, then green for 3 s when the firewall dies
+	Game.flags.erase("net:refused")
+	Game.flags.erase("boss:FIREWALL")
+	var rn := new_room("N01")
+	var hud := Hud.new()
+	main.add_child(hud)
+	hud.set_room(rn)
+	hud._net_scene(0.1)
+	if hud.refused_t < 0.0 or not Game.flag("net:refused"):
+		fail(res, "N01's scene did not start on the first entry")
+	hud._net_scene(1.0)
+	hud._net_scene(1.0)
+	if not hud.refused_say[0] or not hud.refused_say[1]:
+		fail(res, "the two lines were not said by 2.1 s (%s)" % str(hud.refused_say))
+	hud._net_scene(2.5)
+	if hud.refused_t >= 0.0:
+		fail(res, "the scene did not end after 4 s")
+	hud._net_scene(0.1)
+	if hud.refused_t >= 0.0:
+		fail(res, "the scene came a second time")
+	Game.flags["boss:FIREWALL"] = true
+	hud._net_scene(0.1)
+	if hud.fw_green_t < 2.5 or hud.fw_green_t > 3.0:
+		fail(res, "the icon did not go green for 3 s (%.2f)" % hud.fw_green_t)
+	hud._net_scene(3.2)
+	if hud.fw_green_t > 0.0:
+		fail(res, "the icon stayed")
+	hud.queue_free()
+	rn.queue_free()
+	Game.flags.erase("net:refused")
+	# 3. the friendly signs: before the firewall dies, a smile; after, what the signs said
+	Game.flags.erase("boss:FIREWALL")
+	var before := {}
+	for k in [["N03", 0], ["N12", 0], ["N13", 0], ["N13", 1], ["N14", 0], ["N14", 1], ["N21", 0]]:
+		before["%s:%d" % [k[0], k[1]]] = Game.sign_text_of(String(k[0]), int(k[1]))
+	Game.flags["boss:FIREWALL"] = true
+	var after := {}
+	for k in [["N03", 0], ["N12", 0], ["N13", 0], ["N13", 1], ["N14", 0], ["N14", 1], ["N21", 0]]:
+		after["%s:%d" % [k[0], k[1]]] = Game.sign_text_of(String(k[0]), int(k[1]))
+	var want_before := {"N03:0": "core_router: guests, the verification desk is east, past the review queue :)", "N12:0": "nmap: guests, please ride a packet to verification. :)", "N13:0": "Verification desk: this way :)", "N14:0": "dmz: please wait here. You will be verified shortly."}
+	for k in want_before:
+		if before[k] != want_before[k]:
+			fail(res, "sign %s before: '%s'" % [k, before[k]])
+		if after[k] == before[k] or String(after[k]).contains(":)"):
+			fail(res, "sign %s after: '%s'" % [k, after[k]])
+	for k in ["N13:1", "N14:1"]:
+		if before[k] != after[k]:
+			fail(res, "sign %s changed with the firewall" % k)
+	if not String(after["N21:0"]).contains("script for guests: smile, then deny.") or after["N21:0"] != before["N21:0"]:
+		fail(res, "N21's sign: '%s'" % after["N21:0"])
+	if not String(after["N14:0"]).begins_with("dmz: the last bench"):
+		fail(res, "N14's sign after: '%s'" % after["N14:0"])
+	Game.flags.erase("boss:FIREWALL")
 
 # steps until the boss's plan is active (at most 4 s)
 func n_until_active(r: Room, fw) -> void:

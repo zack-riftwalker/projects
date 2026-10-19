@@ -1939,15 +1939,23 @@ func step(dt: float) -> void:
 		death_t -= dt
 		if death_t < 0.0:
 			death_t = -1.0
-			restart_requested.emit(snapshot())
+			if boss != null and is_instance_valid(boss) and boss.has_method("open_loss") and boss.open_loss():
+				pass                                                # (a boss that asks first: THE FIREWALL's menu, retry or back to the last commit)
+			else:
+				restart_requested.emit(snapshot())
 
 # ---------------------------------------------------------------- boss fight flow (MV2-06)
+var fight_hold := 0.0                      # a fight that waits this long before it can start (a retry: the partner's body is still where it fell until its page has moved it)
+
 func _step_fight(dt: float) -> void:
 	if boss == null and fight.state != "reward":      # (the dead boss is freed by the room: the reward timer must not depend on it)
 		return
+	fight_hold = maxf(0.0, fight_hold - dt)
 	var trigger: float = float(def.boss.get("trigger_x", 1e9))          # (a pad boss has none: MVB2-09 starts it from its pad)
 	match String(fight.state):
 		"none":
+			if fight_hold > 0.0:
+				return
 			if String(def.boss.get("trigger", "")) == "land":
 				_step_land(dt)
 				return

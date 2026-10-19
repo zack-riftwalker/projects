@@ -59,6 +59,8 @@ const SWEEP_ACT := 0.6
 const BAN_CUE := 0.5
 const ARM_BREAK := 2
 const DAZE_T := 1.5
+const LOSS_BOX := Rect2(84.0, 70.0, 216.0, 64.0)
+const LOSS_ROWS := ["retry", "back to last commit"]
 const DIE_START := 0.8                                   # the death scene: the fires go out, then the line begins
 const DIE_FLICKER := 1.5                                 # the honeypot's shell flickers back over everything
 const DIE_COLLAPSE := 2.0                                # then the body collapses into stairs
@@ -120,6 +122,8 @@ var drop_t := 5.0                  # host: seconds to the next DROP ALL
 var split_left := 0                # host: strikes still to come in this split
 var rl := {"p1": [-9.0, -9.0, -1.0, 0], "p2": [-9.0, -9.0, -1.0, 0]}    # per player: the room times of its last two hits, the end of its cooldown, blinking (1) or not
 var frozen_self := false           # this page froze its own player for the scene
+var loss_on := false               # both players are down in the fight: the menu asks `retry` or `back to last commit` (the host decides; the guest sees it)
+var loss_sel := 0
 var spoke := false                 # host: the death line has begun / the shell's line has begun / the body has collapsed
 var fine_said := false
 var collapsed := false
@@ -134,6 +138,10 @@ func _init(r: Room, bx: float, by: float, base_hp := 82) -> void:
 	x = DOOR.position.x
 	y = DOOR.position.y
 	kit_init()
+	ensure_lines()
+
+# the voice json (the text, the length and the phrase times of every line): the HUD reads it too, for N01's scene, before any firewall exists
+static func ensure_lines() -> void:
 	if lines.is_empty():
 		var j = JSON.parse_string(FileAccess.get_file_as_string("res://assets/voice/firewall.json")) if FileAccess.file_exists("res://assets/voice/firewall.json") else {}
 		lines = j if j is Dictionary else {"_": ""}
@@ -757,6 +765,33 @@ func update(dt: float) -> void:
 		else:
 			_plan_logic2(dt)
 	_place()
+
+# ---------------------------------------------------------------- the loss menu (everybody is down in the fight): the room / coop ask for it instead of respawning
+func open_loss() -> bool:
+	if not active or dying:
+		return false
+	if not loss_on:
+		loss_on = true
+		loss_sel = 0
+		Audio.sfx("fw_tock", {"vol": 0.8})
+	return true
+
+func loss_row_at(p: Vector2) -> int:
+	for i in range(LOSS_ROWS.size()):
+		if Rect2(LOSS_BOX.position.x + 8.0, LOSS_BOX.position.y + 6.0 + float(i) * 14.0, LOSS_BOX.size.x - 16.0, 14.0).has_point(p):
+			return i
+	return -1
+
+# a terminal box like the crawler's compact: black, a 1 px green border, two lines (the selected one has the `>`), the keys under it
+func _draw_loss(ci: CanvasItem) -> void:
+	var b := LOSS_BOX
+	ci.draw_rect(b, Color.BLACK)
+	ci.draw_rect(b, Color(GREEN), false, 1.0)
+	for i in range(LOSS_ROWS.size()):
+		var c := Color(GREEN) if i == loss_sel else Color("#2e9a52")
+		PixelText.draw_text(ci, ("> " if i == loss_sel else "  ") + String(LOSS_ROWS[i]), b.position.x + 16.0, b.position.y + 10.0 + float(i) * 14.0, c, {})
+	var hint := "host decides" if room.mode == "guest" else "[up/down] choose  [jump] ok"
+	PixelText.draw_text(ci, hint, b.position.x + b.size.x / 2.0, b.position.y + b.size.y - 13.0, "#4f8a62", {"align": "c", "tiny": true})
 
 # ---------------------------------------------------------------- death (host runs it; both pages draw it from the death clock)
 func begin_death() -> void:
@@ -1669,6 +1704,8 @@ func draw_hud(ci: CanvasItem) -> void:
 	if dying:
 		_draw_death_hud(ci)
 		return
+	if loss_on:
+		_draw_loss(ci)
 	if say_k <= 0:
 		return
 	var key := String(SAY_LINES.get(say_k, "intro"))
@@ -1756,7 +1793,7 @@ func net_fields() -> Array:
 	var hl := _hall()
 	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, 1 if dying else 0, roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0), roundi(die_t * 100.0), roundi(daze_t * 100.0)]
 	f.append_array([ph, shift_k, roundi(shift_t0 * 100.0), 1 if shift_long else 0, face_wall, roundi(face_y), roundi(low_t * 100.0), arm_hits,
-		roundi(face2_y), roundi(hop_t0 * 100.0), hop_fw, roundi(hop_fy)])
+		roundi(face2_y), roundi(hop_t0 * 100.0), hop_fw, roundi(hop_fy), 1 if loss_on else 0, loss_sel])
 	for key in ["p1", "p2"]:
 		var s: Array = rl[key]
 		f.append_array([roundi(float(s[0]) * 100.0), roundi(float(s[1]) * 100.0), roundi(float(s[2]) * 100.0), int(s[3])])
@@ -1770,7 +1807,7 @@ func net_fields() -> Array:
 	f.append(hz_pack())
 	return f
 
-const NF := 44
+const NF := 46
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -1796,7 +1833,9 @@ func net_apply(f: Array) -> void:
 	hop_t0 = f[18] / 100.0
 	hop_fw = int(f[19])
 	hop_fy = float(f[20])
-	var i := 21
+	loss_on = int(f[21]) == 1
+	loss_sel = int(f[22])
+	var i := 23
 	for key in ["p1", "p2"]:
 		rl[key] = [f[i] / 100.0, f[i + 1] / 100.0, f[i + 2] / 100.0, int(f[i + 3])]
 		i += 4

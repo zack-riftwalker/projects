@@ -138,11 +138,13 @@ func start_game() -> void:
 	respawn(false)
 
 # a fresh Clawd (full hp) on the respawn bench, or at the start of R01. The room is rebuilt: enemies are back, a fight resets.
-func respawn(count_death := true) -> void:
+# retry_room: not back to the bench but a fresh copy of that room at that spot, with the progress kept (THE FIREWALL's `retry`: a death is counted, nothing else changes)
+func respawn(count_death := true, retry_room := "", retry_spawn = null) -> void:
 	if count_death:
 		Game.deaths += 1
-	Game.load_meta()
-	if room != null:
+	if retry_room == "":
+		Game.load_meta()
+	if room != null and retry_room == "":
 		room.record_loss()
 	last_door_id = ""
 	Game.loop_iter = {}                    # a new life: the loop room starts over
@@ -160,9 +162,14 @@ func respawn(count_death := true) -> void:
 	if Game.bench != "" and Game.rooms_meta.rooms.has(Game.bench):
 		rid = Game.bench
 		spawn = Game.bench_spawn(rid)
+	if retry_room != "":
+		rid = retry_room
+		spawn = retry_spawn
 	if room != null:
 		room.player = null
 	swap_to(rid, spawn, null, true)
+	if retry_room != "" and room != null:
+		room.fight_hold = 1.5                                # (the fight waits for the partner's body to be moved to the door too)
 	if Game.mod_restart_meter() and player != null:
 		player.meter = float(Game.METER_MAX)               # restart: always
 	Controls.locked = false

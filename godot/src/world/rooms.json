@@ -370,7 +370,7 @@
                  {"id": "N11:S3", "side": "S", "a": 69, "b": 98, "to": "N04:N"}
              ] },
     "N03": { "file": "N03.txt", "mood": ["stable", 1], "title": "core_router", "size": [24, 34], "origin": [1290, -36], "world": 6, "music": "w6", "zone": "net", "terminal": true,
-             "signs": ["core_router: every route comes through here. Rest, and travel between terminals."],
+             "signs": [{"text": "core_router: every route comes through here. Rest, and travel between terminals.", "alt": [{"if": "!boss:FIREWALL", "text": "core_router: guests, the verification desk is east, past the review queue :)"}]}],
              "doors": [
                  {"id": "N03:N", "side": "N", "a": 4, "b": 7, "to": "N01:S"},
                  {"id": "N03:S", "side": "S", "a": 10, "b": 13, "to": "N22:N"}
@@ -406,7 +406,7 @@
                  {"id": "N02:W", "side": "W", "a": 9, "b": 12, "to": "D07:E"}
              ] },
     "N12": { "file": "N12.txt", "mood": ["loss", 1], "title": "port_scan", "size": [72, 16], "origin": [1314, -2], "world": 6, "music": "w6", "zone": "net",
-             "signs": ["nmap -p 22,80,443 /net: the ports open for packets. Ride one, or time them on foot."],
+             "signs": [{"text": "nmap -p 22,80,443 /net: the ports open for packets. Ride one, or time them on foot.", "alt": [{"if": "!boss:FIREWALL", "text": "nmap: guests, please ride a packet to verification. :)"}]}],
              "packets": {"every": 4.0, "speed": 64.0, "w": 4, "lead": 32, "lag": 16, "lossy": {"every": 3, "x": [27, 45], "warn": 0.5, "off": 0.6}},
              "variants": [{"if": "boss:FIREWALL", "rect": [0, 0, 72, 16], "from": "3", "to": " "}],
              "doors": [
@@ -414,7 +414,7 @@
                  {"id": "N12:E", "side": "E", "a": 7, "b": 10, "to": "N13:W"}
              ] },
     "N13": { "file": "N13.txt", "mood": ["heat", 0.5], "title": "iptables", "size": [80, 24], "origin": [1386, -12], "world": 6, "music": "w6", "zone": "net",
-             "signs": ["iptables -P INPUT DROP. Red bricks: thin firewall. Something lives in them.", "iptables -A INPUT --dport 31337 -j HONEYPOT  # nothing to see here"],
+             "signs": [{"text": "iptables -P INPUT DROP. Red bricks: thin firewall. Something lives in them.", "alt": [{"if": "!boss:FIREWALL", "text": "Verification desk: this way :)"}]}, "iptables -A INPUT --dport 31337 -j HONEYPOT  # nothing to see here"],
              "decor": [{"kind": "window", "x": 60, "y": 13, "w": 4, "h": 3, "shadow": "firewall"}],
              "doors": [
                  {"id": "N13:W", "side": "W", "a": 17, "b": 20, "to": "N12:E"},
@@ -422,14 +422,14 @@
                  {"id": "N13:S", "side": "S", "a": 34, "b": 37, "to": "N21:N"}
              ] },
     "N21": { "file": "N21.txt", "mood": ["stable", 1], "title": "honeypot", "size": [48, 16], "origin": [1400, 12], "world": 6, "music": "w6", "zone": "net", "secret": true,
-             "signs": ["honeypot: you were not supposed to find this. (you were.)"],
+             "signs": ["honeypot: you were not supposed to find this. (you were.)\nscript for guests: smile, then deny."],
              "plugins": ["rate_limit"],
              "wave": {"flag": "wave:N21", "waves": [[[10, 6], [38, 6]], [[8, 6], [40, 6], ["u", 24, 12]], [["r", 24, 12], [6, 6], [42, 6], ["y", 1, 4]]]},
              "doors": [
                  {"id": "N21:N", "side": "N", "a": 20, "b": 23, "to": "N13:S", "lock": "until:wave:N21"}
              ] },
     "N14": { "file": "N14.txt", "mood": ["heat", 0.7], "title": "dmz", "size": [32, 16], "origin": [1466, -4], "world": 6, "music": "w6", "zone": "net",
-             "signs": ["dmz: the last bench before the firewall.", "unsent: I could use a hand"],
+             "signs": [{"text": "dmz: the last bench before the firewall.", "alt": [{"if": "!boss:FIREWALL", "text": "dmz: please wait here. You will be verified shortly."}]}, "unsent: I could use a hand"],
              "doors": [
                  {"id": "N14:W", "side": "W", "a": 9, "b": 12, "to": "N13:E"},
                  {"id": "N14:E", "side": "E", "a": 9, "b": 12, "to": "N15:W", "lock": "fight"},

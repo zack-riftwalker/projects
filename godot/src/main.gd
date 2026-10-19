@@ -429,6 +429,43 @@ func _ready() -> void:
 			db.collapsed = db.die_t >= db._collapse_t0()
 			if db.collapsed:
 				dr.hpot.set_stage(3)
+		elif Game.scene == "fwloss":                    # screenshot helper: THE FIREWALL's loss menu (both down in its fight)
+			manager.swap_to("N15", Vector2(200.0, 150.0))
+			var xp = manager.player
+			xp.inv = 999.0
+			var xr: Room = manager.room
+			Game.flags["reveal:FIREWALL"] = true
+			xr._start_intro()
+			xr.fight.t = 0.0
+			xr._begin_fight()
+			xr.boss.open_loss()
+		elif Game.scene.begins_with("n01scene:"):       # screenshot helper: N01's first words, `secs` in (n01scene:<secs>)
+			Game.flags["net:refused"] = true
+			FirewallBoss.ensure_lines()
+			manager.swap_to("N01")
+			hud.refused_t = float(Game.scene.substr(9))
+			hud.refused_say = [true, true]
+		elif Game.scene.begins_with("fwicon:"):         # screenshot helper: the signal icon (fwicon:red | fwicon:green)
+			Game.flags["net:refused"] = true
+			manager.swap_to("N02")
+			if Game.scene.ends_with("green"):
+				Game.flags["boss:FIREWALL"] = true
+				hud.fw_prev = true
+				hud.fw_green_t = 2.0
+		elif Game.scene.begins_with("sign:"):           # screenshot helper: a sign read (sign:<room>:<n>[:after] after = THE FIREWALL is dead)
+			var ga := Game.scene.split(":")
+			if ga.size() > 3:
+				Game.flags["boss:FIREWALL"] = true
+			manager.swap_to(ga[1])
+			var gs: Dictionary = manager.room.signs[int(ga[2])]
+			manager.player.x = float(gs.x) - 5.0
+			manager.player.y = float(gs.y) - manager.player.h
+			manager.player.inv = 999.0
+		elif Game.scene.begins_with("fwafter"):         # screenshot helper: N15 once THE FIREWALL is dead (fwafter[:<x>:<y>])
+			var aa := Game.scene.split(":")
+			Game.flags["boss:FIREWALL"] = true
+			manager.swap_to("N15", Vector2(float(aa[1]) if aa.size() > 1 else 40.0, float(aa[2]) if aa.size() > 2 else 150.0))
+			manager.player.inv = 999.0
 		elif Game.scene == "chase":                     # screenshot helper: N17 with the RST line running (MVB3-05)
 			manager.swap_to("N17", Vector2(3.0 * 16.0, 36.0 * 16.0))
 			var rc: Room = manager.room
@@ -673,6 +710,22 @@ func _input(event: InputEvent) -> void:
 			else:
 				title.tap(tg)
 		return
+	var lb = _loss_boss()
+	if lb != null and manager.mode != "guest":           # a tap on a line of the loss menu
+		var lp := Vector2.ZERO
+		var lh := false
+		if event is InputEventScreenTouch and event.pressed:
+			lp = event.position
+			lh = true
+		elif event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION:
+			lp = event.position
+			lh = true
+		if lh and not (touch.visible and touch.claims(lp)):
+			var row: int = lb.loss_row_at(to_game(lp))
+			if row >= 0:
+				lb.loss_sel = row
+				_loss_choose(row)
+		return
 	_map_drag(event)
 	if not paused and active_overlay() == null and hud != null and manager != null:         # a tap on a ping arrow says "seen"
 		var tp2 := Vector2.ZERO
@@ -845,9 +898,47 @@ func _physics_process(_d: float) -> void:
 						o.close()
 		return
 	manager.tick(Game.STEP)
+	var lb = _loss_boss()
+	if lb != null:                                       # THE FIREWALL asks: retry, or back to the last commit ([start] chooses here, it does not pause)
+		_loss_step(lb)
+		return
 	_map_button()
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
 		set_paused(true)
+
+# ---- THE FIREWALL's loss menu (everybody is down in its fight, 16-firewall-build.md 7.1): the host picks with keys or a tap, the guest only sees it
+const FW_RETRY := Vector2(24.0, 144.0)                 # `retry`: both just inside the arena's west door
+
+func _loss_boss():
+	if manager == null or manager.room == null:
+		return null
+	var b = manager.room.boss
+	if b != null and is_instance_valid(b) and b.get("loss_on") == true:
+		return b
+	return null
+
+func _loss_step(b) -> void:
+	if manager.mode == "guest":
+		return
+	if Controls.pressed.get("up", false) or Controls.pressed.get("down", false):
+		b.loss_sel = 1 - int(b.loss_sel)
+		Audio.sfx("uiMove")
+	if Controls.pressed.get("jump", false) or Controls.pressed.get("start", false) or Controls.pressed.get("attack", false):
+		_loss_choose(int(b.loss_sel))
+
+func _loss_choose(i: int) -> void:
+	Audio.sfx("uiOk")
+	var rid: String = manager.room.id
+	var host_coop: bool = coop != null and coop.role == "host" and coop.guest_here and coop.remote != null
+	if i == 0:
+		if host_coop:
+			coop.retry_both(rid, FW_RETRY)
+		else:
+			manager.respawn(true, rid, FW_RETRY)
+	elif host_coop:
+		coop._respawn_both()
+	else:
+		manager.respawn(true)
 
 # The map button opens the overlay when it is let go; held for QUICK_PIN_T it drops a TODO pin at the player instead (and then opens nothing).
 const QUICK_PIN_T := 0.6
