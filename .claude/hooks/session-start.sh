@@ -12,8 +12,15 @@ br=$(git rev-parse --abbrev-ref HEAD)
 behind=$(git rev-list --count HEAD..origin/ph1)
 if [ "$br" = "ph1" ]; then
   if [ "$behind" -gt 0 ]; then
+    old=$(git rev-parse HEAD)
     if git diff --quiet && git diff --cached --quiet && git merge -q --ff-only origin/ph1 2>/dev/null; then
       echo "ph1 was $behind commits behind origin/ph1: fast-forwarded."
+      # The session's instructions were read from the old CLAUDE.md before this hook ran (checked: a CLAUDE.md the hook
+      # rewrites is not reloaded), so hand the session the current one.
+      if ! git diff --quiet "$old" HEAD -- CLAUDE.md; then
+        echo "CLAUDE.md changed in those commits. The CLAUDE.md in your instructions is the OLD one; this is the current one and it wins:"
+        echo "----- CLAUDE.md -----"; cat CLAUDE.md; echo "----- end of CLAUDE.md -----"
+      fi
     else
       echo "WARNING: ph1 is $behind commits behind origin/ph1 and could not fast-forward. Run 'git pull origin ph1' before reading code."
     fi

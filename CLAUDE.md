@@ -29,6 +29,8 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 
 ## Staying current
 - Several sessions push to `ph1` in parallel, so a session's clone goes stale. A SessionStart hook (`.claude/hooks/session-start.sh`) fast-forwards `ph1` and prints its newest commits at the start.
+  - A session can also start from an old cached container (`resume-cached`: its `ph1` was days old). CLAUDE.md is read before the hook runs, so after a fast-forward the hook prints the current CLAUDE.md; that one wins.
+  - No "Newest commits on ph1" at the start means the checkout predates the hook: `git pull origin ph1` first.
 - In a long session, run `git pull origin ph1` before starting a new task and before committing.
 - The boss skills and the Godot docs exist only on `ph1`. A session opened on `main` has neither: `git fetch origin ph1 && git checkout ph1`.
 
