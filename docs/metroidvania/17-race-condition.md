@@ -132,26 +132,17 @@
 
 **طرح اول (Claude، پیکسلی، اندازه‌ی واقعی بازی):** [`17-race-data/concept_v1.png`](17-race-data/concept_v1.png). چپ فاز ۱، راست فاز ۲. هر آدمک ۳۲×۴۸، Clawd (نارنجی) ۱۶ پیکسل. TICK پتک بالا (هشدار ضربه)، TOCK پتک روی شونه. شبح قرمز = READ. قفل برنجی شکسته وسط. خط‌های رنگی کف = بافر (قرمز TICK، فیروزه‌ای TOCK، سفید = خراب).
 
-**پرامپت برای مدل عکس‌ساز (رفرنس بهتر برای سازنده؛ خروجیش مستقیم توی بازی نمی‌ره، سازنده از روش با اندازه و پالت بازی می‌کشه):**
+**پرامپت برای مدل عکس‌ساز (نسخه‌ی ۲؛ نسخه‌ی ۱ زیادی بلند بود و مدل‌ها پیکسلیش نکردن).** خروجیش فقط رفرنسه؛ سازنده از روش با اندازه و پالت بازی می‌کشه.
+- سبک اول و کوتاه بیاد؛ پرامپت بلند سبک پیکسلی رو گم می‌کنه.
+- اگه مدل باز صاف و نقاشی‌وار کشید: یا یه مدل مخصوص پیکسل (مثل PixelLab یا Retro Diffusion)، یا یه طرح معمولی بساز تا Claude خودش کوچیکش کنه به ۳۲×۴۸ با پالت بازی.
 
 ```
-Pixel art character concept sheet for a 2D metroidvania boss, side view, 16-bit style, limited palette,
-plain dark warm-brown background. Two clockwork bell-striker automatons (jacquemarts) closely based on the
-bronze Moors of St Mark's Clocktower in Venice: cast bronze with dark patina and polished brass edges,
-riveted joints, hinged at the waist so they bow forward to strike, sheepskin skirt, small round cap,
-glowing eyes, a big wind-up key on the back, a small number dial on the chest. Each holds a long-handled
-bell hammer with a heavy iron head.
-Left: TICK, the young one: slim, quick, beardless, red glowing eyes and thin red trim, hammer raised high
-above its head.
-Right: TOCK, the old one: broad, heavy, curly bronze beard, cyan glowing eyes and thin cyan trim, hammer
-resting on its shoulder.
-Each figure is 32x48 pixels, shown scaled up 8x with crisp nearest-neighbor pixels, no anti-aliasing,
-no blur.
-Row 2: the same two overheated: the bronze glowing red-orange, springs bursting from the seams, jerky
-poses.
-Row 3: animation keys for each: idle, hammer raised, strike (bowing at the waist), wound-down frozen pose.
-A tiny 16-pixel orange crab-like robot stands next to them for scale.
-Warm brass clock-tower mood. No text, no letters, no watermark.
+pixel art game sprite, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, 16-color palette, no anti-aliasing, no gradients, no blur.
+Two bronze clockwork bell-striker automatons from an old clock tower, like the bronze Moors of Venice.
+Left: young and slim, red glowing eyes, raising a long bell hammer over its head.
+Right: old, broad, bearded, cyan glowing eyes, hammer on its shoulder.
+Round caps, sheepskin skirts, wind-up keys on their backs. Full body, side view, plain dark background.
 ```
 
 ### سه ایده برای بدن (پیشنهاد، ۲۰۲۶-۱۰-۲۲)
