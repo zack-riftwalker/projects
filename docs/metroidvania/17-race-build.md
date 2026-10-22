@@ -4,6 +4,8 @@ This is the complete build plan for RACE CONDITION v3, written for the model tha
 
 Read before every session: this file, [`15-boss-process.md`](15-boss-process.md) sections 3-5, [`07-js-vs-godot.md`](07-js-vs-godot.md) §3, and `CLAUDE.md`. Reference builds: CRAWLER OF THE WEB (`godot/src/enemies/crawler_boss.gd`, `godot/src/world/index_hall.gd`) and THE FIREWALL (`godot/src/enemies/firewall_boss.gd`, `godot/src/world/honeypot_hall.gd`: moving platforms owned by a hall, two HP bars, the loss menu). **Copy their patterns** (a boss class + an arena helper owned by the room, state in net fields, hazards via `hz_add`, scenes on `room.time`).
 
+**Reference images (look at them before drawing anything): [`17-race-data/ref/`](17-race-data/ref/)** — see its `README.md` for what to take from each. Characters: `tick_tock.webp` (main), `sheet_keys.webp`. Arena: `background_p1.webp`, `background_p2.webp`, `arena_full.webp`, `bells.webp`, `escapement.webp`, `clock.webp`. Sketches with the plan's geometry: `17-race-data/arena_B.png`. Where an image disagrees with §3, the plan's geometry wins; the look comes from the images.
+
 The old boss (`godot/src/enemies/race_boss.gd`, kit-era, MV5A-06) is replaced. Keep the class name `RaceBoss` and its `NetClasses` number (46).
 
 ---
@@ -113,7 +115,7 @@ Walls, the floor, the two GET rings and the spawn cells only; the bells, beam an
 | bell 3 (middle) | x 11..14, top row 21 | middle note |
 | bell 4 (small, high) | x 7..9, top row 17 | high note |
 | bell 5 (small, high) | x 16..18, top row 17 | high note |
-| clock face | centre (13, 7), radius 3.5 tiles | decor, behind the escapement rod (§4.4) |
+| clock face | centre (13, 15.5), radius 3.5 tiles | decor in the backdrop, between the two arched windows (`background_p1.webp`) |
 | escapement anchor | pivot under the beam at (13, 2.5), arc 5 tiles wide with two pallets | decor + state |
 | escapement bob (the lock) | centre (13, 11) tiles = (216, 184) px, hitbox 18 × 18 | the thing you hit |
 | GET rings | (8, 12), (17, 12) | map `@` |
@@ -157,8 +159,8 @@ Per bell `i` (5): `strike_t0[i]` (last strike or landing kick), `amp[i]` (px of 
 
 ### 4.4 Drawing
 
-- **Backdrop node (drawn once):** dark brick wall, brass pipes, two gears and a slow pendulum at the sides, two arched windows with the night sky at the sides above the doors, warm floor stones (reference `17-race-data/ref/background.webp`). The back wall must cover the whole room (`gfxcontrast`).
-- **The clock face** (decided in step 2, needed by the death scene): decor in the backdrop, centre (13, 7) tiles, radius 3.5 tiles, deep blue enamel, gold Roman numerals I-XII (draw them right; the reference `clock.webp` has broken numerals), a gold sun-shaped hour hand, a brass riveted rim (reference `17-race-data/ref/clock.webp`). The escapement's rod passes in front of it down to the bob. Hands: phase 1 they tremble and now and then jump back a step; phase 2 the glass is cracked and the hands spin; after the death they jump to 05:12 and then keep real tower time. The hands are drawn every frame (small); the face itself is in the static node.
+- **Backdrop node (drawn once):** dark brick wall, brass pipes, two gears at the sides, two arched windows with the night sky and a moon flanking the clock, two lamps, warm floor stones (references `17-race-data/ref/background_p1.webp`, phase 2 `background_p2.webp`). The back wall must cover the whole room (`gfxcontrast`).
+- **The clock face** (decided in step 2, needed by the death scene): decor in the backdrop, centre (13, 15.5) tiles, radius 3.5 tiles (below the escapement's bob, between the two arched windows, as in `background_p1.webp`), deep blue enamel, gold Roman numerals I-XII (draw them right; the reference `clock.webp` has broken numerals), a gold sun-shaped hour hand, a brass riveted rim (reference `17-race-data/ref/clock.webp`). The escapement hangs above it: beam, anchor, rod, bob, then the clock face (the vertical order of `arena_full.webp`). Hands: phase 1 they tremble and now and then jump back a step; phase 2 the glass is cracked and the hands spin; after the death they jump to 05:12 and then keep real tower time. The hands are drawn every frame (small); the face itself is in the static node.
 - Bells: brass with a dark patina, a highlight line on the crown, chains up to the beam; cracked bells show a dark crack; the swing is drawn from §4.2.
 - Escapement: brass anchor arc with two pallets, a rod down to the bob; until the pin is in, a small **red cross** at the pivot and the anchor hangs crooked and swings irregularly (phase 1 lazily, phase 2 wildly with sparks); when serialized it swings regularly for the serial time; after the death, `pin_in`: a **red dot** at the pivot, steady swing on the tick.
 - Lights (`room_lights.gd` `_arena`, `look.gd`): phase 1 warm amber from the two lamps; phase 2 red-orange, sparks from the anchor; after death warm and calm. No darkness.
@@ -404,3 +406,4 @@ Last milestone: the whole `bash tools/godot/test-all.sh` (~25 min), then the web
 
 1. **Music.** Placeholders `boss` (phase 1) / `boss_hi` (phase 2), or the tower theme `w4` made faster with ffmpeg (`atempo`, pitch kept) for both phases (~171 / 200 bpm, the tick motif)? And the tower floors (T01/T02 slower, TB2 faster): tempo variants of `w4` (two more small files) or keep `w4` as is?
 2. **`drop` fix:** TOCK rides the falling bell down and is stuck 0.8 s on the floor (instead of on the unreachable beam).
+3. **The backdrop:** use `background_p1.webp` / `background_p2.webp` themselves as T06's back wall (downscaled to 416 × 480 on a clean pixel grid, palette-reduced, small file), or redraw them in code like the other arenas? The images match the room's proportions (26 × 30).
