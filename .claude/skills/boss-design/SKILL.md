@@ -7,7 +7,8 @@ description: Design a new boss for the Godot version of CLAWD with Zakaria, in a
 
 The process that made CRAWLER OF THE WEB, as a repeatable talk.
 Sources: `docs/metroidvania/15-boss-process.md` (the process), `14-crawler.md` (a full worked example), `13-bosses-v3.md` (why old bosses were weak, contract v3).
-Read all three before the first message, after `git fetch origin ph1 && git pull origin ph1` (a stale clone cost time before).
+Also read the story bible `docs/studio/STORY.md` (the `story` skill keeps it) when it exists: the boss's place in the tale comes from there.
+Read all of them before the first message, after `git fetch origin ph1 && git pull origin ph1` (a stale clone cost time before).
 
 ## How the talk runs
 

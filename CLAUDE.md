@@ -27,9 +27,10 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 | `docs/PROTOCOL.md` | Network protocol. |
 | `docs/PLAN-*.md`, `docs/reports/` | History of the work. |
 | `docs/studio/PRODUCER.md` | The producer's board: where the game is, the current goal, next tasks. Skill `producer`. |
+| `docs/studio/STORY.md` | The story bible: the one true story. Skill `story`. |
 
 ## Studio
-- Zakaria runs the game like a studio, one department at a time; he is the director. The `producer` skill keeps `docs/studio/PRODUCER.md` true.
+- Zakaria runs the game like a studio, one department at a time; he is the director. The `producer` skill keeps `docs/studio/PRODUCER.md` true; the `story` skill keeps the story bible `docs/studio/STORY.md`. Each has its own session.
 - A session that finishes a task on the board (a boss milestone, a region, a play-test fix) ticks it there in the same push.
 
 ## Staying current
