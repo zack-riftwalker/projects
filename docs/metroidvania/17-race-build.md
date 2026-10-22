@@ -119,7 +119,7 @@ Walls, the floor, the two GET rings and the spawn cells only; the bells, beam an
 | escapement anchor | pivot under the beam at (13, 2.5), arc 5 tiles wide with two pallets | decor + state |
 | escapement bob (the lock) | centre (13, 11) tiles = (216, 184) px, hitbox 18 × 18 | the thing you hit |
 | GET rings | (8, 12), (17, 12) | map `@` |
-| lamps | (2, 3), (23, 3) | lights |
+| lamps | (1.5, 12), (24.5, 12) | lights, where the backdrop images draw them |
 
 A bell's **standing surface** is its top (`top row × 16`), width as listed; the body below is drawn but not solid except the top surface (a one-way platform you can jump through from below, like the packets). Bells are platforms in `room.plats` owned by the hall (flag `bell: i`), skipped by `_move_platforms` and by the generic platform drawing.
 
@@ -159,8 +159,8 @@ Per bell `i` (5): `strike_t0[i]` (last strike or landing kick), `amp[i]` (px of 
 
 ### 4.4 Drawing
 
-- **Backdrop node (drawn once):** dark brick wall, brass pipes, two gears at the sides, two arched windows with the night sky and a moon flanking the clock, two lamps, warm floor stones (references `17-race-data/ref/background_p1.webp`, phase 2 `background_p2.webp`). The back wall must cover the whole room (`gfxcontrast`).
-- **The clock face** (decided in step 2, needed by the death scene): decor in the backdrop, centre (13, 15.5) tiles, radius 3.5 tiles (below the escapement's bob, between the two arched windows, as in `background_p1.webp`), deep blue enamel, gold Roman numerals I-XII (draw them right; the reference `clock.webp` has broken numerals), a gold sun-shaped hour hand, a brass riveted rim (reference `17-race-data/ref/clock.webp`). The escapement hangs above it: beam, anchor, rod, bob, then the clock face (the vertical order of `arena_full.webp`). Hands: phase 1 they tremble and now and then jump back a step; phase 2 the glass is cracked and the hands spin; after the death they jump to 05:12 and then keep real tower time. The hands are drawn every frame (small); the face itself is in the static node.
+- **Backdrop (decided: the images themselves):** `background_p1.webp` (phase 1 and after) and `background_p2.webp` (phase 2) **are** T06's back wall. Make them game files with a small script (`tools/godot/race_backdrop.py`): resize to exactly 416 × 480 (LANCZOS), quantize to at most 48 colours without dithering (keep the pixel look), save `godot/assets/bg/race_p1.png` / `race_p2.png` (aim < 120 KB each; `--import`). Draw it once as the room's back layer (its own node), the phase-2 one cross-faded over 0.6 s in the transition. The image's clock has no hands (p1) or blurred ones (p2): the hands are drawn by code on top (§4.4 clock). The image's floor starts at row ~27, its side pillars sit on columns 0 and 25: line it up with the map. Lights from `room_lights.gd` go on top (lamps at (1.5, 12) and (24.5, 12) tiles, where the images draw them). The back wall must cover the whole room (`gfxcontrast`; if the terrain gain check fails, fix the light, not the image).
+- **The clock face** (decided in step 2, needed by the death scene): decor in the backdrop, centre (13, 15.5) tiles, radius 3.5 tiles (below the escapement's bob, between the two arched windows, as in `background_p1.webp`), deep blue enamel, gold Roman numerals I-XII (draw them right; the reference `clock.webp` has broken numerals), a gold sun-shaped hour hand, a brass riveted rim (reference `17-race-data/ref/clock.webp`). The escapement hangs above it: beam, anchor, rod, bob, then the clock face (the vertical order of `arena_full.webp`). Hands: phase 1 they tremble and now and then jump back a step; phase 2 the glass is cracked and the hands spin; after the death they jump to 05:12 and then keep real tower time. The hands are drawn every frame (small); the face itself is part of the backdrop image (only the hands are code).
 - Bells: brass with a dark patina, a highlight line on the crown, chains up to the beam; cracked bells show a dark crack; the swing is drawn from §4.2.
 - Escapement: brass anchor arc with two pallets, a rod down to the bob; until the pin is in, a small **red cross** at the pivot and the anchor hangs crooked and swings irregularly (phase 1 lazily, phase 2 wildly with sparks); when serialized it swings regularly for the serial time; after the death, `pin_in`: a **red dot** at the pivot, steady swing on the tick.
 - Lights (`room_lights.gd` `_arena`, `look.gd`): phase 1 warm amber from the two lamps; phase 2 red-orange, sparks from the anchor; after death warm and calm. No darkness.
@@ -251,7 +251,7 @@ Everything of phase 1 (cues now 0.6 / 0.9 s), plus:
 
 **Pressure layer:** holes (§4.3); fallen bells stay.
 
-The Persian doc's first wording of `drop` had TOCK stuck on the ceiling beam, which no player can reach; riding the bell down and being stuck on the floor is the fix (Zakaria to confirm, §11).
+The Persian doc's first wording of `drop` had TOCK stuck on the ceiling beam, which no player can reach; riding the bell down and being stuck on the floor is the fix (decided).
 
 ### 5.9 Alone and rewind
 
@@ -274,9 +274,10 @@ The Persian doc's first wording of `drop` had TOCK stuck on the ceiling beam, wh
 
 At least: `active`, `dying`, `ph`, `trans_t0*100`, `intro_t0*100`, `say_k`, `say_t0*100`, `die_t*100`, the beat clock (`beat_i0`, `beat_t0*100`, `tick_len*1000`), per automaton (`x`, `y`, `hp*10`, `max_hp`, `st` alive/down/rewinding, `hop_t0*100`, hop from/to x,y, `hammer` 0 idle/1 up/2 stuck, `daze_until*100`, `read_x`, `read_y`, `read2_x`, `read2_y`, `eye_on`, `dial`), `rewind_t0*100`, the escapement (`serial_until*100`, `lock_cd_until*100`, `pin_in`), the bells (per bell `strike_t0*100`, `amp`, `crack_t0*100`, `fall_t0*100`, `fallen`, `fallen_x`, `rehang_t0*100`), the buffer (paint times packed ×10, `corrupt_t0*100` and `hole_t0*100` per cell), the loss menu fields (§7.1), then `plan_fields()` and `hz_pack()` last. `const NF := <count before plan_fields>` like CRAWLER; `puppet_tick(dt)` like CRAWLER. Hazard kinds in `hz_kinds()`: `["ring", "slambox", "clapper", "rope", "bellfall", "corrupt", "hole"]` (adjust names, keep them registered).
 
-### 5.12 Music
+### 5.12 Music (decided)
 
-`music_now(want)`: intro → `""` (the tower tick only); phase 1 → placeholder; transition → `""`; phase 2 → placeholder; dying → `""`, then the tower theme at the steady tick. **Placeholders until Zakaria decides (§11 question 1):** phase 1 `"boss"`, phase 2 `"boss_hi"`. Comment them as placeholders.
+- `music_now(want)`: intro → `""` (only the tower tick); phase 1 → `"boss"`; transition → `""`; phase 2 → `"boss_hi"`; dying → `""`, then the tower theme at the steady tick. The tick and tock sounds keep playing on the room's tick under the music (the clock motif). Comment `boss`/`boss_hi` as stand-ins until the boss gets its own music.
+- **Tower floors follow the tick:** two tempo variants of `w4` made with ffmpeg `atempo` (pitch kept), `-q:a 0`, small: `w4_slow.ogg` (×0.8333, 120 bpm: tick 1.0) for T01 and T02, `w4_fast.ogg` (×1.1905, ~171 bpm: tick 0.7) for TB2. After `boss:RACE` those rooms play `w4` again (state, not an event). Put them in `tools/godot/` next to the other music scripts and `--import`.
 
 ---
 
@@ -404,6 +405,9 @@ Last milestone: the whole `bash tools/godot/test-all.sh` (~25 min), then the web
 
 ## 11. Open questions (for Zakaria, before or during the build)
 
-1. **Music.** Placeholders `boss` (phase 1) / `boss_hi` (phase 2), or the tower theme `w4` made faster with ffmpeg (`atempo`, pitch kept) for both phases (~171 / 200 bpm, the tick motif)? And the tower floors (T01/T02 slower, TB2 faster): tempo variants of `w4` (two more small files) or keep `w4` as is?
-2. **`drop` fix:** TOCK rides the falling bell down and is stuck 0.8 s on the floor (instead of on the unreachable beam).
-3. **The backdrop:** use `background_p1.webp` / `background_p2.webp` themselves as T06's back wall (downscaled to 416 × 480 on a clean pixel grid, palette-reduced, small file), or redraw them in code like the other arenas? The images match the room's proportions (26 × 30).
+All answered (Zakaria, 2026-10-22: the backdrop "A", the rest left to Claude):
+1. **Music:** §5.12.
+2. **`drop`:** TOCK rides the falling bell down and is stuck 0.8 s on the floor (§5.8).
+3. **Backdrop:** the images themselves (§4.4).
+
+Anything else the player sees or hears that this plan does not settle: ask.
