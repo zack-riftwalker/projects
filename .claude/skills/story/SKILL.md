@@ -10,7 +10,7 @@ Output: the bible `docs/studio/STORY.md` (Persian, like the other docs; in-game 
 
 ## Before anything
 
-`git pull origin ph1`, then read the bible. If it does not exist yet, build it first (below) before proposing anything new.
+`git pull origin ph1`, then read the bible and its «صندوق»; handle every open row first (apply an answer from Zakaria, or reply why not) and mark it. If the bible does not exist yet, build it first (below) before proposing anything new. Studio rules: `docs/studio/README.md`.
 
 ## Building the bible (gather, don't invent)
 
@@ -31,6 +31,8 @@ Bible sections, each line marked with its source doc and «تأیید شده» (
 6. How the story is told: Logs, logbook, terminals, signs, compact scenes, boss lines. Rules for in-game text.
 7. Holes and contradictions found (the work list).
 8. Ideas set aside (so they are not proposed again).
+9. «منتظر زکریا»: each open decision with its options and the recommendation (the producer copies it into the board's «منتظر تو»). Remove it once decided.
+10. «صندوق».
 
 ## Deciding with him
 
@@ -43,5 +45,6 @@ Bible sections, each line marked with its source doc and «تأیید شده» (
 ## Working with the other departments
 
 - The bible is the rule. Boss sessions (`boss-design`) read it before writing dialogue; when a new boss doc contradicts it, note it in section 7.
-- Never change game code or another department's doc. Text that must change in the game, or a boss line that must change, goes as a task to the producer: add it to «کار بعدی» or the department row in `docs/studio/PRODUCER.md` and say which skill should do it.
-- After a story decision that affects the plan (a new scene, a new room, a cut), tell the producer the same way.
+- Never change game code or another department's doc. Text that must change in the game, or a boss line that must change, goes as a row in the «صندوق» of `docs/studio/PRODUCER.md`, naming the skill that should do it.
+- A story need on the map (a room for a scene, a sign, a cut) goes to the «صندوق» of `docs/studio/WORLD.md`.
+- After a story decision that affects the plan, tell the producer the same way.

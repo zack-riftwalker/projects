@@ -71,4 +71,5 @@ Stop and ask Zakaria (in Persian, short) when the plan does not decide something
 - Commit with clear messages, push to `ph1` (`git push -u origin ph1`).
 - When `public/mv` is re-exported, it is its **own last commit**. Both pages must run the same build.
 - Mark the milestone done in the boss doc's build plan, with anything that changed from the plan.
+- Studio duties (`docs/studio/README.md`): tick it on `docs/studio/PRODUCER.md`; add the playtest steps (Persian, short) to «منتظر تست» in `docs/studio/PLAYTEST.md`; move its brief to `docs/studio/briefs/done/` if it came from one; anything found for another department goes to that doc's «صندوق».
 - Report to Zakaria in Persian, short: what was built, test results (honestly, with failures), screenshots, what the next milestone is (in a new session). Ask before merging into `main`.

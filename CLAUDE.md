@@ -28,10 +28,15 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 | `docs/PLAN-*.md`, `docs/reports/` | History of the work. |
 | `docs/studio/PRODUCER.md` | The producer's board: where the game is, the current goal, next tasks. Skill `producer`. |
 | `docs/studio/STORY.md` | The story bible: the one true story. Skill `story`. |
+| `docs/studio/WORLD.md` | The world bible: map, gates, abilities, systems. Skill `world`. |
+| `docs/studio/PLAYTEST.md`, `docs/studio/briefs/` | Play-test sheet and notes (skill `playtest`); ready prompts for build sessions. |
 
 ## Studio
-- Zakaria runs the game like a studio, one department at a time; he is the director. The `producer` skill keeps `docs/studio/PRODUCER.md` true; the `story` skill keeps the story bible `docs/studio/STORY.md`. Each has its own session.
-- A session that finishes a task on the board (a boss milestone, a region, a play-test fix) ticks it there in the same push.
+- Zakaria runs the game like a studio; he is the director and decides. Rules: `docs/studio/README.md`.
+  - Standing sessions: producer (`PRODUCER.md`, skill `producer`, also `playtest`), story (`STORY.md`, skill `story`), world (`WORLD.md`, skill `world`).
+  - Short sessions, one per task: `boss-design`, `boss-build`, `region-build`, usually started from a brief in `docs/studio/briefs/`.
+- Each studio doc has one owner. Write to another department only through its «صندوق» (inbox) section. Decisions waiting on Zakaria go in your doc's «منتظر زکریا»; the producer gathers them into one list.
+- A session that finishes a task on the board (a boss milestone, a region, a play-test fix) ticks it on `PRODUCER.md` in the same push, and adds its playtest steps to «منتظر تست» in `PLAYTEST.md`.
 
 ## Staying current
 - Several sessions push to `ph1` in parallel, so a session's clone goes stale. A SessionStart hook (`.claude/hooks/session-start.sh`) fast-forwards `ph1` and prints its newest commits at the start.
