@@ -145,6 +145,98 @@ Right: old, broad, bearded, cyan glowing eyes, hammer on its shoulder.
 Round caps, sheepskin skirts, wind-up keys on their backs. Full body, side view, plain dark background.
 ```
 
+### پرامپت‌های آرنای نهایی (ناقوس‌خونه)، بدون شخصیت (۲۰۲۶-۱۰-۲۲)
+
+زکریا: آرنا بعد از گام ۳ عوض شد؛ پرامپت همه‌ی تیکه‌ها رو بده، **بدون شخصیت** (عکس آدمک‌ها رو داریم). هر پرامپت ته‌ش منع آدم و ربات و مجسمه رو داره. اتاق ۲۶×۳۰ کاشیه (۴۱۶×۴۸۰، کمی بلندتر از پهنا).
+
+**۱. کل آرنا، فاز ۱ (رفرنس حس، با ناقوس‌ها)**
+```
+pixel art game screen, 16-bit SNES style, side view, low resolution, big visible square pixels,
+hard edges, flat colors, 32-color palette, no anti-aliasing, no blur, vertical 7:8 frame.
+Inside the belfry at the top of an old clock tower at night, warm amber light from two wall lamps.
+A dark wooden beam across the top. Five bronze bells of three sizes hang from it on chains at different
+heights: two big ones low on the left and right, one in the middle, two small ones higher up.
+In the center of the back wall a round clock face, deep blue enamel, gold Roman numerals, a gold
+sun-shaped hour hand. Above it, hanging from the beam, a brass clock escapement: an anchor-shaped
+rocking arm with a long pendulum rod and a round brass weight at the bottom, hanging crooked.
+Dark brick walls with brass pipes and gears at the sides, two arched windows with a night sky.
+Stone floor at the bottom. Empty room: no people, no characters, no robots, no statues, no text.
+```
+
+**۲. فقط پس‌زمینه (لایه‌ی دیوار؛ بدون ناقوس و گریز، چون اون‌ها جدا تکون می‌خورن)**
+```
+pixel art game background layer, 16-bit SNES style, side view, low resolution, big visible square
+pixels, hard edges, flat colors, 32-color palette, no anti-aliasing, no blur, vertical 7:8 frame.
+Empty belfry at the top of an old clock tower at night, warm amber light. A dark wooden beam across the
+top. In the center of the back wall a round clock face, deep blue enamel, gold Roman numerals.
+Dark brick walls, brass pipes, two gears and a slow pendulum at the sides, two arched windows with a
+night sky, two wall lamps. Stone floor. Nothing hanging from the beam. No bells, no people,
+no characters, no robots, no statues, no text.
+```
+
+**۳. پس‌زمینه‌ی فاز ۲ (داغ)**
+```
+pixel art game background layer, 16-bit SNES style, side view, low resolution, big visible square
+pixels, hard edges, flat colors, 32-color palette, no anti-aliasing, no blur, vertical 7:8 frame.
+The same empty clock-tower belfry, overheated: red-orange light, sparks and steam from the gears,
+the blue clock face's glass cracked, its gold hands blurred from spinning. Dark brick walls, brass pipes,
+arched windows, stone floor. Nothing hanging from the beam. No bells, no people, no characters,
+no robots, no statues, no text.
+```
+
+**۴. ناقوس‌ها (برگه‌ی تیکه‌ها)**
+```
+pixel art game sprite sheet, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, 16-color palette, no anti-aliasing, no blur, plain dark background.
+Bronze church bells with dark patina and polished edges, side view, each hanging from a short chain.
+Row 1: three sizes, big, medium and small, intact.
+Row 2: the same three, cracked, with a dark crack line.
+Row 3: the same three, fallen, lying tipped on their side on the ground, dented.
+Row 4: a bell swinging, three frames: tilted left, straight, tilted right.
+No people, no characters, no robots, no text.
+```
+
+**۵. گریز ساعت (escapement)**
+```
+pixel art game sprite sheet, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, 16-color palette, no anti-aliasing, no blur, plain dark background.
+A brass clock escapement, front view: an anchor-shaped rocking arm with two hooked pallets, a pivot at
+the top, a long thin pendulum rod hanging down to a round brass weight.
+Left: broken, hanging crooked, a small red X where the pivot pin is missing.
+Middle: swinging wildly, small sparks at the pivot.
+Right: repaired, hanging straight, a small glowing red dot at the pivot.
+No people, no characters, no robots, no text.
+```
+
+**۶. صفحه‌ی ساعت (عددهای درست)**
+```
+pixel art game sprite, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, 16-color palette, no anti-aliasing, no blur, plain dark background.
+Two versions of the same old tower clock face, front view: deep blue enamel, a thick brass riveted rim,
+the twelve Roman numerals I II III IV V VI VII VIII IX X XI XII in gold in the right order,
+a gold sun-shaped hour hand and a thin gold minute hand showing 5:12.
+Left: clean glass. Right: the glass cracked across. No people, no characters, no text other than the numerals.
+```
+
+**۷. کف (کاشی‌های تکرارشونده)**
+```
+pixel art game tileset, 16-bit SNES style, 16x16 pixel tiles shown scaled up, big visible square pixels,
+hard edges, flat colors, no anti-aliasing, no blur, plain dark background.
+Old stone floor tiles of a clock-tower belfry, warm brown, seamless. Variants: plain; with a thin glowing
+red line on top; with a thin glowing cyan line on top; white-hot cracked; a broken hole with a dark pit
+and red embers at the bottom. Also dark brick wall tiles and a wooden beam tile.
+No people, no characters, no text.
+```
+
+**۸. تیکه‌های کوچیک**
+```
+pixel art game sprites, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, no anti-aliasing, no blur, plain dark background.
+Small props for an old clock-tower belfry: a brass wall lamp lit and unlit, a hanging iron chain
+segment, a bell clapper glowing yellow, a small floating glowing red dot with a soft halo,
+a brass gear, sparks. No people, no characters, no text.
+```
+
 ### رفرنس‌های تصویری زکریا (۲۰۲۶-۱۰-۲۲، ساخته‌ی مدل عکس‌ساز با پرامپت‌های پایین)
 
 همه توی [`17-race-data/ref/`](17-race-data/ref/). **این‌ها رفرنسن، نه فایل بازی:** سازنده با اندازه‌ی بازی (آدمک ۳۲×۴۸) و پالت برج از روشون می‌کشه.
