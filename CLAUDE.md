@@ -26,6 +26,11 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 | `tools/coop-harness.js` + `tools/scenarios-*.js` | Playwright two-tab tests. |
 | `docs/PROTOCOL.md` | Network protocol. |
 | `docs/PLAN-*.md`, `docs/reports/` | History of the work. |
+| `docs/studio/PRODUCER.md` | The producer's board: where the game is, the current goal, next tasks. Skill `producer`. |
+
+## Studio
+- Zakaria runs the game like a studio, one department at a time; he is the director. The `producer` skill keeps `docs/studio/PRODUCER.md` true.
+- A session that finishes a task on the board (a boss milestone, a region, a play-test fix) ticks it there in the same push.
 
 ## Staying current
 - Several sessions push to `ph1` in parallel, so a session's clone goes stale. A SessionStart hook (`.claude/hooks/session-start.sh`) fast-forwards `ph1` and prints its newest commits at the start.
