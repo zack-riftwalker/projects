@@ -3596,12 +3596,22 @@ func sc_co_race() -> Array:
 		var t0 := Time.get_ticks_msec()
 		var f := 0
 		var rode := 0
-		while Time.get_ticks_msec() - t0 < 30000.0 * slow:
+		var forced := false
+		var dbl_log := {}
+		var lock_t := -1.0
+		while Time.get_ticks_msec() - t0 < 40000.0 * slow:
 			p.inv = 999.0
 			p.hp = p.max_hp
 			f += 1
 			Controls.script_input = {}
 			race_plans(b, seen)
+			if not forced and Time.get_ticks_msec() - t0 > 9000.0 * slow and b.th[0].plan.is_empty() and b.th[1].plan.is_empty():
+				forced = true                                  # a double write on the guest, which stands still
+				b._start("double", "p2")
+			if not b.th[0].plan.is_empty() and String(b.th[0].plan.id) == "double":
+				dbl_log[int(b.th[0].plan.seq)] = bool(b.th[0].plan.get("hit", false)) or bool(b.th[0].plan.get("split", false))
+			if lock_t < 0.0 and hl.lock_cd_until > 0.0:
+				lock_t = r.time
 			for q in b.th:                                      # (the guest's claws must not finish the fight: the rules are the test)
 				if q.st == 0 and float(q.hp) < 6.0:
 					q.hp = 6.0
@@ -3612,7 +3622,11 @@ func sc_co_race() -> Array:
 			if tg.has(seen[sq]):
 				tg[seen[sq]] += 1
 		var ok_hits: int = int(coop().verdicts.get("OK", 0))
-		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1, "host: started %s, %d plans (p1 %d, p2 %d), the guest's claw hits accepted %d (verdicts %s)" % [started, seen.size(), tg.p1, tg.p2, ok_hits, str(coop().verdicts)]]
+		var doubles: int = dbl_log.size()
+		var hit_doubles := 0
+		for dk in dbl_log:
+			hit_doubles += 1 if dbl_log[dk] else 0
+		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1 and doubles >= 1 and lock_t >= 0.0, "host: started %s, %d plans (p1 %d, p2 %d), %d double writes (%d hit or split), the guest's claw hits accepted %d (verdicts %s), the guest locked the escapement at %.1f" % [started, seen.size(), tg.p1, tg.p2, doubles, hit_doubles, ok_hits, str(coop().verdicts), lock_t]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("T06", 150.0, 300.0)
 	var found := {"b": null}
@@ -3630,8 +3644,14 @@ func sc_co_race() -> Array:
 	var swings := 0
 	var f2 := 0
 	var last_hp := -1
+	var max_drop := 0
+	var dbl_log2 := {}
+	var bob_phase := false
+	var bob_swings := 0
+	var serial_seen := false
+	var gh: BelfryHall = r2.belfry
 	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < 30000.0 * slow:
+	while Time.get_ticks_msec() - t1 < 40000.0 * slow:
 		var g = mgr().player
 		f2 += 1
 		if not is_instance_valid(pup):
@@ -3639,15 +3659,43 @@ func sc_co_race() -> Array:
 		race_plans(pup, seen2)
 		if last_hp >= 0 and g.hp < last_hp:
 			hits += 1
+			max_drop = maxi(max_drop, last_hp - g.hp)
 		g.hp = g.max_hp
 		last_hp = g.hp
 		g.inv = 0.0 if f2 % 7 != 0 else g.inv
+		var dbl := false
+		for q in pup.th:
+			if not q.plan.is_empty() and String(q.plan.id) == "double":
+				dbl = true
+				dbl_log2[int(q.plan.seq)] = bool(q.plan.get("hit", false)) or bool(q.plan.get("split", false))
+		if gh.serialized(r2.time):
+			serial_seen = true
+		# the double write: stand still in it. Later (14 s on): the escapement's bob, from the air beside it, until the host has serialized
+		if not bob_phase and Time.get_ticks_msec() - t1 > 15000.0 * slow:
+			bob_phase = true
+		var keys := {}
+		var el_g: float = float(Time.get_ticks_msec() - t1) / 1000.0 / slow
+		if dbl or (el_g > 7.5 and el_g < 14.5):                        # (still for the host's forced double write on this guest, 8-14 s)
+			Controls.script_input = {}
+			await get_tree().physics_frame
+			continue
+		if bob_phase and not serial_seen and gh.bob_hittable(r2.time):
+			var bp := gh.bob_pos(r2.time)
+			g.x = bp.x - 22.0
+			g.y = bp.y - 6.0
+			g.vx = 0.0
+			g.vy = 0.0
+			g.face = 1.0
+			keys["attack"] = f2 % 14 < 2 and g.atk_cd <= 0.0
+			bob_swings += 1 if keys.attack else 0
+			Controls.script_input = keys
+			await get_tree().physics_frame
+			continue
 		# go to the nearest automaton that is down on the floor and swing
 		var near = null
 		for q in pup.th:
 			if q.st == 0 and absf(float(q.y) - 432.0) < 4.0 and (near == null or absf(float(q.x) - (g.x + 5.0)) < absf(float(near.x) - (g.x + 5.0))):
 				near = q
-		var keys := {}
 		if near != null:
 			var dx: float = float(near.x) - (g.x + 5.0)
 			if absf(dx) > 24.0:
@@ -3667,8 +3715,12 @@ func sc_co_race() -> Array:
 	for sq in seen2:
 		if seen2[sq] == "p2":
 			mine += 1
+	var dbl_seen: int = dbl_log2.size()
+	var dbl_hit_seen := 0
+	for dk in dbl_log2:
+		dbl_hit_seen += 1 if dbl_log2[dk] else 0
 	await wait_secs(1.0)
-	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1, "guest: saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times, %d swings, violations '%s' '%s'" % [seen2.size(), mine, short, hits, swings, pup.kit_violation, pup.arena_violation]]
+	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1 and max_drop >= 2 and dbl_seen >= 1 and serial_seen, "guest: saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times (at most %d at once), %d swings, %d double writes seen (%d hit), %d swings at the bob, serialized seen %s, violations '%s' '%s'" % [seen2.size(), mine, short, hits, max_drop, swings, dbl_seen, dbl_hit_seen, bob_swings, str(serial_seen), pup.kit_violation, pup.arena_violation]]
 
 func sc_co_loopboss() -> Array:
 	if not await wait_joined():

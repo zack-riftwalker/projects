@@ -927,6 +927,355 @@ func race_plat(r: Room, i: int) -> Rect2:
 	var m: Dictionary = r.belfry.pool[i]
 	return Rect2(float(m.x), float(m.y), float(m.w), 6.0)
 
+# --- M3: the double write, the guard, the escapement lock, the buffer floor, cracking bells, ringing a bell ----------------------------------------------------
+# runs the fight until `cond` is true (at most `max_f` frames), the player kept where it is unless `keep` is a point
+func race_until(r: Room, cond: Callable, max_f := 900, keep = null, immortal := true) -> bool:
+	for f in range(max_f):
+		if immortal:
+			r.player.inv = 999.0
+			r.player.hp = r.player.max_hp
+		if keep != null:
+			r.player.x = float(keep.x)
+			r.player.y = float(keep.y)
+			r.player.vx = 0.0
+			r.player.vy = 0.0
+		r.step(Game.STEP)
+		if cond.call():
+			return true
+	return false
+
+func race_idle(b: RaceBoss) -> void:
+	for q in b.th:
+		q.plan = {}
+		q.mode = "idle"
+		q.gap = 999.0
+		q.hammer = 0
+		q.daze_until = -1.0
+		q.eye = false
+		q.hop = {}
+	b._sync_mirror()
+
+func race_m3(res: Dictionary) -> void:
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
+	Game.diff = "normal"
+	Game.flags["intro:RACE"] = true
+	# ---- 1. the double write: stay = 2 damage (one hit), leave early = TICK reads again and the strikes land apart (1 + 1, no clash), leave late = the hammers clash
+	var r := race_fight_room()
+	var b: RaceBoss = r.boss as RaceBoss
+	var hl: BelfryHall = r.belfry
+	race_idle(b)
+	var spot := Vector2(200.0, 422.0)
+	r.player.x = spot.x - 5.0
+	r.player.y = spot.y
+	b._start("double", "p1")
+	var p0: Dictionary = b.th[0].plan
+	var p1: Dictionary = b.th[1].plan
+	if p0.is_empty() or p1.is_empty() or String(p0.id) != "double" or int(p0.seq) == int(p1.seq):
+		fail(res, "the double write did not start on both automata with a plan each")
+		r.queue_free()
+		return
+	if absf(float(p0.t) - 1.05) > 0.001 or absf(float(p1.t) - 1.05) > 0.001:
+		fail(res, "the double write's cue is %.3f / %.3f s, want 1.05 (3 beats)" % [float(p0.t), float(p1.t)])
+	if absf(float(p0.rx) - float(p1.rx)) > 0.01 or absf(float(p0.ry) - float(p1.ry)) > 0.01 or int(b.th[0].dial) != int(b.th[1].dial) or not b.th[0].eye or not b.th[1].eye:
+		fail(res, "the pair does not read the same point with the same chest clock and both eyes lit")
+	# stay
+	var dmg_taken := 0
+	var hp0: int = r.player.max_hp
+	var impact_t := -1.0
+	var box_dmg := 0
+	r.player.inv = 0.0
+	for f in range(240):
+		r.player.x = spot.x - 5.0
+		r.player.y = spot.y
+		r.player.vx = 0.0
+		r.player.vy = 0.0
+		var hp_pre: int = r.player.hp
+		r.step(Game.STEP)
+		if r.player.hp < hp_pre:
+			dmg_taken += hp_pre - r.player.hp
+			r.player.hp = r.player.max_hp
+			if impact_t < 0.0:
+				impact_t = r.time
+		for hb in b.harmboxes():
+			box_dmg = maxi(box_dmg, int(hb.get("dmg", 1)))
+		if b.th[0].plan.is_empty() and b.th[1].plan.is_empty():
+			break
+	if dmg_taken != 2 or box_dmg != 2 or float(b.clash_t0) > 0.0 or not (b.th[0].last == "double"):
+		fail(res, "double write, stay: damage %d (want 2), box %d, clash %s" % [dmg_taken, box_dmg, str(b.clash_t0)])
+	res.info += " double: stay %d dmg;" % dmg_taken
+	if hl.corrupt_t0[hl.cell_of(spot.x)] < 0.0:
+		fail(res, "a double write on the floor did not corrupt the cell under it (both threads wrote it)")
+	# leave early (before the check): the strikes land apart, TICK 0.15 s after TOCK, 1 damage each, no clash
+	race_idle(b)
+	hl.clear_buffer()
+	b.hz.clear()
+	r.player.x = 120.0
+	r.player.y = 422.0
+	b._start("double", "p1")
+	p0 = b.th[0].plan
+	p1 = b.th[1].plan
+	var act := [-1.0, -1.0]
+	var max_dmg := 0
+	var boxes := 0
+	for f in range(300):
+		r.player.inv = 999.0
+		if float(p0.t) > 0.45 or p0.ph == "recover":
+			r.player.x = 120.0
+		else:
+			r.player.x = 300.0                                       # it walks away well before the check
+		r.player.y = 422.0
+		r.step(Game.STEP)
+		for i in range(2):
+			var pq: Dictionary = b.th[i].plan
+			if not pq.is_empty() and pq.ph == "active" and act[i] < 0.0:
+				act[i] = r.time
+		for hb in b.harmboxes():
+			max_dmg = maxi(max_dmg, int(hb.get("dmg", 1)))
+			boxes += 1
+		if b.th[0].plan.is_empty() and b.th[1].plan.is_empty():
+			break
+	if not p0.get("split", false) or absf((act[0] - act[1]) - 0.15) > 0.03 or max_dmg != 1 or boxes == 0 or float(b.clash_t0) > 0.0:
+		fail(res, "double write, early leave: split %s, TICK %.2f s after TOCK (want 0.15), box damage %d, boxes %d, clash %s" % [str(p0.get("split", false)), act[0] - act[1], max_dmg, boxes, str(b.clash_t0)])
+	res.info += " early leave: split %s, TICK +%.2f s;" % [str(p0.get("split", false)), act[0] - act[1]]
+	# leave late (after the check): the box exists for nobody, the hammers clash, both dazed 2.0 s, both vulnerable
+	race_idle(b)
+	r.player.x = 200.0
+	r.player.y = 422.0
+	b._start("double", "p1")
+	p0 = b.th[0].plan
+	var left := false
+	var boxes2 := 0
+	var clash_seen := false
+	for f in range(300):
+		r.player.inv = 999.0
+		if not left and p0.get("checked", false):
+			left = true
+		r.player.x = 330.0 if left else 200.0
+		r.player.y = 422.0
+		r.step(Game.STEP)
+		boxes2 += b.harmboxes().size()
+		if float(b.clash_t0) > 0.0 and not clash_seen:
+			clash_seen = true
+			break
+	var dz0: float = float(b.th[0].daze_until) - r.time
+	var dz1: float = float(b.th[1].daze_until) - r.time
+	if not clash_seen or boxes2 != 0 or absf(dz0 - 2.0) > 0.1 or absf(dz1 - 2.0) > 0.1 or not b.th[0].plan.is_empty() or b.hurtboxes().size() < 2:
+		fail(res, "double write, late leave: clash %s, boxes %d, dazed %.2f / %.2f s (want 2.0), hurtable %d" % [str(clash_seen), boxes2, dz0, dz1, b.hurtboxes().size()])
+	res.info += " late leave: clash, dazed %.1f/%.1f s;" % [dz0, dz1]
+	if b._pose_of(0) != "dazed" or b._pose_of(1) != "dazed":
+		fail(res, "the clashed pair is not drawn dazed")
+	race_until(r, func(): return r.time > float(b.th[0].daze_until) + 0.5, 400)
+	if String(b.th[0].mode) == "idle" and b.th[0].plan.is_empty() and int(b.th[0].since) > 0:
+		fail(res, "after the clash the pair did not start over (since %d)" % int(b.th[0].since))
+	# the cue never counts down from a guard: a double write has none (2-damage plans) and a normal plan's is x0.8 while the partner is vulnerable
+	race_idle(b)
+	b.th[0].hammer = 2
+	b.th[1].next = "strike"
+	b.th[1].start_at = r.time
+	b._cue_start(1)
+	var gp: Dictionary = b.th[1].plan
+	if gp.is_empty() or absf(float(gp.t) - 0.7 * 0.8) > 0.001:
+		fail(res, "guard: the cue is %.3f s while the partner is stuck, want 0.56" % (float(gp.t) if not gp.is_empty() else -1.0))
+	race_idle(b)
+	b.th[1].daze_until = r.time + 1.0
+	b.th[0].next = "slam"
+	b.th[0].start_at = r.time
+	b._cue_start(0)
+	gp = b.th[0].plan
+	if gp.is_empty() or absf(float(gp.t) - 0.56) > 0.001:
+		fail(res, "guard: the cue is %.3f s while the partner is dazed, want 0.56" % (float(gp.t) if not gp.is_empty() else -1.0))
+	if b._cue_len("double", true) < 1.049:
+		fail(res, "the guard shortened a 2-damage plan's cue")
+	for dd in ["easy", "normal", "hard", "nightmare"]:
+		Game.diff = dd
+		for pid in ["strike", "slam", "clapper", "rope"]:
+			if b._cue_len(pid, true) < 0.30:
+				fail(res, "%s %s: a guarded cue of %.2f s is under 0.30" % [dd, pid, b._cue_len(pid, true)])
+		if b._cue_len("double", false) < 0.7 * float(Game.dv("telegraph_mult")) - 0.001:
+			fail(res, "%s: the double write's cue is under 0.7 s" % dd)
+	Game.diff = "normal"
+	r.queue_free()
+	# ---- 2. the escapement lock: a hit on the bob serializes for 3.0 s (plans on ticks, in turns), clears the floor, 12 s before it can be hit again
+	var r2 := race_fight_room()
+	var b2: RaceBoss = r2.boss as RaceBoss
+	var h2: BelfryHall = r2.belfry
+	race_idle(b2)
+	for q in b2.th:
+		q.gap = 0.3
+		q.since = 0
+		q.need = 99                                                # (no double write in this part)
+	h2.paint(3, 0, r2.time)
+	h2.paint(3, 1, r2.time)
+	h2.step_buffer(r2.time)
+	race_until(r2, func(): return h2.corrupt_t0[3] >= 0.0 and b2.hz.size() >= 1, 60)
+	if b2.hz.size() < 1:
+		fail(res, "no corrupt hazard for a corrupt cell")
+	var bobbox = null
+	for hb in b2.hurtboxes():
+		if hb.has("bob"):
+			bobbox = hb
+	if bobbox == null:
+		fail(res, "the bob is not a hurtbox before the lock is used")
+	else:
+		r2.attacker = r2.player
+		var t_hit: float = r2.time
+		var res_hit: String = b2.hit(1, 1.0, 0.0, "swipe", bobbox)
+		if res_hit != "hit" or absf(h2.serial_until - (t_hit + 3.0)) > 0.02 or absf(h2.lock_cd_until - (t_hit + 12.0)) > 0.02:
+			fail(res, "the lock: result %s, serialized until %.2f (want %.2f), cooldown until %.2f (want %.2f)" % [res_hit, h2.serial_until, t_hit + 3.0, h2.lock_cd_until, t_hit + 12.0])
+		if h2.corrupt_count(r2.time) != 0 or not b2.hz.filter(func(h): return h.k == "corrupt").is_empty():
+			fail(res, "the lock did not clear the corrupt cells")
+		for hb in b2.hurtboxes():
+			if hb.has("bob"):
+				fail(res, "the bob can be hit again while the lock cools down")
+		# 3 s of turns: a plan starts only on a tick, the two alternate, never a double write
+		var starts: Array = []                                      # [time, automaton, tick phase]
+		var seen_s := {}
+		for f in range(int(3.0 * 60.0)):
+			r2.player.inv = 999.0
+			r2.player.x = 200.0
+			r2.player.y = 422.0
+			r2.step(Game.STEP)
+			for i in range(2):
+				var pq: Dictionary = b2.th[i].plan
+				if not pq.is_empty() and not seen_s.has(int(pq.seq)):
+					seen_s[int(pq.seq)] = true
+					starts.append([r2.time, i, h2.tick_f_at(r2.time), String(pq.id)])
+		var bad_tick := 0
+		var bad_turn := 0
+		for k in range(starts.size()):
+			if float(starts[k][2]) > 0.08:
+				bad_tick += 1
+			if k > 0 and int(starts[k][1]) == int(starts[k - 1][1]):
+				bad_turn += 1
+			if starts[k][3] == "double":
+				bad_turn += 1
+		res.info += " lock: %d plans in turns;" % starts.size()
+		if starts.size() < 2 or bad_tick > 0 or bad_turn > 0:
+			fail(res, "serialized: %d plans in 3 s, %d not on a tick, %d out of turn" % [starts.size(), bad_tick, bad_turn])
+		race_until(r2, func(): return r2.time > h2.lock_cd_until + 0.05, 1200)
+		var back := false
+		for hb in b2.hurtboxes():
+			if hb.has("bob"):
+				back = true
+		if not back:
+			fail(res, "the bob never came back 12 s after the hit")
+	r2.queue_free()
+	# ---- 3. the buffer floor: slams paint, two threads in one cell corrupt it (a 0.6 s build-up, a 6 s hurt band of 1 damage), the hazard expires
+	var r3 := race_fight_room()
+	var b3: RaceBoss = r3.boss as RaceBoss
+	var h3: BelfryHall = r3.belfry
+	race_idle(b3)
+	h3.paint(2, 0, r3.time)
+	h3.paint(2, 1, r3.time + 0.5)
+	r3.time += 0.5
+	h3.step_buffer(r3.time)
+	b3._sync_hazards()
+	var czs := b3.hz.filter(func(h): return h.k == "corrupt")
+	if czs.size() != 1:
+		fail(res, "a corrupt cell is %d hazards" % czs.size())
+	else:
+		var hz0: Dictionary = czs[0]
+		if absf(float(hz0.warn) - 0.6) > 0.001 or not b3.hz_all_boxes(float(hz0.t0) + 0.3).is_empty() or b3.hz_all_boxes(float(hz0.t0) + 0.7).size() != 1:
+			fail(res, "the corrupt hazard hurts during its build-up or never")
+		var bx: Dictionary = b3.hz_all_boxes(float(hz0.t0) + 0.7)[0]
+		if absf(float(bx.x) - (16.0 + 2.0 * 48.0)) > 0.01 or absf(float(bx.w) - 48.0) > 0.01 or int(bx.dmg) != 1 or float(bx.h) > 6.01:
+			fail(res, "the corrupt band is %s" % str(bx))
+		if not b3.hz_all_boxes(float(hz0.t0) + 6.7).is_empty():
+			fail(res, "the corrupt band outlives its 6 s")
+		r3.time = float(hz0.t0) + 7.5
+		b3._sync_hazards()
+		if not b3.hz.filter(func(h): return h.k == "corrupt").is_empty():
+			fail(res, "an expired corrupt hazard stays in the list")
+	race_idle(b3)
+	for q in b3.th:
+		q.need = 99
+	b3.th[0].next = "slam"
+	b3.th[0].bell = -1
+	b3.th[0].x = 150.0
+	b3.th[0].y = 432.0
+	r3.player.x = 150.0
+	r3.player.y = 422.0
+	h3.clear_buffer()
+	b3.th[0].start_at = r3.time
+	b3._cue_start(0)
+	race_until(r3, func(): return float(h3.paint_t[0][h3.cell_of(150.0)]) >= 0.0, 200, Vector2(150.0, 422.0))
+	if float(h3.paint_t[0][h3.cell_of(150.0)]) < 0.0:
+		fail(res, "a slam on the floor did not paint its cell with the thread's colour")
+	r3.queue_free()
+	# ---- 4. a bell that cracks: 0.8 s of rattle (the cue), then it falls and hurts 2 under it for the fall only; whoever stands on it hops off at once
+	var r4 := race_fight_room()
+	var b4: RaceBoss = r4.boss as RaceBoss
+	var h4: BelfryHall = r4.belfry
+	race_idle(b4)
+	b4.th[0].bell = 2
+	var rc3 := BelfryHall.new_rest(2)
+	b4.th[0].x = rc3.position.x + rc3.size.x * 0.5
+	b4.th[0].y = rc3.position.y
+	b4.th[0].gap = 0.1
+	if not h4.crack(2):
+		fail(res, "bell 3 does not crack in the fight")
+	var t_crack: float = r4.time
+	b4._sync_hazards()
+	var bf := b4.hz.filter(func(h): return h.k == "bellfall")
+	if bf.size() != 1 or absf(float(bf[0].warn) - 0.8) > 0.001:
+		fail(res, "a cracked bell is %d bellfall hazards" % bf.size())
+	else:
+		if not b4.hz_all_boxes(t_crack + 0.5).is_empty():
+			fail(res, "the bellfall hurts during its rattle")
+		var fb := b4.hz_all_boxes(t_crack + 0.8 + 0.2)
+		if fb.size() != 1 or int(fb[0].dmg) != 2:
+			fail(res, "the falling bell is %s" % str(fb))
+		if not b4.hz_all_boxes(t_crack + 0.8 + h4.fall_time(2) + 0.2).is_empty():
+			fail(res, "the bellfall hurts after it landed")
+	race_until(r4, func(): return int(b4.th[0].bell) != 2 and String(b4.th[0].mode) != "plan", 120, Vector2(380.0, 422.0))
+	if int(b4.th[0].bell) == 2 and r4.time - t_crack < 0.8:
+		fail(res, "TICK stayed on the cracking bell for %.2f s" % (r4.time - t_crack))
+	r4.queue_free()
+	# ---- 5. a player rings a bell: the cue of an automaton on it (or within 40 px) is over (0.3 s recovery, no daze); 1.5 s per bell cooldown
+	var r5 := race_fight_room()
+	var b5: RaceBoss = r5.boss as RaceBoss
+	var h5: BelfryHall = r5.belfry
+	race_idle(b5)
+	var rc1 := BelfryHall.new_rest(0)
+	b5.th[0].bell = 0
+	b5.th[0].x = rc1.position.x + rc1.size.x * 0.5
+	b5.th[0].y = rc1.position.y
+	b5.th[0].next = "strike"
+	b5.th[0].start_at = r5.time
+	b5._cue_start(0)
+	b5.th[1].next = "strike"
+	b5.th[1].start_at = r5.time
+	race_until(r5, func(): return not b5.th[0].plan.is_empty() and float(b5.th[0].plan.t) < 0.4, 120)
+	var bellbox = null
+	for hb in b5.hurtboxes():
+		if hb.has("bell") and int(hb.bell) == 0:
+			bellbox = hb
+	r5.player.x = 600.0
+	r5.attacker = r5.player
+	var rung: String = b5.hit(1, 1.0, 0.0, "swipe", bellbox)
+	var pc: Dictionary = b5.th[0].plan
+	if rung != "block" or pc.is_empty() or pc.ph != "recover" or absf(float(pc.t) - 0.3) > 0.02 or float(b5.th[0].daze_until) > r5.time:
+		fail(res, "ringing the bell: result %s, plan %s, t %.2f, dazed %s" % [rung, str(pc.get("ph", "none")), float(pc.get("t", -1.0)), str(float(b5.th[0].daze_until) > r5.time)])
+	if b5.hit(1, 1.0, 0.0, "swipe", bellbox) != "":
+		fail(res, "a bell rang twice within 1.5 s")
+	if absf(float(h5.hit_cd[0]) - (r5.time + 1.5)) > 0.02 or h5.swing_dx(0, r5.time + 0.3) == 0.0:
+		fail(res, "a rung bell does not swing / has no cooldown")
+	r5.queue_free()
+	# ---- 6. the double write on a bell: the strike lands on the bell the target stands on, it cracks
+	var r6 := race_fight_room()
+	var b6: RaceBoss = r6.boss as RaceBoss
+	var h6: BelfryHall = r6.belfry
+	race_idle(b6)
+	var rc4 := BelfryHall.new_rest(4)
+	var tp := Vector2(rc4.position.x + rc4.size.x * 0.5 - 5.0, rc4.position.y)
+	r6.player.x = tp.x
+	r6.player.y = tp.y - 10.0
+	b6._start("double", "p1")
+	race_until(r6, func(): return float(h6.crack_t0[4]) >= 0.0 or (b6.th[0].plan.is_empty() and b6.th[1].plan.is_empty()), 240, tp - Vector2(0.0, 10.0))
+	if float(h6.crack_t0[4]) < 0.0:
+		fail(res, "a double write on a bell did not crack it")
+	r6.queue_free()
+
 # a T06 room with the fight running (the short intro), the players hurt-proof unless a test says otherwise
 func race_fight_room() -> Room:
 	Game.flags["intro:RACE"] = true
@@ -1130,7 +1479,7 @@ func race_m2(res: Dictionary) -> void:
 			pup.puppet = true
 			pup.net_apply(JSON.parse_string(JSON.stringify(fa)))
 			var fb := pup.net_fields()
-			if JSON.stringify(fa) != JSON.stringify(fb):
+			if JSON.stringify(JSON.parse_string(JSON.stringify(fa))) != JSON.stringify(JSON.parse_string(JSON.stringify(fb))):
 				var which := []
 				for k in range(mini(fa.size(), fb.size())):
 					if JSON.stringify(fa[k]) != JSON.stringify(fb[k]):
@@ -1251,7 +1600,8 @@ func race_sim(res: Dictionary, r: Room, b: RaceBoss) -> void:
 					plans[i][String(q.plan.id)] = int(plans[i].get(String(q.plan.id), 0)) + 1
 				if q.plan.ph == "active" and not q.plan.get("_logged", false):
 					q.plan["_logged"] = true
-					begins.append([r.time, i, String(q.plan.id)])
+					if String(q.plan.id) != "double":                      # (the double write is both automata at once, by design)
+						begins.append([r.time, i, String(q.plan.id)])
 			var standing: bool = String(q.mode) in ["idle", "wait", "crouch"] or (not q.plan.is_empty() and String(q.plan.id) in ["strike", "clapper"])
 			if standing:
 				var ok := false
@@ -1281,7 +1631,9 @@ func race_sim(res: Dictionary, r: Room, b: RaceBoss) -> void:
 		if (plans[i] as Dictionary).size() < 2:
 			fail(res, "%s used only %s in 40 s" % [RaceBoss.NAMES[i], str(plans[i])])
 	if begins.size() < 8:
-		fail(res, "only %d plans in 40 s" % begins.size())
+		fail(res, "only %d single plans in 40 s" % begins.size())
+	if int(plans[0].get("double", 0)) < 1 or int(plans[1].get("double", 0)) < 1:
+		fail(res, "no double write in 40 s (TICK %d, TOCK %d)" % [int(plans[0].get("double", 0)), int(plans[1].get("double", 0))])
 	print("RACESIM plans TICK %s TOCK %s, %d active starts, min gap %.2f s, both at once %d frames, hops %s, mid-air %d" % [str(plans[0]), str(plans[1]), begins.size(), min_gap, both_at_once, str(hops), off_surface])
 
 # `BOSS=T06 --test=fightsim` (17-race-build.md section 8): a simulated good solo player against both automata. The bot stands next to the automaton it hits and
@@ -1606,6 +1958,7 @@ func t_race3() -> bool:
 	r4.queue_free()
 	# --- M2 -------------------------------------------------------------------------------------------------------------
 	race_m2(res)
+	race_m3(res)
 	Controls.script_input = null
 	Game.fresh()
 	return report("race3", res.ok, info + res.info)

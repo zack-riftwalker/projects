@@ -2822,7 +2822,7 @@ func t_bosspresets() -> bool:
 			["N15", "cookies", 0.6, 0.5], ["N15", "hold", 0.7, 0.6], ["N15", "mat", 0.6, 0.5], ["N15", "crack", 0.8, 1.0],
 			["N15", "slam", 0.75, 1.5], ["N15", "sweep", 0.5, 0.6], ["N15", "banlist", 0.5, 0.5], ["N15", "punch", 0.75, 1.0], ["N15", "flame", 0.5, 0.5], ["N15", "split", 0.7, 0.35],
 			["N22", "cached", 1.0, -0.4], ["N22", "double", 0.75, 0.6], ["N22", "verdict", 0.6, 0.6], ["N22", "nitpick", 0.7, 0.6], ["N22", "cross", 0.9, 0.6], ["N22", "signoff", 0.75, 0.2], ["N22", "slash", 0.45, 0.2], ["N22", "sdiamond", 0.45, 0.7], ["N22", "riposte", 0.75, -0.9],
-			["T06", "strike", 0.7, 0.3], ["T06", "slam", 0.7, 0.5], ["T06", "clapper", 0.7, 0.4], ["T06", "rope", 0.7, 0.3]]
+			["T06", "strike", 0.7, 0.3], ["T06", "double", 1.05, 0.5], ["T06", "slam", 0.7, 0.5], ["T06", "clapper", 0.7, 0.4], ["T06", "rope", 0.7, 0.3]]
 		wanted += table.size()
 		var rooms := {}
 		for row in table:
@@ -2850,6 +2850,9 @@ func t_bosspresets() -> bool:
 			boss.face = -1.0
 			rb[0].player.x = 100.0
 			rb[0].player.y = Boss.FLOOR - 10.0
+			if boss is RaceBoss:                              # (T06's floor is lower; a body that stays in the double write's box takes the hit, the clash has no recovery)
+				rb[0].player.x = 195.0
+				rb[0].player.y = 422.0
 			var id: String = row[1]
 			if boss is FirewallBoss:
 				boss.ph = 1 if FirewallBoss.P1_IDS.has(id) else (3 if ["punch", "flame", "split"].has(id) else 2)             # (the furnace's attacks hurt only from phase 2)

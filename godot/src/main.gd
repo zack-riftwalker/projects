@@ -259,7 +259,7 @@ func _ready() -> void:
 			bb.hpf = float(bb.max_hp) * (float(bp[1]) if bp.size() > 1 else 0.2)
 			bb.hp = ceili(bb.hpf)
 			bb.on_damage()
-		elif Game.scene == "race_intro" or Game.scene.begins_with("racetell:") or Game.scene.begins_with("racefight"):          # screenshot helpers: RACE CONDITION's intro from its first frame (race_intro), or the fight with a plan just begun (racetell:<id>[:<x>:<y>])
+		elif Game.scene == "race_intro" or Game.scene.begins_with("racetell:") or Game.scene.begins_with("racefight") or Game.scene.begins_with("racemoment:"):          # screenshot helpers: RACE CONDITION's intro from its first frame (race_intro), or the fight with a plan just begun (racetell:<id>[:<x>:<y>])
 			var rt := Game.scene.split(":")
 			var rx := float(rt[2]) if rt.size() > 2 else 120.0
 			var ry := float(rt[3]) if rt.size() > 3 else 422.0
@@ -282,6 +282,38 @@ func _ready() -> void:
 					for rq in rtb.th:
 						rq.gap = 999.0
 					rtb._start(rt[1], "p1")
+				if rt[0] == "racemoment":                                      # racemoment:<clash|lock|crack|split>: the moment itself, reached by stepping the room
+					for rq in rtb.th:
+						rq.gap = 999.0
+					match rt[1]:
+						"clash", "split":
+							rtb._start("double", "p1")
+							for f in range(200):
+								rtp.inv = 999.0
+								rtp.x = rx - 5.0 if f < (52 if rt[1] == "clash" else 12) else 330.0
+								rtp.y = ry
+								rtr.step(Game.STEP)
+								if rt[1] == "clash" and rtb.clash_t0 > 0.0 and f > 60:
+									for g in range(6):
+										rtr.step(Game.STEP)
+									break
+								if rt[1] == "split" and rtb.th[0].plan.get("landed", false):
+									break
+						"lock":
+							rtr.attacker = rtp
+							for hb in rtb.hurtboxes():
+								if hb.has("bob"):
+									rtb.hit(1, 1.0, 0.0, "swipe", hb)
+									break
+							rtr.belfry.paint(3, 0, rtr.time)
+							rtr.belfry.paint(3, 1, rtr.time)
+							rtr.belfry.step_buffer(rtr.time)
+							for f in range(30):
+								rtr.step(Game.STEP)
+						"crack":
+							rtr.belfry.crack(2)
+							for f in range(24):
+								rtr.step(Game.STEP)
 		elif Game.scene.begins_with("race:"):          # screenshot helper: RACE CONDITION's belfry (race:<hp>:<x>:<y>[:<demo>]); 1.0 phase 1, 0.4 phase 2, 0 the after-state (M1: the hall alone, the boss inert); demo: bells struck / fallen, cells corrupt / open
 			var ra := Game.scene.substr(5).split(":")
 			var rhp := float(ra[0])

@@ -86,6 +86,7 @@ var fall_t0: Array = []
 var fallen: Array = []
 var rehang_t0: Array = []
 var hit_cd: Array = []                     # a player rang it: its cooldown (room time)
+var last_who: Array = []                   # which automaton struck it last (a second one within 0.25 s cracks it)
 var pool: Array = []                       # the platform dictionaries (also in room.plats)
 
 # the buffer floor
@@ -113,6 +114,7 @@ func _init(r) -> void:
 		fallen.append(false)
 		rehang_t0.append(NONE_T)
 		hit_cd.append(NONE_T)
+		last_who.append(-1)
 		var rc := rest_rect(i)
 		var m := {"x": rc.position.x, "y": rc.position.y, "w": rc.size.x, "h": 6.0, "dx": 0.0, "dy": 0.0, "bell": i, "off": false, "lost": false}
 		pool.append(m)
@@ -141,6 +143,7 @@ func reset() -> void:
 		fallen[i] = false
 		rehang_t0[i] = NONE_T
 		hit_cd[i] = NONE_T
+		last_who[i] = -1
 	for c in range(CELLS):
 		paint_t[0][c] = NONE_T
 		paint_t[1][c] = NONE_T
@@ -273,9 +276,12 @@ func can_fall(i: int, t: float) -> bool:
 	return true
 
 # ---------------------------------------------------------------- bell actions (host and tests)
-func strike(i: int, big := true) -> void:
+func strike(i: int, big := true, who := -1) -> void:
 	if not hanging(i, room.time):
 		return
+	if who >= 0 and int(last_who[i]) >= 0 and int(last_who[i]) != who and room.time - float(strike_t0[i]) < 0.25:
+		crack(i)                                       # both automata struck this bell within 0.25 s
+	last_who[i] = who
 	strike_t0[i] = snappedf(room.time, 0.01)
 	amp[i] = AMP_BIG if int(BELLS[i][3]) == 0 and big else AMP_SMALL
 	if int(BELLS[i][3]) == 0 and not big:

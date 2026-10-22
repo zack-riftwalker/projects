@@ -5,6 +5,7 @@ extends Boss
 # recover), a plan is state (it travels in net_fields), the guest is hurt only by what it was shown, and the arena (BelfryHall) is the room's.
 # Everything is read from the bodies and the bells, never from a marker: the eye light and its thin beam to the READ point, a faint afterimage of the target,
 # the raised hammer, the glowing bell. Hits go to the automaton whose hurtbox was struck; the pair shares one fight with two HP bars.
+# The signature is the double write: both read the same point, both raise hammers; stay and it is 2 damage, leave late and the hammers clash (both dazed 2 s).
 
 const IDS := ["strike", "slam", "double", "clapper", "rope", "switch", "drop", "triple", "combo"]
 const COL := ["#ff4a3a", "#2ee6d6"]
@@ -25,16 +26,25 @@ const PLANS := {
 	"slam": [2, 0.45, 0.5],
 	"clapper": [2, 0.15, 0.4],
 	"rope": [2, 0.5, 0.3],
+	"double": [3, 0.5, 0.5],
 }
-const DIVE_T := 0.25                                 # a slam's dive, then its box on the landing
+const DIVE_T := 0.25                                 # a slam's / the double write's dive, then its box on the landing
 const RING_R := 80.0
-const RING_THICK := 6.0
 const HOP_T := 0.45
 const CROUCH_T := 0.25
 const GAP_MIN := 0.3
 const GAP_MAX := 0.4
 const STAGGER := 0.15                                # two single strikes of different automata do not land within this
 const DAZE_CAUGHT := 0.7                             # a caught clapper that comes back hurts TOCK and dazes it
+const CLASH_DAZE := 2.0                              # the hammers clash: both dazed, the one big punish
+const GUARD_K := 0.8                                 # the cue of a normal plan while the partner is vulnerable
+const CHECK_T := 0.30                                # the double write checks its target this long before the strike
+const SPLIT_PX := 32.0                               # the target is further than this from the read point at the check: the strikes land apart
+const BOX_W := 40.0                                  # the double write's strike box
+const LOCK_SERIAL := [3.0, 2.5]                      # the escapement lock: the two take turns for this long (phase 1, phase 2)
+const LOCK_CD := 12.0
+const RING_CD := 1.5                                 # a player rings a bell: per-bell cooldown
+const DOUBLE_NEED := [3, 4]                          # plans each before the next double write (after the first: one each)
 
 var th: Array = []
 var ph := 1                                          # 1 / 2 (phase 2: M4)
@@ -43,8 +53,10 @@ var intro_t0 := -1.0
 var say_k := 0                                       # which line plays (0 none, 1 intro, 2 p2, 3 alone, 4 die)
 var say_t0 := -1.0
 var die_t0 := -1.0
-var ass: Array = ["p1", "p2"]                        # which player each automaton reads next (they swap after every plan)
-var hist := {"p1": [], "p2": []}                     # host: the last 0.3 s of each player's centre, for the prefetch
+var clash_t0 := -100.0                               # the last clash (sparks, both pages)
+var clash_pt := Vector2.ZERO
+var serial_turn := 0                                 # serialized by the lock: whose turn it is to start a plan
+var hist := {"p1": [], "p2": []}                     # host: the last second of each player's centre, for the prefetch and the least-moved read
 var hsamp: Array = [[], []]                          # guest: snapshot samples of each body
 var pseen := {}                                      # guest: plan seq -> the phase it was first seen in
 
@@ -61,7 +73,7 @@ func _init(r: Room, bx: float, by: float, base_hp := 90) -> void:
 func _mk(i: int) -> Dictionary:
 	return {"i": i, "x": 0.0, "y": FLOOR_Y, "face": 1.0 if i == 0 else -1.0, "hp": 1.0, "max": 1, "st": 0, "mode": "idle", "mt": 0.0, "gap": 1.0,
 		"hop": {}, "plan": {}, "last": "", "tgt": "p1" if i == 0 else "p2", "hammer": 0, "daze_until": -1.0, "eye": false, "dial": i * 6, "bell": -1, "ox": 0.0,
-		"dest": -1, "next": "", "flash": 0.0, "n": 0, "start_at": 0.0, "rx": 0.0, "ry": 0.0, "r2x": 0.0, "r2y": 0.0, "t0": 0.0}
+		"dest": -1, "dx": 0.0, "dy": FLOOR_Y, "next": "", "flash": 0.0, "n": 0, "start_at": 0.0, "rx": 0.0, "ry": 0.0, "since": 0, "need": 1, "wait_t": 0.0}
 
 func plan_ids() -> Array:
 	return IDS
@@ -129,7 +141,7 @@ func _next_beat(tm: float) -> float:
 	return float(s[0]) + float(k) * b
 
 # ---------------------------------------------------------------- the players
-func _track(dt: float) -> void:
+func _track(_dt: float) -> void:
 	for key in ["p1", "p2"]:
 		var q = kit_body(key)
 		var a: Array = hist[key]
@@ -137,7 +149,7 @@ func _track(dt: float) -> void:
 			a.clear()
 			continue
 		a.append([room.time, q.x + q.w * 0.5, q.y + q.h * 0.5])
-		while a.size() > 2 and room.time - float(a[0][0]) > 0.3:
+		while a.size() > 2 and room.time - float(a[0][0]) > 1.05:
 			a.pop_front()
 
 # the velocity of a player over the last 0.25 s
@@ -153,6 +165,17 @@ func _vel(key: String) -> Vector2:
 			break
 	var dt_ := maxf(0.05, float(last[0]) - float(first[0]))
 	return Vector2(float(last[1]) - float(first[1]), float(last[2]) - float(first[2])) / dt_
+
+# how far a player moved in the last second (the double write reads the one that moved least)
+func _moved(key: String) -> float:
+	var a: Array = hist[key]
+	if a.size() < 2:
+		return 0.0
+	var mx := 0.0
+	var last: Array = a[a.size() - 1]
+	for s in a:
+		mx = maxf(mx, Vector2(float(s[1]) - float(last[1]), float(s[2]) - float(last[2])).length())
+	return mx
 
 # the READ point of an automaton: TOCK reads where the target IS (stale), TICK where it will be 0.5 s from now (prefetch), inside the room
 func read_point(i: int, key: String, prefetch := true) -> Vector2:
@@ -170,12 +193,51 @@ func _key_for(i: int) -> String:
 		return want
 	return keys[0]
 
+# solo: the player; co-op: the one that moved least in the last second
+func _double_key() -> String:
+	var keys := kit_keys()
+	if keys.is_empty():
+		return "p1"
+	var best: String = keys[0]
+	for k in keys:
+		if _moved(k) < _moved(best):
+			best = k
+	return best
+
+# guard: the player nearest to the vulnerable partner
+func _guard_key(i: int) -> String:
+	var o: Dictionary = th[1 - i]
+	var keys := kit_keys()
+	if keys.is_empty():
+		return _key_for(i)
+	var best: String = keys[0]
+	var bd := 1e9
+	for k in keys:
+		var q = kit_body(k)
+		var d := Vector2(q.x + q.w * 0.5 - float(o.x), q.y + q.h * 0.5 - float(o.y)).length()
+		if d < bd:
+			bd = d
+			best = k
+	return best
+
+func _vulnerable(q: Dictionary) -> bool:
+	return q.st == 0 and (int(q.hammer) == 2 or room.time < float(q.daze_until))
+
 # ---------------------------------------------------------------- hurt and harm boxes
 func hurtboxes() -> Array:
 	var b: Array = []
 	for q in th:
 		if q.st == 0:
 			b.append({"x": q.x - BODY_W * 0.5, "y": q.y - BODY_H, "w": BODY_W, "h": BODY_H, "th": q.i})
+	var hl := _hall()
+	if hl != null and active and not dying:
+		if hl.bob_hittable(room.time):
+			var br := hl.bob_rect(room.time)
+			b.append({"x": br.position.x, "y": br.position.y, "w": br.size.x, "h": br.size.y, "bob": true})
+		for k in range(BelfryHall.N_BELLS):                      # a bell is something to ring: the one interrupt
+			if hl.hanging(k, room.time) and hl.bell_mode(k, room.time) != "rehang":
+				var bp := hl.bell_pose(k, room.time)
+				b.append({"x": float(bp.x), "y": float(bp.y), "w": BelfryHall.new_rest(k).size.x, "h": 36.0, "bell": k})
 	return b
 
 func body_rect(i: int) -> Rect2:
@@ -227,8 +289,68 @@ func harmboxes() -> Array:
 				var u := _el(p) / float(p.act_len)
 				if u >= 0.25 and u <= 0.75:
 					out.append({"x": q.x - 14.0, "y": q.y - 12.0, "w": 28.0, "h": 12.0, "dmg": 1})
+			"double":
+				if _el(p) >= DIVE_T:
+					if p.get("split", false):
+						out.append({"x": float(p.lx) - 16.0, "y": float(p.ly) - 48.0, "w": 32.0, "h": 48.0, "dmg": 1})
+					elif p.get("hit", false) and int(q.i) == 1:
+						out.append({"x": float(p.rx) - BOX_W * 0.5, "y": float(p.ly) - 48.0, "w": BOX_W, "h": 48.0, "dmg": _big()})
 	out.append_array(hz_harm())
 	return out
+
+# ---------------------------------------------------------------- the arena hazards (the floor layer): corrupt cells and the falling bell
+func hz_boxes(h: Dictionary, now: float) -> Array:
+	var hl := _hall()
+	match String(h.k):
+		"corrupt":
+			var el := now - float(h.t0) - float(h.warn)
+			if el > BelfryHall.CORRUPT_T:
+				return []
+			var c := clampi(int(h.v[0]), 0, BelfryHall.CELLS - 1)
+			return [{"x": BelfryHall.CELL_X0 + float(c) * BelfryHall.CELL_W, "y": FLOOR_Y - 6.0, "w": BelfryHall.CELL_W, "h": 6.0, "dmg": 1}]
+		"bellfall":
+			if hl == null:
+				return []
+			var bi := clampi(int(h.v[0]), 0, BelfryHall.N_BELLS - 1)
+			var el2 := now - float(h.t0) - float(h.warn)
+			if el2 > hl.fall_time(bi) + 0.05:
+				return []
+			var fb := hl.fall_box(bi, now)
+			return [{"x": fb.position.x, "y": fb.position.y, "w": fb.size.x, "h": fb.size.y, "dmg": _big()}]
+	return []
+
+func _hz_expired(h: Dictionary, now: float) -> bool:
+	match String(h.k):
+		"corrupt":
+			return now - float(h.t0) - float(h.warn) > BelfryHall.CORRUPT_T + 0.3
+		"bellfall":
+			var hl := _hall()
+			return hl == null or now - float(h.t0) - float(h.warn) > hl.fall_time(clampi(int(h.v[0]), 0, BelfryHall.N_BELLS - 1)) + 0.3
+	return now - float(h.t0) > 12.0
+
+func _has_hz(kind: String, v0: int, t0: float) -> bool:
+	for h in hz:
+		if h.k == kind and int(h.v[0]) == v0 and absf(float(h.t0) - t0) < 0.06:
+			return true
+	return false
+
+# the floor layer follows the hall: a corrupt cell is a hazard with a 0.6 s build-up, a bell that cracked falls on whatever is under it after its rattle
+func _sync_hazards() -> void:
+	var hl := _hall()
+	if hl == null:
+		return
+	hz = hz.filter(func(h): return not _hz_expired(h, room.time))
+	for c in range(BelfryHall.CELLS):
+		var t0: float = hl.corrupt_t0[c]
+		if t0 >= 0.0 and hl.corrupt_state(c, room.time) > 0 and not _has_hz("corrupt", c, t0):
+			var h := hz_add("corrupt", BelfryHall.CORRUPT_WARN, [c])
+			h.t0 = snappedf(t0, 0.01)
+	for b in range(BelfryHall.N_BELLS):
+		var c0: float = hl.crack_t0[b]
+		var f0: float = hl.fall_t0[b]
+		if c0 >= 0.0 and f0 >= 0.0 and room.time - c0 < BelfryHall.CRACK_T + hl.fall_time(b) + 0.3 and not _has_hz("bellfall", b, c0):
+			var h2 := hz_add("bellfall", BelfryHall.CRACK_T, [b])
+			h2.t0 = snappedf(c0, 0.01)
 
 # ---------------------------------------------------------------- damage
 func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
@@ -243,6 +365,13 @@ func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
 		hp = 0
 		begin_death()
 		return "kill"
+	if box is Dictionary and box.has("bob"):
+		return _lock_hit()
+	if box is Dictionary and box.has("bell"):
+		var near := _body_near_attacker()
+		if near < 0:
+			return _ring_bell(int(box.bell))
+		box = {"th": near}                                    # (the swing also reached an automaton: that is the hit)
 	var i := -1
 	if box is Dictionary and box.has("th"):
 		i = int(box.th)
@@ -282,11 +411,77 @@ func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
 func on_damage() -> void:
 	pass
 
+# a swing that reached a bell and an automaton: the one near the attacker takes it
+func _body_near_attacker() -> int:
+	var att = room.attacker
+	if att == null or not is_instance_valid(att):
+		return -1
+	var c := Vector2(att.x + att.w * 0.5, att.y + att.h * 0.5)
+	for q in th:
+		if q.st == 0 and body_rect(q.i).grow(26.0).has_point(c):
+			return int(q.i)
+	return -1
+
+# a player rings a bell: a small swing, and the cue of an automaton on it (or within 40 px) is over: its plan goes straight to a 0.3 s recovery, no daze
+func _ring_bell(b: int) -> String:
+	var hl := _hall()
+	if hl == null or room.time < float(hl.hit_cd[b]):
+		return ""
+	hl.hit_cd[b] = snappedf(room.time + RING_CD, 0.01)
+	hl.strike(b, false)
+	Audio.sfx("clang", {"vol": 0.5})
+	var rc := BelfryHall.new_rest(b)
+	for q in th:
+		var p: Dictionary = q.plan
+		if q.st != 0 or p.is_empty() or p.ph != "cue":
+			continue
+		var gap := maxf(maxf(rc.position.x - float(q.x), float(q.x) - (rc.position.x + rc.size.x)), 0.0)
+		if (int(q.bell) == b or gap <= 40.0) and absf(float(q.y) - rc.position.y) <= 52.0:
+			var pid: String = String(p.id)
+			_cancel(int(q.i))
+			if pid == "double":
+				_cancel(1 - int(q.i))
+	_sync_mirror()
+	return "block"
+
+func _cancel(i: int) -> void:
+	var q: Dictionary = th[i]
+	var p: Dictionary = q.plan
+	if p.is_empty() or p.ph == "recover":
+		return
+	p.ph = "recover"
+	p.t = 0.3
+	p.rec_len = 0.3
+	q.eye = false
+	q.hammer = 0
+
+# the lock: a hit on the escapement's bob catches it: the two take turns for 3 s (2.5 s in phase 2), every corrupt cell clears, then 12 s before it can be hit again
+func _lock_hit() -> String:
+	var hl := _hall()
+	if hl == null or not hl.bob_hittable(room.time):
+		return ""
+	var t: float = room.time
+	hl.serial_until = snappedf(t + float(LOCK_SERIAL[0 if ph == 1 else 1]), 0.01)
+	hl.lock_cd_until = snappedf(t + LOCK_CD, 0.01)
+	hl.clear_buffer()
+	hz = hz.filter(func(h): return h.k != "corrupt" and h.k != "hole")
+	serial_turn = 0
+	for q in th:
+		if not q.plan.is_empty() and q.plan.id == "double":
+			_cancel(int(q.i))
+	room.pop(BelfryHall.PIVOT.x, 100.0, "escapement.lock()", "#ffd23f", true)
+	Audio.sfx("clang", {"vol": 1.0})
+	Audio.sfx("gate", {"vol": 0.6})
+	room.shake(0.35)
+	return "hit"
+
 func _daze(i: int, secs: float) -> void:
 	var q: Dictionary = th[i]
 	q.daze_until = room.time + secs
 	q.hammer = 0
 	if not q.plan.is_empty():
+		if q.plan.id == "double":
+			_cancel(1 - i)
 		q.plan = {}
 		q.mode = "idle"
 		q.gap = 0.0
@@ -296,6 +491,8 @@ func _daze(i: int, secs: float) -> void:
 # an automaton at 0 hp winds down where it stands (M4: the survivor's alone / rewind logic)
 func _fall(i: int) -> void:
 	var q: Dictionary = th[i]
+	if not q.plan.is_empty() and q.plan.id == "double":
+		_cancel(1 - i)
 	q.st = 1
 	q.plan = {}
 	q.mode = "idle"
@@ -313,6 +510,8 @@ func start() -> void:
 		q.gap = 0.8 + 0.4 * float(q.i)
 		q.mode = "idle"
 		q.eye = false
+		q.since = 0
+		q.need = 1
 	Game.flags["intro:RACE"] = true                            # the long intro only once
 	var hl := _hall()
 	if hl != null and room.mode != "guest":
@@ -366,15 +565,14 @@ func update(dt: float) -> void:
 		if room.fight.state == "intro":
 			_step_intro(dt)
 		_focus()
-		_audio_edges()
 		return
 	plan_clock += dt
 	_track(dt)
+	_sync_hazards()
 	for i in range(2):
 		_step_th(i, dt)
 	_sync_mirror()
 	_focus()
-	_audio_edges()
 
 # the hall follows the boss's phase and clock (host; the guest's copy gets them in the snapshot)
 func _sync_hall() -> void:
@@ -455,13 +653,32 @@ func _pick_bell(i: int, pt: Vector2) -> int:
 			best = b
 	return best
 
+# where to stand on bell b when the read point is pt (a big bell: leaning toward it)
+func _bell_pt(b: int, pt: Vector2) -> Vector2:
+	var rc := BelfryHall.new_rest(b)
+	var cx := rc.position.x + rc.size.x * 0.5
+	var lean := 0.0 if rc.size.x < 60.0 else clampf(pt.x - cx, -20.0, 20.0)
+	return Vector2(clampf(cx + lean, ARENA_L, ARENA_R), rc.position.y)
+
+func _bell_unsafe(b: int) -> bool:
+	var hl := _hall()
+	if hl == null or b < 0:
+		return false
+	return hl.bell_mode(b, room.time) != "hang" or not hl.bell_standable(b, room.time)
+
 # ---------------------------------------------------------------- one automaton
 func _step_th(i: int, dt: float) -> void:
 	var q: Dictionary = th[i]
 	if q.st != 0:
 		return
 	if room.time < float(q.daze_until):
+		if int(q.bell) >= 0:
+			var sd := _stand(i)
+			q.x = sd.x
+			q.y = sd.y
 		return
+	if int(q.bell) >= 0 and _bell_unsafe(int(q.bell)) and String(q.mode) in ["idle", "wait", "plan"]:
+		_flee(i)                                               # its bell is cracking or falling: off it
 	match String(q.mode):
 		"idle":
 			var sp := _stand(i)
@@ -486,16 +703,42 @@ func _step_th(i: int, dt: float) -> void:
 			if int(q.bell) >= 0:
 				q.x = sp3.x
 				q.y = sp3.y
-			if room.time >= float(q.start_at):
+			if String(q.next) == "double":
+				_wait_double(i, dt)
+			elif room.time >= float(q.start_at):
 				_cue_start(i)
 		"plan":
 			_plan_logic(i, dt)
+
+# its bell is going: cancel what it was doing and hop to a free bell (or the floor)
+func _flee(i: int) -> void:
+	var q: Dictionary = th[i]
+	if not q.plan.is_empty():
+		if q.plan.id == "double":
+			_cancel(1 - i)
+		q.plan = {}
+		q.eye = false
+		q.hammer = 0
+	var pt := read_point(i, _key_for(i))
+	var b := _pick_bell(i, pt)
+	q.next = ""
+	if b >= 0:
+		var bp := _bell_pt(b, pt)
+		q.dest = b
+		q.dx = bp.x
+		q.dy = bp.y
+	else:
+		q.dest = -1
+		q.dx = clampf(float(q.x) + 60.0 * (1.0 if float(q.x) < 208.0 else -1.0), ARENA_L, ARENA_R)
+		q.dy = FLOOR_Y
+	q.mode = "crouch"
+	q.mt = CROUCH_T * 0.5
 
 # weighted choice by distance: far, bell strikes and the clapper; near, slams and the rope; never the same twice, a fixed order the first time
 func _choose(i: int) -> String:
 	var q: Dictionary = th[i]
 	if int(q.n) == 0:
-		return "strike" if i == 1 else "slam"                  # the teaching order of phase 1 (the double write follows in M3)
+		return "strike" if i == 1 else "slam"                  # the teaching order of phase 1 (the double write follows)
 	var key := _key_for(i)
 	var d := absf(kit_aim(key).x - float(q.x))
 	var opts: Array = []                                       # [id, weight]
@@ -518,9 +761,24 @@ func _choose(i: int) -> String:
 			return String(o[0])
 	return String(opts[0][0])
 
+# both free, neither used the double write in its last 3-4 plans (the first one comes after a plan each), never while the lock has them taking turns
+func _double_ready() -> bool:
+	var hl := _hall()
+	if hl == null or hl.serialized(room.time) or alive_n() < 2:
+		return false
+	for q in th:
+		if q.st != 0 or not q.plan.is_empty() or room.time < float(q.daze_until) or not (String(q.mode) in ["idle", "wait"]):
+			return false
+		if int(q.since) < int(q.need):
+			return false
+	return true
+
 func _begin_next(i: int) -> void:
 	var q: Dictionary = th[i]
 	if alive_n() == 0:
+		return
+	if _double_ready():
+		_begin_double()
 		return
 	var id := _choose(i)
 	q.next = id
@@ -529,14 +787,13 @@ func _begin_next(i: int) -> void:
 	var b := _pick_bell(i, pt)
 	if id == "rope" and int(q.bell) >= 0:
 		b = int(q.bell)
-	if id == "clapper" or id == "strike" or id == "slam" or id == "rope":
-		if b >= 0 and b != int(q.bell):
-			q.dest = b
-			q.mode = "crouch"
-			q.mt = CROUCH_T
-			return
-	if int(q.bell) < 0 and b >= 0:
+	if b >= 0 and (b != int(q.bell) or int(q.bell) < 0):
+		var bp := _bell_pt(b, pt)
 		q.dest = b
+		q.dx = bp.x
+		q.dy = bp.y
+		q.rx = pt.x
+		q.ry = pt.y
 		q.mode = "crouch"
 		q.mt = CROUCH_T
 		return
@@ -545,14 +802,19 @@ func _begin_next(i: int) -> void:
 func _to_wait(i: int) -> void:
 	var q: Dictionary = th[i]
 	q.mode = "wait"
+	q.wait_t = 0.0
 	q.start_at = _next_beat(room.time)
+	var hl := _hall()
+	if hl != null and hl.serialized(room.time):                  # the lock: a plan starts on a tick, one automaton per tick, in turns
+		q.start_at = hl.next_boundary(room.time + 0.001)
 
 func _launch(i: int) -> void:
 	var q: Dictionary = th[i]
 	var b: int = int(q.dest)
-	var rc := BelfryHall.new_rest(b)
-	var to := Vector2(clampf(rc.position.x + rc.size.x * 0.5 + (0.0 if rc.size.x < 60.0 else clampf(float(q.rx) - (rc.position.x + rc.size.x * 0.5), -20.0, 20.0)), ARENA_L, ARENA_R), rc.position.y)
-	q.ox = to.x - (rc.position.x + rc.size.x * 0.5)
+	var to := Vector2(float(q.dx), float(q.dy))
+	if b >= 0:
+		var rc := BelfryHall.new_rest(b)
+		q.ox = to.x - (rc.position.x + rc.size.x * 0.5)
 	q.hop = {"t0": snappedf(room.time, 0.01), "dur": HOP_T, "fx": q.x, "fy": q.y, "tx": to.x, "ty": to.y}
 	q.face = 1.0 if to.x >= q.x else -1.0
 	q.bell = -1
@@ -573,7 +835,7 @@ func _hop_step(i: int) -> void:
 	if room.time >= float(h.t0) + float(h.dur):
 		var b: int = int(q.dest)
 		var hl := _hall()
-		if hl != null and hl.bell_standable(b, room.time):
+		if b >= 0 and hl != null and hl.bell_standable(b, room.time):
 			q.bell = b
 			hl.kick(b)                                        # landing on a bell kicks it: a small harmless ring from its swing
 			var sp := _stand(i)
@@ -583,36 +845,55 @@ func _hop_step(i: int) -> void:
 			var g := _ground_at(q.x, q.y)
 			q.bell = int(g.bell)
 			q.y = float(g.y)
+			q.ox = 0.0
 		q.hop = {}
 		_to_wait(i)
 
 # ---------------------------------------------------------------- a plan
-func _cue_len(id: String) -> float:
-	return float(PLANS[id][0]) * _beat() * _tm()
+func _cue_len(id: String, guard: bool) -> float:
+	var c := float(PLANS[id][0]) * _beat() * _tm()
+	if guard and id != "double":
+		c = maxf(c * GUARD_K, 0.30)                             # (never on a 2-damage plan, never under 0.30 s)
+	return c
 
 func _rec_len(id: String) -> float:
 	return _pm_rec(float(PLANS[id][2]))
 
+func _new_plan(i: int, id: String, key: String, rp: Vector2, cue: float) -> Dictionary:
+	var q: Dictionary = th[i]
+	plan_seq += 1
+	var p := {"seq": plan_seq, "id": id, "fam": "slam", "tgt": key, "ph": "cue", "t": cue, "cue_len": cue, "act_len": float(PLANS[id][1]), "rec_len": _rec_len(id),
+		"rx": rp.x, "ry": rp.y, "sx": q.x, "sy": q.y, "lx": q.x, "ly": q.y, "bell": int(q.bell), "land_at": room.time + cue, "hold": 0.0, "ack_at": -1.0, "dir": 1.0,
+		"split": false, "hit": false, "r2x": rp.x, "r2y": rp.y, "checked": false}
+	if not _guest_waits():
+		p.ack_at = plan_clock
+	return p
+
 func _cue_start(i: int) -> void:
 	var q: Dictionary = th[i]
 	var id: String = String(q.next)
-	var key := _key_for(i)
-	var cue := _cue_len(id)
 	var o: Dictionary = th[1 - i]
-	if not o.plan.is_empty() and o.plan.ph != "recover" and absf(float(o.plan.land_at) - (room.time + cue)) < STAGGER:
+	var hl := _hall()
+	var guard := _vulnerable(o)
+	var key := _guard_key(i) if guard else _key_for(i)
+	var cue := _cue_len(id, guard)
+	if hl != null and hl.serialized(room.time):                  # the lock: this one only on a tick and only in its turn
+		var turn_ok: bool = i == serial_turn or String(o.mode) != "wait"          # (its turn, or the other one is not ready this tick)
+		if not turn_ok or hl.tick_f_at(room.time) > 0.06 or (not o.plan.is_empty() and o.plan.ph == "cue" and float(o.plan.cue_len) - float(o.plan.t) < 0.05):
+			q.start_at = hl.next_boundary(room.time + 0.05)
+			return
+		serial_turn = 1 - i
+	elif not o.plan.is_empty() and o.plan.ph != "recover" and absf(float(o.plan.land_at) - (room.time + cue)) < STAGGER:
 		q.start_at = room.time + _beat()                      # two strikes do not land together: this one waits a beat
 		return
 	var rp := read_point(i, key)
 	q.rx = rp.x
 	q.ry = rp.y
-	plan_seq += 1
 	var sp := _stand(i)
-	q.x = sp.x if int(q.bell) >= 0 else q.x
-	q.y = sp.y if int(q.bell) >= 0 else q.y
-	var p := {"seq": plan_seq, "id": id, "fam": "slam", "tgt": key, "ph": "cue", "t": cue, "cue_len": cue, "act_len": float(PLANS[id][1]), "rec_len": _rec_len(id),
-		"rx": rp.x, "ry": rp.y, "sx": q.x, "sy": q.y, "lx": q.x, "ly": q.y, "bell": int(q.bell), "land_at": room.time + cue, "hold": 0.0, "ack_at": -1.0, "dir": 1.0}
-	if not _guest_waits():
-		p.ack_at = plan_clock
+	if int(q.bell) >= 0:
+		q.x = sp.x
+		q.y = sp.y
+	var p := _new_plan(i, id, key, rp, cue)
 	if id == "slam":
 		var lx := clampf(rp.x, ARENA_L + 16.0, ARENA_R - 16.0)
 		var g := _ground_at(lx, rp.y)
@@ -629,10 +910,77 @@ func _cue_start(i: int) -> void:
 	q.eye = true
 	q.dial = (int(q.dial) + 1) % 12                           # the chest clock ticks once: the READ
 	q.hammer = 1
-	var hl := _hall()
 	if hl != null and int(q.bell) >= 0 and (id == "strike" or id == "clapper"):
 		hl.kick(int(q.bell))                                  # the bell it will ring starts to glow and sway
-	Game.dlog("%s %s -> %s (read %d,%d)" % [NAMES[i], id, key, roundi(rp.x), roundi(rp.y)])
+	Game.dlog("%s %s -> %s (read %d,%d)%s" % [NAMES[i], id, key, roundi(rp.x), roundi(rp.y), " guard" if guard else ""])
+	_sync_mirror()
+
+# ---- the double write: both read the same point (the target's position, no prefetch), both raise hammers, 3 beats
+func _begin_double() -> void:
+	var key := _double_key()
+	var pt := read_point(1, key, false)
+	var g := _ground_at(pt.x, pt.y)
+	for i in range(2):
+		var q: Dictionary = th[i]
+		q.next = "double"
+		q.rx = pt.x
+		q.ry = pt.y
+		var fx := clampf(pt.x + (-BOX_W * 0.5 if i == 0 else BOX_W * 0.5), ARENA_L + 8.0, ARENA_R - 8.0)
+		var gb := int(g.bell)
+		if gb >= 0:
+			var rc := BelfryHall.new_rest(gb)
+			fx = clampf(fx, rc.position.x + 10.0, rc.position.x + rc.size.x - 10.0)
+		q.dest = gb
+		q.dx = fx
+		q.dy = float(g.y)
+		q.wait_t = 0.0
+		if absf(float(q.x) - fx) < 6.0 and absf(float(q.y) - float(g.y)) < 3.0:
+			_to_wait(i)
+			q.next = "double"
+		else:
+			q.mode = "crouch"
+			q.mt = CROUCH_T
+
+# both flank the point; the cue starts when both are there
+func _wait_double(i: int, dt: float) -> void:
+	var q: Dictionary = th[i]
+	var o: Dictionary = th[1 - i]
+	q.wait_t += dt
+	if q.wait_t > 3.0:                                         # the partner never came (hit, dazed, fallen): a single plan instead
+		q.next = _choose(i)
+		q.mode = "wait"
+		q.start_at = room.time
+		return
+	if i == 1:
+		return                                                # (TICK starts the pair)
+	if String(o.mode) == "wait" and String(o.next) == "double" and room.time >= float(q.start_at) and room.time >= float(o.start_at):
+		_cue_double()
+
+func _cue_double(forced_key := "") -> void:
+	var key := forced_key if forced_key != "" else _double_key()
+	var rp := read_point(1, key, false)
+	var g := _ground_at(rp.x, rp.y)
+	var cue := _cue_len("double", false)
+	var dial := (int(th[0].dial) + 1) % 12
+	for i in range(2):
+		var q: Dictionary = th[i]
+		var sp := _stand(i)
+		if int(q.bell) >= 0:
+			q.x = sp.x
+			q.y = sp.y
+		var p := _new_plan(i, "double", key, rp, cue)
+		p.ly = float(g.y)
+		p.lb = int(g.bell)
+		p.lx = clampf(rp.x + (-BOX_W * 0.5 if i == 0 else BOX_W * 0.5), ARENA_L + 8.0, ARENA_R - 8.0)
+		q.rx = rp.x
+		q.ry = rp.y
+		q.plan = p
+		q.mode = "plan"
+		q.eye = true
+		q.dial = dial                                         # both chest clocks show the same number
+		q.hammer = 1
+		q.face = 1.0 if rp.x >= q.x else -1.0
+	Game.dlog("double write -> %s (read %d,%d)" % [key, roundi(rp.x), roundi(rp.y)])
 	_sync_mirror()
 
 func _plan_logic(i: int, dt: float) -> void:
@@ -644,6 +992,8 @@ func _plan_logic(i: int, dt: float) -> void:
 	p.t -= dt
 	match String(p.ph):
 		"cue":
+			if String(p.id) == "double" and not p.checked and float(p.t) <= CHECK_T and i == 0:
+				_double_check()
 			if p.t > 0.0:
 				return
 			if _guest_waits() and not (float(p.ack_at) >= 0.0 and plan_clock - float(p.ack_at) >= SEEN_MIN):
@@ -654,6 +1004,8 @@ func _plan_logic(i: int, dt: float) -> void:
 					p.ph = "recover"
 					p.t = float(p.rec_len)
 					q.eye = false
+					if p.id == "double":
+						_cancel(1 - i)
 				return
 			p.ph = "active"
 			p.t = float(p.act_len)
@@ -661,13 +1013,44 @@ func _plan_logic(i: int, dt: float) -> void:
 			_on_active(i)
 		"active":
 			_active_step(i, dt)
-			if p.t <= 0.0:
+			if p.t <= 0.0 and not q.plan.is_empty():
 				p.ph = "recover"
 				p.t = float(p.rec_len)
 				_on_recover(i)
 		"recover":
 			if p.t <= 0.0:
 				_plan_done(i)
+
+# 0.30 s before the strike: the target left the read point (further than 32 px): TICK reads again, the strikes land apart (1 + 1, no clash)
+func _double_check() -> void:
+	var p0: Dictionary = th[0].plan
+	var p1: Dictionary = th[1].plan
+	if p0.is_empty() or p1.is_empty() or p1.id != "double":
+		return
+	p0.checked = true
+	p1.checked = true
+	var key: String = String(p0.tgt)
+	var rp := Vector2(float(p0.rx), float(p0.ry))
+	var now_pt := kit_aim(key)
+	if now_pt.distance_to(rp) <= SPLIT_PX:
+		return
+	var r2 := read_point(0, key)
+	p0.split = true
+	p1.split = true
+	p0.r2x = r2.x
+	p0.r2y = r2.y
+	var g2 := _ground_at(clampf(r2.x, ARENA_L + 16.0, ARENA_R - 16.0), r2.y)
+	p0.lx = clampf(r2.x, ARENA_L + 16.0, ARENA_R - 16.0)
+	p0.ly = float(g2.y)
+	p0.lb = int(g2.bell)
+	p0.rx = r2.x                                                # (TICK's beam and afterimage follow the new read)
+	p0.ry = r2.y
+	th[0].rx = r2.x
+	th[0].ry = r2.y
+	p0.t = float(p0.t) + 0.15                                   # TICK lands 0.15 s after TOCK
+	p0.cue_len = float(p0.cue_len) + 0.15
+	p1.lx = clampf(float(p1.rx), ARENA_L + 16.0, ARENA_R - 16.0)
+	Game.dlog("double write: %s left (%.0f px): TICK reads again" % [key, now_pt.distance_to(rp)])
 
 func _on_active(i: int) -> void:
 	var q: Dictionary = th[i]
@@ -676,7 +1059,7 @@ func _on_active(i: int) -> void:
 	match String(p.id):
 		"strike":
 			if hl != null and int(p.bell) >= 0:
-				hl.strike(int(p.bell))
+				hl.strike(int(p.bell), true, i)
 			Audio.sfx("clang", {"vol": 0.8})
 			room.shake(0.25)
 		"slam":
@@ -685,6 +1068,8 @@ func _on_active(i: int) -> void:
 			_shoot_clapper(i)
 		"rope":
 			Audio.sfx("swipe", {"vol": 0.7})
+		"double":
+			Audio.sfx("swipeBig", {"vol": 0.7})
 
 func _active_step(i: int, _dt: float) -> void:
 	var q: Dictionary = th[i]
@@ -693,26 +1078,99 @@ func _active_step(i: int, _dt: float) -> void:
 	var hl := _hall()
 	match String(p.id):
 		"slam":
-			if el < DIVE_T:                                   # the dive: up a little, then fast to the read point
-				var u := el / DIVE_T
-				q.x = lerpf(float(p.sx), float(p.lx), u)
-				q.y = lerpf(float(p.sy), float(p.ly), u * u) - 14.0 * 4.0 * u * (1.0 - u)
-			else:
-				q.x = float(p.lx)
-				q.y = float(p.ly)
-				if not p.get("landed", false):
-					p["landed"] = true
-					q.bell = int(p.get("lb", -1))
-					q.ox = 0.0
-					q.hammer = 2
-					room.shake(0.45)
-					Audio.sfx("thud", {"vol": 0.9})
-					if hl != null and int(q.bell) >= 0:
+			_dive(q, p, el)
+			if el >= DIVE_T and not p.get("landed", false):
+				p["landed"] = true
+				q.bell = int(p.get("lb", -1))
+				q.ox = 0.0
+				q.hammer = 2
+				room.shake(0.45)
+				Audio.sfx("thud", {"vol": 0.9})
+				if hl != null:
+					if int(q.bell) >= 0:
 						hl.kick(int(q.bell))
+					else:
+						hl.paint(hl.cell_of(float(p.lx)), i, room.time)       # a write on the floor paints its cell
 		"rope":
 			var u2 := el / float(p.act_len)
 			q.x = clampf(float(p.sx) + float(p.dir) * 50.0 * sin(PI * u2), ARENA_L, ARENA_R)
 			q.y = float(p.sy) - 18.0 * sin(PI * u2)
+		"double":
+			_dive(q, p, el)
+			if el >= DIVE_T and not p.get("landed", false):
+				p["landed"] = true
+				q.bell = int(p.get("lb", -1))
+				q.ox = 0.0
+				if p.get("split", false):
+					q.hammer = 2
+					room.shake(0.4)
+					Audio.sfx("thud", {"vol": 0.9})
+					if hl != null:
+						if int(q.bell) >= 0:
+							hl.crack(int(q.bell))
+						else:
+							hl.paint(hl.cell_of(float(p.lx)), i, room.time)
+				elif i == 0:
+					_double_impact()
+
+# the dive of a slam / double write: up a little, then fast to the landing spot
+func _dive(q: Dictionary, p: Dictionary, el: float) -> void:
+	if el < DIVE_T:
+		var u := el / DIVE_T
+		q.x = lerpf(float(p.sx), float(p.lx), u)
+		q.y = lerpf(float(p.sy), float(p.ly), u * u) - 14.0 * 4.0 * u * (1.0 - u)
+	else:
+		q.x = float(p.lx)
+		q.y = float(p.ly)
+
+# the two hammers arrive: the target inside the strike box takes 2 (one hit); gone (it left in the last 0.30 s) and they clash: both dazed 2 s
+func _double_impact() -> void:
+	var p0: Dictionary = th[0].plan
+	var p1: Dictionary = th[1].plan
+	if p0.is_empty() or p1.is_empty() or p0.get("split", false):
+		return
+	var key: String = String(p0.tgt)
+	var box := Rect2(float(p1.rx) - BOX_W * 0.5, float(p1.ly) - 48.0, BOX_W, 48.0)
+	var inside := box.grow(4.0).has_point(kit_aim(key))
+	var hl := _hall()
+	if inside:
+		p0.hit = true
+		p1.hit = true
+		room.shake(0.6)
+		Audio.sfx("thud", {"vol": 1.0})
+		Audio.sfx("clang", {"vol": 0.8})
+		if hl != null:
+			if int(p1.get("lb", -1)) >= 0:
+				hl.crack(int(p1.lb))                          # the target stood on a bell and the strike lands on it
+			else:
+				var c := hl.cell_of(float(p1.rx))
+				hl.paint(c, 0, room.time)                     # both threads write the same cell: it corrupts
+				hl.paint(c, 1, room.time)
+		return
+	clash_t0 = snappedf(room.time, 0.01)
+	clash_pt = Vector2(float(p1.rx), float(p1.ly) - 24.0)
+	Audio.sfx("clang", {"vol": 1.0})
+	Audio.sfx("explode", {"vol": 0.5})
+	room.shake(0.8)
+	room.flash_screen(0.25, "#ffffff")
+	room.burst(clash_pt.x, clash_pt.y, 14, ["#ffffff", COL[0], COL[1]], 160.0, 220.0, {"glow": 1})
+	for k in range(2):
+		var q: Dictionary = th[k]
+		q.x = float(q.plan.lx)
+		q.y = float(q.plan.ly)
+		q.bell = int(q.plan.get("lb", -1))
+		q.ox = 0.0
+	th[0].plan = {}
+	th[1].plan = {}
+	for k in range(2):
+		th[k].mode = "idle"
+		th[k].gap = 0.0
+		th[k].eye = false
+		th[k].hammer = 0
+		th[k].daze_until = room.time + CLASH_DAZE
+		th[k].since = 0
+		th[k].need = DOUBLE_NEED[room.rng.randi() % 2]
+	_sync_mirror()
 
 func _on_recover(i: int) -> void:
 	var q: Dictionary = th[i]
@@ -725,12 +1183,21 @@ func _on_recover(i: int) -> void:
 		"rope":
 			q.x = float(p.sx)
 			q.y = float(p.sy)
+		"double":
+			q.x = float(p.lx)
+			q.y = float(p.ly)
+			q.hammer = 2 if p.get("split", false) else 0
 		_:
 			q.hammer = 0
 
 func _plan_done(i: int) -> void:
 	var q: Dictionary = th[i]
 	q.last = String(q.plan.id)
+	if q.plan.id == "double":
+		q.since = 0
+		q.need = DOUBLE_NEED[room.rng.randi() % 2]
+	else:
+		q.since = int(q.since) + 1
 	q.plan = {}
 	q.mode = "idle"
 	q.gap = room.rng.randf_range(GAP_MIN, GAP_MAX)
@@ -763,13 +1230,30 @@ func plan_seen(seq: int) -> void:
 		if not p.is_empty() and int(p.seq) <= seq and float(p.get("ack_at", -1.0)) < 0.0:
 			p.ack_at = plan_clock
 
-# the test harness and the kit's old one-plan calls: start `id` on the right automaton now (TOCK for the clapper, TICK for the rope), the cue as for a real one
+# the test harness and the kit's old one-plan calls: start `id` on the right automaton now (TOCK for the clapper, TICK for the rope; both for the double write)
 func _start(id: String, tgt := "p1") -> void:
-	var i := 1 if id == "clapper" else 0
 	for q in th:
 		q.plan = {}
 		q.mode = "idle"
 		q.hop = {}
+		q.daze_until = -1.0
+		q.hammer = 0
+	if id == "double":
+		var pt := read_point(1, tgt, false)
+		var g := _ground_at(pt.x, pt.y)
+		for k in range(2):
+			var qd: Dictionary = th[k]
+			qd.next = "double"
+			qd.tgt = tgt
+			qd.x = clampf(pt.x + (-BOX_W if k == 0 else BOX_W), ARENA_L + 8.0, ARENA_R - 8.0)
+			qd.y = float(g.y)
+			qd.bell = int(g.bell)
+			qd.ox = 0.0
+			qd.mode = "wait"
+			qd.start_at = room.time
+		_cue_double(tgt)
+		return
+	var i := 1 if id == "clapper" else 0
 	var q2: Dictionary = th[i]
 	q2.next = id
 	q2.tgt = tgt
@@ -830,10 +1314,6 @@ func glow_of_bell(b: int) -> float:
 			return clampf(1.0 - float(p.t) / maxf(float(p.cue_len), 0.01), 0.0, 1.0)
 	return 0.0
 
-# ---------------------------------------------------------------- sounds from state edges (both pages: the plan phases are in the snapshot); M5 fills it
-func _audio_edges() -> void:
-	pass
-
 # ---------------------------------------------------------------- drawing
 func _pose_of(i: int) -> String:
 	var q: Dictionary = th[i]
@@ -864,6 +1344,12 @@ func _pose_of(i: int) -> String:
 			return "swing" if p.ph == "cue" else ("strike" if p.ph == "active" else "idle")
 		"rope":
 			return "swing"
+		"double":
+			if p.ph == "cue":
+				return "up"
+			if p.ph == "active":
+				return "hop" if _el(p) < DIVE_T * 0.5 else "strike"
+			return "strike" if not p.get("split", false) else "stuck"
 	return "idle"
 
 func draw_boss_body(ci: CanvasItem) -> void:
@@ -886,10 +1372,15 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 		var eye := Vector2(float(q.x) + 3.0 * float(q.face), float(q.y) - 38.0 + (4.0 if p.id == "slam" and p.ph == "cue" else 0.0))
 		var rp := Vector2(float(p.rx), float(p.ry))
 		var k := 1.0 if p.ph == "cue" else 1.0 - _el(p) / 0.12
-		ci.draw_line(eye, rp, Color(c.r, c.g, c.b, 0.5 * k), 2.0)                       # the thin beam from the eye to the READ point
+		ci.draw_line(eye, rp, Color(c.r, c.g, c.b, 0.5 * k), 2.0)                         # the thin beam from the eye to the READ point
 		_afterimage(ci, rp, c, 0.4 * k)
-		if p.id == "slam" and p.ph == "cue":                                              # (the landing is the read point's ground)
-			pass
+	if room.time - clash_t0 < 0.5:                                                         # the hammers clashed: a star of sparks
+		var u := (room.time - clash_t0) / 0.5
+		for k in range(10):
+			var a := TAU * float(k) / 10.0 + 0.3
+			var r0 := 4.0 + 26.0 * u
+			var r1 := r0 + 8.0 * (1.0 - u)
+			ci.draw_line(clash_pt + Vector2(cos(a), sin(a)) * r0, clash_pt + Vector2(cos(a), sin(a)) * r1, Color(1.0, 1.0, 0.85, 1.0 - u), 2.0)
 
 # the READ: a faint outline of the target where the automaton last saw it, in its colour (light from the eye, not a marker box)
 func _afterimage(ci: CanvasItem, pt: Vector2, c: Color, a: float) -> void:
@@ -902,7 +1393,6 @@ func _afterimage(ci: CanvasItem, pt: Vector2, c: Color, a: float) -> void:
 	ci.draw_rect(Rect2(x0 + 2.0, y0 + 3.0, 1.0, 2.0), Color(c.r, c.g, c.b, a * 1.5))
 	ci.draw_rect(Rect2(x0 + 7.0, y0 + 3.0, 1.0, 2.0), Color(c.r, c.g, c.b, a * 1.5))
 
-# the ring waves and the kick are drawn here: light, not markers
 func draw_hud(ci: CanvasItem) -> void:
 	_draw_intro_line(ci)
 
@@ -941,10 +1431,11 @@ func _draw_intro_line(ci: CanvasItem) -> void:
 func _plan_pack(q: Dictionary) -> Array:
 	var p: Dictionary = q.plan
 	if p.is_empty():
-		return [0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0]
+		return [0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0]
 	return [int(p.seq), maxi(0, IDS.find(p.id)), PLAN_PH.find(p.ph), roundi(maxf(float(p.t), 0.0) * 100.0), 0 if p.tgt == "" else (1 if p.tgt == "p1" else 2),
 		roundi(float(p.rx)), roundi(float(p.ry)), roundi(float(p.sx) * 4.0), roundi(float(p.sy) * 4.0), roundi(float(p.lx) * 4.0), roundi(float(p.ly) * 4.0), int(p.bell),
-		roundi(float(p.cue_len) * 100.0), roundi(float(p.act_len) * 100.0), roundi(float(p.dir))]
+		roundi(float(p.cue_len) * 100.0), roundi(float(p.act_len) * 100.0), roundi(float(p.dir)), 1 if p.get("split", false) else 0, 1 if p.get("hit", false) else 0,
+		roundi(float(p.get("r2x", p.rx))), roundi(float(p.get("r2y", p.ry)))]
 
 func _th_pack(q: Dictionary) -> Array:
 	var h: Dictionary = q.hop
@@ -955,11 +1446,11 @@ func _th_pack(q: Dictionary) -> Array:
 func net_fields() -> Array:
 	var hl := _hall()
 	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, 1 if dying else 0, ph, roundi(trans_t0 * 100.0), roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0),
-		roundi(die_t0 * 100.0), _th_pack(th[0]), _th_pack(th[1]), hl.net_pack() if hl != null else []]
+		roundi(die_t0 * 100.0), roundi(clash_t0 * 100.0), roundi(clash_pt.x), roundi(clash_pt.y), _th_pack(th[0]), _th_pack(th[1]), hl.net_pack() if hl != null else []]
 	f.append(hz_pack())
 	return f
 
-const NF := 13
+const NF := 16
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -975,8 +1466,10 @@ func net_apply(f: Array) -> void:
 	say_k = int(f[7])
 	say_t0 = f[8] / 100.0
 	die_t0 = f[9] / 100.0
+	clash_t0 = f[10] / 100.0
+	clash_pt = Vector2(float(f[11]), float(f[12]))
 	for i in range(2):
-		var a: Array = f[10 + i]
+		var a: Array = f[13 + i]
 		var q: Dictionary = th[i]
 		q.x = a[0] / 4.0
 		q.y = a[1] / 4.0
@@ -997,8 +1490,8 @@ func net_apply(f: Array) -> void:
 		_plan_unpack(q, a[17])
 	_sums()
 	var hl := _hall()
-	if hl != null and not (f[12] as Array).is_empty():
-		hl.net_unpack(f[12])
+	if hl != null and not (f[15] as Array).is_empty():
+		hl.net_unpack(f[15])
 	hz_unpack(f[NF] if f.size() > NF else [])
 	_sync_mirror()
 
@@ -1010,7 +1503,8 @@ func _plan_unpack(q: Dictionary, a: Array) -> void:
 	var keep_t: float = float(old.t) if (not old.is_empty() and int(old.seq) == int(a[0]) and old.ph == PLAN_PH[clampi(int(a[2]), 0, 2)]) else -1.0
 	var p := {"seq": int(a[0]), "id": IDS[clampi(int(a[1]), 0, IDS.size() - 1)], "fam": "slam", "ph": PLAN_PH[clampi(int(a[2]), 0, 2)], "t": a[3] / 100.0,
 		"tgt": ["", "p1", "p2"][clampi(int(a[4]), 0, 2)], "rx": float(a[5]), "ry": float(a[6]), "sx": a[7] / 4.0, "sy": a[8] / 4.0, "lx": a[9] / 4.0, "ly": a[10] / 4.0, "bell": int(a[11]),
-		"cue_len": a[12] / 100.0, "act_len": a[13] / 100.0, "rec_len": 0.3, "dir": float(a[14]), "lock": 0.0}
+		"cue_len": a[12] / 100.0, "act_len": a[13] / 100.0, "rec_len": 0.3, "dir": float(a[14]), "lock": 0.0, "split": int(a[15]) == 1, "hit": int(a[16]) == 1,
+		"r2x": float(a[17]), "r2y": float(a[18])}
 	if keep_t >= 0.0 and absf(keep_t - float(p.t)) < 0.15:
 		p.t = keep_t                                          # (counted down locally between snapshots: do not jump back)
 	q.plan = p
@@ -1078,4 +1572,3 @@ func puppet_tick(dt: float) -> void:
 			if shown < 0.30 and kit_violation == "" and pseen.get(s, "") == "cue":
 				kit_violation = "%s plan %d active after %.2f s of cue" % [NAMES[q.i], s, shown]
 	_sync_hall()
-	_audio_edges()
