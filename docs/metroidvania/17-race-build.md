@@ -20,12 +20,26 @@ The old boss (`godot/src/enemies/race_boss.gd`, kit-era, MV5A-06) is replaced. K
 
 | milestone | what | status |
 |---|---|---|
-| M1 | arena: T06 26x30, the belfry hall (bells as platforms, escapement, buffer floor), camera, lights; per-room tower tick | not started |
+| M1 | arena: T06 26x30, the belfry hall (bells as platforms, escapement, buffer floor), camera, lights; per-room tower tick | **done** (2026-10-22, notes below) |
 | M2 | the two automata + reads + phase-1 single attacks + intro + two-bar HUD | not started |
 | M3 | double write and the clash, guarding, the escapement lock, buffer corruption, bell crack/fall/re-hang | not started |
 | M4 | phase 2 (transition, switch, bell drop, triple strike, combo, holes), alone mode, rewind | not started |
 | M5 | death scene and reward, voices and interleaved subtitles, sounds, music, logs line | not started |
 | M6 | loss menu, foreshadow (TB2, T04), after-state (tower tick, T02/TA1), full tests, web export | not started |
+
+### Milestone notes (what changed from the plan, decisions made without asking)
+
+**M1 (done).** Built as planned: `belfry_hall.gd`, `rooms/T06.txt` (26x30), doors on rows 23..26, per-room tick (`"tick"` in rooms.json: T01 1.0, T02 1.0, TB2 0.7; steady 0.8333 after `boss:RACE`; T06's beat clock is a list of segments `[t0, i0, len]` in the hall, a new length starts at the next tick boundary), `race3` (M1 part) replaces `raceboss`, `co-race` rewritten (M1: the guest rides a swinging bell, sees the strikes, phase 2 and the new tick), screenshot scene `race:<hp>:<x>:<y>[:demo]`. The old kit boss is gone: `race_boss.gd` is an inert stub until M2 (it only carries the hall's state to the guest).
+- **T06 is a world-4 room: it has no `Look` / `room_lights` / moods (those exist only for world 6)**, so the plan's `room_lights.gd` / `look.gd` work does not apply. The lamps' glow, the phase-2 heat (a red wash and the phase-2 picture cross-fading in over 0.6 s) are drawn by the hall (`draw_glow`). `arenas`, `gfxcontrast`, `moodshift` are not affected by T06. (`gfxcontrast` fails with `N15 phase3 cap rows 0.39` in this environment, **also on the commit before M1**: not from this boss.)
+- **Clock centre:** the back-wall picture's clock sits at (208, 231) px, not (208, 248); the hands are drawn on the picture's centre (radius 48). The picture's floor line (y ~428) is 4 px above row 27 (y 432): the floor tiles cover it.
+- **Backdrop script** `tools/godot/race_backdrop.py` writes `godot/assets/bg/race_p1.png` (78 KB) / `race_p2.png` (87 KB), 416x480, 48 colours.
+- **Engine fix needed by the plan's own route:** curl (`[special]` to a GET ring) did nothing while the player stood on a moving platform (the platform carry `y = ride.y - h` ran every step and pinned the zip). `player.gd` now clears `ride` when a zip starts. This changes nothing else (packets, gears and bells all benefit).
+- **Phase 2 bell rule (decided):** the plan's "worst case, bells 3 and 4 fallen" cannot be reached by a player at all: without bell 3 nobody can climb (bell 1/2 to bell 4/5 is 112 px, a jump plus a dash is ~105), and with bells 4 and 5 both down the rings are out of curl range from bell 3 (149 px > 104). So in phase 2 **bell 3 never falls for good, and the two small bells never both fall** (`BelfryHall.can_fall`); at most 2 down, at least 3 hang, as planned. Phase 1 cracks are temporary (8 s lying, 0.5 s fade, 1.5 s re-hang), so they may take any bell. `race3` checks the way up (floor, bell 1/2, bell 3, bell 4/5, ring, bob) with and without two bells down.
+- **Routes checked (real `step_keys` physics, bash + curl, no sudo/catch):** floor to bell 1 / 2, bell 1 / 2 to bell 3, bell 3 to bell 4 / 5 (needs jump + up-dash), bell 4 / 5 by curl to the ring and a dash to within 3 px of the bob's rest place (claw reach 38 px).
+- **Lying bells:** phase 1, a lying bell is a one-way platform whose top is at y 400 (2 tiles); phase 2, it is two rows of solid tiles (rows 25-26) over the bell's columns (cover for rings), written by `BelfryHall.apply` on both pages.
+- **Hands (decided):** phase 1 the hands tremble and every fifth tick jump back a step; phase 2 they spin; after the pin they show 05:12 and then advance one minute per (0.8333 s) tick.
+- **Tower ticks, route check (item 4):** `tick5a` passes (its T02 blink test now uses the room's own tick). `check5a.py` (reachability) is tick-agnostic and passes for T01, T02, TB2, T06. T01 has no tick-driven machines (only the sound, the pendulum and the song follow its 1.0 s). T02's blink blocks now stay on/off 1.0 s instead of 0.83 s: **20 % easier, not impossible** (told to the world inbox). TB2 has only seconds-based mutex gates (3.5 s, unchanged): its 0.7 s tick only changes the sound, the pendulum and the song. **T01's sign says "the clock up there ticks every 0.83 s. so does everything in the tower." which is now false for T01 (1.0 s): world inbox.**
+- **Open for M2:** the camera lean toward the automaton in its cue (free camera uses `boss.cy`; the boss body will move to the focused automaton), the pair after the fight (`_draw_after` is a stub until the bodies exist).
 
 ## 1. The fight in one page
 

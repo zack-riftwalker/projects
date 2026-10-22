@@ -19,16 +19,23 @@ var offs := {}                        # object key -> seconds its clock is behin
 var fz := {}                          # object key -> seconds it stays frozen
 var fz_mt := {}                       # guest: object key -> the clock the host froze it at (kept exactly: the guest's own clock may be a little off)
 var has_blink := false
+var tick := TICK                      # s: this room's tick (set when the room loads)
 var flag_t := 0.0
 
 func _init(r) -> void:
 	room = r
 
-static func tick_i_of(tm: float) -> int:
-	return floori(tm / TICK)
+static func tick_i_of(tm: float, tl := TICK) -> int:
+	return floori(tm / tl)
 
-static func tick_f_of(tm: float) -> float:
-	return fposmod(tm, TICK) / TICK
+static func tick_f_of(tm: float, tl := TICK) -> float:
+	return fposmod(tm, tl) / tl
+
+# the tick of a room: rooms.json `tick` (T01 1.0, T02 1.0, TB2 0.7), steady 0.8333 once the tower's clock is fixed (RACE CONDITION dead)
+static func tick_of_def(def: Dictionary) -> float:
+	if Game.flag("boss:RACE"):
+		return TICK
+	return float(def.get("tick", TICK))
 
 static func ease_tick(f: float) -> float:
 	return smoothstep(0.0, 0.3, f)
@@ -134,17 +141,17 @@ func _find_blinks() -> void:
 # ---------------------------------------------------------------- pure functions of the clock
 # platform j of a gear at room time tm: 45 degrees per tick, moving in the first 0.3 of the tick and holding after
 func gear_pos(g: Dictionary, j: int, tm: float) -> Vector2:
-	var ang := deg_to_rad((float(tick_i_of(tm)) + ease_tick(tick_f_of(tm))) * 45.0 + float(j) * 360.0 / float(g.n))
+	var ang := deg_to_rad((float(tick_i_of(tm, tick)) + ease_tick(tick_f_of(tm, tick))) * 45.0 + float(j) * 360.0 / float(g.n))
 	return Vector2(g.px + cos(ang) * g.r * float(T), g.py + sin(ang) * g.r * float(T))
 
 # how many cells under the housing the piston covers at time tm (tile-quantised: a cell is covered the moment the head enters it,
 # so the way is clear only while the piston waits)
 func piston_rows_at(pz: Dictionary, tm: float) -> int:
 	var tk: Array = pz.ticks
-	var d0: float = float(tk[0]) * TICK
-	var d1: float = float(tk[1]) * TICK
-	var d2: float = float(tk[2]) * TICK
-	var d3: float = float(tk[3]) * TICK
+	var d0: float = float(tk[0]) * tick
+	var d1: float = float(tk[1]) * tick
+	var d2: float = float(tk[2]) * tick
+	var d3: float = float(tk[3]) * tick
 	var total := d0 + d1 + d2 + d3
 	if total <= 0.0:
 		return 0
@@ -159,7 +166,7 @@ func piston_rows_at(pz: Dictionary, tm: float) -> int:
 	return clampi(ceili(ext * float(pz.len) - 0.0001), 0, int(pz.len))
 
 func blink_phase_of(key: String) -> int:
-	return floori(mt(key) / TICK) % 2
+	return floori(mt(key) / tick) % 2
 
 # ---------------------------------------------------------------- per step (host, solo and guest)
 func step(dt: float, live: Array) -> void:
@@ -388,7 +395,7 @@ func mismatch(host_t: float) -> String:
 	for g in bgroups:
 		var ok := false
 		for tc in times:
-			if floori(maxf(0.0, float(tc) - float(offs.get(g.key, 0.0))) / TICK) % 2 == int(g.ph) or int(g.ph) < 0:
+			if floori(maxf(0.0, float(tc) - float(offs.get(g.key, 0.0))) / tick) % 2 == int(g.ph) or int(g.ph) < 0:
 				ok = true
 		if not ok:
 			return "blink group %s shows phase %d" % [g.key, g.ph]
@@ -461,7 +468,7 @@ func draw(ci: CanvasItem) -> void:
 	# blink blocks: solid = bright brass, off = a faint outline; the ones that turn off flicker in the last 0.2 of the tick
 	for g in bgroups:
 		var tm := mt(g.key)
-		var f := tick_f_of(tm)
+		var f := tick_f_of(tm, tick)
 		for c in g.cells:
 			var t: int = room.grid.tile(c[0], c[1])
 			if t != TileGrid.BLINK_A and t != TileGrid.BLINK_B:
@@ -487,7 +494,7 @@ func draw(ci: CanvasItem) -> void:
 	# gears
 	for g in gears:
 		var tm2 := mt(g.key)
-		var spin := (float(tick_i_of(tm2)) + ease_tick(tick_f_of(tm2))) * 45.0
+		var spin := (float(tick_i_of(tm2, tick)) + ease_tick(tick_f_of(tm2, tick))) * 45.0
 		var ctr := Vector2(g.px, g.py)
 		for j in range(g.n):
 			var pos := gear_pos(g, j, tm2)

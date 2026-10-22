@@ -259,6 +259,46 @@ func _ready() -> void:
 			bb.hpf = float(bb.max_hp) * (float(bp[1]) if bp.size() > 1 else 0.2)
 			bb.hp = ceili(bb.hpf)
 			bb.on_damage()
+		elif Game.scene.begins_with("race:"):          # screenshot helper: RACE CONDITION's belfry (race:<hp>:<x>:<y>[:<demo>]); 1.0 phase 1, 0.4 phase 2, 0 the after-state (M1: the hall alone, the boss inert); demo: bells struck / fallen, cells corrupt / open
+			var ra := Game.scene.substr(5).split(":")
+			var rhp := float(ra[0])
+			manager.swap_to("T06", Vector2(float(ra[1]) if ra.size() > 1 else 60.0, float(ra[2]) if ra.size() > 2 else 400.0))
+			var rp = manager.player
+			rp.x = float(ra[1]) if ra.size() > 1 else 60.0
+			rp.y = float(ra[2]) if ra.size() > 2 else 400.0
+			rp.inv = 999.0
+			var rr2: Room = manager.room
+			rr2.fight.state = "done"
+			rr2.time = 20.0
+			var rh: BelfryHall = rr2.belfry
+			if rhp <= 0.0:
+				rh.after = true
+				rh.pin_in = true
+				rh.pin_t0 = rr2.time - 3.0
+				rh.segs = [[0.0, 0, BelfryHall.TICK_AFTER]]
+			elif rhp < 0.7:
+				rh.ph = 2
+				rh.p2_t0 = rr2.time - 2.0
+				rh.segs = [[0.0, 0, BelfryHall.TICK_P2]]
+			if ra.size() > 3 and ra[3] == "demo":
+				var tn: float = rr2.time
+				rh.strike_t0[0] = tn - 0.2
+				rh.amp[0] = 4.0
+				rh.strike_t0[4] = tn - 0.45
+				rh.amp[4] = 5.0
+				if rh.ph == 1:
+					rh.fall_t0[2] = tn - 3.0
+					rh.fallen[2] = true
+					rh.paint_t[0][2] = tn - 1.0
+					rh.paint_t[1][5] = tn - 2.0
+					rh.corrupt_t0[3] = tn - 1.5
+					rh.corrupt_t0[6] = tn - 0.3
+				else:
+					rh.fall_t0[0] = tn - 3.0
+					rh.fall_t0[3] = tn - 3.0
+					rh.hole_t0[1] = tn - 1.0
+					rh.hole_t0[5] = tn - 0.3
+					rh.paint_t[0][3] = tn - 1.0
 		elif Game.scene.begins_with("crawler:"):       # screenshot helper: CRAWLER OF THE WEB at an hp fraction, Clawd at a spot (crawler:<hp>:<x>:<y>)
 			var ca := Game.scene.substr(8).split(":")
 			manager.swap_to("N09")

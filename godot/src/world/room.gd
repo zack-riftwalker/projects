@@ -57,6 +57,7 @@ var lq_last := -9.0            # host: when a guest's `lqhit` last pushed the ti
 var blink_period := 1.5
 var hall_nodes: Array = []
 var hall: IndexHall = null                # N09: the crawler's hall (drawers, web net, strands, the back wall screen), 14-crawler.md
+var belfry: BelfryHall = null            # T06: the bells, the escapement, the buffer floor and the beat clock of RACE CONDITION, 17-race-build.md
 var hpot: HoneypotHall = null             # N15: the firewall's lobby / furnace (floor, furniture, walls, packets), 16-firewall-build.md
 var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
 var iter := 0                              # T09's loop room: which pass this is (0..3)
@@ -326,11 +327,14 @@ func load_room(room_id: String, snap = null) -> void:
 						next_nid += 1
 						ents.append(e)
 	tower = Tower.new(self)                                  # (every room: a breakpoint can stop its platforms)
+	tower.tick = Tower.tick_of_def(def)                      # (cached now: the flags are not read per frame)
 	tower.load_all()
 	if IndexHall.wanted(def):
 		hall = IndexHall.new(self)
 	if HoneypotHall.wanted(def):
 		hpot = HoneypotHall.new(self)
+	if BelfryHall.wanted(def):
+		belfry = BelfryHall.new(self)
 	if def.has("loop"):
 		iter = clampi(int(Game.loop_iter.get(id, 0)), 0, 3)
 		if mode != "guest" and not Game.flag("boss:LOOP"):
@@ -1075,6 +1079,18 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 			hg2.material = Look.unshaded()
 		add_child(hg2)
 		hall_nodes = [hs2, hg2]
+	if belfry != null:                                      # the belfry: bells, escapement, floor cells and the clock's hands every frame; the lamps' glow on top
+		var bs := DrawProxy.new()
+		bs.name = "BelfryShaded"
+		bs.cb = belfry.draw_shaded
+		bs.z_index = 1
+		add_child(bs)
+		var bg := DrawProxy.new()
+		bg.name = "BelfryGlow"
+		bg.cb = belfry.draw_glow
+		bg.z_index = 1
+		add_child(bg)
+		hall_nodes = [bs, bg]
 	for spec in [["furniture", 1], ["top", 4]]:
 		var layer := RoomLayer.new()
 		layer.room = self
@@ -1582,6 +1598,8 @@ func step_guest(dt: float) -> void:
 		hall.step(dt)
 	if hpot != null:
 		hpot.step(dt)
+	if belfry != null:
+		belfry.step(dt)
 	if tower != null:
 		tower.step(dt, players())
 		_tick_sound()
@@ -1739,9 +1757,11 @@ func _move_platforms() -> void:
 	_move_packets()
 	if hpot != null:
 		hpot.move_packets()
+	if belfry != null:
+		belfry.move_bells()
 	_update_ports(bodies())
 	for m in plats:
-		if m.get("packet", false) or m.has("gear") or m.has("fw"):
+		if m.get("packet", false) or m.has("gear") or m.has("fw") or m.has("bell"):
 			continue
 		var span := absf(m.b - m.a)
 		if span < 1.0:
@@ -1763,10 +1783,20 @@ func _move_platforms() -> void:
 
 # world 4 beats with the tick: the clock is the room's, so both pages tick together
 func tick_i() -> int:
-	return Tower.tick_i_of(time)
+	if belfry != null:
+		return belfry.tick_i_at(time)                       # T06: the boss's beat clock (its length changes with the phase)
+	return Tower.tick_i_of(time, tick_len())
 
 func tick_f() -> float:
-	return Tower.tick_f_of(time)
+	if belfry != null:
+		return belfry.tick_f_at(time)
+	return Tower.tick_f_of(time, tick_len())
+
+# this room's tick (rooms.json `tick`; every tower room is steady 0.8333 once RACE CONDITION is fixed); cached on load, never read from the flags per frame
+func tick_len() -> float:
+	if belfry != null:
+		return belfry.tick_len()
+	return tower.tick if tower != null else Tower.TICK
 
 func _tick_sound() -> void:
 	if world != 4:
@@ -1850,6 +1880,8 @@ func step(dt: float) -> void:
 		hall.step(dt)
 	if hpot != null:
 		hpot.step(dt)
+	if belfry != null:
+		belfry.step(dt)
 	if tower != null:
 		tower.step(dt, live)
 		_tick_sound()
@@ -3269,8 +3301,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 				Fx._disc(ci, sxp, syp, 5, swc)
 				PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
-			if m.has("fw"):
-				continue                                    # the honeypot hall moves and draws its own packets
+			if m.has("fw") or m.has("bell"):
+				continue                                    # the honeypot hall moves and draws its own packets, the belfry its bells
 			if m.get("packet", false):
 				_draw_packet(ci, m)
 				continue

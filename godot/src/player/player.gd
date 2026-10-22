@@ -253,6 +253,7 @@ func update(dt: float) -> void:
 			var anc: Dictionary = room.anchors()[ai]
 			zip = ai
 			zip_t = 0.0
+			ride = null                                     # (a platform under the feet must not pin the zip: the carry above runs every step while `ride` is set)
 			zip_cut = clampf(0.6 * Vector2(float(anc.x) - (x + w / 2.0), float(anc.y) - (y + h / 2.0)).length() / Game.CURL_SPEED, 0.04, 0.25)
 			zip_dx = float(anc.x) - (x + w / 2.0)
 			zip_blocked = 0

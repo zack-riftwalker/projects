@@ -475,7 +475,7 @@
              "doors": [
                  {"id": "N20:N", "side": "N", "a": 12, "b": 15, "to": "N05:S"}
              ] },
-    "T01": { "file": "T01.txt", "title": "pthread_create.c", "size": [64, 20], "origin": [1176, -72], "world": 4, "music": "w4", "zone": "tower",
+    "T01": { "file": "T01.txt", "tick": 1.0, "title": "pthread_create.c", "size": [64, 20], "origin": [1176, -72], "world": 4, "music": "w4", "zone": "tower",
              "signs": ["pthread_create(): three threads start here. Each climbs on its own; they meet at race_condition.go.", "the clock up there ticks every 0.83 s. so does everything in the tower."],
              "landmarks": ["tower"],
              "npc": [{"kind": "tree", "x": 54, "y": 8, "zone": "tower", "price": 40}],
@@ -485,7 +485,7 @@
                  {"id": "T01:W", "side": "W", "a": 9, "b": 12, "to": "T02:E"},
                  {"id": "T01:N", "side": "N", "a": 24, "b": 27, "to": "TC1:S"}
              ] },
-    "T02": { "file": "T02.txt", "title": "async_await.ts", "size": [86, 20], "origin": [1090, -72], "world": 4, "music": "w4", "zone": "tower",
+    "T02": { "file": "T02.txt", "tick": 1.0, "title": "async_await.ts", "size": [86, 20], "origin": [1090, -72], "world": 4, "music": "w4", "zone": "tower",
              "signs": ["await: the blocks are there on one tick and gone on the next. Count with the clock.", "trapdoor to /proc/heap. pull the lever, then drop."],
              "levers": [{"x": 35, "y": 12, "flag": "lever:T02"}],
              "variants": [{"if": "boss:RACE", "rect": [0, 0, 86, 20], "from": "1", "to": "#"}, {"if": "boss:RACE", "rect": [0, 0, 86, 20], "from": "2", "to": "#"}],
@@ -549,7 +549,7 @@
                  {"id": "TA2:W", "side": "W", "a": 35, "b": 38, "to": "T14:E"},
                  {"id": "TA2:N", "side": "N", "a": 10, "b": 13, "to": "T08:S"}
              ] },
-    "TB2": { "file": "TB2.txt", "title": "mutex.c", "size": [26, 62], "origin": [1138, -198], "world": 4, "music": "w4", "zone": "tower",
+    "TB2": { "file": "TB2.txt", "tick": 0.7, "title": "mutex.c", "size": [26, 62], "origin": [1138, -198], "world": 4, "music": "w4", "zone": "tower",
              "signs": ["mutex.c: hit the key, the lock above is yours for 3.5 s. (two of you: one stands on the key.)"],
              "mutex": [{"key": [3, 58], "rows": [45]}, {"key": [22, 43], "rows": [30]}, {"key": [3, 28], "rows": [15]}],
              "doors": [
@@ -565,12 +565,12 @@
                  {"id": "TC2:W", "side": "W", "a": 55, "b": 58, "to": "T06:E", "lock": "until:boss:RACE"},
                  {"id": "TC2:N", "side": "N", "a": 6, "b": 9, "to": "T09:S"}
              ] },
-    "T06": { "file": "T06.txt", "title": "RACE CONDITION", "size": [26, 14], "origin": [1164, -150], "world": 4, "music": "w4", "zone": "tower",
+    "T06": { "file": "T06.txt", "title": "RACE CONDITION", "size": [26, 30], "origin": [1164, -166], "world": 4, "music": "w4", "zone": "tower", "hall": "belfry",
              "signs": [],
-             "boss": {"id": "RACE", "class": "RaceBoss", "name": "RACE CONDITION", "sub": "two threads, one variable", "trigger_x": 96, "T": 100, "u": 0.9, "reward": "breakpoint", "banner": "breakpoint", "banner_sub": "facing a machine or an enemy, press [special]: it stops for 3.5 s", "music": "boss", "drop": 45},
+             "boss": {"id": "RACE", "class": "RaceBoss", "name": "RACE CONDITION", "sub": "two threads, one variable", "trigger_x": 96, "cam": "free", "T": 100, "u": 0.9, "reward": "breakpoint", "banner": "breakpoint", "banner_sub": "facing a machine or an enemy, press [special]: it stops for 3.5 s", "music": "boss", "drop": 45},
              "doors": [
-                 {"id": "T06:W", "side": "W", "a": 7, "b": 10, "to": "TB2:E", "lock": "fight"},
-                 {"id": "T06:E", "side": "E", "a": 7, "b": 10, "to": "TC2:W", "lock": "until:boss:RACE"}
+                 {"id": "T06:W", "side": "W", "a": 23, "b": 26, "to": "TB2:E", "lock": "fight"},
+                 {"id": "T06:E", "side": "E", "a": 23, "b": 26, "to": "TC2:W", "lock": "until:boss:RACE"}
              ] },
     "T14": { "file": "T14.txt", "title": "volatile.h", "size": [24, 14], "origin": [1066, -170], "world": 4, "music": "w4", "zone": "tower", "secret": true,
              "signs": ["volatile: the compiler may not assume this value stays the same. neither should you."],

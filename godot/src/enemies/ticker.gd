@@ -61,11 +61,11 @@ func _plan(ti: int) -> void:
 func update(dt: float) -> void:
 	tick(dt)
 	var m := mtime()
-	var ti := floori(m / Tower.TICK)
+	var ti := floori(m / room.tick_len())
 	if ti != last_tick:
 		last_tick = ti
 		_plan(ti)
-	var k := clampf(fposmod(m, Tower.TICK) / STEP_T, 0.0, 1.0)
+	var k := clampf(fposmod(m, room.tick_len()) / STEP_T, 0.0, 1.0)
 	var pos := p0.lerp(p1, k)
 	if hopping and p0 != p1:
 		pos.y -= 10.0 * sin(PI * k)

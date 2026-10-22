@@ -1945,9 +1945,9 @@
    "zone": "tower",
    "title": "RACE CONDITION",
    "x": 1164,
-   "y": -150,
+   "y": -166,
    "w": 26,
-   "h": 14,
+   "h": 30,
    "role": "boss",
    "feats": [
     "boss:RACE CONDITION"
@@ -1956,8 +1956,8 @@
    "doors": [
     {
      "side": "W",
-     "a": 7,
-     "b": 10,
+     "a": 23,
+     "b": 26,
      "to": "TB2",
      "gate": "fight",
      "note": "",
@@ -1965,8 +1965,8 @@
     },
     {
      "side": "E",
-     "a": 7,
-     "b": 10,
+     "a": 23,
+     "b": 26,
      "to": "TC2",
      "gate": "boss",
      "note": "",

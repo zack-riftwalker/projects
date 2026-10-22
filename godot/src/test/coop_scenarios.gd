@@ -3573,76 +3573,67 @@ func tower_fight_host(room_id: String, host_x: float, guest_x: float, forced: Ar
 	await wait_secs(1.0)
 	return [started, seen.size(), tg, st]
 
+# RACE CONDITION v3 (17-race-build.md). M1: the belfry on both pages: the guest rides a swinging bell without falling through, sees the host's strikes,
+# the phase change and the tick change. (Later milestones add the fight itself.)
 func sc_co_race() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
 	if role == "host":
-		var forced := [[3.0, "rw", "p2"], [8.0, "rw", "p1"], [13.0, "switch", "p2"], [18.0, "rw", "p2"], [23.0, "contend", "p2"], [28.0, "rw", "p2"]]
-		var marks := [[9.0, 0.55], [20.0, 0.2]]
-		var res: Array = await tower_fight_host("T06", 150.0, 270.0, forced, marks, func(b, st, el):
-			st["corrupt"] = maxi(int(st.get("corrupt", 0)), b.hz.size())
-			for q in b.th:                                        # (the guest's swings must not finish the fight: the rules are the test)
-				if not q.dead and q.hp < 8.0:
-					q.hp = 8.0
-			b._sums())
-		return [res[0] and res[1] >= 5 and res[2].p2 >= 1, "host: started %s, %d plans (p1 %d, p2 %d), corrupt segments at most %d" % [res[0], res[1], res[2].p1, res[2].p2, int(res[3].get("corrupt", 0))]]
+		var r := boss_arena("T06", 60.0, 340.0)
+		await wait_secs(1.0)
+		var p = mgr().player
+		var hl: BelfryHall = r.belfry
+		var t0 := Time.get_ticks_msec()
+		var f := 0
+		var phase2 := false
+		while Time.get_ticks_msec() - t0 < 14000.0 * slow:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			f += 1
+			if f % 90 == 5:
+				hl.strike(1)
+				hl.strike(0)
+			if not phase2 and Time.get_ticks_msec() - t0 > 8000.0 * slow:
+				phase2 = true
+				hl.ph = 2
+				hl.p2_t0 = r.time
+				hl.set_tick(0.6, r.time)
+			await get_tree().physics_frame
+		return [true, "host: struck bells, phase 2 at %.1f, tick %.2f" % [hl.p2_t0, hl.tick_len()]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
-	var r2 := boss_arena("T06", 150.0, 270.0)
-	var found := {"b": null}
-	await wait_until(func():
-		for e in mgr().room.ents:
-			if e is RaceBoss:
-				found.b = e
-		return found.b != null, 15.0)
-	var pup: RaceBoss = found.b
-	if pup == null:
-		return [false, "no RaceBoss puppet"]
-	var st2 := {"f": 0, "swings": 0}
-	var seen2 := {}
-	var stale := 0
-	var writes := 0
-	var secs := 32.0 * slow
-	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < secs * 1000.0:
-		var g = mgr().player
-		st2.f += 1
-		if not is_instance_valid(pup):
-			break
-		plan_stats(pup, seen2)
-		# a thread is something to hit: walk up to the nearer living one and swing
-		var near = null
-		for q in pup.th:
-			if not q.dead and (near == null or absf(q.x - (g.x + 5.0)) < absf(near.x - (g.x + 5.0))):
-				near = q
-		var keys := {}
-		if near != null:
-			var dx: float = near.x - (g.x + 5.0)
-			if absf(dx) > 26.0:
-				keys["right" if dx > 0.0 else "left"] = true
-			else:
-				g.face = 1.0 if dx > 0.0 else -1.0
-				keys["attack"] = st2.f % 14 < 2 and g.atk_cd <= 0.0
-		Controls.script_input = keys
-		hazard_probe(g, pup, st2)
-		# the write lands where the guest was when the thread read it: while a write box is live on this page, the guest has usually walked on
-		if pup.plan_active() and String(pup.plan.id) == "rw":
-			for hb in pup.harmboxes():
-				if hb.get("dmg", 0) >= 1 and hb.h >= 39.0:
-					writes += 1
-					if absf((float(hb.x) + 16.0) - (g.x + 5.0)) > 20.0:
-						stale += 1
-		await get_tree().physics_frame
-	Controls.script_input = {}
-	var short := 0
-	for sq in pup.kit_active_seen:
-		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
-			short += 1
-	var mine := 0
-	for sq in seen2:
-		if seen2[sq] == "p2":
-			mine += 1
+	var r2 := boss_arena("T06", 60.0, 340.0)
 	await wait_secs(1.0)
-	return [seen2.size() >= 5 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and writes > 0, "guest: saw %d plans, %d active shown < 0.30 s, targeted %d times, %d write frames (%d off the guest), violations '%s' '%s'" % [seen2.size(), short, mine, writes, stale, pup.kit_violation, pup.arena_violation]]
+	var g = mgr().player
+	var gh: BelfryHall = r2.belfry
+	var frames := 0
+	var rode := 0
+	var max_dx := 0.0
+	var fell := 0
+	var saw_p2 := false
+	var tick_after := 0.0
+	var t1 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t1 < 13000.0 * slow:
+		g.inv = 999.0
+		g.hp = g.max_hp
+		var top: float = float(gh.pool[1].y)
+		if frames < 5:
+			g.x = 335.0
+			g.y = 384.0 - g.h - 2.0
+		Controls.script_input = {}
+		frames += 1
+		if frames > 20:
+			if g.on_ground and absf(g.y + g.h - top) < 3.0:
+				rode += 1
+			if g.y + g.h > 400.0:
+				fell += 1
+			max_dx = maxf(max_dx, absf(gh.swing_dx(1, r2.time)))
+		if gh.ph == 2:
+			saw_p2 = true
+			tick_after = gh.tick_len()
+		await get_tree().physics_frame
+	var ok: bool = rode > (frames - 20) * 9 / 10 and fell == 0 and max_dx > 1.5 and saw_p2 and absf(tick_after - 0.6) < 0.001
+	await wait_secs(1.0)
+	return [ok, "guest: rode the bell %d of %d frames (fell %d), saw a swing of %.1f px, phase 2 seen %s, tick after it %.2f" % [rode, frames - 20, fell, max_dx, str(saw_p2), tick_after]]
 
 func sc_co_loopboss() -> Array:
 	if not await wait_joined():

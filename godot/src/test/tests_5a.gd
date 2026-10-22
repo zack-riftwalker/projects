@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "raceboss", "loopboss", "deadlockboss", "plugins5a", "tower4b1"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "race3", "loopboss", "deadlockboss", "plugins5a", "tower4b1"]
 
 func run(name: String):
 	match name:
@@ -11,7 +11,7 @@ func run(name: String):
 		"tick5a": return await t_tick5a()
 		"breakpoint": return await t_breakpoint()
 		"w4enemies": return await t_w4enemies()
-		"raceboss": return await t_raceboss()
+		"race3": return await t_race3()
 		"loopboss": return await t_loopboss()
 		"deadlockboss": return await t_deadlockboss()
 		"plugins5a": return await t_plugins5a()
@@ -305,7 +305,7 @@ func t_tick5a() -> bool:
 	if ga.is_empty():
 		fail(res, "T02 has no blink block")
 	else:
-		rb.time = Tower.TICK * 1.5                                # an odd tick: `1` is off
+		rb.time = rb.tick_len() * 1.5                                # an odd tick: `1` is off
 		rb.tower.step(0.0, [])
 		if rb.grid.solid(ga.tx, ga.ty):
 			fail(res, "a `1` block is solid on an odd tick")
@@ -313,7 +313,7 @@ func t_tick5a() -> bool:
 		rb.player.y = float(ga.ty * 16 + 3)
 		rb.player.vx = 0.0
 		rb.player.vy = 0.0
-		rb.time = Tower.TICK * 2.2                                # the next even tick: `1` would turn on under the body
+		rb.time = rb.tick_len() * 2.2                                # the next even tick: `1` would turn on under the body
 		rb.tower.step(0.0, [rb.player])
 		if rb.grid.solid(ga.tx, ga.ty):
 			fail(res, "a blink block closed on a body")
@@ -836,180 +836,336 @@ func start_fight(r: Room, px := 100.0) -> bool:
 		n += 1
 	return r.fight.state == "active"
 
-# MV5A-06: RACE CONDITION
-func t_raceboss() -> bool:
+# ---------------------------------------------------------------- RACE CONDITION v3 (docs/metroidvania/17-race-build.md): race3 grows with every milestone
+func race_setup() -> void:
 	Game.persist = false
 	Game.net_role = ""
 	Game.fresh()
 	Game.load_meta()
 	Game.diff = "normal"
+
+# a scripted hop: the player stands at `from` (feet), runs toward the target, holds jump `hold` frames, dashes at frame `dash_at` (towards the target, up when `up`),
+# then waits to land. True when it ends standing on the target's top (x inside its width). `min_d` collects the closest the body came to `near` (for a curl pop)
+func race_hop(r: Room, from: Vector2, target: Rect2, hold: int, dash_at: int, up: bool) -> bool:
+	var p = r.player
+	p.x = from.x - p.w * 0.5
+	p.y = from.y - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	p.inv = 99.0
+	var dir := "right" if target.get_center().x > from.x else "left"
+	var done := false
+	for f in range(110):
+		var keys := {dir: true}
+		if f < hold:
+			keys["jump"] = true
+		if dash_at >= 0 and f == dash_at:
+			keys["dash"] = true
+			if up:
+				keys["up"] = true
+		step_keys(r, keys)
+		p.inv = 99.0
+		if p.on_ground and f > 4 and absf(p.y + p.h - target.position.y) < 2.5 and p.x + p.w * 0.5 >= target.position.x and p.x + p.w * 0.5 <= target.end.x:
+			done = true
+			break
+	return done
+
+func race_reach(r: Room, from: Vector2, target: Rect2) -> bool:
+	for hold in [10, 14, 18, 22, 26, 30, 40]:
+		for dash_at in [-1, 6, 12, 18, 24, 30, 36]:
+			for up in [false, true]:
+				if up and dash_at < 0:
+					continue
+				if race_hop(r, from, target, hold, dash_at, up):
+					return true
+	return false
+
+# a curl from a bell to the ring above it, then a dash at the bob: how close the body gets to the bob's rest place (claw 24 + body 5 + bob 9 = 38 px is a hit)
+func race_bob_try(r: Room, from: Vector2, toward: String, dash_after: int, up: bool) -> float:
+	var p = r.player
+	p.x = from.x - p.w * 0.5
+	p.y = from.y - p.h
+	p.vx = 0.0
+	p.vy = 0.0
+	p.zip = -1
+	p.inv = 99.0
+	var bob := BelfryHall.PIVOT + Vector2(0.0, BelfryHall.ROD)
+	var best := 1e9
+	var arrived := -1
+	var was_zip := false
+	for f in range(70):
+		var keys := {}
+		if f == 0:
+			keys["special"] = true
+		if toward != "":
+			keys[toward] = true
+		if p.zip >= 0:
+			was_zip = true
+		if was_zip and p.zip < 0 and arrived < 0:
+			arrived = f
+		if arrived >= 0 and f == arrived + dash_after:
+			keys["dash"] = true
+			if up:
+				keys["up"] = true
+		step_keys(r, keys)
+		p.inv = 99.0
+		best = minf(best, Vector2(p.x + p.w * 0.5, p.y + p.h * 0.5).distance_to(bob))
+	return best
+
+func race_bob_reach(r: Room, from: Vector2, toward: String) -> float:
+	var best := 1e9
+	for da in [0, 2, 4, 6, 9, 12, 16, 20]:
+		for up in [false, true]:
+			best = minf(best, race_bob_try(r, from, toward, da, up))
+	return best
+
+func race_plat(r: Room, i: int) -> Rect2:
+	var m: Dictionary = r.belfry.pool[i]
+	return Rect2(float(m.x), float(m.y), float(m.w), 6.0)
+
+# MV5A-06 / 17-race-build.md: RACE CONDITION
+func t_race3() -> bool:
+	race_setup()
 	var res := checker()
+	var info := ""
+	# --- M1 -------------------------------------------------------------------------------------------------------------
+	# 1. the map: 26 x 30 (it grows upward), doors on rows 23..26, the hall named, the ticks per room
+	var md: Dictionary = Game.rooms_meta.rooms.T06
+	if int(md.size[0]) != 26 or int(md.size[1]) != 30 or int(md.origin[0]) != 1164 or int(md.origin[1]) != -166 or String(md.get("hall", "")) != "belfry":
+		fail(res, "T06 size %s origin %s hall %s" % [str(md.size), str(md.origin), str(md.get("hall", ""))])
+	for d in md.doors:
+		if int(d.a) != 23 or int(d.b) != 26:
+			fail(res, "door %s rows %d..%d, want 23..26" % [d.id, int(d.a), int(d.b)])
+	Game.tools = {"bash": true, "catch": false, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}       # what the player surely has (curl: nobody reaches the tower without it)
+	var trig: float = float(md.boss.trigger_x)
+	md.boss["trigger_x"] = 1e9                              # (the intro must not freeze the players while the arena is measured)
 	var r := new_room("T06")
-	var b: RaceBoss = r.boss as RaceBoss
-	if b == null:
-		fail(res, "T06 has no RaceBoss")
+	md.boss["trigger_x"] = trig
+	if r.pw != 416 or r.ph != 480 or r.belfry == null:
+		fail(res, "T06 is %d x %d, belfry %s" % [r.pw, r.ph, str(r.belfry)])
 		r.queue_free()
-		return report("raceboss", false, res.info)
-	if b.max_hp != 90 or b.th[0].hp != 45.0 or b.th[1].hp != 45.0:
-		fail(res, "hp %d (%s/%s), want 45 + 45" % [b.max_hp, str(b.th[0].hp), str(b.th[1].hp)])
-	if not start_fight(r):
-		fail(res, "the fight never started")
-	b.plan = {}
-	b.idle_t = 999.0
-	r.attacker = r.player
-	# 1. the write lands on the READ position, not the current one
-	r.player.x = 100.0
-	b._start("rw")
-	var read_x: float = b.gx[int(b.plan.a_i)]
-	if absf(read_x - 105.0) > 12.0:
-		fail(res, "the ghost is at %.0f, the player at 105" % read_x)
-	if not rb_until(r, b, "rw", "active", Vector2(330.0, 150.0)):
-		fail(res, "the write never came")
-	var on_ghost := false
-	var on_player := false
-	var hb: Dictionary = r.player.hurtbox()
-	for bx in b.harmboxes():
-		if absf(float(bx.x) + 16.0 - read_x) < 1.0:
-			on_ghost = true
-		if Game.overlap(bx, {"x": 330.0, "y": 150.0, "w": 8.0, "h": 9.0}):
-			on_player = true
-	if not on_ghost or on_player:
-		fail(res, "write boxes: on the ghost %s, on the player's new place %s" % [on_ghost, on_player])
-	b.plan = {}
-	b.gx = [-1.0, -1.0]
-	# 2. two writes into one segment within 4 s corrupt it: a warning, then the floor band hurts
-	r.time = 50.0
-	b._paint(0, 100.0)
-	b._paint(1, 110.0)
-	if b.hz.size() != 1:
-		fail(res, "no corrupt segment (%d)" % b.hz.size())
-	else:
-		if not b.hz_all_boxes(50.3).is_empty() or b.hz_all_boxes(50.7).size() != 1:
-			fail(res, "the corrupt segment hurts too early or never")
-		var hzb: Dictionary = b.hz_all_boxes(50.7)[0]
-		if absf(float(hzb.y) - (Boss.FLOOR - 6.0)) > 0.1 or absf(float(hzb.w) - 48.0) > 0.1:
-			fail(res, "the corrupt band is %s" % str(hzb))
-	b.hz.clear()
-	r.time = 70.0
-	b._paint(0, 200.0)
-	r.time = 76.0
-	b._paint(1, 205.0)
-	if not b.hz.is_empty():
-		fail(res, "writes 6 s apart corrupted a segment")
-	# at most 4 at once
-	r.time = 90.0
-	for sg in range(6):
-		b._paint(0, 20.0 + float(sg) * 48.0)
-		b._paint(1, 25.0 + float(sg) * 48.0)
-	if b.hz.size() != 4:
-		fail(res, "%d corrupt segments, at most 4" % b.hz.size())
-	# 3. the lock serializes (one writer, corrupt segments clear) and then rests 10 s
-	if b._lock_hit() != "hit" or b.serial_t <= 0.0 or not b.hz.is_empty():
-		fail(res, "the lock did not serialize and clear (serial %.1f, hz %d)" % [b.serial_t, b.hz.size()])
-	b._start("rw")
-	var ghosts := 0
-	for gv in b.gx:
-		if gv >= 0.0:
-			ghosts += 1
-	if ghosts != 1:
-		fail(res, "serialized: %d ghosts, want 1" % ghosts)
-	b.plan = {}
-	b.gx = [-1.0, -1.0]
-	b.serial_t = 0.05
-	b.update(0.1)
-	if b.lock_cd < 9.0 or b._lock_hit() != "block":
-		fail(res, "the lock has no cooldown (%.1f)" % b.lock_cd)
-	b.lock_cd = 0.0
-	# 4. contend: both dash through the lock; when they meet they stun each other for 2 s
-	b.th[0].x = 130.0
-	b.th[1].x = 286.0
-	b._start("contend")
-	var stunned := false
-	if rb_until(r, b, "contend", "active", Vector2(40.0, 150.0)):
-		for f in range(60):
-			r.player.inv = 99.0
-			r.player.x = 40.0
-			r.player.y = 150.0
-			r.step(Game.STEP)
-			if b.th[0].stun > 1.0 and b.th[1].stun > 1.0:
-				stunned = true
-				break
-	if not stunned:
-		fail(res, "the threads did not stun each other on meeting")
-	b.plan = {}
-	for q in b.th:
-		q.stun = 0.0
-		q.y = Boss.FLOOR
-	# 5. rule 8: the ghost goes to the player who moved least
-	var rp := partner(r, 300.0, 150.0)
-	rp.samples.clear()
-	for f in range(14):
-		r.player.x = 80.0 + float(f) * 6.0
-		b._track(0.11)
-		rp.x = 300.0
-		b._track(0.0)
-	b.mv_acc = 0.2
-	b._track(0.0)
-	var least := b._least_moved()
-	if least != "p2" and rp.get_parent() != null:
-		fail(res, "the ghost goes to %s, the moving player is p1" % least)
-	r.remote_players.erase(rp)
-	rp.queue_free()
-	# 6. the last thread alive is enraged: cues x0.85, never below 0.70 for the big write
-	b.th[0].hp = 0.5
-	b.th[0].hp = 0.5
-	r.attacker = r.player
-	b.hit(1, 1.0, 0.0, "swipe", {"x": b.th[0].x - 8.0, "y": b.th[0].y - 24.0, "w": 16.0, "h": 24.0, "head": 0})
-	if not b.th[0].dead or b._enr() != 0.85:
-		fail(res, "thread A did not die or B is not enraged")
-	b.plan = {}
-	b._start("rw")
-	if float(b.plan.t) < 0.70 or absf(float(b.plan.t) - 0.765) > 0.01:
-		fail(res, "enraged cue %.3f, want 0.765" % float(b.plan.t))
-	b.plan = {}
-	b.gx = [-1.0, -1.0]
-	# 7. net fields: a puppet built from the record has the same boxes and plan
-	b.th[0].dead = false
-	b.th[0].hp = 20.0
-	b._sums()
-	b.plan = {}
-	b._start("rw")
-	rb_until(r, b, "rw", "active", Vector2(330.0, 150.0))
-	var rec: Array = JSON.parse_string(JSON.stringify(NetClasses.record(b)))
-	var pup = NetClasses.make(NetClasses.cls_of(b), r)
-	NetClasses.apply(pup, rec)
-	if not same_boxes(b.harmboxes(), pup.harmboxes()) or not same_boxes(b.hurtboxes(), pup.hurtboxes()):
-		fail(res, "the puppet's boxes differ from the host's")
-	var fa: Array = JSON.parse_string(JSON.stringify(pup.net_fields()))
-	var fb: Array = JSON.parse_string(JSON.stringify(b.net_fields()))
-	if JSON.stringify(fa) != JSON.stringify(fb):
-		var which := []
-		for i in range(mini(fa.size(), fb.size())):
-			if JSON.stringify(fa[i]) != JSON.stringify(fb[i]):
-				which.append("%d:%s/%s" % [i, JSON.stringify(fa[i]).left(30), JSON.stringify(fb[i]).left(30)])
-		fail(res, "the puppet's fields differ %s" % str(which))
-	pup.free()
-	# 8. the kill gives breakpoint and opens T06:E
-	b.plan = {}
-	var i0 := 0
-	r.attacker = r.player
-	if not r.skip_boss():
-		fail(res, "skip boss did not work")
-	var guard := 0
-	while r.fight.state != "done" and guard < 900:
-		r.player.inv = 99.0
-		r.step(Game.STEP)
-		guard += 1
-	if r.fight.state != "done" or not Game.tools.get("breakpoint", false) or not Game.flag("boss:RACE"):
-		fail(res, "the reward: state %s, breakpoint %s" % [r.fight.state, str(Game.tools.get("breakpoint", false))])
-	r.update_doors()
-	var de = r.grid.door_at("E", 8)
-	if de == null or not de.open:
-		fail(res, "T06:E stays closed after the fight")
+		return report("race3", false, res.info)
+	var hl: BelfryHall = r.belfry
+	if r.grid.door_at("W", 24) == null or r.grid.door_at("E", 24) == null or r.grid.door_at("W", 8) != null:
+		fail(res, "the doors are not on rows 23..26")
+	for c in [0, 13, 25]:
+		if not r.grid.solid(c, 27) or not r.grid.solid(c, 29) or r.grid.solid(13, 26):
+			fail(res, "the floor is not rows 27..29")
+	# 2. the bells are five platforms with the plan's tops, widths and notes
+	var want_tops := [384.0, 384.0, 336.0, 272.0, 272.0]
+	var want_w := [80.0, 80.0, 64.0, 48.0, 48.0]
+	var bells := r.plats.filter(func(m): return m.has("bell"))
+	if bells.size() != 5:
+		fail(res, "%d bells in plats" % bells.size())
+	for i in range(mini(5, bells.size())):
+		var rc := race_plat(r, i)
+		if absf(rc.position.y - want_tops[i]) > 0.01 or absf(rc.size.x - want_w[i]) > 0.01:
+			fail(res, "bell %d is at y %.0f w %.0f" % [i, rc.position.y, rc.size.x])
+	# 3. routes without sudo and catch (bash, curl): floor -> bell 1/2 -> bell 3 -> bell 4/5; also with bells 3 and 4 fallen (phase 2's worst case)
+	for e in r.ents:
+		e.queue_free()
+	r.ents.clear()
+	var pairs := [["floor to bell 1", Vector2(24.0, 432.0), 0], ["floor to bell 2", Vector2(400.0, 432.0), 1], ["bell 1 to bell 3", Vector2(100.0, 384.0), 2],
+		["bell 2 to bell 3", Vector2(316.0, 384.0), 2], ["bell 3 to bell 4", Vector2(184.0, 336.0), 3], ["bell 3 to bell 5", Vector2(232.0, 336.0), 4]]
+	for pr in pairs:
+		if not race_reach(r, pr[1], race_plat(r, int(pr[2]))):
+			fail(res, "%s is out of reach" % pr[0])
+	info += "routes ok; "
+	# the bob (the lock): from bell 5 / bell 4 by curl to the ring and a dash
+	var d5 := race_bob_reach(r, Vector2(280.0, 272.0), "left")
+	var d4 := race_bob_reach(r, Vector2(136.0, 272.0), "right")
+	if d5 > 38.0 or d4 > 38.0:
+		fail(res, "the bob is out of reach from bell 5 (%.0f px) or bell 4 (%.0f px)" % [d5, d4])
+	info += "bob %.0f/%.0f px; " % [d5, d4]
+	# phase 2's worst case: two bells down. The middle bell (the climb) never falls in phase 2 and never both small ones: the way up always stays
+	hl.ph = 2
+	hl.p2_t0 = 0.0
+	hl.step_host(r.time)
+	r.time = 100.0
+	var okf := 0
+	for i in range(5):
+		if hl.can_fall(i, r.time):
+			okf += 1
+	if hl.can_fall(2, r.time):
+		fail(res, "bell 3 can fall in phase 2 (the climb is gone)")
+	if not (hl.drop(0) and hl.drop(3)):
+		fail(res, "bells 1 and 4 cannot fall together in phase 2")
+	r.time = 110.0
+	if hl.can_fall(4, r.time) or hl.can_fall(1, r.time):
+		fail(res, "a third bell can fall in phase 2 (two down: %d)" % hl.fallen_count(r.time))
+	r.step(Game.STEP)
+	if not race_reach(r, Vector2(400.0, 432.0), race_plat(r, 1)) or not race_reach(r, Vector2(316.0, 384.0), race_plat(r, 2)) or not race_reach(r, Vector2(232.0, 336.0), race_plat(r, 4)):
+		fail(res, "with bells 1 and 4 down the way up (floor, bell 2, bell 3, bell 5) is gone")
+	var d5b := race_bob_reach(r, Vector2(280.0, 272.0), "left")
+	if d5b > 38.0:
+		fail(res, "with bells 1 and 4 down the bob is out of reach from bell 5 (%.0f px)" % d5b)
 	r.queue_free()
+	# 4. the hall's own rules on a fresh room (no player in the way)
+	var r2 := new_room("T06")
+	var h2: BelfryHall = r2.belfry
+	r2.time = 10.0
+	# the swing is a pure function: a strike at t0 with amp 4 gives dx = amp sin(2 pi age / 1.2) e^(-age / 0.8); a bell on a puppet copy agrees
+	h2.strike(0)
+	var dx := h2.swing_dx(0, 10.3)
+	var want_dx := 4.0 * sin(TAU * 0.3 / 1.2) * exp(-0.3 / 0.8)
+	if absf(dx - want_dx) > 0.001:
+		fail(res, "swing dx %.4f, want %.4f" % [dx, want_dx])
+	if absf(h2.swing_dx(0, 10.0)) > 0.001 or absf(h2.swing_dx(0, 20.0)) > 0.02:
+		fail(res, "a bell does not start and end at rest")
+	h2.strike(3)
+	if absf(float(h2.amp[3]) - 5.0) > 0.001 or absf(float(h2.amp[0]) - 4.0) > 0.001:
+		fail(res, "strike amplitudes %s / %s, want 5 (small) / 4 (big)" % [str(h2.amp[3]), str(h2.amp[0])])
+	var pack := h2.net_pack()
+	var r3 := new_room("T06")
+	r3.time = 10.0
+	r3.belfry.net_unpack(JSON.parse_string(JSON.stringify(pack)))               # (what the wire does to it)
+	for k in range(20):
+		var tt := 10.0 + float(k) * 0.13
+		for i in range(5):
+			var a := h2.bell_pose(i, tt)
+			var b := r3.belfry.bell_pose(i, tt)
+			if absf(float(a.x) - float(b.x)) > 0.0001 or absf(float(a.y) - float(b.y)) > 0.0001 or a.mode != b.mode:
+				fail(res, "bell %d differs between host and a copy at %.2f" % [i, tt])
+				break
+	r3.queue_free()
+	# crack -> rattle 0.8 s -> fall -> lie -> (phase 1) fade after 8.0 s -> a new bell lowers 1.5 s -> hangs again
+	h2.reset()
+	r2.time = 20.0
+	if not h2.crack(2):
+		fail(res, "bell 3 does not crack")
+	var fdist := h2.fall_dist(2)
+	var ft := h2.fall_time(2)
+	if absf(fdist - 64.0) > 0.01 or absf(ft - sqrt(2.0 * 64.0 / 900.0)) > 0.0001:
+		fail(res, "bell 3 falls %.1f px in %.3f s" % [fdist, ft])
+	var modes := {}
+	for tq in [[20.5, "crack"], [20.79, "crack"], [20.81, "fall"], [20.8 + ft - 0.02, "fall"], [20.8 + ft + 0.02, "lie"], [20.8 + ft + 7.9, "lie"], [20.8 + ft + 8.1, "fade"], [20.8 + ft + 8.6, "fade"]]:
+		var mm := h2.bell_mode(2, float(tq[0]))
+		if mm != tq[1]:
+			fail(res, "bell 3 at %.2f is %s, want %s" % [tq[0], mm, tq[1]])
+	r2.time = 20.8 + ft + 8.55
+	h2.step_host(r2.time)
+	if float(h2.rehang_t0[2]) < 0.0:
+		fail(res, "the fallen bell was not re-hung after lying and fading")
+	var rh0: float = h2.rehang_t0[2]
+	if h2.bell_mode(2, rh0 + 0.7) != "rehang" or absf(float(h2.bell_pose(2, rh0 + 0.75).y) - lerpf(BelfryHall.BEAM_Y - BelfryHall.BODY_H, 336.0, 0.5)) > 0.01:
+		fail(res, "the new bell does not lower from the beam over 1.5 s")
+	if h2.bell_standable(2, rh0 + 0.7) or not h2.bell_standable(2, rh0 + 1.6):
+		fail(res, "the new bell is standable too early or never")
+	r2.time = rh0 + 1.6
+	h2.step_host(r2.time)
+	if h2.bell_mode(2, r2.time) != "hang" or float(h2.fall_t0[2]) >= 0.0 or h2.fallen[2]:
+		fail(res, "the re-hung bell is not a plain hanging bell again")
+	# at least 3 hang always: a third bell will not fall; a fallen bell in phase 1 is a one-way top at the floor
+	h2.reset()
+	r2.time = 50.0
+	var ok1 := h2.crack(0)
+	var ok2 := h2.crack(1)
+	var ok3 := h2.crack(4)
+	if not ok1 or not ok2 or ok3:
+		fail(res, "two bells may fall, the third not (got %s %s %s)" % [str(ok1), str(ok2), str(ok3)])
+	r2.time = 52.0
+	h2.step_host(r2.time)
+	if h2.hanging_count(r2.time) != 3 or not h2.fallen[0] or h2.bell_standable(0, 52.0) != true:
+		fail(res, "two fallen bells: %d hang, fallen %s" % [h2.hanging_count(r2.time), str(h2.fallen)])
+	h2.move_bells()
+	var lm: Dictionary = h2.pool[0]
+	if absf(float(lm.y) - 400.0) > 0.01 or lm.off:
+		fail(res, "a lying bell's top is at %.1f (off %s), want 400 and standable in phase 1" % [float(lm.y), str(lm.off)])
+	# 5. the buffer floor: both threads in one cell within 4 s -> a 0.6 s build-up, then a hurt band 6 s (phase 1; at most 4); phase 2: a hole 4 s (at most 2, never neighbours)
+	h2.reset()
+	r2.time = 60.0
+	h2.paint(3, 0, 60.0)
+	h2.paint(3, 1, 63.9)
+	r2.time = 63.9
+	h2.step_buffer(r2.time)
+	if float(h2.corrupt_t0[3]) < 0.0:
+		fail(res, "two writes within 4 s did not corrupt the cell")
+	var c0: float = h2.corrupt_t0[3]
+	if h2.corrupt_state(3, c0 + 0.3) != 1 or h2.corrupt_state(3, c0 + 0.7) != 2 or h2.corrupt_state(3, c0 + 6.5) != 2 or h2.corrupt_state(3, c0 + 6.7) != 0:
+		fail(res, "corrupt timings: %d %d %d %d" % [h2.corrupt_state(3, c0 + 0.3), h2.corrupt_state(3, c0 + 0.7), h2.corrupt_state(3, c0 + 6.5), h2.corrupt_state(3, c0 + 6.7)])
+	h2.paint(5, 0, 70.0)
+	h2.paint(5, 1, 75.0)
+	r2.time = 75.0
+	h2.step_buffer(r2.time)
+	if float(h2.corrupt_t0[5]) >= 0.0:
+		fail(res, "writes 5 s apart corrupted a cell")
+	h2.reset()
+	r2.time = 80.0
+	for c in range(7):
+		h2.paint(c, 0, 80.0)
+		h2.paint(c, 1, 80.5)
+	h2.step_buffer(80.6)
+	if h2.corrupt_count(80.7) != 4:
+		fail(res, "%d corrupt cells at once, want at most 4" % h2.corrupt_count(80.7))
+	h2.reset()
+	h2.ph = 2
+	r2.time = 90.0
+	for c in [1, 2, 4, 6]:
+		h2.paint(c, 0, 90.0)
+		h2.paint(c, 1, 90.5)
+	h2.step_buffer(90.6)
+	if h2.hole_count(90.7) != 2 or h2.hole_state(1, 90.7) == 0 or h2.hole_state(2, 90.7) != 0 or h2.hole_state(4, 90.7) == 0:
+		fail(res, "holes: %d open (cells 1 %d, 2 %d, 4 %d, 6 %d), want 1 and 4 only" % [h2.hole_count(90.7), h2.hole_state(1, 90.7), h2.hole_state(2, 90.7), h2.hole_state(4, 90.7), h2.hole_state(6, 90.7)])
+	var hc0: float = h2.hole_t0[1]
+	if h2.hole_state(1, hc0 + 0.3) != 1 or h2.hole_state(1, hc0 + 0.7) != 2 or h2.hole_state(1, hc0 + 4.5) != 2 or h2.hole_state(1, hc0 + 4.7) != 0:
+		fail(res, "hole timings are not 0.6 s build-up and 4 s open")
+	r2.time = hc0 + 1.0
+	h2.apply()
+	if r2.grid.solid(1 + 3, 27) or r2.grid.solid(1 + 3, 28) or not r2.grid.solid(1 + 3, 29) or not r2.grid.solid(1 + 3 * 5, 27):
+		fail(res, "an open cell is not a 2-tile pit over row 29 (and its neighbours stay floor)")
+	h2.clear_buffer()
+	h2.apply()
+	if not r2.grid.solid(4, 27) or h2.hole_count(r2.time) != 0:
+		fail(res, "clearing the buffer did not close the holes")
+	# 6. a lying bell in phase 2 is solid cover (2 tiles high), in phase 1 a one-way top
+	h2.reset()
+	h2.ph = 2
+	r2.time = 120.0
+	if not h2.drop(0):
+		fail(res, "bell 1 cannot be dropped in phase 2")
+	r2.time = 122.0
+	h2.step_host(r2.time)
+	h2.apply()
+	if not r2.grid.solid(3, 25) or not r2.grid.solid(3, 26) or r2.grid.solid(3, 24):
+		fail(res, "a fallen bell is not a 2-tile block in phase 2")
+	if not h2.cover_between(Vector2(60.0, 420.0), Vector2(150.0, 420.0), r2.time):
+		fail(res, "a fallen bell gives no cover")
+	r2.queue_free()
+	# 7. the tick per room and the beat clock of T06
+	var want_tick := {"T01": 1.0, "T02": 1.0, "TB2": 0.7, "TA1": Tower.TICK, "TC2": Tower.TICK}
+	Game.flags.erase("boss:RACE")
+	for id in want_tick:
+		var rt := new_room(id)
+		if absf(rt.tick_len() - float(want_tick[id])) > 0.0001 or absf(rt.tower.tick - float(want_tick[id])) > 0.0001:
+			fail(res, "%s ticks %.4f, want %.4f" % [id, rt.tick_len(), float(want_tick[id])])
+		if rt.tick_i() != floori(rt.time / float(want_tick[id])):
+			fail(res, "%s tick index" % id)
+		rt.queue_free()
+	Game.flags["boss:RACE"] = true
+	for id in ["T01", "T02", "TB2", "TA1", "T06"]:
+		var rt2 := new_room(id)
+		if absf(rt2.tick_len() - Tower.TICK) > 0.0001:
+			fail(res, "%s ticks %.4f after the fight, want 0.8333" % [id, rt2.tick_len()])
+		rt2.queue_free()
+	Game.flags.erase("boss:RACE")
+	var r4 := new_room("T06")
+	var h4: BelfryHall = r4.belfry
+	if absf(h4.tick_len() - 0.7) > 0.0001:
+		fail(res, "T06 ticks %.4f in phase 1, want 0.7" % h4.tick_len())
+	r4.time = 10.0
+	var i_before := h4.tick_i_at(10.0)
+	h4.set_tick(0.6, 10.0)                                    # phase 2: from the next boundary on
+	var tb := float(h4.segs[h4.segs.size() - 1][0])
+	if tb < 10.0 or tb > 10.0 + 0.7 + 0.01 or absf(fposmod(tb, 0.7)) > 0.011 and absf(fposmod(tb, 0.7) - 0.7) > 0.011:
+		fail(res, "the new length starts at %.3f, not on a 0.7 boundary after 10.0" % tb)
+	if h4.tick_i_at(tb - 0.001) != h4.tick_i_at(tb) - 1 or h4.tick_i_at(10.0) != i_before:
+		fail(res, "the tick index jumps at the length change")
+	if h4.tick_f_at(tb + 0.3) < 0.49 or h4.tick_f_at(tb + 0.3) > 0.51 or h4.tick_i_at(tb + 0.65) != h4.tick_i_at(tb) + 1:
+		fail(res, "the beat clock does not follow 0.6 s ticks after the change")
+	r4.queue_free()
 	Controls.script_input = null
 	Game.fresh()
-	return report("raceboss", res.ok, res.info)
+	return report("race3", res.ok, info + res.info)
 
 # MV5A-07: INFINITE LOOP
 func t_loopboss() -> bool:

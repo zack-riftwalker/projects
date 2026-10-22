@@ -40,7 +40,7 @@ func settle() -> void:
 	y = base.y - h / 2.0
 
 func tick_k() -> int:
-	return floori(mtime() / Tower.TICK) % 4
+	return floori(mtime() / room.tick_len()) % 4
 
 func stopped_now() -> bool:
 	return tick_k() == 3
@@ -51,9 +51,9 @@ func blocks(_dx: float, _dy: float, _how: String) -> bool:
 func update(dt: float) -> void:
 	tick(dt)
 	var m := mtime()
-	var f := fposmod(m, Tower.TICK) / Tower.TICK
+	var f := fposmod(m, room.tick_len()) / room.tick_len()
 	var off := 0.0
-	if floori(m / Tower.TICK) % 4 == 0:
+	if floori(m / room.tick_len()) % 4 == 0:
 		off = OUT * sin(PI * f)
 	var c := base + axis * off
 	x = c.x - w / 2.0

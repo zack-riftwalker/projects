@@ -85,6 +85,18 @@ func build(rm: Room) -> void:
 		spr.centered = false
 		bg.add_child(spr)
 		add_child(bg)
+		if room.belfry != null:                         # the belfry: the back wall is its picture (phase 2's fades in over it); nothing of the day sky shows through
+			var bw1 := DrawProxy.new()
+			bw1.name = "BelfryWall"
+			bw1.cb = room.belfry.draw_wall
+			add_child(bw1)
+			var bw2 := DrawProxy.new()
+			bw2.name = "BelfryWall2"
+			bw2.cb = room.belfry.draw_wall2
+			bw2.modulate.a = 0.0
+			bw2.visible = false
+			add_child(bw2)
+			room.belfry.wall_nodes = [bw1, bw2]
 	if not room.def.get("landmarks", []).is_empty():           # far shapes between the sky and the tiles (MVB1-14)
 		var lm := Landmarks.new()
 		lm.name = "Landmarks"
