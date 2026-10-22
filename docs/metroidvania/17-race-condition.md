@@ -9,7 +9,7 @@
 | گام | وضعیت |
 |---|---|
 | ۱ · داستان و شخصیت | تأیید شد (۲۰۲۶-۱۰-۲۲): TICK و TOCK، قفلی که refactor یوزر پاک کرد، بدون compact، دو فاز، ضرب برج هر چی بالاتر تندتر |
-| ۲ · ظاهر و صدا | ⏳ گزینه‌ها پیشنهاد شد (۲۰۲۶-۱۰-۲۲)، منتظر زکریا |
+| ۲ · ظاهر و صدا | ⏳ بدن «الف» (دو آدمک ناقوس‌زن)، رنگ‌ها و ظاهر فازها تأیید شد (۲۰۲۶-۱۰-۲۲)؛ صدا منتظر انتخاب take |
 | ۳ · آرنا | — |
 | ۴ · حمله‌ها | — |
 | ۵ · روند مبارزه | — |
@@ -118,6 +118,42 @@
 
 **رنگ:** برج برنجی و ماسه‌ایه با نور گرم. نارنجی رنگ خود Clawd ـه و روی برنج هم گم می‌شه، پس پیشنهاد: **TICK قرمز گرم** و **TOCK فیروزه‌ای سرد** (فیروزه‌ای روی برنج خیلی دیده می‌شه). جایی که هر دو با هم بنویسن (خونه‌ی خراب، ضربه‌ی دوتایی): **سفید داغ** با لبه‌ی بنفش (قاطی شدن دو رنگ).
 
+### تصمیم‌های زکریا (۲۰۲۶-۱۰-۲۲)
+
+- **بدن: الف، «دو آدمک ناقوس‌زن».** ب (عقربه‌ها) و ج (ربات ریلی) کنار رفتن.
+- **رنگ‌ها و ظاهر هر فاز** (جدول‌های پایین): تأیید شد.
+- **شرطش:** نقاشی باید درست باشه و خیلی شبیه آدمک‌های واقعی. یعنی رفرنس واقعی، نه ربات کارتونی.
+
+### رفرنس واقعی
+
+- **آدمک‌های برنزی برج ساعت سن مارکو، ونیز (`I Mori`، «دو مور»):** دو غول برنزی بالای برج که با پتک به ناقوس بزرگ (۱۴۹۷) می‌زنن. برنزشون با زمان تیره شده (اسمشون از همینه). اولش طلاکاری بودن. **از کمر لولا دارن و برای ضربه خم می‌شن.** پوست گوسفند پوشیدن (چوپان‌ان). **یکی پیره (ریش‌دار) و یکی جوون: یعنی گذر زمان.** صفحه‌ی ساعت پایینشون آبی لاجوردی با طلاست. ([ویکی‌پدیا](https://en.wikipedia.org/wiki/St_Mark%27s_Clocktower))
+- **Jacquemart و Jacqueline، کلیسای نوتردام دیژون** (از ۱۳۸۳): آدمک‌های چکش‌دار که ساعت‌ها رو می‌زنن؛ بچه‌هاشون ربع‌ها رو روی ناقوس کوچیک. ([ویکی‌پدیا](https://en.wikipedia.org/wiki/Jacquemart_(bellstriker)))
+- **از این‌ها گرفته شد:** TOCK = مور پیر (ریش، پهن‌تر، سنگین‌تر)؛ TICK = مور جوون (بی‌ریش، لاغر، تند). لولای کمر = ضربه با خم شدن. دامن پوست گوسفند، کلاه گرد، پتک دسته‌بلند. برنز با پتینه‌ی تیره و لبه‌های براق. ناقوس بالای صفحه‌ی ساعت، صفحه‌ی ساعت آبی و طلایی.
+
+**طرح اول (Claude، پیکسلی، اندازه‌ی واقعی بازی):** [`17-race-data/concept_v1.png`](17-race-data/concept_v1.png). چپ فاز ۱، راست فاز ۲. هر آدمک ۳۲×۴۸، Clawd (نارنجی) ۱۶ پیکسل. TICK پتک بالا (هشدار ضربه)، TOCK پتک روی شونه. شبح قرمز = READ. قفل برنجی شکسته وسط. خط‌های رنگی کف = بافر (قرمز TICK، فیروزه‌ای TOCK، سفید = خراب).
+
+**پرامپت برای مدل عکس‌ساز (رفرنس بهتر برای سازنده؛ خروجیش مستقیم توی بازی نمی‌ره، سازنده از روش با اندازه و پالت بازی می‌کشه):**
+
+```
+Pixel art character concept sheet for a 2D metroidvania boss, side view, 16-bit style, limited palette,
+plain dark warm-brown background. Two clockwork bell-striker automatons (jacquemarts) closely based on the
+bronze Moors of St Mark's Clocktower in Venice: cast bronze with dark patina and polished brass edges,
+riveted joints, hinged at the waist so they bow forward to strike, sheepskin skirt, small round cap,
+glowing eyes, a big wind-up key on the back, a small number dial on the chest. Each holds a long-handled
+bell hammer with a heavy iron head.
+Left: TICK, the young one: slim, quick, beardless, red glowing eyes and thin red trim, hammer raised high
+above its head.
+Right: TOCK, the old one: broad, heavy, curly bronze beard, cyan glowing eyes and thin cyan trim, hammer
+resting on its shoulder.
+Each figure is 32x48 pixels, shown scaled up 8x with crisp nearest-neighbor pixels, no anti-aliasing,
+no blur.
+Row 2: the same two overheated: the bronze glowing red-orange, springs bursting from the seams, jerky
+poses.
+Row 3: animation keys for each: idle, hammer raised, strike (bowing at the waist), wound-down frozen pose.
+A tiny 16-pixel orange crab-like robot stands next to them for scale.
+Warm brass clock-tower mood. No text, no letters, no watermark.
+```
+
 ### سه ایده برای بدن (پیشنهاد، ۲۰۲۶-۱۰-۲۲)
 
 **الف، «دو آدمک ناقوس‌زن» (پیشنهاد من).** برج‌های ساعت قدیمی واقعاً اینو دارن (jacquemart): آدمک‌های فلزی کوکی که سر ساعت بیرون میان و با چکش به ناقوس می‌زنن.
@@ -157,6 +193,16 @@
 **صدای حرف زدن:** دو صدا که یه جمله رو با هم می‌گن، کمی جلو و عقب.
 - **پیشنهاد:** هر دو از **یه** صدا (دوقلوان)، یکی زیرتر (TICK) و یکی بم‌تر (TOCK)، با یه لرزش فلزی کوکی (مثل جعبه‌موزیک). فاصله‌ی دو صدا توی ورود ~۰.۱۵ ث، که هم شنیده بشه هم قاطی.
 - صداهای مجاز: `northern_english_male` (CC BY-SA) یا `ljspeech` (عمومی). بعد از انتخاب بدن، چند take می‌سازم و می‌فرستم.
+
+**take‌ها (۲۰۲۶-۱۰-۲۲، `tools/voice/race_voice.py`):** هر دو یه جمله رو با هم شروع می‌کنن و چون TICK تندتر حرف می‌زنه کم‌کم از هم جدا می‌شن (خودِ race). یه لایه‌ی «آدمک حلبی» روشونه: صدای نازک، جعبه‌ی فلزی کوچیک، لرزش فنری، یه کم خش دیجیتال.
+
+| take | TICK | TOCK | چک با ASR (whisper base.en) |
+|---|---|---|---|
+| a | صدای مرد (`northern_english_male`) زیرتر و تندتر | همون صدا، بم و کند | ورود درست شنیده شد (حتی `little agent, little agent`: جدا شدن دو صدا)؛ `zero` و `After you` گنگ‌تر |
+| b | زن (`ljspeech`) جوون | مرد پیر | ورود و فاز ۲ و مرگ درست؛ `Who wrote last` → `But wrote last` |
+| c | زن، خیلی زیر | همون زن، خیلی بم، حالت جعبه‌موزیکی بیشتر | ورود، فاز ۲ و مرگ درست؛ `Who wrote last` → `We both wrote last` |
+
+**مشکل مشترک:** کلمه‌ی `Who` توی صدای زیر و فلزی گم می‌شه (هر سه take). اگه زکریا موافق باشه، جمله‌ی تنهایی می‌تونه یه کم عوض بشه که شنیده بشه، مثلاً `Which of us was last?`.
 
 ---
 
