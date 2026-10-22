@@ -35,6 +35,7 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 - Zakaria runs the game like a studio; he is the director and decides. Rules: `docs/studio/README.md`.
   - Standing sessions: producer (`PRODUCER.md`, skill `producer`, also `playtest`), story (`STORY.md`, skill `story`), world (`WORLD.md`, skill `world`).
   - Short sessions, one per task: `boss-design`, `boss-build`, `region-build`, usually started from a brief in `docs/studio/briefs/`.
+  - The studio office (skill `studio-office`): the session with the claude-code-remote tools starts brief sessions and wakes departments. Department sessions ask for it with a line starting `📨 به دفتر استودیو:`.
 - Each studio doc has one owner. Write to another department only through its «صندوق» (inbox) section. Decisions waiting on Zakaria go in your doc's «منتظر زکریا»; the producer gathers them into one list.
 - A session that finishes a task on the board (a boss milestone, a region, a play-test fix) ticks it on `PRODUCER.md` in the same push, and adds its playtest steps to «منتظر تست» in `PLAYTEST.md`.
 

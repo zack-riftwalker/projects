@@ -31,7 +31,11 @@ Write the answer where it belongs: the producer's own decisions on the board; an
 
 ## Briefs
 
-When a build task is next and its design is approved, write `docs/studio/briefs/NN-<name>.md` from the template in `briefs/README.md`: a complete prompt with every path the builder needs, what "done" means (tests, screenshots), and the closing duties (tick the board, inboxes, playtest steps, push to `ph1`). One brief = one session's work (one boss milestone, one region milestone). List open briefs in the board's «دستورهای کار». He starts a fresh session with it, or asks a session that can create sessions to start it.
+When a build task is next and its design is approved, write `docs/studio/briefs/NN-<name>.md` from the template in `briefs/README.md`: a complete prompt with every path the builder needs, what "done" means (tests, screenshots), and the closing duties (tick the board, inboxes, playtest steps, push to `ph1`). One brief = one session's work (one boss milestone, one region milestone). List open briefs in the board's «دستورهای کار». To start it, end your reply with a line `📨 به دفتر استودیو: دستور کار NN رو بزن` (rule 6 in `docs/studio/README.md`).
+
+## The studio office (rule 6)
+
+This session cannot create sessions or message other sessions. When the next step needs either (start a brief, wake a department whose «صندوق» just got something urgent, e.g. his answer to its decision), end the reply with one line per action, starting with `📨 به دفتر استودیو:`, in plain Persian. He pastes it to the office session (skill `studio-office`), which does it. Don't add the line when nothing needs to happen now.
 
 ## Play-tests
 
