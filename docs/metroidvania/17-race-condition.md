@@ -145,6 +145,60 @@ Right: old, broad, bearded, cyan glowing eyes, hammer on its shoulder.
 Round caps, sheepskin skirts, wind-up keys on their backs. Full body, side view, plain dark background.
 ```
 
+### پرامپت‌های صحنه (رفرنس حس اتاق، ۲۰۲۶-۱۰-۲۲)
+
+زکریا خواست کل اتاق باس هم پرامپت داشته باشه. **چیدمان دقیق (سکوها، اندازه) مال گام ۳ ـه**؛ این‌ها فقط حس و رنگ و چیزهای توی اتاقن. اتاق الان ۲۶×۱۴ کاشیه (۴۱۶×۲۲۴ پیکسل، پهن). سبک همیشه اول و کوتاه.
+
+**۱. کل صحنه، فاز ۱**
+```
+pixel art game screen, 16-bit SNES style, side-view 2D platformer boss room, low resolution,
+big visible square pixels, hard edges, flat colors, 32-color palette, no anti-aliasing, no blur, wide 16:9.
+The top of an old brass clock tower at night, warm amber lamp light. Dark brick back wall with brass pipes
+and big turning gears. In the center a huge round clock face, deep blue enamel, gold Roman numerals,
+gold hands, a big bronze bell hanging above it. Under the clock, on a stone floor, a big broken brass
+padlock with its shackle snapped. Left and right of the lock stand two bronze clockwork bell-striker
+automatons: left young and slim, red glowing eyes, hammer raised; right old and bearded, cyan glowing eyes,
+hammer on its shoulder. A tiny orange crab-like robot stands between them. No text, no UI.
+```
+
+**۲. فقط پس‌زمینه (بدون آدمک‌ها، برای لایه‌ی دیوار)**
+```
+pixel art game background layer, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, 32-color palette, no anti-aliasing, no blur, wide 16:9.
+Empty room at the top of an old brass clock tower at night, warm amber light. Dark brick wall, brass pipes,
+big gears and a slow pendulum. In the center a huge round clock face, deep blue enamel, gold Roman numerals,
+gold hands, a big bronze bell above it. Plain stone floor. No characters, no text, no UI.
+```
+
+**۳. صفحه‌ی ساعت و ناقوس، تنها (نزدیک)**
+```
+pixel art game sprite, 16-bit SNES style, low resolution, big visible square pixels, hard edges,
+flat colors, 16-color palette, no anti-aliasing, no blur.
+A huge old tower clock face, front view: deep blue enamel, gold Roman numerals, a gold sun-shaped hour hand,
+a thin gold minute hand, a thick brass rim with rivets, a bronze bell hanging above it. Plain dark background.
+```
+
+**۴. کل صحنه، فاز ۲ (داغ)**
+```
+pixel art game screen, 16-bit SNES style, side-view 2D platformer boss room, low resolution,
+big visible square pixels, hard edges, flat colors, 32-color palette, no anti-aliasing, no blur, wide 16:9.
+The top of an old clock tower, overheated: red-orange light, the blue clock face's glass cracked,
+its gold hands spinning, steam and sparks from the gears. Two bronze clockwork bell-striker automatons
+glowing red-hot, springs bursting from their seams: left young with red eyes, right old and bearded with
+cyan eyes, both swinging long bell hammers. A broken brass padlock on the floor between them.
+A tiny orange crab-like robot dodging. No text, no UI.
+```
+
+**۵. آخر کار (بعد از مرگ)**
+```
+pixel art game screen, 16-bit SNES style, side-view 2D platformer room, low resolution,
+big visible square pixels, hard edges, flat colors, 32-color palette, no anti-aliasing, no blur, wide 16:9.
+The top of an old brass clock tower, calm warm light. The big blue and gold clock shows 5:12.
+A big brass padlock in the middle, closed and whole again. Two bronze clockwork bell-striker automatons
+stand frozen face to face, each bowing politely to the other, hammers lowered: left young with dim red eyes,
+right old and bearded with dim cyan eyes. A tiny orange crab-like robot watches. No text, no UI.
+```
+
 ### سه ایده برای بدن (پیشنهاد، ۲۰۲۶-۱۰-۲۲)
 
 **الف، «دو آدمک ناقوس‌زن» (پیشنهاد من).** برج‌های ساعت قدیمی واقعاً اینو دارن (jacquemart): آدمک‌های فلزی کوکی که سر ساعت بیرون میان و با چکش به ناقوس می‌زنن.
