@@ -75,6 +75,8 @@ var pin_t0 := NONE_T
 var serial_until := NONE_T                 # the escapement is caught until this room time
 var lock_cd_until := NONE_T                # the bob stays pinned out of reach until this room time
 var esc_spark_t0 := NONE_T
+var creak_t0 := NONE_T                     # the anchor's one crooked swing in the intro (the boss derives it from its intro clock, both pages)
+var cam_lock_v = null                      # the boss's camera script (the intro's pan); the room reads it every step
 
 # per bell
 var strike_t0: Array = []
@@ -152,9 +154,12 @@ func reset() -> void:
 	move_bells()
 
 # ---------------------------------------------------------------- geometry
-func rest_rect(i: int) -> Rect2:
+static func new_rest(i: int) -> Rect2:
 	var b: Array = BELLS[i]
-	return Rect2(float(b[0] * T), float(b[2] * T), float(b[1] * T), BODY_H)
+	return Rect2(float(int(b[0]) * T), float(int(b[2]) * T), float(int(b[1]) * T), BODY_H)
+
+func rest_rect(i: int) -> Rect2:
+	return new_rest(i)
 
 func rest_cx(i: int) -> float:
 	var rc := rest_rect(i)
@@ -434,6 +439,9 @@ func esc_angle(tm: float) -> float:
 	if serialized(tm):
 		var tl2 := tick_len()
 		return 0.3 * sin(PI * tm / tl2)
+	if creak_t0 >= 0.0 and tm >= creak_t0 and tm < creak_t0 + 1.6:
+		var age := tm - creak_t0
+		return 0.1 + 0.55 * sin(TAU * age / 1.6) * exp(-age / 1.0)           # one crooked swing, creaking
 	if ph == 2:
 		return 0.62 * sin(tm * 4.3) + 0.2 * sin(tm * 9.1 + 1.0)
 	return 0.1 + 0.28 * sin(tm * 1.1) + 0.08 * sin(tm * 2.9 + 2.0)
@@ -630,6 +638,9 @@ func _seg_hits_rect(a: Vector2, b: Vector2, r: Rect2) -> bool:
 			return true
 	return false
 
+func cam_lock():
+	return cam_lock_v
+
 # ---------------------------------------------------------------- drawing: the back wall (drawn once; phase 2's picture fades in over it)
 func _textures() -> void:
 	if _tex1 == null:
@@ -679,6 +690,12 @@ func _draw_chain(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float) -> 
 		else:
 			ci.draw_rect(Rect2(floorf(px), floorf(py), 1.0, 4.0), iron)
 
+func _glow_of(i: int) -> float:
+	var b = room.boss
+	if b is RaceBoss:
+		return b.glow_of_bell(i)
+	return 0.0
+
 func _draw_bell(ci: CanvasItem, i: int, tm: float) -> void:
 	var p := bell_pose(i, tm)
 	var mode := String(p.mode)
@@ -691,6 +708,14 @@ func _draw_bell(ci: CanvasItem, i: int, tm: float) -> void:
 		var cx0 := rest_cx(i)
 		_draw_chain(ci, cx0, BEAM_Y, x + w * 0.5, y)
 		_draw_bell_body(ci, x, y, w, int(BELLS[i][3]), tm, a, float(crack_t0[i]) >= 0.0 and tm >= float(crack_t0[i]), i)
+		var gl := _glow_of(i)
+		if gl > 0.0:                                              # an automaton is about to ring it: the bell warms up and shakes
+			ci.draw_rect(Rect2(x - 1.0, y + 4.0, w + 2.0, 26.0), Color(1.0, 0.85, 0.45, 0.35 * gl))
+			ci.draw_rect(Rect2(x - 2.0, y + 28.0, w + 4.0, 3.0), Color(1.0, 0.95, 0.7, 0.8 * gl))
+		var sa := tm - float(strike_t0[i])
+		if mode == "hang" and sa >= 0.0 and sa < 0.5 and float(amp[i]) > 0.0:                    # a struck bell's harmless ring
+			var rr := 8.0 + 50.0 * sa / 0.5
+			ci.draw_arc(Vector2(x + w * 0.5, y + 14.0), rr, 0.0, TAU, 24, Color(1.0, 0.95, 0.75, 0.35 * (1.0 - sa / 0.5) * (float(amp[i]) / AMP_BIG)), 1.0)
 	elif mode == "lie" or mode == "fade":
 		_draw_chain(ci, rest_cx(i), BEAM_Y, rest_cx(i), BEAM_Y + 22.0)       # a broken chain end dangles from the beam
 		_draw_lying(ci, x, y, w, i, a)

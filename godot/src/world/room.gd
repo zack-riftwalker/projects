@@ -1671,6 +1671,8 @@ func step_guest(dt: float) -> void:
 				view.dynamic.set_cell(Vector2i(tx, ty), 0, Vector2i(2, 5))
 	if hpot != null:
 		cam.lock = hpot.cam_lock()                         # (the lobby shows no furnace: derived from the hall's state every frame, both pages)
+	if belfry != null:
+		cam.lock = belfry.cam_lock()                       # (the intro's pan up to the escapement: the boss's script, both pages)
 	if cam.lock == null:
 		update_cam(dt)
 	else:
@@ -1801,6 +1803,8 @@ func tick_len() -> float:
 func _tick_sound() -> void:
 	if world != 4:
 		return
+	if belfry != null and fight.state == "intro":
+		return                                              # (the tower's tick stops while the pair wakes up)
 	var ti := tick_i()
 	if ti != last_tick:
 		last_tick = ti
@@ -1946,6 +1950,8 @@ func step(dt: float) -> void:
 	_step_pad()
 	if hpot != null:
 		cam.lock = hpot.cam_lock()                         # (the lobby shows no furnace: derived from the hall's state every frame, both pages)
+	if belfry != null:
+		cam.lock = belfry.cam_lock()                       # (the intro's pan up to the escapement: the boss's script, both pages)
 	if cam.lock == null:
 		update_cam(dt)
 	else:

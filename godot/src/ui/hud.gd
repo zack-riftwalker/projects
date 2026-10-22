@@ -99,12 +99,29 @@ func _draw() -> void:
 			bar_bg = bar_c.darkened(0.75)
 			bar_hi = bar_c.lightened(0.45)
 			bar_name = String(hb[2])
-		PixelText.draw_text(self, bar_name, bx, byy - 9, Game.COL.paper, {"tiny": true, "outline": Game.COL.ink})
-		Gfx.panel(self, bx - 2, byy - 2, bw + 4, 7, "#231d2e", Game.COL.ink)
-		draw_rect(Rect2(bx, byy, bw, 3), bar_bg)
-		var fw := roundi(bw * bar_f)
-		draw_rect(Rect2(bx, byy, fw, 3), Color.WHITE if b.flash > 0.0 else bar_c)
-		draw_rect(Rect2(bx, byy, fw, 1), bar_hi)
+		if b.has_method("hud_bars"):                      # two bars side by side (RACE CONDITION: TICK red on the left, TOCK cyan on the right): [fraction, colour, name, down]
+			Gfx.panel(self, bx - 2, byy - 2, bw + 4, 7, "#231d2e", Game.COL.ink)
+			var bars: Array = b.hud_bars()
+			var half := (bw - 4) / 2
+			for bi in range(bars.size()):
+				var bb: Array = bars[bi]
+				var bxx := bx + bi * (half + 4)
+				var down: bool = bool(bb[3])
+				var cc := Color(bb[1])
+				if down:
+					cc = cc.darkened(0.6)
+				PixelText.draw_text(self, String(bb[2]), bxx, byy - 9, cc.lightened(0.2) if not down else Color("#6a6270"), {"tiny": true, "outline": Game.COL.ink})
+				draw_rect(Rect2(bxx, byy, half, 3), cc.darkened(0.75))
+				var fwb := roundi(half * float(bb[0]))
+				draw_rect(Rect2(bxx, byy, fwb, 3), Color.WHITE if (b.th[bi].flash > 0.0) else cc)
+				draw_rect(Rect2(bxx, byy, fwb, 1), cc.lightened(0.45))
+		else:
+			PixelText.draw_text(self, bar_name, bx, byy - 9, Game.COL.paper, {"tiny": true, "outline": Game.COL.ink})
+			Gfx.panel(self, bx - 2, byy - 2, bw + 4, 7, "#231d2e", Game.COL.ink)
+			draw_rect(Rect2(bx, byy, bw, 3), bar_bg)
+			var fw := roundi(bw * bar_f)
+			draw_rect(Rect2(bx, byy, fw, 3), Color.WHITE if b.flash > 0.0 else bar_c)
+			draw_rect(Rect2(bx, byy, fw, 1), bar_hi)
 	if b != null and room.fight.state == "intro":
 		var k := _ease_out(clampf((1.5 - room.fight.t - 0.3) / 0.5, 0.0, 1.0))
 		if k > 0.0:

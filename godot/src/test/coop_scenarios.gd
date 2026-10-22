@@ -3573,67 +3573,102 @@ func tower_fight_host(room_id: String, host_x: float, guest_x: float, forced: Ar
 	await wait_secs(1.0)
 	return [started, seen.size(), tg, st]
 
-# RACE CONDITION v3 (17-race-build.md). M1: the belfry on both pages: the guest rides a swinging bell without falling through, sees the host's strikes,
-# the phase change and the tick change. (Later milestones add the fight itself.)
+# RACE CONDITION v3 (17-race-build.md). M1: the belfry on both pages (the guest rides a swinging bell, sees the strikes, phase 2 and the new tick). M2: phase 1:
+# both players are read (TICK one, TOCK the other), the guest sees every plan's cue 0.30 s or more before it turns active, is hurt by what it was shown, and its
+# claw hits on an automaton reach the host.
+func race_plans(b, seen: Dictionary) -> void:
+	for q in b.th:
+		if not q.plan.is_empty() and not seen.has(int(q.plan.seq)):
+			seen[int(q.plan.seq)] = String(q.plan.tgt)
+
 func sc_co_race() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
+	Game.flags["intro:RACE"] = true                            # (the short intro)
 	if role == "host":
-		var r := boss_arena("T06", 60.0, 340.0)
+		var r := boss_arena("T06", 150.0, 300.0)
 		await wait_secs(1.0)
 		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		var b: RaceBoss = r.boss
 		var hl: BelfryHall = r.belfry
+		var seen := {}
 		var t0 := Time.get_ticks_msec()
 		var f := 0
-		var phase2 := false
-		while Time.get_ticks_msec() - t0 < 14000.0 * slow:
+		var rode := 0
+		while Time.get_ticks_msec() - t0 < 30000.0 * slow:
 			p.inv = 999.0
 			p.hp = p.max_hp
 			f += 1
-			if f % 90 == 5:
-				hl.strike(1)
-				hl.strike(0)
-			if not phase2 and Time.get_ticks_msec() - t0 > 8000.0 * slow:
-				phase2 = true
-				hl.ph = 2
-				hl.p2_t0 = r.time
-				hl.set_tick(0.6, r.time)
+			Controls.script_input = {}
+			race_plans(b, seen)
+			for q in b.th:                                      # (the guest's claws must not finish the fight: the rules are the test)
+				if q.st == 0 and float(q.hp) < 6.0:
+					q.hp = 6.0
+			b._sums()
 			await get_tree().physics_frame
-		return [true, "host: struck bells, phase 2 at %.1f, tick %.2f" % [hl.p2_t0, hl.tick_len()]]
+		var tg := {"p1": 0, "p2": 0}
+		for sq in seen:
+			if tg.has(seen[sq]):
+				tg[seen[sq]] += 1
+		var ok_hits: int = int(coop().verdicts.get("OK", 0))
+		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1, "host: started %s, %d plans (p1 %d, p2 %d), the guest's claw hits accepted %d (verdicts %s)" % [started, seen.size(), tg.p1, tg.p2, ok_hits, str(coop().verdicts)]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
-	var r2 := boss_arena("T06", 60.0, 340.0)
-	await wait_secs(1.0)
-	var g = mgr().player
-	var gh: BelfryHall = r2.belfry
-	var frames := 0
-	var rode := 0
-	var max_dx := 0.0
-	var fell := 0
-	var saw_p2 := false
-	var tick_after := 0.0
+	var r2 := boss_arena("T06", 150.0, 300.0)
+	var found := {"b": null}
+	await wait_until(func():
+		for e in mgr().room.ents:
+			if e is RaceBoss:
+				found.b = e
+		return found.b != null, 15.0)
+	var pup: RaceBoss = found.b
+	if pup == null:
+		return [false, "no RaceBoss puppet"]
+	await wait_until(func(): return pup.active, 25.0)
+	var seen2 := {}
+	var hits := 0
+	var swings := 0
+	var f2 := 0
+	var last_hp := -1
 	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < 13000.0 * slow:
-		g.inv = 999.0
+	while Time.get_ticks_msec() - t1 < 30000.0 * slow:
+		var g = mgr().player
+		f2 += 1
+		if not is_instance_valid(pup):
+			break
+		race_plans(pup, seen2)
+		if last_hp >= 0 and g.hp < last_hp:
+			hits += 1
 		g.hp = g.max_hp
-		var top: float = float(gh.pool[1].y)
-		if frames < 5:
-			g.x = 335.0
-			g.y = 384.0 - g.h - 2.0
-		Controls.script_input = {}
-		frames += 1
-		if frames > 20:
-			if g.on_ground and absf(g.y + g.h - top) < 3.0:
-				rode += 1
-			if g.y + g.h > 400.0:
-				fell += 1
-			max_dx = maxf(max_dx, absf(gh.swing_dx(1, r2.time)))
-		if gh.ph == 2:
-			saw_p2 = true
-			tick_after = gh.tick_len()
+		last_hp = g.hp
+		g.inv = 0.0 if f2 % 7 != 0 else g.inv
+		# go to the nearest automaton that is down on the floor and swing
+		var near = null
+		for q in pup.th:
+			if q.st == 0 and absf(float(q.y) - 432.0) < 4.0 and (near == null or absf(float(q.x) - (g.x + 5.0)) < absf(float(near.x) - (g.x + 5.0))):
+				near = q
+		var keys := {}
+		if near != null:
+			var dx: float = float(near.x) - (g.x + 5.0)
+			if absf(dx) > 24.0:
+				keys["right" if dx > 0.0 else "left"] = true
+			else:
+				g.face = 1.0 if dx > 0.0 else -1.0
+				keys["attack"] = f2 % 14 < 2 and g.atk_cd <= 0.0
+				swings += 1 if keys.attack else 0
+		Controls.script_input = keys
 		await get_tree().physics_frame
-	var ok: bool = rode > (frames - 20) * 9 / 10 and fell == 0 and max_dx > 1.5 and saw_p2 and absf(tick_after - 0.6) < 0.001
+	Controls.script_input = {}
+	var short := 0
+	for sq in pup.kit_active_seen:
+		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and pup.pseen.get(sq, "") == "cue":
+			short += 1
+	var mine := 0
+	for sq in seen2:
+		if seen2[sq] == "p2":
+			mine += 1
 	await wait_secs(1.0)
-	return [ok, "guest: rode the bell %d of %d frames (fell %d), saw a swing of %.1f px, phase 2 seen %s, tick after it %.2f" % [rode, frames - 20, fell, max_dx, str(saw_p2), tick_after]]
+	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1, "guest: saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times, %d swings, violations '%s' '%s'" % [seen2.size(), mine, short, hits, swings, pup.kit_violation, pup.arena_violation]]
 
 func sc_co_loopboss() -> Array:
 	if not await wait_joined():

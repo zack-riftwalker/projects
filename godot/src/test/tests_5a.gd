@@ -2,7 +2,7 @@ extends Tests4b3
 class_name Tests5a
 # Unit tests of phase 5A (THREAD TOWER). run_tests.gd hands names it does not know to run().
 
-const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "race3", "loopboss", "deadlockboss", "plugins5a", "tower4b1"]
+const NAMES5 := ["rooms5a", "w4assets", "tick5a", "breakpoint", "w4enemies", "race3", "loopboss", "deadlockboss", "plugins5a", "tower4b1", "fightsim"]
 
 func run(name: String):
 	match name:
@@ -12,6 +12,10 @@ func run(name: String):
 		"breakpoint": return await t_breakpoint()
 		"w4enemies": return await t_w4enemies()
 		"race3": return await t_race3()
+		"fightsim":
+			if OS.get_environment("BOSS") == "T06":
+				return await race_fightsim()
+			return await super.run(name)
 		"loopboss": return await t_loopboss()
 		"deadlockboss": return await t_deadlockboss()
 		"plugins5a": return await t_plugins5a()
@@ -923,6 +927,443 @@ func race_plat(r: Room, i: int) -> Rect2:
 	var m: Dictionary = r.belfry.pool[i]
 	return Rect2(float(m.x), float(m.y), float(m.w), 6.0)
 
+# a T06 room with the fight running (the short intro), the players hurt-proof unless a test says otherwise
+func race_fight_room() -> Room:
+	Game.flags["intro:RACE"] = true
+	var md: Dictionary = Game.rooms_meta.rooms.T06
+	var trig: float = float(md.boss.trigger_x)
+	md.boss["trigger_x"] = 1e9
+	var r := new_room("T06")
+	md.boss["trigger_x"] = trig
+	r.player.x = 200.0
+	r.player.y = 422.0
+	r.player.inv = 999.0
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	return r
+
+func race_step(r: Room, n: int) -> void:
+	for f in range(n):
+		r.player.inv = 999.0
+		r.player.hp = r.player.max_hp
+		r.step(Game.STEP)
+
+func race_ring_ok(b: RaceBoss, c: Vector2, rad: float) -> bool:
+	for bx in b.ring_boxes(c, rad):
+		var mid := Vector2(float(bx.x) + 5.0, float(bx.y) + 5.0)
+		if absf(mid.distance_to(c) - rad) > 0.6:
+			return false
+	return true
+
+func race_m2(res: Dictionary) -> void:
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
+	Game.diff = "normal"
+	var r := race_fight_room()
+	var b: RaceBoss = r.boss as RaceBoss
+	if b == null or r.fight.state != "active":
+		fail(res, "M2: the fight did not start (%s)" % r.fight.state)
+		return
+	var hl: BelfryHall = r.belfry
+	# 1. hp: TICK 40 %, TOCK the rest of Game.boss_hp (90 at normal); co-op x1.5; two bars
+	if b.max_hp != 90 or int(b.th[0].max) != 36 or int(b.th[1].max) != 54 or absf(b.hpf - 90.0) > 0.01:
+		fail(res, "hp %d = %d + %d, want 90 = 36 + 54" % [b.max_hp, int(b.th[0].max), int(b.th[1].max)])
+	var bc := RaceBoss.new(r, 0, 0, 90)
+	bc.scale_hp(1.5)
+	if bc.max_hp != 135 or int(bc.th[0].max) != 54 or int(bc.th[1].max) != 81:
+		fail(res, "co-op hp %d = %d + %d, want 135 = 54 + 81" % [bc.max_hp, int(bc.th[0].max), int(bc.th[1].max)])
+	bc.free()
+	for q in b.th:
+		q.gap = 999.0                                         # (the automata wait: the plans below are started by hand)
+	# 2. reads: TOCK where the target is, TICK 0.5 s ahead of its velocity (average over 0.25 s), inside the room; a still target gives the same point for both
+	r.player.x = 195.0
+	r.player.y = 400.0
+	b.hist["p1"] = []
+	for k in range(16):
+		b.hist["p1"].append([r.time - 0.25 + float(k) * (0.25 / 15.0), 100.0 + 25.0 * float(k) / 15.0, 405.0])
+	r.player.x = 120.0
+	var rt0 := b.read_point(0, "p1")
+	var rt1 := b.read_point(1, "p1")
+	if absf(rt1.x - 125.0) > 0.01 or absf(rt0.x - (125.0 + 50.0)) > 6.0 or absf(rt0.y - rt1.y) > 6.0:
+		fail(res, "reads: TOCK %.1f (want 125), TICK %.1f (want ~175)" % [rt1.x, rt0.x])
+	b.hist["p1"] = [[r.time - 0.25, 125.0, 405.0], [r.time, 125.0, 405.0]]
+	if absf(b.read_point(0, "p1").x - b.read_point(1, "p1").x) > 0.01:
+		fail(res, "a still target is read differently by the two")
+	b.hist["p1"] = [[r.time - 0.25, 330.0, 405.0], [r.time, 390.0, 405.0]]
+	r.player.x = 385.0
+	if b.read_point(0, "p1").x > RaceBoss.ARENA_R + 0.01:
+		fail(res, "TICK's prefetch left the room (%.0f)" % b.read_point(0, "p1").x)
+	r.player.x = 200.0
+	b.hist["p1"] = []
+	# 3. every phase-1 plan: a cue of two beats (0.70 s) with nothing that hurts, then the active part, then its recovery; difficulty scales cues and recoveries
+	var rec_want := {"strike": 0.3, "slam": 0.5, "clapper": 0.4, "rope": 0.3}
+	var act_want := {"strike": 0.5, "slam": 0.45, "clapper": 0.15, "rope": 0.5}
+	for id in ["strike", "slam", "clapper", "rope"]:
+		for diff in ["normal", "easy"]:
+			Game.diff = diff
+			r.player.x = 200.0
+			r.player.y = 422.0
+			r.projs.clear()
+			b._start(id, "p1")
+			var ai := 1 if id == "clapper" else 0
+			var q: Dictionary = b.th[ai]
+			var p: Dictionary = q.plan
+			if p.is_empty() or String(p.id) != id:
+				fail(res, "%s: no plan" % id)
+				continue
+			var tm := 1.3 if diff == "easy" else 1.0
+			var cue: float = float(p.t)
+			if absf(cue - 0.7 * tm) > 0.001:
+				fail(res, "%s %s cue %.3f, want %.3f" % [diff, id, cue, 0.7 * tm])
+			var boxes_in_cue := 0
+			var boxes_active := 0
+			var max_dmg := 0
+			var t_act := 0.0
+			var t_rec := 0.0
+			var ev := ""
+			var proj_seen := false
+			for f in range(600):
+				ev = b.plan_step(Game.STEP)
+				if not q.plan.is_empty():
+					if String(q.plan.ph) == "cue":
+						boxes_in_cue += b.harmboxes().size()
+					elif String(q.plan.ph) == "active":
+						if id == "strike" and f % 5 == 0 and not race_ring_ok(b, b.ring_center(q.plan), RaceBoss.RING_R * clampf(b._el(q.plan) / float(q.plan.act_len), 0.0, 1.0)):
+							fail(res, "strike: a ring box is off its circle")
+						boxes_active += b.harmboxes().size()
+						t_act += Game.STEP
+						for hb in b.harmboxes():
+							max_dmg = maxi(max_dmg, int(hb.get("dmg", 1)))
+						if id == "clapper":
+							for pj in r.projs:
+								if pj.get("clapper", false):
+									proj_seen = true
+					elif String(q.plan.ph) == "recover":
+						t_rec += Game.STEP
+				if ev == "done" or q.plan.is_empty():
+					break
+			if boxes_in_cue != 0:
+				fail(res, "%s: %d harm boxes during the cue" % [id, boxes_in_cue])
+			if id != "clapper" and boxes_active == 0:
+				fail(res, "%s: nothing hurts while it is active" % id)
+			if max_dmg > 1:
+				fail(res, "%s: a %d-damage box (all phase-1 singles are 1)" % [id, max_dmg])
+			if absf(t_act - float(act_want[id])) > 0.04:
+				fail(res, "%s active %.3f s, want %.2f" % [id, t_act, float(act_want[id])])
+			if absf(t_rec - float(rec_want[id]) * tm) > 0.04:
+				fail(res, "%s %s recovers %.3f s, want %.2f" % [diff, id, t_rec, float(rec_want[id]) * tm])
+			if id == "clapper" and not proj_seen:
+				fail(res, "the clapper never left")
+			q.plan = {}
+			q.mode = "idle"
+			q.gap = 999.0
+			q.hammer = 0
+	Game.diff = "normal"
+	# 4. the ring wave: a band 6 px thick that grows 0 -> 80 px in 0.5 s; a body on the band is hurt, 12 px inside or outside is not; the slam box is where the read point's ground is
+	var ctr := Vector2(72.0, 398.0)
+	for rad in [20.0, 50.0, 80.0]:
+		var bs := b.ring_boxes(ctr, rad)
+		var on_band := false
+		var inside := false
+		var outside := false
+		for bx in bs:
+			if Game.overlap({"x": ctr.x + rad - 4.0, "y": ctr.y - 3.0, "w": 8.0, "h": 8.0}, bx):
+				on_band = true
+		for bx in bs:
+			if Game.overlap({"x": ctr.x + rad - 16.0, "y": ctr.y - 3.0, "w": 8.0, "h": 8.0}, bx):
+				inside = true
+			if Game.overlap({"x": ctr.x + rad + 8.0, "y": ctr.y - 3.0, "w": 8.0, "h": 8.0}, bx):
+				outside = true
+		if not on_band or inside or outside:
+			fail(res, "ring %.0f: on the band %s, inside %s, outside %s" % [rad, str(on_band), str(inside), str(outside)])
+	# 5. a caught clapper that comes back hurts TOCK for 2 and dazes it 0.7 s; the same on TICK only hurts
+	var tock: Dictionary = b.th[1]
+	var tick: Dictionary = b.th[0]
+	var hp0: float = tock.hp
+	r.attacker = r.player
+	var box: Dictionary = b.hurtboxes()[1]
+	b.hit(2, 1.0, 0.0, "catch", box)
+	if absf(float(tock.hp) - (hp0 - 2.0)) > 0.01 or float(tock.daze_until) < r.time + 0.69:
+		fail(res, "a returned clapper: TOCK hp %.1f (want %.1f), dazed until %.2f (now %.2f)" % [float(tock.hp), hp0 - 2.0, float(tock.daze_until), r.time])
+	var hp1: float = tick.hp
+	b.hit(2, 1.0, 0.0, "catch", b.hurtboxes()[0])
+	if float(tick.daze_until) > r.time or absf(float(tick.hp) - (hp1 - 2.0)) > 0.01:
+		fail(res, "a returned clapper dazed TICK or missed it")
+	tock.daze_until = -1.0
+	# 6. the bars: fractions per automaton, an empty one when down
+	var bars := b.hud_bars()
+	if absf(float(bars[0][0]) - float(tick.hp) / 36.0) > 0.001 or absf(float(bars[1][0]) - float(tock.hp) / 54.0) > 0.001 or String(bars[0][2]) != "TICK" or String(bars[1][2]) != "TOCK":
+		fail(res, "the two bars read %s" % str(bars))
+	race_sim(res, r, b)
+	# 7. no contact damage: a body standing in an idle automaton is not hurt
+	for q in b.th:
+		q.plan = {}
+		q.mode = "idle"
+		q.gap = 999.0
+		q.daze_until = -1.0
+		q.hammer = 0
+		q.hp = float(q.max)
+	b._sync_mirror()
+	r.player.x = float(b.th[0].x) - 5.0
+	r.player.y = float(b.th[0].y) - 12.0
+	r.player.hp = r.player.max_hp
+	var hp_c: int = r.player.hp
+	for f in range(90):
+		r.player.inv = 0.0
+		r.player.x = float(b.th[0].x) - 5.0
+		r.player.y = float(b.th[0].y) - 12.0
+		r.player.vy = 0.0
+		r.step(Game.STEP)
+	if r.player.hp != hp_c or not b.harmboxes().is_empty():
+		fail(res, "touching an idle automaton hurts (hp %d -> %d, %d harm boxes)" % [hp_c, r.player.hp, b.harmboxes().size()])
+	# 8. the net: what the host sends, a puppet applies and sends back unchanged (two bodies, two plans, the hall)
+	for q in b.th:
+		q.gap = 0.2
+	for f in range(60 * 6):
+		r.player.inv = 999.0
+		r.player.x = 200.0
+		r.player.y = 422.0
+		r.step(Game.STEP)
+		if f % 20 == 0:
+			var fa := b.net_fields()
+			var pup := RaceBoss.new(r, 0, 0, 90)
+			pup.puppet = true
+			pup.net_apply(JSON.parse_string(JSON.stringify(fa)))
+			var fb := pup.net_fields()
+			if JSON.stringify(fa) != JSON.stringify(fb):
+				var which := []
+				for k in range(mini(fa.size(), fb.size())):
+					if JSON.stringify(fa[k]) != JSON.stringify(fb[k]):
+						which.append("%d:%s/%s" % [k, JSON.stringify(fa[k]).left(60), JSON.stringify(fb[k]).left(60)])
+				fail(res, "the puppet's fields differ at frame %d %s" % [f, str(which)])
+				pup.free()
+				break
+			pup.free()
+	# 9. the long intro (first time 6.0 s, then 2.0 s): the camera pans to the escapement, the eyes light at 3.0 s, the line at 3.4 s, the tick stops
+	Game.flags.erase("intro:RACE")
+	r.queue_free()
+	var md: Dictionary = Game.rooms_meta.rooms.T06
+	var trig: float = float(md.boss.trigger_x)
+	md.boss["trigger_x"] = 1e9
+	var ri := new_room("T06")
+	md.boss["trigger_x"] = trig
+	var bi: RaceBoss = ri.boss
+	if absf(bi.intro_len() - 6.0) > 0.001:
+		fail(res, "the first intro is %.1f s, want 6" % bi.intro_len())
+	ri.player.x = 120.0
+	ri.player.y = 422.0
+	ri._start_intro()
+	var el_eyes := -1.0
+	var el_say := -1.0
+	var cam_mid := -1.0
+	var cam_late := false
+	for f in range(60 * 7):
+		ri.player.inv = 999.0
+		ri.step(Game.STEP)
+		if bi.intro_t0 < 0.0:
+			continue
+		var el := bi.intro_el()
+		if el_eyes < 0.0 and bi.th[0].eye and bi.th[1].eye:
+			el_eyes = el
+		if el_say < 0.0 and bi.say_k == 1:
+			el_say = el
+		if absf(el - 1.25) < 0.01:
+			var cl = bi.cam_lock_now()
+			cam_mid = float(cl.y) if cl != null else -1.0
+		if el > 3.05 and ri.fight.state == "intro" and bi.cam_lock_now() != null:
+			cam_late = true
+	if absf(el_eyes - 3.0) > 0.05 or absf(el_say - 3.4) > 0.05:
+		fail(res, "intro: eyes at %.2f s (want 3.0), the line at %.2f s (want 3.4)" % [el_eyes, el_say])
+	if absf(cam_mid - 132.0) > 3.0 or cam_late:
+		fail(res, "intro camera: y %.1f at 1.25 s (want ~132), still scripted after 3 s: %s" % [cam_mid, str(cam_late)])
+	if ri.fight.state != "active":
+		fail(res, "the intro never ended (%s)" % ri.fight.state)
+	if not Game.flag("intro:RACE") or absf(bi.intro_len() - 2.0) > 0.001:
+		fail(res, "the second intro is not short")
+	ri.queue_free()
+	# 10. the kill (skip boss): breakpoint, the flag, the east door open on rows 23..26
+	Game.flags["intro:RACE"] = true
+	var rk := race_fight_room()
+	rk.attacker = rk.player
+	if not rk.skip_boss():
+		fail(res, "skip boss did not work")
+	var guard := 0
+	while rk.fight.state != "done" and guard < 1200:
+		rk.player.inv = 99.0
+		rk.step(Game.STEP)
+		guard += 1
+	if rk.fight.state != "done" or not Game.tools.get("breakpoint", false) or not Game.flag("boss:RACE"):
+		fail(res, "the reward: state %s, breakpoint %s, flag %s" % [rk.fight.state, str(Game.tools.get("breakpoint", false)), str(Game.flag("boss:RACE"))])
+	rk.update_doors()
+	var de = rk.grid.door_at("E", 24)
+	if de == null or not de.open:
+		fail(res, "T06:E stays closed after the fight")
+	rk.queue_free()
+	Game.flags.erase("boss:RACE")
+	Game.tools["breakpoint"] = false
+
+# a 40 s fight with a player that stands on the floor under the bells: hops, surfaces, never the same plan twice, both automata at once, strikes not together, no contact damage
+func race_sim(res: Dictionary, r: Room, b: RaceBoss) -> void:
+	for q in b.th:
+		q.hp = float(q.max)
+		q.gap = 0.5
+		q.plan = {}
+		q.mode = "idle"
+		q.n = 0
+		q.last = ""
+		q.daze_until = -1.0
+		q.hammer = 0
+	b._sums()
+	var surfaces := [432.0, 384.0, 336.0, 272.0]
+	var begins: Array = []                                   # [time, automaton, id] of every active start
+	var seen_seq := {}
+	var last_id := ["", ""]
+	var repeats := 0
+	var both_at_once := 0
+	var off_surface := 0
+	var hops := [0, 0]
+	var prev_mode := ["", ""]
+	var plans := [{}, {}]
+	r.player.x = 200.0
+	r.player.y = 422.0
+	for f in range(60 * 40):
+		r.player.hp = r.player.max_hp
+		r.player.inv = 0.0
+		if f % 3 == 0:
+			r.player.x = 200.0 + 120.0 * sin(float(f) / 60.0 * 0.5)
+			r.player.y = 422.0
+			r.player.vy = 0.0
+		r.step(Game.STEP)
+		var plan_now := [false, false]
+		for i in range(2):
+			var q: Dictionary = b.th[i]
+			if String(q.mode) == "hop" and prev_mode[i] != "hop":
+				hops[i] += 1
+			prev_mode[i] = String(q.mode)
+			if not q.plan.is_empty():
+				plan_now[i] = true
+				var sq: int = int(q.plan.seq)
+				if not seen_seq.has(sq):
+					seen_seq[sq] = true
+					if last_id[i] == String(q.plan.id):
+						repeats += 1
+					last_id[i] = String(q.plan.id)
+					plans[i][String(q.plan.id)] = int(plans[i].get(String(q.plan.id), 0)) + 1
+				if q.plan.ph == "active" and not q.plan.get("_logged", false):
+					q.plan["_logged"] = true
+					begins.append([r.time, i, String(q.plan.id)])
+			var standing: bool = String(q.mode) in ["idle", "wait", "crouch"] or (not q.plan.is_empty() and String(q.plan.id) in ["strike", "clapper"])
+			if standing:
+				var ok := false
+				for sy in surfaces:
+					if absf(float(q.y) - sy) < 3.0:
+						ok = true
+				if not ok:
+					off_surface += 1
+		if plan_now[0] and plan_now[1]:
+			both_at_once += 1
+	var min_gap := 99.0
+	for i in range(begins.size()):
+		for j in range(i + 1, begins.size()):
+			if begins[i][1] != begins[j][1]:
+				min_gap = minf(min_gap, absf(float(begins[i][0]) - float(begins[j][0])))
+	if repeats > 0:
+		fail(res, "an automaton repeated its plan %d times in a row" % repeats)
+	if both_at_once < 60:
+		fail(res, "the automata never ran plans at the same time (%d frames)" % both_at_once)
+	if min_gap < 0.15:
+		fail(res, "two plans of different automata went active %.2f s apart (< 0.15)" % min_gap)
+	if off_surface > 30:
+		fail(res, "an automaton stood in mid-air for %d frames" % off_surface)
+	if hops[0] < 3 or hops[1] < 3:
+		fail(res, "hops: TICK %d, TOCK %d in 40 s" % [hops[0], hops[1]])
+	for i in range(2):
+		if (plans[i] as Dictionary).size() < 2:
+			fail(res, "%s used only %s in 40 s" % [RaceBoss.NAMES[i], str(plans[i])])
+	if begins.size() < 8:
+		fail(res, "only %d plans in 40 s" % begins.size())
+	print("RACESIM plans TICK %s TOCK %s, %d active starts, min gap %.2f s, both at once %d frames, hops %s, mid-air %d" % [str(plans[0]), str(plans[1]), begins.size(), min_gap, both_at_once, str(hops), off_surface])
+
+# `BOSS=T06 --test=fightsim` (17-race-build.md section 8): a simulated good solo player against both automata. The bot stands next to the automaton it hits and
+# swings every 0.4 s while that one is open: not in the air, not mid-ring (a strike's cue and active part throw a ring over everything near its bell) and not
+# mid-kick (the rope). A slam, a clapper shot and the cues of the rope are aimed somewhere else, so a player beside the automaton may hit it. The bot needs 0.4 s
+# to switch, 0.15 s more per bell level to climb, and backs off for 0.7 s when it is not sure of a cue near it. It prints the mix of plans, how long the first 50 %
+# of the hp (phase 1) took and how the fight ended.
+func race_open(q: Dictionary) -> bool:
+	if q.st != 0 or String(q.mode) == "hop" or String(q.mode) == "crouch":
+		return false
+	var p: Dictionary = q.plan
+	if p.is_empty():
+		return true
+	if String(p.id) == "strike" and String(p.ph) != "recover":
+		return false
+	if String(p.id) == "rope" and String(p.ph) == "active":
+		return false
+	return true
+func race_fightsim() -> bool:
+	race_setup()
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
+	var secs := float(OS.get_environment("FIGHT_S")) if OS.get_environment("FIGHT_S") != "" else 240.0
+	var r := race_fight_room()
+	var b: RaceBoss = r.boss as RaceBoss
+	var counts := [{}, {}]
+	var seen := {}
+	var tgt := -1
+	var busy := 0.0
+	var next_hit := 0.0
+	var t_p1 := -1.0
+	var level_of := func(y: float) -> int:
+		return roundi((432.0 - y) / 48.0)
+	var bot_level := 0
+	var hits_taken := 0
+	var swings := 0
+	var f := 0
+	while f < int(secs * 60.0):
+		f += 1
+		var now := float(f) / 60.0
+		r.player.inv = 999.0
+		r.player.hp = r.player.max_hp
+		busy = maxf(0.0, busy - Game.STEP)
+		# the bot's choice: the vulnerable automaton with the most hp left, else the one it is on
+		var pick := -1
+		for q in b.th:
+			if q.st != 0:
+				continue
+			if race_open(q) and (pick < 0 or float(q.hp) > float(b.th[pick].hp)):
+				pick = int(q.i)
+		if pick >= 0 and pick != tgt:
+			var lv: int = level_of.call(float(b.th[pick].y))
+			busy = 0.7 + 0.2 * absf(float(lv - bot_level)) if tgt >= 0 or bot_level != lv else 0.5
+			bot_level = lv
+			tgt = pick
+		var tq: Dictionary = b.th[maxi(tgt, 0)]
+		r.player.x = float(tq.x) - 30.0 * float(tq.face) - 5.0
+		r.player.y = float(tq.y) - 10.0
+		r.player.vy = 0.0
+		for q in b.th:                                              # a ring about to open under the bot: back off
+			if q.st == 0 and not q.plan.is_empty() and String(q.plan.id) == "strike" and q.plan.ph == "cue" and absf(float(q.x) - (r.player.x + 5.0)) < 100.0 and float(q.plan.t) < 0.4 and busy < 0.1:
+				busy = 0.7
+		r.step(Game.STEP)
+		if now >= next_hit and busy <= 0.0 and tgt >= 0 and tq.st == 0:
+			if race_open(tq):
+				swings += 1
+				next_hit = now + 0.55
+				r.attacker = r.player
+				b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0 if b.hurtboxes().size() == 1 else (0 if int(tq.i) == int(b.hurtboxes()[0].th) else 1)])
+		for q in b.th:
+			if not q.plan.is_empty() and not seen.has(int(q.plan.seq)):
+				seen[int(q.plan.seq)] = true
+				counts[int(q.i)][String(q.plan.id)] = int(counts[int(q.i)].get(String(q.plan.id), 0)) + 1
+		if t_p1 < 0.0 and b.hpf <= float(b.max_hp) * 0.5:
+			t_p1 = now
+		if b.dying or b.dead or b.alive_n() == 0:
+			break
+	print("FIGHTSIM T06 %.0f s: TICK %s, TOCK %s, hp %.1f/%d, swings %d, phase 1 (to 50 %%) over at %.0f s, the fight ended at %.0f s" % [secs, str(counts[0]), str(counts[1]), b.hpf, b.max_hp, swings, t_p1, float(f) / 60.0])
+	r.queue_free()
+	Controls.script_input = null
+	Game.fresh()
+	return report("fightsim", true, "")
+
 # MV5A-06 / 17-race-build.md: RACE CONDITION
 func t_race3() -> bool:
 	race_setup()
@@ -1163,6 +1604,8 @@ func t_race3() -> bool:
 	if h4.tick_f_at(tb + 0.3) < 0.49 or h4.tick_f_at(tb + 0.3) > 0.51 or h4.tick_i_at(tb + 0.65) != h4.tick_i_at(tb) + 1:
 		fail(res, "the beat clock does not follow 0.6 s ticks after the change")
 	r4.queue_free()
+	# --- M2 -------------------------------------------------------------------------------------------------------------
+	race_m2(res)
 	Controls.script_input = null
 	Game.fresh()
 	return report("race3", res.ok, info + res.info)

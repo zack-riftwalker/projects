@@ -259,6 +259,29 @@ func _ready() -> void:
 			bb.hpf = float(bb.max_hp) * (float(bp[1]) if bp.size() > 1 else 0.2)
 			bb.hp = ceili(bb.hpf)
 			bb.on_damage()
+		elif Game.scene == "race_intro" or Game.scene.begins_with("racetell:") or Game.scene.begins_with("racefight"):          # screenshot helpers: RACE CONDITION's intro from its first frame (race_intro), or the fight with a plan just begun (racetell:<id>[:<x>:<y>])
+			var rt := Game.scene.split(":")
+			var rx := float(rt[2]) if rt.size() > 2 else 120.0
+			var ry := float(rt[3]) if rt.size() > 3 else 422.0
+			manager.swap_to("T06", Vector2(rx, ry))
+			var rtp = manager.player
+			rtp.x = rx
+			rtp.y = ry
+			rtp.inv = 999.0
+			var rtr: Room = manager.room
+			if rt[0] == "race_intro":
+				rtp.x = 120.0
+				rtr._start_intro()
+			else:
+				Game.flags["intro:RACE"] = true
+				rtr._start_intro()
+				rtr.fight.t = 0.0
+				rtr._begin_fight()
+				var rtb = rtr.boss
+				if rt[0] == "racetell":
+					for rq in rtb.th:
+						rq.gap = 999.0
+					rtb._start(rt[1], "p1")
 		elif Game.scene.begins_with("race:"):          # screenshot helper: RACE CONDITION's belfry (race:<hp>:<x>:<y>[:<demo>]); 1.0 phase 1, 0.4 phase 2, 0 the after-state (M1: the hall alone, the boss inert); demo: bells struck / fallen, cells corrupt / open
 			var ra := Game.scene.substr(5).split(":")
 			var rhp := float(ra[0])
