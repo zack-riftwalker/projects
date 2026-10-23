@@ -25,7 +25,7 @@ The old boss (`godot/src/enemies/race_boss.gd`, kit-era, MV5A-06) is replaced. K
 | M3 | double write and the clash, guarding, the escapement lock, buffer corruption, bell crack/fall/re-hang | **done** (2026-10-22, notes below) |
 | M4 | phase 2 (transition, switch, bell drop, triple strike, combo, holes), alone mode, rewind | done |
 | M5 | death scene and reward, voices and interleaved subtitles, sounds, music, logs line | not started |
-| M6 | loss menu, foreshadow (TB2, T04), after-state (tower tick, T02/TA1), full tests, web export | not started |
+| M6 | loss menu, foreshadow (TB2, T04), after-state (tower tick, T02/TA1), full tests, web export | done |
 
 ### Milestone notes (what changed from the plan, decisions made without asking)
 
@@ -75,6 +75,10 @@ The old boss (`godot/src/enemies/race_boss.gd`, kit-era, MV5A-06) is replaced. K
 - **Sounds** (`tools/godot/sfx/make_race_sfx.py`, ~1 MB of wav): bells ring from `BelfryHall.strike` (size class 1/2/3), the crack, rattle and fall from `crack` / `rattle` / `release`; the tower's tick and tock are the game's own `tick` / `tock`. **Music:** `w4_slow` (x0.8333, tick 1.0) and `w4_fast` (x1.1905, tick 0.7) via `tools/godot/make-w4-tempo.sh`, picked by `Main.song_for` from the room's tick (so T01/T02 play slow, TB2 fast, and the steady 0.8333 after the fight plays `w4`). T06 itself keeps `boss` / `boss_hi` as stand-ins (§5.12).
 - **A bug found and fixed on the way:** a pending plan start (`start_at`, waiting on the lock) could fire after its plan was cancelled (empty `next`): `_cue_start` now goes back to idle. Seen in `co-race` on a bad line.
 - **Not done in M5 (decided):** the interleaved subtitle for `p2` uses the measured times (TICK's `We both read zero.` and TOCK's `We both wrote one.` mixed in time order); `race_chain.wav` and `rc_thunk` exist but only the thunk is placed (the chain rattle is the bell's `rc_rattle`).
+
+**M6 (done).** The loss menu is generalized into `Boss` (`has_retry`, `retry_spot`, `loss_colors`, `loss_sound`, `open_loss`, `draw_loss`); THE FIREWALL and RACE CONDITION turn it on (`retry` = both at x 24, y 416, a fresh phase 1, the short intro). `race3` M6 part (menu opens instead of restarting, retry resets the hall and tick 0.7, deaths +1, fields round-trip, TB2 foreshadow, after-state ticks 0.8333 in T01/T02/TB2/T04, T06 after: pin in, no boss), `logs`, `co-raceretry` (new, added to `coop-test.sh`), `firewall3` still green.
+- **Foreshadow (decided, the Persian doc wins):** TB2's east door is at the bottom of the room, so the far bells get louder the **higher** you climb (every 6th tick, a second bell 0.05-0.15 s later); the window (2 x 3 tiles, two silhouettes striking, 2 frames) is near the top of the east side; the sign is beside the east door at the bottom (a `T` added to `TB2.txt` row 58: the only map character changed). T04's streaks are red `#ff4a3a` / cyan `#2ee6d6`.
+- **Full `test-all.sh`:** green except: `hurt`, `guestpred`, `w6enemies` (fail the same way on the commit before the boss work, `029074a`, in this environment), `gfxcontrast` (N15 phase3 cap rows 0.39, also baseline), and `mv-title` "new game moves" once (flaky: passes on rerun). The brief's old known failures `co-loopboss`, `co-shop`, `gfxother` did not fail in this run.
 
 
 ## 1. The fight in one page
