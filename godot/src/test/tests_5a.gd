@@ -1409,6 +1409,90 @@ func race_m5(res: Dictionary) -> void:
 		fail(res, "subtitles: intro %d words in order %s, %d voice changes; alone %s" % [iws.size(), str(order_ok), swaps, str(aws)])
 	r2.queue_free()
 
+func race_m6(res: Dictionary) -> void:
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
+	Game.diff = "normal"
+	Game.flags["intro:RACE"] = true
+	Game.flags.erase("boss:RACE")
+	# ---- 1. the loss menu (generalized from THE FIREWALL's): the player's death in the fight does not restart at once, the boss asks; `retry` is a fresh phase 1 at the
+	# west door with the progress kept and a death counted, a short intro; `back to last commit` is what dying always did
+	var m := RoomManager.new(main.world, null)
+	main.add_child(m)
+	m.start_game()
+	m.swap_to("T06", Vector2(120.0, 422.0))
+	var r: Room = m.room
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	var rb: RaceBoss = r.boss
+	var emitted := {"n": 0}
+	m.restart_requested.connect(func(): emitted.n += 1)
+	r.player.hp = 0
+	r.player.die()
+	for f in range(60 * 3):
+		m.tick(Game.STEP)
+	if not rb.loss_on or emitted.n != 0:
+		fail(res, "the death did not open the menu (menu %s, restart requests %d)" % [str(rb.loss_on), emitted.n])
+	if rb.loss_row_at(Vector2(150.0, 70.0 + 6.0 + 3.0)) != 0 or rb.loss_row_at(Vector2(150.0, 70.0 + 6.0 + 14.0 + 3.0)) != 1 or rb.loss_row_at(Vector2(5.0, 5.0)) != -1:
+		fail(res, "the menu's rows are not where they are drawn")
+	if rb.retry_spot() != Vector2(24.0, 416.0):
+		fail(res, "retry spot %s" % str(rb.retry_spot()))
+	var deaths0 := Game.deaths
+	Game.flags["test:progress"] = true
+	m.respawn(true, "T06", rb.retry_spot())
+	r = m.room
+	rb = r.boss
+	if r.id != "T06" or rb == null or rb.ph != 1 or rb.active or rb.loss_on or absf(r.belfry.tick_len() - 0.7) > 0.001 or r.belfry.fallen_count(r.time) != 0:
+		fail(res, "retry: room %s, boss phase %d, active %s, tick %.3f" % [r.id, rb.ph if rb != null else -1, str(rb.active if rb != null else false), r.belfry.tick_len()])
+	if absf(m.player.x - 24.0) > 3.0 or m.player.hp != m.player.max_hp or m.player.dead:
+		fail(res, "retry: the player is at %.0f,%.0f with %d hp" % [m.player.x, m.player.y, m.player.hp])
+	if Game.deaths != deaths0 + 1 or not Game.flag("test:progress"):
+		fail(res, "retry: deaths %d -> %d, progress kept %s" % [deaths0, Game.deaths, str(Game.flag("test:progress"))])
+	r._start_intro()
+	if absf(r.boss.intro_len() - 2.0) > 0.001:
+		fail(res, "the intro after a retry is the long one (%.1f)" % r.boss.intro_len())
+	m.respawn(true)
+	if m.room.id == "T06":
+		fail(res, "back to the last commit stayed in T06")
+	m.queue_free()
+	Game.flags.erase("test:progress")
+	# the menu's two fields travel with the boss
+	var r2 := race_fight_room()
+	var f2: RaceBoss = r2.boss
+	f2.loss_on = true
+	f2.loss_sel = 1
+	var r3 := race_fight_room()
+	var f3: RaceBoss = r3.boss
+	f3.net_apply(f2.net_fields())
+	if not f3.loss_on or f3.loss_sel != 1:
+		fail(res, "the loss menu's fields did not round-trip")
+	r2.queue_free()
+	r3.queue_free()
+	# ---- 2. foreshadow: TB2's second sign (the deleted line) and its window; the far bells (louder the higher, a hair apart) stop after the fight
+	var tb := new_room("TB2")
+	if tb.def.signs.size() != 2 or String(tb.def.signs[1]) != "- escapement.lock();  // slow. useless." or not bool(tb.def.get("far_bells", false)):
+		fail(res, "TB2 foreshadow: signs %s, far bells %s" % [str(tb.def.signs), str(tb.def.get("far_bells", false))])
+	var windows := 0
+	for d in tb.decor_items:
+		windows += 1 if String(d.kind) == "window" and String(d.get("shadow", "")) == "race" else 0
+	if windows != 1:
+		fail(res, "TB2: %d belfry windows (want 1)" % windows)
+	if absf(tb.tick_len() - 0.7) > 0.001:
+		fail(res, "TB2 tick %.3f (want 0.7 before the fight)" % tb.tick_len())
+	tb.queue_free()
+	# ---- 3. after the fight: the tower is steady (every tower room 0.8333), T06 shows the pair bowing and the pin, no boss, the escapement fix is in the logs
+	Game.flags["boss:RACE"] = true
+	for id in ["T01", "T02", "TB2", "T04"]:
+		var rt := new_room(id)
+		if absf(rt.tick_len() - 0.8333) > 0.001:
+			fail(res, "%s after the fight: tick %.4f (want 0.8333)" % [id, rt.tick_len()])
+		rt.queue_free()
+	var ra := new_room("T06")
+	if ra.belfry == null or not ra.belfry.after or not ra.belfry.pin_in or absf(ra.belfry.tick_len() - 0.8333) > 0.001 or ra.boss != null:
+		fail(res, "T06 after the fight: hall after %s, pin %s, tick %.4f, boss %s" % [str(ra.belfry.after if ra.belfry != null else false), str(ra.belfry.pin_in if ra.belfry != null else false), ra.belfry.tick_len() if ra.belfry != null else -1.0, str(ra.boss)])
+	ra.queue_free()
+	Game.flags.erase("boss:RACE")
+
 func race_m4(res: Dictionary) -> void:
 	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
 	Game.diff = "normal"
@@ -2451,6 +2535,7 @@ func t_race3() -> bool:
 	race_m3(res)
 	race_m4(res)
 	race_m5(res)
+	race_m6(res)
 	Controls.script_input = null
 	Game.fresh()
 	return report("race3", res.ok, info + res.info)

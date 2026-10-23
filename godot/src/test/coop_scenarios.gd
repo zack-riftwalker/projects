@@ -2681,6 +2681,59 @@ func sc_co_firewallretry() -> Array:
 	await wait_secs(1.0)
 	return [seen and sel_ok and back, "guest: saw the menu %s (selection 0: %s), back at the door %s (x %.0f)" % [seen, sel_ok, back, mgr().player.x if mgr().player != null else -1.0]]
 
+func sc_co_raceretry() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "host":
+		Game.tools.catch = true
+		Game.flags["intro:RACE"] = true
+		await wait_secs(1.0)
+		var r := boss_arena("T06", 150.0, 300.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		await wait_secs(2.0)
+		p.hp = 0
+		p.die()
+		var menu := await wait_until(func():
+			var b = mgr().room.boss
+			return b != null and is_instance_valid(b) and b.loss_on, 14.0)
+		await wait_secs(2.0)                                           # (the guest looks at it)
+		var deaths0 := Game.deaths
+		main._loss_choose(0)
+		await wait_secs(3.0)
+		var r2: Room = mgr().room
+		var b2 = r2.boss
+		var q = mgr().player
+		var fresh: bool = r2.id == "T06" and b2 != null and b2.ph == 1 and not b2.active and not b2.loss_on
+		var back: bool = q != null and not q.dead and q.hp == q.max_hp and q.x < 70.0
+		var guest_in: bool = coop()._remote_room() == r2 and not coop().remote.dead
+		await wait_secs(1.0)
+		return [started and menu and fresh and back and guest_in and Game.deaths == deaths0 + 1, "host: started %s, menu %s, fresh fight %s (room %s, phase %d, active %s, menu %s), host back at the door %s (x %.0f), guest in the room %s, deaths %d -> %d" % [started, menu, fresh, r2.id, b2.ph if b2 != null else -1, str(b2.active if b2 != null else false), str(b2.loss_on if b2 != null else false), back, q.x if q != null else -1.0, guest_in, deaths0, Game.deaths]]
+	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
+	var r3 := boss_arena("T06", 150.0, 300.0)
+	await wait_secs(2.0)
+	var g = mgr().player
+	g.hp = 0
+	g.die()
+	var seen := await wait_until(func():
+		var b = mgr().room.boss
+		return b != null and is_instance_valid(b) and b.loss_on, 16.0)
+	var sel_ok := false
+	var drawn := false
+	if seen:
+		var b = mgr().room.boss
+		sel_ok = b.loss_sel == 0
+		var ci := Node2D.new()
+		main.add_child(ci)
+		drawn = true                                                   # (the menu's draw is exercised by the HUD every frame: it did not break the scenario)
+		ci.queue_free()
+	var back := await wait_until(func():
+		var b = mgr().room.boss
+		var q = mgr().player
+		return q != null and not q.dead and q.hp == q.max_hp and b != null and is_instance_valid(b) and not b.loss_on and q.x < 70.0, 20.0)
+	await wait_secs(1.0)
+	return [seen and sel_ok and back, "guest: saw the menu %s (selection 0: %s), back at the door %s (x %.0f)" % [seen, sel_ok, back, mgr().player.x if mgr().player != null else -1.0]]
+
 # the guest sits on N22's chair with ssh and presses [up]: the host's intro starts, 40 s of fight, nobody is lost
 func sc_co_reviewer2() -> Array:
 	if not await wait_joined():

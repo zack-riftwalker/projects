@@ -59,8 +59,6 @@ const SWEEP_ACT := 0.6
 const BAN_CUE := 0.5
 const ARM_BREAK := 2
 const DAZE_T := 1.5
-const LOSS_BOX := Rect2(84.0, 70.0, 216.0, 64.0)
-const LOSS_ROWS := ["retry", "back to last commit"]
 const DIE_START := 0.8                                   # the death scene: the fires go out, then the line begins
 const DIE_FLICKER := 1.5                                 # the honeypot's shell flickers back over everything
 const DIE_COLLAPSE := 2.0                                # then the body collapses into stairs
@@ -124,8 +122,6 @@ var drop_t := 5.0                  # host: seconds to the next DROP ALL
 var split_left := 0                # host: strikes still to come in this split
 var rl := {"p1": [-9.0, -9.0, -1.0, 0], "p2": [-9.0, -9.0, -1.0, 0]}    # per player: the room times of its last two hits, the end of its cooldown, blinking (1) or not
 var frozen_self := false           # this page froze its own player for the scene
-var loss_on := false               # both players are down in the fight: the menu asks `retry` or `back to last commit` (the host decides; the guest sees it)
-var loss_sel := 0
 var spoke := false                 # host: the death line has begun / the shell's line has begun / the body has collapsed
 var fine_said := false
 var collapsed := false
@@ -779,32 +775,15 @@ func update(dt: float) -> void:
 			_plan_logic2(dt)
 	_place()
 
-# ---------------------------------------------------------------- the loss menu (everybody is down in the fight): the room / coop ask for it instead of respawning
-func open_loss() -> bool:
-	if not active or dying:
-		return false
-	if not loss_on:
-		loss_on = true
-		loss_sel = 0
-		Audio.sfx("fw_tock", {"vol": 0.8})
+# ---------------------------------------------------------------- the loss menu (everybody is down in the fight): the base class draws and asks it
+func has_retry() -> bool:
 	return true
 
-func loss_row_at(p: Vector2) -> int:
-	for i in range(LOSS_ROWS.size()):
-		if Rect2(LOSS_BOX.position.x + 8.0, LOSS_BOX.position.y + 6.0 + float(i) * 14.0, LOSS_BOX.size.x - 16.0, 14.0).has_point(p):
-			return i
-	return -1
+func retry_spot() -> Vector2:
+	return Vector2(24.0, 144.0)                        # both just inside the arena's west door
 
-# a terminal box like the crawler's compact: black, a 1 px green border, two lines (the selected one has the `>`), the keys under it
-func _draw_loss(ci: CanvasItem) -> void:
-	var b := LOSS_BOX
-	ci.draw_rect(b, Color.BLACK)
-	ci.draw_rect(b, Color(GREEN), false, 1.0)
-	for i in range(LOSS_ROWS.size()):
-		var c := Color(GREEN) if i == loss_sel else Color("#2e9a52")
-		PixelText.draw_text(ci, ("> " if i == loss_sel else "  ") + String(LOSS_ROWS[i]), b.position.x + 16.0, b.position.y + 10.0 + float(i) * 14.0, c, {})
-	var hint := "host decides" if room.mode == "guest" else "[up/down] choose  [jump] ok"
-	PixelText.draw_text(ci, hint, b.position.x + b.size.x / 2.0, b.position.y + b.size.y - 13.0, "#4f8a62", {"align": "c", "tiny": true})
+func loss_sound() -> String:
+	return "fw_tock"
 
 # ---------------------------------------------------------------- death (host runs it; both pages draw it from the death clock)
 func begin_death() -> void:
@@ -1727,7 +1706,7 @@ func draw_hud(ci: CanvasItem) -> void:
 		_draw_death_hud(ci)
 		return
 	if loss_on:
-		_draw_loss(ci)
+		draw_loss(ci)
 	if say_k <= 0:
 		return
 	var key := String(SAY_LINES.get(say_k, "intro"))

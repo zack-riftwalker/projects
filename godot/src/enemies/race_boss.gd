@@ -658,6 +658,9 @@ func update(dt: float) -> void:
 	if dying:
 		_step_death()
 		return
+	if loss_on:                                               # everybody is down and the menu asks: the pair waits
+		_focus()
+		return
 	if not active:
 		if room.fight.state == "intro":
 			_step_intro(dt)
@@ -689,6 +692,19 @@ func update(dt: float) -> void:
 	_focus()
 
 # ---------------------------------------------------------------- death (host runs it; both pages draw it from the death clock)
+# ---------------------------------------------------------------- the loss menu (everybody is down in the fight): `retry` puts both just inside the west door, a fresh phase 1, the short intro
+func has_retry() -> bool:
+	return true
+
+func retry_spot() -> Vector2:
+	return Vector2(24.0, 416.0)
+
+func loss_colors() -> Array:
+	return ["#ffd23f", "#a8872a", "#8a7a3a"]
+
+func loss_sound() -> String:
+	return "rc_lock"
+
 func _die_el() -> float:
 	return room.time - die_t0 if die_t0 >= 0.0 else 0.0
 
@@ -2151,6 +2167,8 @@ func say_words() -> Array:
 	return out
 
 func draw_hud(ci: CanvasItem) -> void:
+	if loss_on:
+		draw_loss(ci)
 	if say_t0 < 0.0 or say_k == 0:
 		return
 	var el := room.time - say_t0
@@ -2162,7 +2180,7 @@ func draw_hud(ci: CanvasItem) -> void:
 	var total := 0
 	for w in words:
 		total += PixelText.text_width(String(w[0]) + " ")
-	var cx := 208.0 - float(total) * 0.5
+	var cx := 192.0 - float(total) * 0.5
 	if total > 380:
 		cx = 2.0
 	for w in words:
@@ -2191,11 +2209,11 @@ func _th_pack(q: Dictionary) -> Array:
 func net_fields() -> Array:
 	var hl := _hall()
 	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, 1 if dying else 0, ph, roundi(trans_t0 * 100.0), roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0),
-		roundi(die_t0 * 100.0), roundi(clash_t0 * 100.0), roundi(clash_pt.x), roundi(clash_pt.y), say_who, roundi(rewind_t0 * 100.0), _th_pack(th[0]), _th_pack(th[1]), hl.net_pack() if hl != null else []]
+		roundi(die_t0 * 100.0), roundi(clash_t0 * 100.0), roundi(clash_pt.x), roundi(clash_pt.y), say_who, roundi(rewind_t0 * 100.0), _th_pack(th[0]), _th_pack(th[1]), hl.net_pack() if hl != null else [], [1 if loss_on else 0, loss_sel]]
 	f.append(hz_pack())
 	return f
 
-const NF := 18
+const NF := 19
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -2240,6 +2258,9 @@ func net_apply(f: Array) -> void:
 	var hl := _hall()
 	if hl != null and not (f[17] as Array).is_empty():
 		hl.net_unpack(f[17])
+	var lf: Array = f[18]
+	loss_on = int(lf[0]) == 1
+	loss_sel = int(lf[1])
 	hz_unpack(f[NF] if f.size() > NF else [])
 	_sync_mirror()
 

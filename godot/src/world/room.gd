@@ -1800,16 +1800,28 @@ func tick_len() -> float:
 		return belfry.tick_len()
 	return tower.tick if tower != null else Tower.TICK
 
+var far_t := -1.0                       # TB2's far bells: when the second one rings, and how loud
+var far_v := 0.0
+
 func _tick_sound() -> void:
 	if world != 4:
 		return
 	if belfry != null and fight.state == "intro":
 		return                                              # (the tower's tick stops while the pair wakes up)
 	var ti := tick_i()
+	if far_t > 0.0 and time >= far_t:                       # TB2: the second bell, a hair after the first (never exactly together)
+		far_t = -1.0
+		Audio.local_sfx("rc_bell2", far_v)
 	if ti != last_tick:
 		last_tick = ti
 		if is_local and player != null and not player.dead:
 			Audio.local_sfx("tick" if ti % 2 == 0 else "tock", 0.22)
+			if bool(def.get("far_bells", false)) and ti % 6 == 0 and not Game.flag("boss:RACE"):       # the bells behind the wall: louder the higher the climb
+				var hk := 1.0 - clampf((player.y - 120.0) / maxf(1.0, float(ph) - 240.0), 0.0, 1.0)
+				far_v = 0.5 * hk * hk
+				if far_v > 0.03:
+					Audio.local_sfx("rc_bell1", far_v)
+					far_t = time + 0.05 + 0.1 * Game.hash3(ti, 7, 3)
 
 func _check_door() -> void:
 	var p = player

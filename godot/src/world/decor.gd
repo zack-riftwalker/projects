@@ -189,10 +189,10 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 			var ub := fposmod(t * 0.23 + 0.5 * sin(t * 0.4) + 0.5, 1.0)
 			var ax := x0 + ua * span
 			var bx := x0 + (1.0 - ub) * span
-			ci.draw_rect(Rect2(ax - 30, yy - 1, 30, 2), Color(1.0, 0.48, 0.35, 0.55))
-			ci.draw_rect(Rect2(ax - 4, yy - 2, 4, 4), Color(1.0, 0.62, 0.45, 0.9))
-			ci.draw_rect(Rect2(bx, yy + 5, 30, 2), Color(0.49, 0.77, 1.0, 0.55))
-			ci.draw_rect(Rect2(bx, yy + 4, 4, 4), Color(0.7, 0.88, 1.0, 0.9))
+			ci.draw_rect(Rect2(ax - 30, yy - 1, 30, 2), Color(1.0, 0.29, 0.23, 0.55))                  # red #ff4a3a: TICK's colour (it was orange)
+			ci.draw_rect(Rect2(ax - 4, yy - 2, 4, 4), Color(1.0, 0.45, 0.38, 0.9))
+			ci.draw_rect(Rect2(bx, yy + 5, 30, 2), Color(0.18, 0.9, 0.84, 0.55))                     # cyan #2ee6d6: TOCK's colour (it was blue)
+			ci.draw_rect(Rect2(bx, yy + 4, 4, 4), Color(0.55, 0.97, 0.93, 0.9))
 			if absf(ax - bx) < 24.0:
 				ci.draw_rect(Rect2((ax + bx) / 2.0 - 8, yy - 3, 16, 12), Color(1.0, 0.2, 0.25, 0.5 + 0.3 * sin(t * 30.0)))
 		"coffee2":
@@ -277,6 +277,21 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 			var ww: float = float(d.get("w", 1)) * 16.0
 			var wh: float = float(d.get("h", 1)) * 16.0
 			ci.draw_rect(Rect2(wx, wy, ww, wh), Color("#0b0f24"))
+			if String(d.get("shadow", "")) == "race":                       # the belfry seen through a small window: two silhouettes striking the same bell, a beat apart (2 frames, TB2's tick)
+				ci.draw_rect(Rect2(wx + 1.0, wy + 1.0, ww - 2.0, wh - 2.0), Color(0.42, 0.2, 0.08, 0.9))
+				ci.draw_rect(Rect2(wx + 1.0, wy + 1.0, ww - 2.0, wh * 0.45), Color(0.62, 0.32, 0.1, 0.8))
+				var fr: int = int(t / 0.35) % 2
+				for k in range(2):
+					var sx: float = wx + ww * (0.28 if k == 0 else 0.72)
+					var up: bool = (fr == k)
+					var sil := Color("#120a08")
+					ci.draw_rect(Rect2(sx - 3.0, wy + wh - 20.0, 6, 14), sil)                        # the body
+					ci.draw_rect(Rect2(sx - 2.0, wy + wh - 25.0, 4, 5), sil)                         # the head
+					var hx: float = sx + (3.0 if k == 0 else -3.0)
+					var hy: float = wy + wh - (30.0 if up else 17.0)
+					ci.draw_line(Vector2(sx, wy + wh - 17.0), Vector2(hx + (4.0 if k == 0 else -4.0), hy + 4.0), sil, 2.0)
+					ci.draw_rect(Rect2(hx + (2.0 if k == 0 else -8.0), hy, 6, 4), sil)               # the hammer head
+				ci.draw_rect(Rect2(wx + ww * 0.5 - 1.0, wy + 2.0, 2, wh - 10.0), Color(0.35, 0.28, 0.12))   # the bell's rope between them
 			if String(d.get("shadow", "")) == "firewall":
 				if not Game.flag("boss:FIREWALL"):                       # a small green EXIT sign that flickers behind a red brick pattern (THE FIREWALL is a honeypot: the way out it shows is a lie)
 					if Game.hash3(int(t * 7.0), 3, 5) > 0.3:

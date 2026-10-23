@@ -550,7 +550,8 @@
                  {"id": "TA2:N", "side": "N", "a": 10, "b": 13, "to": "T08:S"}
              ] },
     "TB2": { "file": "TB2.txt", "tick": 0.7, "title": "mutex.c", "size": [26, 62], "origin": [1138, -198], "world": 4, "music": "w4", "zone": "tower",
-             "signs": ["mutex.c: hit the key, the lock above is yours for 3.5 s. (two of you: one stands on the key.)"],
+             "signs": ["mutex.c: hit the key, the lock above is yours for 3.5 s. (two of you: one stands on the key.)", "- escapement.lock();  // slow. useless."],
+             "decor": [{"kind": "window", "x": 22, "y": 1, "w": 2, "h": 3, "shadow": "race", "if": "!boss:RACE"}], "far_bells": true,
              "mutex": [{"key": [3, 58], "rows": [45]}, {"key": [22, 43], "rows": [30]}, {"key": [3, 28], "rows": [15]}],
              "doors": [
                  {"id": "TB2:S", "side": "S", "a": 10, "b": 13, "to": "T04:N2"},

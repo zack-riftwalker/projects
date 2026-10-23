@@ -24,6 +24,52 @@ var target = null
 var body: DrawProxy
 var overlay: DrawProxy
 
+# ---- the loss menu (everybody is down in the fight): off by default. A boss that asks `retry` or `back to last commit` before sending everybody home
+# says so in has_retry() (THE FIREWALL, RACE CONDITION). The host decides in Main (keys or a tap), the guest only sees it (the boss carries loss_on / loss_sel).
+const LOSS_BOX := Rect2(84.0, 70.0, 216.0, 64.0)
+const LOSS_ROWS := ["retry", "back to last commit"]
+var loss_on := false
+var loss_sel := 0
+
+func has_retry() -> bool:
+	return false
+
+func retry_spot() -> Vector2:                       # where `retry` puts both players (just inside the arena's west door)
+	return Vector2.ZERO
+
+func loss_colors() -> Array:                         # [the chosen row, the other row, the hint line]
+	return ["#57ff8a", "#2e9a52", "#4f8a62"]
+
+func loss_sound() -> String:
+	return "uiMove"
+
+func open_loss() -> bool:
+	if not has_retry() or not active or dying:
+		return false
+	if not loss_on:
+		loss_on = true
+		loss_sel = 0
+		Audio.sfx(loss_sound(), {"vol": 0.8})
+	return true
+
+func loss_row_at(p: Vector2) -> int:
+	for i in range(LOSS_ROWS.size()):
+		if Rect2(LOSS_BOX.position.x + 8.0, LOSS_BOX.position.y + 6.0 + float(i) * 14.0, LOSS_BOX.size.x - 16.0, 14.0).has_point(p):
+			return i
+	return -1
+
+# a terminal box like the crawler's compact: black, a 1 px border, two lines (the selected one has the `>`), the keys under it
+func draw_loss(ci: CanvasItem) -> void:
+	var b := LOSS_BOX
+	var cols := loss_colors()
+	ci.draw_rect(b, Color.BLACK)
+	ci.draw_rect(b, Color(cols[0]), false, 1.0)
+	for i in range(LOSS_ROWS.size()):
+		var c := Color(cols[0]) if i == loss_sel else Color(cols[1])
+		PixelText.draw_text(ci, ("> " if i == loss_sel else "  ") + String(LOSS_ROWS[i]), b.position.x + 16.0, b.position.y + 10.0 + float(i) * 14.0, c, {})
+	var hint := "host decides" if room.mode == "guest" else "[up/down] choose  [jump] ok"
+	PixelText.draw_text(ci, hint, b.position.x + b.size.x / 2.0, b.position.y + b.size.y - 13.0, cols[2], {"align": "c", "tiny": true})
+
 func _init(r: Room, bx: float, by: float, bw: float, bh: float, boss_hp: int) -> void:
 	super(r, 0, 0, bw, bh)
 	x = bx - bw / 2.0

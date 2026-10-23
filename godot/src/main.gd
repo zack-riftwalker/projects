@@ -314,6 +314,11 @@ func _ready() -> void:
 							rtr.belfry.crack(2)
 							for f in range(24):
 								rtr.step(Game.STEP)
+						"loss":                                               # the loss menu (both down in the fight)
+							for f in range(60):
+								rtp.inv = 999.0
+								rtr.step(Game.STEP)
+							rtb.open_loss()
 						"die":                                                # racemoment:die:<x>:<y>:<secs> the death scene that many seconds in
 							var secs := float(rt[4]) if rt.size() > 4 else 3.0
 							rtb.hit(9999, 1.0, 0.0, "swipe", null)
@@ -1028,9 +1033,7 @@ func _physics_process(_d: float) -> void:
 	if Controls.pressed.get("pause", false) or Controls.pressed.get("start", false):
 		set_paused(true)
 
-# ---- THE FIREWALL's loss menu (everybody is down in its fight, 16-firewall-build.md 7.1): the host picks with keys or a tap, the guest only sees it
-const FW_RETRY := Vector2(24.0, 144.0)                 # `retry`: both just inside the arena's west door
-
+# ---- the loss menu of a boss that asks first (THE FIREWALL, RACE CONDITION: everybody is down in its fight, 16-firewall-build.md 7.1): the host picks with keys or a tap, the guest only sees it
 func _loss_boss():
 	if manager == null or manager.room == null:
 		return null
@@ -1054,9 +1057,9 @@ func _loss_choose(i: int) -> void:
 	var host_coop: bool = coop != null and coop.role == "host" and coop.guest_here and coop.remote != null
 	if i == 0:
 		if host_coop:
-			coop.retry_both(rid, FW_RETRY)
+			coop.retry_both(rid, manager.room.boss.retry_spot())
 		else:
-			manager.respawn(true, rid, FW_RETRY)
+			manager.respawn(true, rid, manager.room.boss.retry_spot())
 	elif host_coop:
 		coop._respawn_both()
 	else:
