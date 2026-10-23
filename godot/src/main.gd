@@ -314,6 +314,12 @@ func _ready() -> void:
 							rtr.belfry.crack(2)
 							for f in range(24):
 								rtr.step(Game.STEP)
+						"die":                                                # racemoment:die:<x>:<y>:<secs> the death scene that many seconds in
+							var secs := float(rt[4]) if rt.size() > 4 else 3.0
+							rtb.hit(9999, 1.0, 0.0, "swipe", null)
+							for f in range(roundi(secs * 60.0)):
+								rtp.inv = 999.0
+								rtr.step(Game.STEP)
 						"trans", "switch", "drop", "cover":                    # phase 2: the change of context (60 frames in), a switch's cue, a bell falling, two bells down as cover
 							rtb._begin_trans()
 							for f in range(60 if rt[1] == "trans" else 150):
@@ -1110,6 +1116,12 @@ static func song_for(r: Room) -> String:
 		"done":
 			if want == "":
 				want = "w%d" % int(r.def.get("world", 1))
+	if want == "w4":                                     # the tower theme follows the tower's tick (1.0 slow, 0.7 fast; RACE CONDITION steadies it at 0.8333: w4 itself)
+		var tl: float = r.tick_len()
+		if tl >= 0.95:
+			want = "w4_slow"
+		elif tl <= 0.75:
+			want = "w4_fast"
 	return want
 
 var music_auto := true                 # (a test of the audio module turns this off)

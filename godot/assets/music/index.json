@@ -73,5 +73,15 @@
   "len": 87.457,
   "loop_start": 9.662,
   "once": false
+ },
+ "w4_slow": {
+  "len": 47.989,
+  "loop_start": 0,
+  "once": false
+ },
+ "w4_fast": {
+  "len": 33.608,
+  "loop_start": 0,
+  "once": false
  }
 }

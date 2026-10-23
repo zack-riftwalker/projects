@@ -56,6 +56,7 @@ const CLOCK_R := 48.0
 const TICK_P1 := 0.7
 const TICK_P2 := 0.6
 const TICK_AFTER := 0.8333
+const AFTER_X := [192.0, 224.0]                 # the pair after the fight (and where the death scene brings them): TICK left, TOCK right, bowing face to face
 
 const INK := "#1b1226"
 const BRASS := "#b58a34"
@@ -283,6 +284,7 @@ func strike(i: int, big := true, who := -1) -> void:
 		crack(i)                                       # both automata struck this bell within 0.25 s
 	last_who[i] = who
 	strike_t0[i] = snappedf(room.time, 0.01)
+	Audio.sfx("rc_bell%d" % (int(BELLS[i][3]) + 1), {"vol": 0.9 if big else 0.5})
 	amp[i] = AMP_BIG if int(BELLS[i][3]) == 0 and big else AMP_SMALL
 	if int(BELLS[i][3]) == 0 and not big:
 		amp[i] = AMP_KICK
@@ -299,6 +301,7 @@ func crack(i: int) -> bool:
 		return false
 	crack_t0[i] = snappedf(room.time, 0.01)
 	fall_t0[i] = snappedf(room.time + CRACK_T, 0.01)
+	Audio.sfx("rc_crash", {"vol": 0.9})
 	return true
 
 # TOCK rips a chain: no rattle here (its cue is the chain rattling), the bell falls at once
@@ -312,10 +315,12 @@ func drop(i: int) -> bool:
 # the chain is being rattled (TOCK's bell drop): the bell shakes now and falls when `release` is called
 func rattle(i: int) -> void:
 	crack_t0[i] = snappedf(room.time, 0.01)
+	Audio.sfx("rc_rattle", {"vol": 0.8})
 
 # ... and ripped: it falls straight down now
 func release(i: int) -> void:
 	fall_t0[i] = snappedf(room.time, 0.01)
+	Audio.sfx("rc_fall", {"vol": 1.0})
 	if float(crack_t0[i]) < 0.0:
 		crack_t0[i] = fall_t0[i]
 
@@ -676,7 +681,10 @@ func draw_wall2(ci: CanvasItem) -> void:
 func wall2_alpha(tm: float) -> float:
 	if ph < 2 or p2_t0 < 0.0:
 		return 0.0
-	return clampf((tm - p2_t0) / 0.6, 0.0, 1.0)
+	var a := clampf((tm - p2_t0) / 0.6, 0.0, 1.0)
+	if pin_in:
+		return 0.0 if pin_t0 < -500.0 else a * (1.0 - clampf((tm - pin_t0) / 1.0, 0.0, 1.0))        # the heat goes out with the pin
+	return a
 
 # ---------------------------------------------------------------- drawing: every frame
 func _ink() -> Color:
@@ -689,7 +697,7 @@ func draw_shaded(ci: CanvasItem) -> void:
 		_draw_bell(ci, i, tm)
 	_draw_escapement(ci, tm)
 	_draw_hands(ci, tm)
-	if after:
+	if after or (room != null and room.fight.state == "reward"):
 		_draw_after(ci, tm)
 
 func _draw_chain(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float) -> void:
@@ -919,8 +927,9 @@ func _draw_hands(ci: CanvasItem, tm: float) -> void:
 	ci.draw_circle(ctr, 4.0, Color("#c9962f"))
 
 # ---------------------------------------------------------------- after the fight: the pair, bowing for ever (the bodies are the boss's drawing helper)
-func _draw_after(_ci: CanvasItem, _tm: float) -> void:
-	pass
+func _draw_after(ci: CanvasItem, tm: float) -> void:
+	for i in range(2):
+		RaceBody.draw(ci, {"who": i, "x": AFTER_X[i], "y": FLOOR_Y, "face": 1.0 if i == 0 else -1.0, "pose": "bow", "t": tm + float(i) * 0.37, "hot": 0.0, "eye": false, "dial": 0, "a": 1.0, "still": true})
 
 # ---------------------------------------------------------------- the glow layer: the lamps, the phase-2 heat
 func draw_glow(ci: CanvasItem) -> void:
@@ -936,3 +945,9 @@ func draw_glow(ci: CanvasItem) -> void:
 			ci.draw_circle(lp, r, Color(lc.r, lc.g, lc.b, 0.035 * flick))
 	if hot > 0.0:
 		ci.draw_rect(Rect2(0.0, 0.0, PW, PH), Color(1.0, 0.25, 0.1, 0.07 * hot))
+	if pin_in:                                                       # warm light returns (0.5 s after the pin, over a second)
+		var wa := 1.0 if pin_t0 < -500.0 else clampf((tm - pin_t0 - 0.5) / 1.0, 0.0, 1.0)
+		if wa > 0.0:
+			ci.draw_rect(Rect2(0.0, 0.0, PW, PH), Color(1.0, 0.78, 0.4, 0.07 * wa))
+			for k in range(4):
+				ci.draw_circle(Vector2(PW * 0.5, 150.0), 120.0 - float(k) * 24.0, Color(1.0, 0.8, 0.45, 0.04 * wa))

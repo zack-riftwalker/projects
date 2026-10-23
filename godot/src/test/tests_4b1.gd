@@ -616,6 +616,14 @@ func t_logs() -> bool:
 	if txt.contains("LAB") or txt.contains("lab:") or txt.contains("waiting for a"):
 		fail(res, "a lab sign is listed")
 	r8.queue_free()
+	# RACE CONDITION fixed the escapement: its changelog line, only after boss:RACE
+	if txt.contains("restore escapement.lock()"):
+		fail(res, "the escapement fix is logged before the boss")
+	Game.flags["boss:RACE"] = true
+	lv.open()
+	if not logs_text(lv).contains("fix: restore escapement.lock()") or not logs_text(lv).contains("threads take turns again."):
+		fail(res, "boss:RACE did not add its changelog line: " + logs_text(lv).left(200))
+	Game.flags.erase("boss:RACE")
 	# a memory fragment: the line under its pop, and in the list
 	var r6 := new_room("R06")
 	var spark = null

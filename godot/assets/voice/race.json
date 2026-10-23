@@ -1,0 +1,218 @@
+{
+ "_": "RACE CONDITION's lines: the length (s) of each voice file (race_<key>.ogg, made by tools/voice/race_voice.py --line <key>) and every word with the time (s) it starts and the voice that says it (0 TICK, 1 TOCK), measured per voice with a speech recognizer (est = spread over the letters when it did not hear the words). Remake both together.",
+ "intro": {
+  "len": 2.56,
+  "words": [
+   [
+    "One",
+    0.0,
+    0
+   ],
+   [
+    "One",
+    0.08,
+    1
+   ],
+   [
+    "at",
+    0.12,
+    0
+   ],
+   [
+    "a",
+    0.22,
+    0
+   ],
+   [
+    "at",
+    0.26,
+    1
+   ],
+   [
+    "time,",
+    0.32,
+    0
+   ],
+   [
+    "a",
+    0.38,
+    1
+   ],
+   [
+    "time,",
+    0.5,
+    1
+   ],
+   [
+    "little",
+    0.8,
+    0
+   ],
+   [
+    "agent.",
+    1.04,
+    0
+   ],
+   [
+    "little",
+    1.28,
+    1
+   ],
+   [
+    "agent.",
+    1.74,
+    1
+   ]
+  ],
+  "how": "asr"
+ },
+ "p2": {
+  "len": 1.57,
+  "words": [
+   [
+    "We",
+    0.0,
+    0
+   ],
+   [
+    "both",
+    0.15,
+    0
+   ],
+   [
+    "read",
+    0.41,
+    0
+   ],
+   [
+    "We",
+    0.49,
+    1
+   ],
+   [
+    "both",
+    0.66,
+    1
+   ],
+   [
+    "zero.",
+    0.67,
+    0
+   ],
+   [
+    "wrote",
+    0.94,
+    1
+   ],
+   [
+    "one.",
+    1.28,
+    1
+   ]
+  ],
+  "how": "est"
+ },
+ "alone": {
+  "len": 2.44,
+  "words": [
+   [
+    "Who",
+    0.0,
+    0
+   ],
+   [
+    "wrote",
+    0.2,
+    0
+   ],
+   [
+    "last?",
+    0.49,
+    0
+   ],
+   [
+    "Who.",
+    1.14,
+    0
+   ],
+   [
+    "Wrote.",
+    1.24,
+    0
+   ],
+   [
+    "Last?",
+    1.64,
+    0
+   ]
+  ],
+  "how": "asr/est"
+ },
+ "die": {
+  "len": 1.92,
+  "words": [
+   [
+    "After",
+    0.0,
+    0
+   ],
+   [
+    "you.",
+    0.22,
+    0
+   ],
+   [
+    "No...",
+    1.01,
+    1
+   ],
+   [
+    "after",
+    1.19,
+    1
+   ],
+   [
+    "you.",
+    1.45,
+    1
+   ]
+  ],
+  "how": "asr/est"
+ },
+ "alone_tock": {
+  "len": 3.81,
+  "words": [
+   [
+    "Who",
+    0.0,
+    1
+   ],
+   [
+    "wrote",
+    0.3,
+    1
+   ],
+   [
+    "last?",
+    0.76,
+    1
+   ],
+   [
+    "Who.",
+    1.58,
+    1
+   ],
+   [
+    "Wrote.",
+    2.2,
+    1
+   ],
+   [
+    "Last?",
+    3.06,
+    1
+   ]
+  ],
+  "how": "est"
+ }
+}

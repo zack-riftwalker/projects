@@ -58,6 +58,12 @@ const SWITCH_RING := 48.0
 const TRIPLE_RING_T := 0.5
 const HOLE_BOTTOM_Y := 458.0
 const DOUBLE_NEED := [3, 4]                          # plans each before the next double write (after the first: one each)
+const DIE_LINE := 2.0                                # the death scene (8 s): they meet and bow, `After you.`, the pin clicks in, the warm light, the red dot floats down
+const DIE_PIN := 5.0
+const DIE_WARM := 5.5
+const DIE_DOT0 := 6.0
+const DIE_DOT1 := 8.0
+const DOT_END := Vector2(208.0, 416.0)               # where the reward (the red dot) waits: the middle of the floor
 
 var th: Array = []
 var ph := 1                                          # 1 / 2 (phase 2: M4)
@@ -66,6 +72,11 @@ var intro_t0 := -1.0
 var say_k := 0                                       # which line plays (0 none, 1 intro, 2 p2, 3 alone, 4 die)
 var say_t0 := -1.0
 var die_t0 := -1.0
+var die_from: Array = [Vector2.ZERO, Vector2.ZERO]   # host: where each body stood when the last one fell
+var die_said := false
+var die_pinned := false
+var dot_done := false
+var die_last := 1                                    # host: the automaton that fell last (it crawls)
 var clash_t0 := -100.0                               # the last clash (sparks, both pages)
 var clash_pt := Vector2.ZERO
 var serial_turn := 0                                 # serialized by the lock: whose turn it is to start a plan
@@ -425,6 +436,7 @@ func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
 		_sums()
 		hpf = 0.0
 		hp = 0
+		die_last = 1
 		begin_death()
 		return "kill"
 	if box is Dictionary and box.has("bob"):
@@ -466,6 +478,7 @@ func hit(d: int, _dx: float, _dy: float, how: String, box = null) -> String:
 		if alive_n() == 0:
 			hpf = 0.0
 			hp = 0
+			die_last = i
 			begin_death()
 			return "kill"
 		return "hit"
@@ -493,7 +506,6 @@ func _ring_bell(b: int) -> String:
 		return ""
 	hl.hit_cd[b] = snappedf(room.time + RING_CD, 0.01)
 	hl.strike(b, false)
-	Audio.sfx("clang", {"vol": 0.5})
 	var rc := BelfryHall.new_rest(b)
 	for q in th:
 		var p: Dictionary = q.plan
@@ -536,7 +548,8 @@ func _lock_hit() -> String:
 		if not q.plan.is_empty() and q.plan.id == "double":
 			_cancel(int(q.i))
 	room.pop(BelfryHall.PIVOT.x, 100.0, "escapement.lock()", "#ffd23f", true)
-	Audio.sfx("clang", {"vol": 1.0})
+	Audio.sfx("rc_lock", {"vol": 1.0})
+	Audio.sfx("rc_anchor", {"vol": 0.7})
 	Audio.sfx("gate", {"vol": 0.6})
 	room.shake(0.35)
 	return "hit"
@@ -603,14 +616,18 @@ func intro_len() -> float:
 func _step_intro(_dt: float) -> void:
 	if intro_t0 < 0.0:
 		intro_t0 = room.time
+		Audio.sfx("rc_key", {"vol": 0.7})
 		_to_bells()
 	var el := room.time - intro_t0
 	if el >= 3.0:
+		if not th[0].eye:
+			Audio.sfx("rc_eye", {"vol": 0.6})
 		for q in th:
 			q.eye = true
 	if el >= 3.4 and say_k == 0 and intro_len() > 3.0:
 		say_k = 1
 		say_t0 = room.time
+		Audio.sfx("race_intro", {"vol": 0.9})
 
 func intro_el() -> float:
 	return room.time - intro_t0 if intro_t0 >= 0.0 else -1.0
@@ -625,7 +642,9 @@ func cam_lock_now():
 	return {"x": (float(room.pw) - 384.0) * 0.5, "y": lerpf(float(room.ph) - 216.0, 0.0, k)}
 
 func music_now(_want: String) -> String:
-	if dying or room.fight.state == "intro":
+	if dying:
+		return "w4" if _die_el() >= DIE_WARM else ""            # the tower theme comes back with the warm light (at the steady tick)
+	if room.fight.state == "intro":
 		return ""
 	return "boss" if ph == 1 else "boss_hi"                    # stand-ins until the pair has its own music
 
@@ -637,7 +656,7 @@ func update(dt: float) -> void:
 			q.flash -= dt
 	_sync_hall()
 	if dying:
-		death_rattle(dt, 2.4, ["#ffffff", COL[0], COL[1]])
+		_step_death()
 		return
 	if not active:
 		if room.fight.state == "intro":
@@ -661,12 +680,110 @@ func update(dt: float) -> void:
 		say_k = 3
 		say_who = pending_alone
 		say_t0 = room.time
+		Audio.sfx("race_alone" if say_who == 0 else "race_alone_tock", {"vol": 0.9})
 		pending_alone = -1
 	_rewind_watch()
 	for i in range(2):
 		_step_th(i, dt)
 	_sync_mirror()
 	_focus()
+
+# ---------------------------------------------------------------- death (host runs it; both pages draw it from the death clock)
+func _die_el() -> float:
+	return room.time - die_t0 if die_t0 >= 0.0 else 0.0
+
+# the last one's HP is 0: plans, hazards and holes stop, the music cuts, they come together for the line
+func begin_death() -> void:
+	dying = true
+	die_t = 0.0
+	die_t0 = snappedf(room.time, 0.01)
+	passive = true
+	var hl := _hall()
+	for q in th:
+		_abort_plan(q)
+		q.plan = {}
+		q.mode = "idle"
+		q.hammer = 0
+		q.hop = {}
+		q.air = false
+		q.eye = false
+		q.daze_until = -1.0
+		q.next = ""
+		q.hp = 0.0
+		q.bell = -1
+	for i in range(2):
+		die_from[i] = Vector2(float(th[i].x), float(th[i].y))
+	hz.clear()
+	if hl != null:
+		hl.clear_buffer()
+		hl.serial_until = BelfryHall.NONE_T
+	hpf = 0.0
+	hp = 0
+	say_k = 4
+	say_t0 = snappedf(room.time + DIE_LINE, 0.01)
+	for q in room.projs:
+		q.dead = true
+	for e in room.ents:
+		if e != self and not e.get("is_boss"):
+			e.loot = 0
+			e.die("")
+	room.stop(0.35)
+	room.shake(0.6)
+	room.events.append("bossDying")
+	Game.dlog("RACE CONDITION down")
+	_sync_mirror()
+
+func death_spot(i: int) -> Vector2:
+	return Vector2(BelfryHall.AFTER_X[i], FLOOR_Y)
+
+func dot_pos(el: float) -> Vector2:
+	var u := clampf((el - DIE_DOT0) / (DIE_DOT1 - DIE_DOT0), 0.0, 1.0)
+	u = u * u * (3.0 - 2.0 * u)
+	return BelfryHall.PIVOT.lerp(DOT_END, u) + Vector2(0.0, 2.0 * sin(el * 5.0))
+
+func _step_death() -> void:
+	var el := _die_el()
+	var hl := _hall()
+	hz.clear()
+	for i in range(2):
+		var q: Dictionary = th[i]
+		var fu := clampf(el / 0.4, 0.0, 1.0)
+		var u := clampf(el / DIE_LINE, 0.0, 1.0)
+		u = u * u * (3.0 - 2.0 * u)
+		q.y = lerpf(float(die_from[i].y), FLOOR_Y, fu * fu)
+		q.x = lerpf(float(die_from[i].x), float(death_spot(i).x), u)
+		q.face = 1.0 if i == 0 else -1.0
+		if q.flash > 0.0:
+			q.flash -= Game.STEP
+	if not die_said and el >= DIE_LINE:
+		die_said = true
+		Audio.sfx("race_die", {"vol": 0.95})
+	if not die_pinned and el >= DIE_PIN:
+		die_pinned = true
+		if hl != null:
+			hl.pin_in = true
+			hl.pin_t0 = snappedf(room.time, 0.01)
+			hl.set_tick(BelfryHall.TICK_AFTER, hl.next_boundary(room.time + 0.05))
+		Audio.sfx("rc_pin", {"vol": 0.9})
+		room.shake(0.3)
+	if not dot_done and el >= DIE_DOT1:
+		var c := DOT_END
+		var near := false
+		for pl in room.players():
+			if absf(float(pl.x) + float(pl.w) * 0.5 - c.x) < 22.0 and absf(float(pl.y) + float(pl.h) * 0.5 - c.y) < 30.0:
+				near = true
+		if near or el >= DIE_DOT1 + 25.0:                           # (nobody has to find it: it waits 25 s, then the reward comes anyway)
+			dot_done = true
+			gone = true
+			dead = true
+			if hl != null:
+				hl.after = true
+			Audio.sfx("heal", {"vol": 0.8})
+			room.burst(c.x, c.y, 14, ["#ff4a3a", "#ffffff"], 90.0, 160.0, {"glow": 1})
+			room.drop(c.x, c.y, drop_n)
+			room.events.append("bossDead")
+	_sums()
+	_sync_mirror()
 
 # at half the hp or when one falls: 2.0 s of heat, then phase 2 (tick 0.6, the bells stay down, holes, switch, drop, triple, combo)
 func _begin_trans() -> void:
@@ -698,6 +815,7 @@ func _begin_trans() -> void:
 		hl.set_tick(BelfryHall.TICK_P2, trans_t0 + TRANS_T)
 	say_k = 2
 	say_t0 = room.time
+	Audio.sfx("race_p2", {"vol": 0.9})
 	Audio.sfx("roar", {"vol": 0.8})
 	room.shake(0.8)
 	Game.dlog("RACE CONDITION phase 2 (hp %.0f / %d, down %d)" % [hpf, max_hp, int(th[0].st == 1) + int(th[1].st == 1)])
@@ -713,6 +831,8 @@ func _abort_plan(q: Dictionary) -> void:
 		hl.crack_t0[int(p.bell)] = BelfryHall.NONE_T
 
 func _hot() -> float:
+	if dying:                                                  # the heat goes out with the pin
+		return clampf(1.0 - (_die_el() - DIE_PIN) / 1.0, 0.0, 1.0) if ph == 2 else 0.0
 	if ph == 1:
 		return 0.0
 	if trans_t0 < 0.0:
@@ -1170,6 +1290,11 @@ func _new_plan(i: int, id: String, key: String, rp: Vector2, cue: float) -> Dict
 func _cue_start(i: int) -> void:
 	var q: Dictionary = th[i]
 	var id: String = String(q.next)
+	if not PLANS.has(id):                                       # (a pending start whose plan was cancelled meanwhile: back to idle)
+		q.mode = "idle"
+		q.next = ""
+		q.gap = 0.3
+		return
 	var o: Dictionary = th[1 - i]
 	var hl := _hall()
 	var guard := _vulnerable(o)
@@ -1224,6 +1349,10 @@ func _cue_start(i: int) -> void:
 		p.act_len = 3.0 * _beat() + TRIPLE_RING_T
 		p.tbeat = _beat()
 		p.tb = [-1, -1, -1]
+	if id in ["strike", "slam", "double", "combo"]:
+		Audio.sfx("rc_whirr", {"vol": 0.5})
+	elif id == "rope":
+		Audio.sfx("rc_creak", {"vol": 0.7})
 	if id == "drop":
 		var db := int(q.dbell)
 		if db < 0 or hl == null or not hl.can_fall(db, room.time):
@@ -1438,7 +1567,8 @@ func _on_active(i: int) -> void:
 		"strike":
 			if hl != null and int(p.bell) >= 0:
 				hl.strike(int(p.bell), true, i)
-			Audio.sfx("clang", {"vol": 0.8})
+			else:
+				Audio.sfx("clang", {"vol": 0.8})
 			room.shake(0.25)
 		"slam":
 			Audio.sfx("swipeBig", {"vol": 0.6})
@@ -1451,7 +1581,6 @@ func _on_active(i: int) -> void:
 		"drop":
 			if hl != null and int(p.bell) >= 0:
 				hl.release(int(p.bell))                          # the chain is ripped: the bell falls with TOCK riding it
-			Audio.sfx("brk", {"vol": 0.9})
 		"switch", "combo":
 			Audio.sfx("swipeBig", {"vol": 0.6})
 		"triple":
@@ -1601,7 +1730,6 @@ func _triple_step(i: int, q: Dictionary, p: Dictionary, el: float) -> void:
 			q.bell = int(tb[kk])
 			q.ox = 0.0
 			hl.strike(int(tb[kk]), true, i)
-			Audio.sfx("clang", {"vol": 0.8})
 			room.shake(0.2)
 	p.tbeat = beat
 
@@ -1672,6 +1800,7 @@ func _on_recover(i: int) -> void:
 			q.x = float(p.lx)
 			q.y = float(p.ly)
 			q.hammer = 2                                      # the hammer is stuck in the floor for the recovery
+			Audio.sfx("rc_thunk", {"vol": 0.8})
 		"rope":
 			q.x = float(p.sx)
 			q.y = float(p.sy)
@@ -1745,7 +1874,7 @@ func _shoot_clapper(i: int) -> void:
 		dv = Vector2(0.0, -1.0)
 	dv = dv.normalized() * 150.0
 	room.shoot(from.x, from.y, dv.x, dv.y, {"kind": "diamond", "col": "#ffd23f", "catchable": true, "cut": true, "r": 4.0, "life": 3.2, "dmg": 1, "by_boss": true, "clapper": true, "tile": true})
-	Audio.sfx("shoot", {"vol": 0.7})
+	Audio.sfx("rc_shot", {"vol": 0.8})
 
 # ---------------------------------------------------------------- the guest's acknowledgement: per plan (two plans run at once)
 func plan_seen(seq: int) -> void:
@@ -1870,6 +1999,13 @@ func glow_of_bell(b: int) -> float:
 # ---------------------------------------------------------------- drawing
 func _pose_of(i: int) -> String:
 	var q: Dictionary = th[i]
+	if dying:                                                  # the death: the last one crawls (down, then on its knees), the other kneels with it, then both bow
+		var el := _die_el()
+		if el >= DIE_LINE:
+			return "bow"
+		if el < 0.8:
+			return "down" if i == die_last or q.st == 1 else "kneel"
+		return "kneel"
 	if q.st == 1:
 		return "down"
 	if q.st == 2:
@@ -1929,6 +2065,13 @@ func draw_boss_body(ci: CanvasItem) -> void:
 		RaceBody.draw(ci, o)
 
 func draw_boss_overlay(ci: CanvasItem) -> void:
+	if dying and not dot_done and _die_el() >= DIE_DOT0:                                    # the reward: the pin's red dot floats down to the middle of the floor
+		var dp := dot_pos(_die_el())
+		var pulse := 0.6 + 0.4 * sin(room.time * 6.0)
+		for k in range(3):
+			ci.draw_circle(dp, 9.0 - float(k) * 2.5, Color(1.0, 0.25, 0.2, 0.12 + 0.08 * pulse))
+		ci.draw_circle(dp, 5.0, Color(Game.COL.ink))
+		ci.draw_circle(dp, 4.0, Color(1.0, 0.2 + 0.1 * pulse, 0.15))
 	for q in th:
 		var p: Dictionary = q.plan
 		if p.is_empty() or (p.ph != "cue" and not (p.ph == "active" and _el(p) < 0.12)):
@@ -1958,67 +2101,74 @@ func _afterimage(ci: CanvasItem, pt: Vector2, c: Color, a: float) -> void:
 	ci.draw_rect(Rect2(x0 + 2.0, y0 + 3.0, 1.0, 2.0), Color(c.r, c.g, c.b, a * 1.5))
 	ci.draw_rect(Rect2(x0 + 7.0, y0 + 3.0, 1.0, 2.0), Color(c.r, c.g, c.b, a * 1.5))
 
+# ---- the lines: each word shown when its voice says it (race.json: the word times of each voice, measured by tools/voice/race_voice.py)
+# [word, time, voice] voice 0 TICK red, 1 TOCK cyan. `intro` and `p2` read as the race itself: both voices' words in one line, in the order they are heard
+const P2_WORDS := [["We", 0.0, 0], ["both", 0.3, 0], ["read", 0.6, 0], ["zero.", 0.95, 0], ["We", 0.9, 1], ["both", 1.2, 1], ["wrote", 1.5, 1], ["one.", 1.9, 1]]       # (stand-ins when race.json is missing)
+const ALONE_WORDS := [["Who", 0.0, 0], ["wrote", 0.5, 0], ["last?", 0.95, 0], ["WHO", 2.4, 0], ["WROTE", 2.8, 0], ["LAST?", 3.25, 0]]
+const INTRO_WORDS := [["One", 0.0], ["at", 0.38], ["a", 0.58], ["time,", 0.7], ["little", 1.12], ["agent.", 1.42]]
+static var vlines := {}
+
+static func voice_line(key: String) -> Dictionary:
+	if vlines.is_empty():
+		var j = JSON.parse_string(FileAccess.get_file_as_string("res://assets/voice/race.json")) if FileAccess.file_exists("res://assets/voice/race.json") else null
+		vlines = j if j is Dictionary else {"_": ""}
+	var l = vlines.get(key, {})
+	return l if l is Dictionary else {}
+
+# the words of the line that plays now ([] when none), with their voices and the line's length
+func say_words() -> Array:
+	var key := ""
+	match say_k:
+		1: key = "intro"
+		2: key = "p2"
+		3: key = "alone" if say_who == 0 else "alone_tock"
+		4: key = "die"
+	if key == "":
+		return []
+	var l := voice_line(key)
+	var out: Array = []
+	if l.has("words"):
+		var n := 0
+		for w in l.words:
+			var who: int = say_who if say_k == 3 else int(w[2])
+			var txt := String(w[0])
+			out.append([txt.to_upper() if say_k == 3 and n >= 3 else txt, float(w[1]), who])
+			n += 1
+		return out
+	match say_k:
+		1:
+			for w in INTRO_WORDS:
+				out.append([String(w[0]), float(w[1]) * 0.92, 0])
+				out.append([String(w[0]), 0.08 + float(w[1]) * 1.08, 1])
+		2:
+			out = P2_WORDS.duplicate()
+		3:
+			for w in ALONE_WORDS:
+				out.append([w[0], w[1], say_who])
+		4:
+			out = [["After", 0.0, 0], ["you.", 0.3, 0], ["No...", 1.0, 1], ["after", 1.3, 1], ["you.", 1.6, 1]]
+	out.sort_custom(func(a, b): return float(a[1]) < float(b[1]))
+	return out
+
 func draw_hud(ci: CanvasItem) -> void:
-	_draw_intro_line(ci)
-	_draw_say(ci)
-
-# ---- the other lines (estimated word times until M5 measures them): phase 2's two voices over each other, the survivor's
-# [word, time, voice] voice 0 TICK red, 1 TOCK cyan
-const P2_WORDS := [["We", 0.0, 0], ["both", 0.3, 0], ["read", 0.6, 0], ["zero.", 0.95, 0], ["We", 0.9, 1], ["both", 1.2, 1], ["wrote", 1.5, 1], ["one.", 1.9, 1]]
-const ALONE_WORDS := [["Who", 0.0], ["wrote", 0.5], ["last?", 0.95], ["WHO", 2.4], ["WROTE", 2.8], ["LAST?", 3.25]]
-
-func _draw_say(ci: CanvasItem) -> void:
-	if say_t0 < 0.0 or (say_k != 2 and say_k != 3):
+	if say_t0 < 0.0 or say_k == 0:
 		return
 	var el := room.time - say_t0
-	var words: Array = []
-	if say_k == 2:
-		words = P2_WORDS.duplicate()
-		words.sort_custom(func(a, b): return float(a[1]) < float(b[1]))
-	else:
-		for w in ALONE_WORDS:
-			words.append([w[0], w[1], say_who])
-	if el > float(words[words.size() - 1][1]) + 1.6:
+	if el < 0.0:
+		return
+	var words := say_words()
+	if words.is_empty() or el > float(words[words.size() - 1][1]) + 1.6:
 		return
 	var total := 0
 	for w in words:
 		total += PixelText.text_width(String(w[0]) + " ")
-	var cx := 192.0 - float(total) * 0.5
+	var cx := 208.0 - float(total) * 0.5
+	if total > 380:
+		cx = 2.0
 	for w in words:
 		var wt := String(w[0]) + " "
 		if el >= float(w[1]):
 			PixelText.draw_text(ci, wt, cx, 168.0, COL[int(w[2])], {"outline": Game.COL.ink})
-		cx += float(PixelText.text_width(wt))
-
-# ---- the intro line: "One at a time, little agent." said by both at once; the subtitle is the race itself (each word when its voice says it)
-const INTRO_WORDS := [["One", 0.0], ["at", 0.38], ["a", 0.58], ["time,", 0.7], ["little", 1.12], ["agent.", 1.42]]
-const INTRO_LEN := 1.9
-
-func intro_words() -> Array:
-	var out: Array = []
-	for w in INTRO_WORDS:
-		out.append([String(w[0]), float(w[1]) * 0.92, 0])                  # TICK: faster
-		out.append([String(w[0]), 0.08 + float(w[1]) * 1.08, 1])           # TOCK: 0.08 s later and slower, so they drift apart
-	out.sort_custom(func(a, b): return float(a[1]) < float(b[1]))
-	return out
-
-func _draw_intro_line(ci: CanvasItem) -> void:
-	if say_k != 1 or say_t0 < 0.0:
-		return
-	var el := room.time - say_t0
-	if el > INTRO_LEN + 1.2:
-		return
-	var words := intro_words()
-	var total := 0
-	for w in words:
-		total += PixelText.text_width(String(w[0]) + " ")
-	var x0 := 192.0 - float(total) * 0.5
-	var y0 := 168.0
-	var cx := x0
-	for w in words:
-		var wt := String(w[0]) + " "
-		if el >= float(w[1]):
-			PixelText.draw_text(ci, wt, cx, y0, COL[int(w[2])], {"outline": Game.COL.ink})
 		cx += float(PixelText.text_width(wt))
 
 # ---------------------------------------------------------------- net (the guest sees the same belfry and the same two bodies)

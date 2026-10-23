@@ -3602,6 +3602,8 @@ func sc_co_race() -> Array:
 		var p2_in := false
 		var dropped := false
 		var fell_h := false
+		var killed := false
+		var pin_h := false
 		while Time.get_ticks_msec() - t0 < 40000.0 * slow:
 			p.inv = 999.0
 			p.hp = p.max_hp
@@ -3624,6 +3626,11 @@ func sc_co_race() -> Array:
 				b._start("drop", "p2")
 			if hl.fallen_count(r.time) >= 1:
 				fell_h = true
+			if dropped and not killed and el_h > 33.5:
+				killed = true                                  # the end: both fall, the death scene (8 s) runs on both pages
+				b.hit(9999, 1.0, 0.0, "swipe", null)
+			if killed and hl.pin_in:
+				pin_h = true
 			for q in b.th:                                      # (the guest's claws must not finish the fight: the rules are the test)
 				if q.st == 0 and float(q.hp) < 6.0:
 					q.hp = 6.0
@@ -3638,7 +3645,7 @@ func sc_co_race() -> Array:
 		var hit_doubles := 0
 		for dk in dbl_log:
 			hit_doubles += 1 if dbl_log[dk] else 0
-		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1 and doubles >= 1 and lock_t >= 0.0 and fell_h, "host: fallen bell %s, started %s, %d plans (p1 %d, p2 %d), %d double writes (%d hit or split), the guest's claw hits accepted %d (verdicts %s), the guest locked the escapement at %.1f" % [str(fell_h), started, seen.size(), tg.p1, tg.p2, doubles, hit_doubles, ok_hits, str(coop().verdicts), lock_t]]
+		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1 and doubles >= 1 and lock_t >= 0.0 and fell_h and pin_h, "host: fallen bell %s, pin in %s, started %s, %d plans (p1 %d, p2 %d), %d double writes (%d hit or split), the guest's claw hits accepted %d (verdicts %s), the guest locked the escapement at %.1f" % [str(fell_h), str(pin_h), started, seen.size(), tg.p1, tg.p2, doubles, hit_doubles, ok_hits, str(coop().verdicts), lock_t]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("T06", 150.0, 300.0)
 	var found := {"b": null}
@@ -3662,6 +3669,10 @@ func sc_co_race() -> Array:
 	var bob_swings := 0
 	var serial_seen := false
 	var fell_g := false
+	var die_g := false
+	var bow_g := false
+	var pin_g := false
+	var words_g := 0
 	var gh: BelfryHall = r2.belfry
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < 40000.0 * slow:
@@ -3683,15 +3694,20 @@ func sc_co_race() -> Array:
 				dbl_log2[int(q.plan.seq)] = bool(q.plan.get("hit", false)) or bool(q.plan.get("split", false))
 		if gh.serialized(r2.time):
 			serial_seen = true
+		if pup.dying:                                                  # the death scene on this page: bowing, the line's words, the pin
+			die_g = true
+			bow_g = bow_g or pup._pose_of(0) == "bow"
+			pin_g = pin_g or gh.pin_in
+			words_g = maxi(words_g, pup.say_words().size())
 		for fb in range(BelfryHall.N_BELLS):                          # a fallen bell on this page is solid cover too
 			if gh.fallen[fb] and gh.bell_mode(fb, r2.time) == "lie" and r2.grid.solid(BelfryHall.BELLS[fb][0], 25):
 				fell_g = true
-		# the double write: stand still in it. Later (14 s on): the escapement's bob, from the air beside it, until the host has serialized
-		if not bob_phase and Time.get_ticks_msec() - t1 > 15000.0 * slow:
+		# the double write: stand still in it. Later (20 s on): the escapement's bob, from the air beside it, until the host has serialized
+		if not bob_phase and Time.get_ticks_msec() - t1 > 20000.0 * slow:
 			bob_phase = true
 		var keys := {}
 		var el_g: float = float(Time.get_ticks_msec() - t1) / 1000.0 / slow
-		if dbl or (el_g > 7.5 and el_g < 14.5):                        # (still for the host's forced double write on this guest, 8-14 s)
+		if dbl or (el_g > 7.5 and el_g < 19.0):                        # (still for the host's forced double write on this guest, from 9 s on)
 			Controls.script_input = {}
 			await get_tree().physics_frame
 			continue
@@ -3736,7 +3752,7 @@ func sc_co_race() -> Array:
 	for dk in dbl_log2:
 		dbl_hit_seen += 1 if dbl_log2[dk] else 0
 	await wait_secs(1.0)
-	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1 and max_drop >= 2 and dbl_seen >= 1 and serial_seen and fell_g, "guest: fallen bell lying %s, saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times (at most %d at once), %d swings, %d double writes seen (%d hit), %d swings at the bob, serialized seen %s, violations '%s' '%s'" % [str(fell_g), seen2.size(), mine, short, hits, max_drop, swings, dbl_seen, dbl_hit_seen, bob_swings, str(serial_seen), pup.kit_violation, pup.arena_violation]]
+	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1 and max_drop >= 2 and dbl_seen >= 1 and serial_seen and fell_g and die_g and bow_g and pin_g and words_g == 5, "guest: fallen bell lying %s, death %s bowing %s pin %s words %d, saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times (at most %d at once), %d swings, %d double writes seen (%d hit), %d swings at the bob, serialized seen %s, violations '%s' '%s'" % [str(fell_g), str(die_g), str(bow_g), str(pin_g), words_g, seen2.size(), mine, short, hits, max_drop, swings, dbl_seen, dbl_hit_seen, bob_swings, str(serial_seen), pup.kit_violation, pup.arena_violation]]
 
 func sc_co_loopboss() -> Array:
 	if not await wait_joined():

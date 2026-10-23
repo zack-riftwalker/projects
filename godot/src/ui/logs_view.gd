@@ -110,11 +110,14 @@ func rebuild() -> void:
 		for n in pages:
 			_add_text(String(Game.LOGBOOK[n]), Game.COL.paper)
 		_y += 4.0
-	if not Game.changelog_lines.is_empty():
+	var fixed_lock: bool = Game.flag("boss:RACE")          # RACE CONDITION: the pin is in, the threads take turns (17-race-condition.md 7.3)
+	if not Game.changelog_lines.is_empty() or fixed_lock:
 		any = true
 		_add_head("changelog", "#58f0c8")
 		for cl in Game.changelog_lines:
 			_add_text(String(cl), Game.COL.paper)
+		if fixed_lock:
+			_add_text("fix: restore escapement.lock() \u2014 threads take turns again.", Game.COL.paper)
 	if not any:
 		_add_text("nothing logged yet. read the signs you find.", Game.COL.dim)
 	content_h = _y

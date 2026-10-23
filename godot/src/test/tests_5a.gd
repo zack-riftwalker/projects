@@ -1286,6 +1286,129 @@ func race_p2_room() -> Room:
 	race_idle(b)
 	return r
 
+func race_m5(res: Dictionary) -> void:
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
+	Game.diff = "normal"
+	Game.flags["intro:RACE"] = true
+	Game.flags.erase("boss:RACE")
+	# ---- 1. the voice files and their word times: four lines (+ TOCK's `alone`), measured, in order, TICK red (0) and TOCK cyan (1)
+	for k in ["intro", "p2", "alone", "alone_tock", "die"]:
+		var l := RaceBoss.voice_line(k)
+		var ws: Array = l.get("words", [])
+		var prev := -1.0
+		var bad := ws.is_empty()
+		for w in ws:
+			bad = bad or float(w[1]) < prev or float(w[1]) > float(l.len) or (int(w[2]) != 0 and int(w[2]) != 1)
+			prev = float(w[1])
+		if bad or not ResourceLoader.exists("res://assets/voice/race_%s.ogg" % k) or not Audio.streams.has("race_%s" % k):
+			fail(res, "voice line %s: %d words, file %s" % [k, ws.size(), str(ResourceLoader.exists("res://assets/voice/race_%s.ogg" % k))])
+	var iw: Array = RaceBoss.voice_line("intro").words
+	var v0 := 0
+	var v1 := 0
+	for w in iw:
+		v0 += 1 if int(w[2]) == 0 else 0
+		v1 += 1 if int(w[2]) == 1 else 0
+	if v0 != 6 or v1 != 6:
+		fail(res, "intro words: TICK %d, TOCK %d (want 6 and 6)" % [v0, v1])
+	for sfx in ["rc_bell1", "rc_bell2", "rc_bell3", "rc_crash", "rc_rattle", "rc_fall", "rc_whirr", "rc_thunk", "rc_shot", "rc_creak", "rc_eye", "rc_key", "rc_lock", "rc_anchor", "rc_pin"]:
+		if not Audio.streams.has(sfx):
+			fail(res, "sound %s is not registered / imported" % sfx)
+	# ---- 2. the death scene (host): they come together, the line at 2.0, the pin at 5.0, the dot from 6.0 to 8.0; the reward only when the dot is touched
+	var r := race_fight_room()
+	var b: RaceBoss = r.boss as RaceBoss
+	var hl: BelfryHall = r.belfry
+	race_idle(b)
+	b.th[0].hp = 0.0
+	b.th[0].st = 1
+	b.th[1].hp = 1.0
+	r.attacker = r.player
+	for hb in b.hurtboxes():
+		if hb.has("th") and int(hb.th) == 1:
+			b.hit(1, 1.0, 0.0, "swipe", hb)
+			break
+	var t_die := -1.0
+	for f in range(200):
+		if b.dying:
+			t_die = float(f)
+			break
+		r.step(Game.STEP)
+	if not b.dying:
+		fail(res, "death: the last automaton's hp 0 did not begin the death")
+		return
+	var said_at := -1.0
+	var pin_at := -1.0
+	var pose_at: Dictionary = {}
+	var music_at: Dictionary = {}
+	var holes_after := -1
+	var el := 0.0
+	var dot_seen := false
+	var harm := false
+	var first_x := [float(b.th[0].x), float(b.th[1].x)]
+	for f in range(60 * 9):
+		r.player.inv = 999.0
+		r.step(Game.STEP)
+		el = b._die_el()
+		if b.say_k == 4 and said_at < 0.0 and el >= RaceBoss.DIE_LINE:
+			said_at = el
+		if hl.pin_in and pin_at < 0.0:
+			pin_at = el
+		for mark in [1.0, 3.0, 5.4, 6.0, 7.0]:
+			if el >= mark and not pose_at.has(mark):
+				pose_at[mark] = [b._pose_of(0), b._pose_of(1)]
+				music_at[mark] = b.music_now("boss")
+		if el > RaceBoss.DIE_DOT0 + 0.3 and not dot_seen and b.dot_pos(el).y > BelfryHall.PIVOT.y + 5.0:
+			dot_seen = true
+		if not b.harmboxes().is_empty() or not b.hurtboxes().is_empty():
+			harm = true
+		if el >= 8.0 or b.dot_done:
+			break
+	if absf(pin_at - RaceBoss.DIE_PIN) > 0.1:
+		fail(res, "death: the pin clicked in at %.2f s (want 5.0)" % pin_at)
+	if absf(said_at - 2.0) > 0.1 or absf(b.say_t0 - (b.die_t0 + 2.0)) > 0.02:
+		fail(res, "death: the line at %.2f s, say_t0 %.2f vs die_t0 %.2f (want +2.0)" % [said_at, b.say_t0, b.die_t0])
+	if pose_at.get(3.0, ["", ""]) != ["bow", "bow"] or pose_at.get(1.0, ["", ""])[0] == "bow":
+		fail(res, "death: poses %s (want both bowing from 2.0 s)" % str(pose_at))
+	if music_at.get(1.0, "x") != "" or music_at.get(3.0, "x") != "" or music_at.get(6.0, "") != "w4":
+		fail(res, "death: music %s (want silence, then the tower theme from 5.5 s)" % str(music_at))
+	if not dot_seen or harm:
+		fail(res, "death: the dot floats %s, harm or hurt boxes %s" % [str(dot_seen), str(harm)])
+	if absf(float(b.th[0].x) - BelfryHall.AFTER_X[0]) > 1.5 or absf(float(b.th[1].x) - BelfryHall.AFTER_X[1]) > 1.5 or absf(float(b.th[0].y) - 432.0) > 0.5:
+		fail(res, "death: the pair at (%.0f, %.0f) and (%.0f, %.0f), want face to face on the floor" % [b.th[0].x, b.th[0].y, b.th[1].x, b.th[1].y])
+	if hl.tick_len() > 0.84 or hl.tick_len() < 0.83 or hl.wall2_alpha(r.time) > 0.01:
+		fail(res, "death: tick %.4f after the pin (want 0.8333), heat %.2f (want 0)" % [hl.tick_len(), hl.wall2_alpha(r.time)])
+	if r.fight.state != "active" or b.dot_done:
+		fail(res, "death: the reward came before the dot was touched (%s)" % r.fight.state)
+	# the dot is touched: the reward flow (breakpoint, the flag)
+	var guard := 0
+	while r.fight.state != "done" and guard < 1200:
+		r.player.inv = 99.0
+		r.player.x = RaceBoss.DOT_END.x - r.player.w * 0.5
+		r.player.y = RaceBoss.DOT_END.y - r.player.h * 0.5
+		r.step(Game.STEP)
+		guard += 1
+	if r.fight.state != "done" or not Game.flag("boss:RACE") or not Game.tools.get("breakpoint", false):
+		fail(res, "death: the dot did not give the reward (%s)" % r.fight.state)
+	r.queue_free()
+	Game.flags.erase("boss:RACE")
+	Game.tools["breakpoint"] = false
+	# ---- 3. the subtitles are the race: the intro's words from both voices in one line, in the order they are heard; the survivor's `alone` in capitals the second time
+	var r2 := race_fight_room()
+	var b2: RaceBoss = r2.boss as RaceBoss
+	b2.say_k = 1
+	var iws := b2.say_words()
+	var order_ok := iws.size() == 12
+	for k in range(1, iws.size()):
+		order_ok = order_ok and float(iws[k][1]) >= float(iws[k - 1][1])
+	var swaps := 0
+	for k in range(1, iws.size()):
+		swaps += 1 if int(iws[k][2]) != int(iws[k - 1][2]) else 0
+	b2.say_k = 3
+	b2.say_who = 1
+	var aws := b2.say_words()
+	if not order_ok or swaps < 4 or aws.size() != 6 or String(aws[3][0]) != aws[3][0].to_upper() or int(aws[0][2]) != 1:
+		fail(res, "subtitles: intro %d words in order %s, %d voice changes; alone %s" % [iws.size(), str(order_ok), swaps, str(aws)])
+	r2.queue_free()
+
 func race_m4(res: Dictionary) -> void:
 	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
 	Game.diff = "normal"
@@ -1676,13 +1799,15 @@ func race_m2(res: Dictionary) -> void:
 		fail(res, "M2: the fight did not start (%s)" % r.fight.state)
 		return
 	var hl: BelfryHall = r.belfry
-	# 1. hp: TICK 40 %, TOCK the rest of Game.boss_hp (90 at normal); co-op x1.5; two bars
-	if b.max_hp != 90 or int(b.th[0].max) != 36 or int(b.th[1].max) != 54 or absf(b.hpf - 90.0) > 0.01:
-		fail(res, "hp %d = %d + %d, want 90 = 36 + 54" % [b.max_hp, int(b.th[0].max), int(b.th[1].max)])
-	var bc := RaceBoss.new(r, 0, 0, 90)
+	# 1. hp: TICK 40 %, TOCK the rest of Game.boss_hp (T 140 -> 126 at normal, calibrated in M4); co-op x1.5; two bars
+	var tot: int = Game.boss_hp(r.def.boss)
+	var t_tick: int = roundi(0.4 * float(tot))
+	if b.max_hp != tot or int(b.th[0].max) != t_tick or int(b.th[1].max) != tot - t_tick or absf(b.hpf - float(tot)) > 0.01:
+		fail(res, "hp %d = %d + %d, want %d = %d + %d" % [b.max_hp, int(b.th[0].max), int(b.th[1].max), tot, t_tick, tot - t_tick])
+	var bc := RaceBoss.new(r, 0, 0, tot)
 	bc.scale_hp(1.5)
-	if bc.max_hp != 135 or int(bc.th[0].max) != 54 or int(bc.th[1].max) != 81:
-		fail(res, "co-op hp %d = %d + %d, want 135 = 54 + 81" % [bc.max_hp, int(bc.th[0].max), int(bc.th[1].max)])
+	if bc.max_hp != roundi(float(tot) * 1.5) or int(bc.th[0].max) != roundi(0.4 * float(bc.max_hp)):
+		fail(res, "co-op hp %d = %d + %d, want 1.5 x the hp, TICK 40 %" % [bc.max_hp, int(bc.th[0].max), int(bc.th[1].max)])
 	bc.free()
 	for q in b.th:
 		q.gap = 999.0                                         # (the automata wait: the plans below are started by hand)
@@ -1803,7 +1928,7 @@ func race_m2(res: Dictionary) -> void:
 	tock.daze_until = -1.0
 	# 6. the bars: fractions per automaton, an empty one when down
 	var bars := b.hud_bars()
-	if absf(float(bars[0][0]) - float(tick.hp) / 36.0) > 0.001 or absf(float(bars[1][0]) - float(tock.hp) / 54.0) > 0.001 or String(bars[0][2]) != "TICK" or String(bars[1][2]) != "TOCK":
+	if absf(float(bars[0][0]) - float(tick.hp) / float(tick.max)) > 0.001 or absf(float(bars[1][0]) - float(tock.hp) / float(tock.max)) > 0.001 or String(bars[0][2]) != "TICK" or String(bars[1][2]) != "TOCK":
 		fail(res, "the two bars read %s" % str(bars))
 	race_sim(res, r, b)
 	# 7. no contact damage: a body standing in an idle automaton is not hurt
@@ -1899,8 +2024,11 @@ func race_m2(res: Dictionary) -> void:
 	if not rk.skip_boss():
 		fail(res, "skip boss did not work")
 	var guard := 0
-	while rk.fight.state != "done" and guard < 1200:
+	while rk.fight.state != "done" and guard < 2400:
 		rk.player.inv = 99.0
+		if rk.boss != null and is_instance_valid(rk.boss) and rk.boss.dying and rk.boss._die_el() > 8.2:
+			rk.player.x = RaceBoss.DOT_END.x - rk.player.w * 0.5            # (the reward is the red dot: touch it)
+			rk.player.y = RaceBoss.DOT_END.y - rk.player.h * 0.5
 		rk.step(Game.STEP)
 		guard += 1
 	if rk.fight.state != "done" or not Game.tools.get("breakpoint", false) or not Game.flag("boss:RACE"):
@@ -2322,6 +2450,7 @@ func t_race3() -> bool:
 	race_m2(res)
 	race_m3(res)
 	race_m4(res)
+	race_m5(res)
 	Controls.script_input = null
 	Game.fresh()
 	return report("race3", res.ok, info + res.info)
