@@ -23,7 +23,7 @@ The old boss (`godot/src/enemies/race_boss.gd`, kit-era, MV5A-06) is replaced. K
 | M1 | arena: T06 26x30, the belfry hall (bells as platforms, escapement, buffer floor), camera, lights; per-room tower tick | **done** (2026-10-22, notes below) |
 | M2 | the two automata + reads + phase-1 single attacks + intro + two-bar HUD | **done** (2026-10-22, notes below) |
 | M3 | double write and the clash, guarding, the escapement lock, buffer corruption, bell crack/fall/re-hang | **done** (2026-10-22, notes below) |
-| M4 | phase 2 (transition, switch, bell drop, triple strike, combo, holes), alone mode, rewind | not started |
+| M4 | phase 2 (transition, switch, bell drop, triple strike, combo, holes), alone mode, rewind | done |
 | M5 | death scene and reward, voices and interleaved subtitles, sounds, music, logs line | not started |
 | M6 | loss menu, foreshadow (TB2, T04), after-state (tower tick, T02/TA1), full tests, web export | not started |
 
@@ -64,6 +64,11 @@ The old boss (`godot/src/enemies/race_boss.gd`, kit-era, MV5A-06) is replaced. K
 - **Ringing a bell:** every hanging bell is a hurtbox `{"bell": i}`; a hit on it (host: its own swing; guest: the existing hit event, the host picks the nearest hurtbox) rings it (a swing of 3 px, returns `"block"` so the claw clangs), cancels the cue of an automaton on it or within 40 px (0.3 s recovery, no daze; a double write is cancelled for both), cooldown 1.5 s per bell. If the same swing also reaches an automaton, the automaton takes the hit and the bell stays quiet (`_body_near_attacker`).
 - **Harness API additions:** `_start("double", key)` starts the pair; `_cue_double(key)`.
 - **Phase-2-only rules kept for M4:** bell 3 never falls for good in phase 2, one small bell always hangs (M1); holes and `hole` hazards, `combo`, `switch`, `drop`, `triple` are not there yet.
+
+**M4 (done).** Phase 2 (2.0 s invulnerable transition, beat 0.3 s), `switch` (0.6 s tell), `drop` (bell falls with TOCK on it, 2 damage only in the fall, then it lies as solid cover), `triple` (three leaps one beat apart, each ringing its bell), `combo`, holes in the buffer (max 2, not neighbouring), alone mode (cue x0.85, an alone double of 1 + 1 two 0.2 s apart), the rewind (15 s, 2 s, cancelled by damage, 30 % hp, retry 6 s). `race3` M4 part, `bosspresets` rows `switch`, `drop`, `triple`, `co-race` (now also: the host moves to phase 2 and drops a bell; the guest page sees it lying and solid; with and without `BADLINE_ALL=1`), screenshots `racemoment:<trans|switch|drop|cover>`.
+- **Calibration:** `fightsim` at `T` 100 gave 51 s + 55 s (106 s). The plan's target is ~70 s + ~80 s, so **`T` is now 140** (126 hp at normal): `fightsim` shows **phase 1 over at 80 s, the whole fight at 149 s** for the perfect bot (a human is slower; the bot is the floor). 
+- Decisions (the plan was silent): a dropped bell is chosen by `_droppable_bell` (hanging, not bell 3, not the last small one, TOCK able to reach it); two down at most, three hang at least; the triple's bells are picked from a fresh prefetch read per leap, never the one just left.
+
 
 ## 1. The fight in one page
 

@@ -45,6 +45,8 @@ static func pose_of(name: String, t: float) -> Dictionary:
 			return {"bow": 0.45, "crouch": 12.0, "hand": Vector2(9, 9), "hang": 1.5, "tuck": 0.0}
 		"swing":
 			return {"bow": -0.2, "crouch": 0.0, "hand": Vector2(9, -6), "hang": -0.5, "tuck": 0.0}
+		"hang":
+			return {"bow": 0.0, "crouch": 0.0, "hand": Vector2(3, -23), "hang": 0.6, "tuck": 6.0}
 		"bow":
 			return {"bow": 0.85, "crouch": 3.0, "hand": Vector2(5, 9), "hang": 1.45, "tuck": 0.0}
 	return {"bow": 0.012 * sin(t * 2.0), "crouch": 0.0, "hand": Vector2(6, -3), "hang": -2.2, "tuck": 0.0}

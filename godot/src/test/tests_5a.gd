@@ -1276,6 +1276,368 @@ func race_m3(res: Dictionary) -> void:
 		fail(res, "a double write on a bell did not crack it")
 	r6.queue_free()
 
+# --- M4: phase 2 (the transition, switch, drop, triple, combo, holes), the survivor alone, the rewind ----------------------------------------------------------
+# a fight room already in phase 2 (the transition over)
+func race_p2_room() -> Room:
+	var r := race_fight_room()
+	var b: RaceBoss = r.boss as RaceBoss
+	b._begin_trans()
+	race_until(r, func(): return r.time - b.trans_t0 > RaceBoss.TRANS_T + 0.05, 300)
+	race_idle(b)
+	return r
+
+func race_m4(res: Dictionary) -> void:
+	Game.tools = {"bash": true, "catch": true, "sudo": false, "agents": false, "opus": false, "curl": true, "ssh": false}
+	Game.diff = "normal"
+	Game.flags["intro:RACE"] = true
+	# ---- 1. the transition: at half the hp, or when one falls (whichever first); 2.0 s both cannot be hurt; tick 0.6 from the next boundary; the floor is clean
+	var r := race_fight_room()
+	var b: RaceBoss = r.boss as RaceBoss
+	var hl: BelfryHall = r.belfry
+	race_idle(b)
+	hl.paint(1, 0, r.time)
+	hl.paint(1, 1, r.time)
+	hl.step_buffer(r.time)
+	b.th[1].hp = 54.0 - 11.0                                     # total 36 + 43 = 79: not yet
+	b._sums()
+	race_until(r, func(): return false, 6)
+	if b.ph != 1:
+		fail(res, "phase 2 began at %.1f of 90 hp" % b.hpf)
+	b.th[1].hp = 54.0 - 18.0                                     # total 36 + 36 = 72 ... 45 is half: take TICK's too
+	b.th[0].hp = 9.0
+	b._sums()
+	race_until(r, func(): return b.ph == 2, 20)
+	if b.ph != 2 or hl.ph != 2 or b.say_k != 2:
+		fail(res, "no phase 2 at half the hp (ph %d, hall %d, line %d)" % [b.ph, hl.ph, b.say_k])
+	var tt0: float = b.trans_t0
+	r.attacker = r.player
+	var during := b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0])
+	if during != "" or absf(float(b.th[0].hp) - 9.0) > 0.01:
+		fail(res, "an automaton was hurt during the transition (%s)" % during)
+	if b.th[0].plan.size() > 0 or b.th[1].plan.size() > 0 or hl.corrupt_count(r.time) != 0:
+		fail(res, "plans or corrupt cells survived the transition")
+	race_until(r, func(): return r.time - tt0 > RaceBoss.TRANS_T + 0.8, 400)
+	if absf(hl.tick_len() - 0.6) > 0.0001 or absf(b._beat() - 0.3) > 0.0001:
+		fail(res, "tick %.3f / beat %.3f after the transition, want 0.6 / 0.3" % [hl.tick_len(), b._beat()])
+	var seg0: float = float(hl.segs[hl.segs.size() - 1][0])
+	if seg0 < tt0 + RaceBoss.TRANS_T - 0.001 or seg0 > tt0 + RaceBoss.TRANS_T + 0.71:
+		fail(res, "the 0.6 s ticks start at %.2f, the transition ends at %.2f" % [seg0, tt0 + RaceBoss.TRANS_T])
+	if b.hit(1, 1.0, 0.0, "swipe", b.hurtboxes()[0]) != "hit":
+		fail(res, "phase 2: an automaton cannot be hurt after the transition")
+	r.queue_free()
+	# when one falls first: phase 2 and the survivor's line (after the transition's)
+	var r1 := race_fight_room()
+	var b1: RaceBoss = r1.boss as RaceBoss
+	race_idle(b1)
+	r1.attacker = r1.player
+	b1.th[0].hp = 1.0
+	b1.hit(1, 1.0, 0.0, "swipe", b1.hurtboxes()[0])
+	if b1.th[0].st != 1 or b1.alive_n() != 1:
+		fail(res, "TICK did not fall at 0 hp")
+	race_until(r1, func(): return b1.ph == 2, 20)
+	if b1.ph != 2 or b1.say_k != 2:
+		fail(res, "a fall did not start phase 2 with its line (ph %d, line %d)" % [b1.ph, b1.say_k])
+	race_until(r1, func(): return b1.say_k == 3, 400)
+	if b1.say_k != 3 or b1.say_who != 1 or absf(b1.rw_at - (b1.trans_t0 - 0.1 + 15.0)) > 2.5:
+		fail(res, "the survivor's line: %d by %d, rewind at %.1f" % [b1.say_k, b1.say_who, b1.rw_at])
+	r1.queue_free()
+	# ---- 2. phase 2's plans
+	var r2 := race_p2_room()
+	var b2: RaceBoss = r2.boss as RaceBoss
+	var h2: BelfryHall = r2.belfry
+	r2.player.x = 195.0
+	r2.player.y = 422.0
+	# switch: a cue of 2 beats (0.6 s) with the destination bells swinging, the two swap places in a crossing leap, each landing a 48 px ring (1 damage)
+	b2._start("switch", "p1")
+	var a0: Vector2 = Vector2(float(b2.th[0].x), float(b2.th[0].y))
+	var a1: Vector2 = Vector2(float(b2.th[1].x), float(b2.th[1].y))
+	var sp0: Dictionary = b2.th[0].plan
+	if sp0.is_empty() or absf(float(sp0.t) - 0.6) > 0.001 or float(h2.strike_t0[int(b2.th[1].bell)]) < 0.0:
+		fail(res, "switch: cue %.3f (want 0.6), destination bell struck at %.2f" % [float(sp0.get("t", -1.0)), float(h2.strike_t0[int(b2.th[1].bell)])])
+	var maxr := 0.0
+	var dmgs := 0
+	for f in range(240):
+		var evs: String = b2.plan_step(Game.STEP)
+		r2.time += Game.STEP
+		if not b2.th[0].plan.is_empty() and b2.th[0].plan.ph == "cue":
+			dmgs += b2.harmboxes().size()
+		for hb in b2.harmboxes():
+			dmgs += 1000 if int(hb.get("dmg", 1)) != 1 else 0
+			maxr = maxf(maxr, 1.0)
+		if b2.th[0].plan.is_empty() and b2.th[1].plan.is_empty():
+			break
+	if absf(float(b2.th[0].x) - a1.x) > 1.0 or absf(float(b2.th[1].x) - a0.x) > 1.0:
+		fail(res, "switch: they did not swap places (%.0f, %.0f) <-> (%.0f, %.0f)" % [float(b2.th[0].x), float(b2.th[1].x), a1.x, a0.x])
+	if dmgs != 0 or maxr == 0.0:
+		fail(res, "switch: harm in the cue or no ring (%d, %.0f)" % [dmgs, maxr])
+	race_idle(b2)
+	# triple: a cue of 0.6 s, three strikes one beat (0.3 s) apart on three different bells, 0.8 s of recovery
+	r2.player.x = 360.0
+	r2.player.y = 422.0
+	b2.th[0].bell = 0
+	var rcb := BelfryHall.new_rest(0)
+	b2.th[0].x = rcb.position.x + rcb.size.x * 0.5
+	b2.th[0].y = rcb.position.y
+	b2._start("triple", "p1")
+	var tp: Dictionary = b2.th[0].plan
+	if tp.is_empty() or absf(float(tp.t) - 0.6) > 0.001:
+		fail(res, "triple: cue %.3f, want 0.6" % float(tp.get("t", -1.0)))
+	var strike_times: Array = []
+	var last_hit := [false, false, false]
+	var rec_t := 0.0
+	for f in range(400):
+		b2.plan_step(Game.STEP)
+		r2.time += Game.STEP
+		if b2.th[0].plan.is_empty():
+			break
+		var pq: Dictionary = b2.th[0].plan
+		for k in range(3):
+			if pq.get("hit_%d" % k, false) and not last_hit[k]:
+				last_hit[k] = true
+				strike_times.append(b2._el(pq))
+		if pq.ph == "recover":
+			rec_t += Game.STEP
+	var tbs: Array = tp.tb
+	if strike_times.size() != 3 or absf(float(strike_times[1]) - float(strike_times[0]) - 0.3) > 0.03 or absf(float(strike_times[2]) - float(strike_times[1]) - 0.3) > 0.03:
+		fail(res, "triple: strikes at %s, want a beat (0.3 s) apart" % str(strike_times))
+	if int(tbs[0]) == int(tbs[1]) or int(tbs[1]) == int(tbs[2]) or int(tbs[0]) == int(tbs[2]) or int(tbs[0]) < 0:
+		fail(res, "triple: bells %s are not three different bells" % str(tbs))
+	if absf(rec_t - 0.8) > 0.05:
+		fail(res, "triple: recovery %.2f s, want 0.8" % rec_t)
+	race_idle(b2)
+	# drop: a cue of 3 beats (0.9 s) with the chain rattling and the bell shaking, then the bell falls with TOCK riding it (2 damage under it, only in the fall),
+	# TOCK stuck 0.8 s beside the fallen bell; refused with two bells down
+	r2.player.x = 100.0
+	r2.player.y = 422.0
+	b2._start("drop", "p1")
+	var dp: Dictionary = b2.th[1].plan
+	var db: int = int(dp.get("bell", -1))
+	if dp.is_empty() or db < 0 or absf(float(dp.t) - 0.9) > 0.001 or float(h2.crack_t0[db]) < 0.0 or float(h2.fall_t0[db]) >= 0.0:
+		fail(res, "drop: cue %.3f (want 0.9), bell %d rattling %s" % [float(dp.get("t", -1.0)), db, str(float(h2.crack_t0[db]) >= 0.0 if db >= 0 else false)])
+	var max_dd := 0
+	var rec_d := 0.0
+	var fell := false
+	for f in range(500):
+		b2.plan_step(Game.STEP)
+		r2.time += Game.STEP
+		h2.step_host(r2.time)
+		if b2.th[1].plan.is_empty():
+			break
+		var pd: Dictionary = b2.th[1].plan
+		if pd.ph == "cue":
+			for hb in b2.harmboxes():
+				max_dd = 99
+		if pd.ph == "active":
+			for hb in b2.harmboxes():
+				max_dd = maxi(max_dd, int(hb.get("dmg", 1)))
+			if h2.bell_mode(db, r2.time) == "fall":
+				fell = true
+		if pd.ph == "recover":
+			rec_d += Game.STEP
+	if max_dd != 2 or not fell or absf(rec_d - 0.8) > 0.05 or not h2.fallen[db] or int(b2.th[1].bell) != -1 or absf(float(b2.th[1].y) - 432.0) > 0.5:
+		fail(res, "drop: box damage %d (want 2 and only in the fall), fell %s, recovery %.2f s, fallen %s, TOCK at y %.0f" % [max_dd, str(fell), rec_d, str(h2.fallen[db]), float(b2.th[1].y)])
+	h2.apply()
+	if h2.bell_mode(db, r2.time) != "lie" or not r2.grid.solid(BelfryHall.BELLS[db][0], 25):
+		fail(res, "the dropped bell is not lying as solid cover in phase 2 (%s)" % h2.bell_mode(db, r2.time))
+	# at most 2 down, at least 3 hang; the middle bell never; no drop with two down
+	race_idle(b2)
+	var second := -1
+	for k in range(BelfryHall.N_BELLS):
+		if h2.can_fall(k, r2.time):
+			second = k
+			break
+	h2.apply()
+	if second < 0 or not h2.drop(second):
+		fail(res, "a second bell cannot fall in phase 2")
+	r2.time += 3.0
+	h2.step_host(r2.time)
+	h2.apply()
+	if b2._droppable_bell(Vector2(208.0, 300.0)) >= 0 or h2.fallen_count(r2.time) != 2:
+		fail(res, "a third bell is droppable (down %d)" % h2.fallen_count(r2.time))
+	r2.queue_free()
+	# combo: a switch, then the double write's 3-beat cue starts on the landing (2 damage, 0.9 s)
+	var r3 := race_p2_room()
+	var b3: RaceBoss = r3.boss as RaceBoss
+	r3.player.x = 195.0
+	r3.player.y = 422.0
+	b3._start("combo", "p1")
+	var landed_cue := -1.0
+	var saw_double := false
+	for f in range(400):
+		b3.plan_step(Game.STEP)
+		r3.time += Game.STEP
+		var pc: Dictionary = b3.th[0].plan
+		if not pc.is_empty() and String(pc.id) == "double" and not saw_double:
+			saw_double = true
+			landed_cue = float(pc.t)
+			break
+	if not saw_double or absf(landed_cue - 0.9) > 0.001 or not b3.th[1].eye or int(b3.th[0].dial) != int(b3.th[1].dial):
+		fail(res, "combo: the double write after the switch: cue %.3f (want 0.9), seen %s" % [landed_cue, str(saw_double)])
+	r3.queue_free()
+	# ---- 3. the holes: phase 2's corrupt cells open (2 tiles deep, 4.0 s, at most 2, never neighbours); the pit's bottom hurts 1; the lock closes them
+	var r4 := race_p2_room()
+	var b4: RaceBoss = r4.boss as RaceBoss
+	var h4: BelfryHall = r4.belfry
+	h4.paint(3, 0, r4.time)
+	h4.paint(3, 1, r4.time)
+	h4.paint(4, 0, r4.time)
+	h4.paint(4, 1, r4.time)
+	h4.paint(6, 0, r4.time)
+	h4.paint(6, 1, r4.time)
+	h4.step_buffer(r4.time)
+	b4._sync_hazards()
+	var holes := b4.hz.filter(func(h): return h.k == "hole")
+	if holes.size() != 2 or h4.hole_state(4, r4.time) != 0:
+		fail(res, "phase 2 holes: %d hazards (want 2 and none next to another)" % holes.size())
+	else:
+		var t0h: float = float(holes[0].t0)
+		if not b4.hz_all_boxes(t0h + 0.3).is_empty() or b4.hz_all_boxes(t0h + 0.7).size() < 1:
+			fail(res, "a hole hurts during its build-up or never")
+		var hb0: Dictionary = b4.hz_all_boxes(t0h + 0.7)[0]
+		if int(hb0.dmg) != 1 or float(hb0.y) < 456.0:
+			fail(res, "the pit's bottom is %s" % str(hb0))
+		r4.time = t0h + 0.8
+		h4.apply()
+		var cc: int = int(holes[0].v[0])
+		if r4.grid.solid(1 + cc * 3 + 1, 27) or r4.grid.solid(1 + cc * 3 + 1, 28) or not r4.grid.solid(1 + cc * 3 + 1, 29):
+			fail(res, "a hole is not two tiles deep over row 29")
+		r4.time = t0h + 0.6 + 4.0 + 0.5
+		h4.apply()
+		b4._sync_hazards()
+		if not r4.grid.solid(1 + cc * 3 + 1, 27) or not b4.hz.filter(func(h): return h.k == "hole").is_empty():
+			fail(res, "a hole does not close after 4 s")
+	r4.queue_free()
+	# ---- 4. alone: cues x0.85 (never under 0.30 s, not on a 2-damage plan), its double write is two reads and two strikes 0.2 s apart (1 + 1), the lock's turns cost 1.5 s extra
+	var r5 := race_p2_room()
+	var b5: RaceBoss = r5.boss as RaceBoss
+	var h5: BelfryHall = r5.belfry
+	r5.attacker = r5.player
+	b5.th[0].hp = 1.0
+	b5.hit(1, 1.0, 0.0, "swipe", b5.hurtboxes()[0])
+	race_idle(b5)
+	var cue_a: float = b5._cue_len("strike", false)
+	if b5.alive_n() != 1 or absf(cue_a - 0.6 * 0.85) > 0.001 or b5._cue_len("double", false) < 0.9 * 0.85 - 0.001:
+		fail(res, "alone: strike cue %.3f (want 0.51), double %.3f (want 0.765)" % [cue_a, b5._cue_len("double", false)])
+	for dd in ["easy", "normal", "hard", "nightmare"]:
+		Game.diff = dd
+		for pid in ["strike", "slam", "clapper", "rope", "switch", "triple", "drop"]:
+			if b5._cue_len(pid, true) < 0.30:
+				fail(res, "%s %s: an alone / guarded cue under 0.30 s" % [dd, pid])
+	Game.diff = "normal"
+	r5.player.x = 120.0
+	r5.player.y = 422.0
+	b5.hist["p1"] = [[r5.time - 0.25, 100.0, 427.0], [r5.time, 130.0, 427.0]]
+	b5.th[1].next = "double"
+	b5.th[1].start_at = r5.time
+	b5._cue_start(1)
+	var ap: Dictionary = b5.th[1].plan
+	var boxes_t: Array = []
+	if ap.is_empty() or not ap.get("alone", false) or absf(float(ap.rx) - float(ap.r2x)) < 5.0:
+		fail(res, "alone double: no plan or the two reads are the same point (%s %s)" % [str(ap.get("rx", 0.0)), str(ap.get("r2x", 0.0))])
+	else:
+		var ev_a := 0.0
+		for f in range(300):
+			b5.plan_step(Game.STEP)
+			r5.time += Game.STEP
+			if b5.th[1].plan.is_empty():
+				break
+			var pa: Dictionary = b5.th[1].plan
+			if pa.ph == "active":
+				var hbx := b5.harmboxes()
+				if not hbx.is_empty():
+					boxes_t.append([b5._el(pa), hbx.size(), int(hbx[0].get("dmg", 1))])
+		var firsts: Array = []
+		var last_bt := -1.0
+		for bt in boxes_t:
+			if firsts.is_empty() or float(bt[0]) - float(last_bt) > 0.08:
+				firsts.append(float(bt[0]))
+			last_bt = float(bt[0])
+		if firsts.size() != 2 or absf(firsts[1] - firsts[0] - 0.2) > 0.03:
+			fail(res, "alone double: strikes at %s, want two 0.2 s apart" % str(firsts))
+		for bt in boxes_t:
+			if int(bt[2]) != 1:
+				fail(res, "an alone double write box does %d damage (want 1 + 1)" % int(bt[2]))
+				break
+		if float(b5.clash_t0) > 0.0:
+			fail(res, "an alone double write clashed")
+	# the lock while alone: 1.5 s extra recovery after each plan
+	h5.serial_until = r5.time + 3.0
+	b5.th[1].next = "strike"
+	b5.th[1].plan = {}
+	b5.th[1].start_at = r5.time
+	var np := b5._new_plan(1, "strike", "p1", Vector2(100.0, 400.0), 0.51)
+	if absf(float(np.rec_len) - (0.3 + 1.5)) > 0.001:
+		fail(res, "alone and serialized: recovery %.2f s, want 1.8" % float(np.rec_len))
+	b5.plan_seq -= 1
+	r5.queue_free()
+	# ---- 5. the rewind: 15 s after the fall the survivor hops down beside its partner and kneels 2.0 s; hurt, it stops (6 s before the next try); done, the partner gets up with 30 %
+	var r6 := race_p2_room()
+	var b6: RaceBoss = r6.boss as RaceBoss
+	r6.attacker = r6.player
+	b6.th[0].hp = 1.0
+	b6.hit(1, 1.0, 0.0, "swipe", b6.hurtboxes()[0])
+	var t_fall: float = r6.time
+	race_idle(b6)
+	r6.player.x = 330.0
+	r6.player.y = 422.0
+	b6.rw_at = t_fall + 15.0
+	b6.th[1].gap = 999.0
+	var kneel_t := -1.0
+	race_until(r6, func(): return b6.th[1].st == 2, 1200, Vector2(330.0, 422.0))
+	if b6.th[1].st != 2 or r6.time - t_fall < 14.9 or r6.time - t_fall > 17.5 or absf(float(b6.th[1].y) - 432.0) > 0.6:
+		fail(res, "rewind: TOCK kneels at %.1f s after the fall (want ~15 s), st %d, y %.0f" % [r6.time - t_fall, b6.th[1].st, float(b6.th[1].y)])
+	kneel_t = r6.time
+	# hurt: stops, tries again 6 s later
+	for hb in b6.hurtboxes():
+		if hb.has("th") and int(hb.th) == 1:
+			b6.hit(1, 1.0, 0.0, "swipe", hb)
+			break
+	if b6.th[1].st != 0 or absf(b6.rw_at - (r6.time + 6.0)) > 0.05 or b6.th[0].st != 1:
+		fail(res, "rewind hurt: survivor st %d, next try in %.2f s (want 6), partner st %d" % [b6.th[1].st, b6.rw_at - r6.time, b6.th[0].st])
+	race_idle(b6)
+	b6.th[1].gap = 999.0
+	race_until(r6, func(): return b6.th[1].st == 2, 800, Vector2(330.0, 422.0))
+	var k0 := r6.time
+	race_until(r6, func(): return b6.th[0].st == 0, 400, Vector2(330.0, 422.0))
+	if b6.th[0].st != 0 or absf((r6.time - k0) - 2.0) > 0.1 or absf(float(b6.th[0].hp) - 0.3 * float(b6.th[0].max)) > 1.0 or b6.th[1].st != 0:
+		fail(res, "rewind done: partner st %d hp %.1f (want %.1f), took %.2f s (want 2.0)" % [b6.th[0].st, float(b6.th[0].hp), 0.3 * float(b6.th[0].max), r6.time - k0])
+	if b6.ph != 2:
+		fail(res, "the rewind changed the phase")
+	r6.queue_free()
+	# net: a phase-2 fight with every plan kind, the puppet applies what the host sends and sends it back
+	var r7 := race_p2_room()
+	var b7: RaceBoss = r7.boss as RaceBoss
+	for q in b7.th:
+		q.gap = 0.2
+		q.since = 0
+		q.need = 1
+		q.swneed = 0
+	var bad := ""
+	var kinds := {}
+	for f in range(60 * 30):
+		r7.player.inv = 999.0
+		r7.player.x = 200.0 + 120.0 * sin(float(f) / 60.0 * 0.4)
+		r7.player.y = 422.0
+		r7.step(Game.STEP)
+		for q in b7.th:
+			if not q.plan.is_empty():
+				kinds[String(q.plan.id)] = true
+		if f % 25 == 0 and bad == "":
+			var fa := b7.net_fields()
+			var pup := RaceBoss.new(r7, 0, 0, 90)
+			pup.puppet = true
+			pup.net_apply(JSON.parse_string(JSON.stringify(fa)))
+			var fb := pup.net_fields()
+			if JSON.stringify(JSON.parse_string(JSON.stringify(fa))) != JSON.stringify(JSON.parse_string(JSON.stringify(fb))):
+				bad = "frame %d" % f
+			pup.free()
+	if bad != "":
+		fail(res, "phase 2 puppet fields differ at %s" % bad)
+	res.info += " phase 2 in 30 s: %s;" % str(kinds.keys())
+	if kinds.size() < 4 or not (kinds.has("switch") or kinds.has("combo")) or not (kinds.has("triple") or kinds.has("drop")):
+		fail(res, "phase 2 plans in 30 s: only %s" % str(kinds.keys()))
+	r7.queue_free()
+
 # a T06 room with the fight running (the short intro), the players hurt-proof unless a test says otherwise
 func race_fight_room() -> Room:
 	Game.flags["intro:RACE"] = true
@@ -1959,6 +2321,7 @@ func t_race3() -> bool:
 	# --- M2 -------------------------------------------------------------------------------------------------------------
 	race_m2(res)
 	race_m3(res)
+	race_m4(res)
 	Controls.script_input = null
 	Game.fresh()
 	return report("race3", res.ok, info + res.info)

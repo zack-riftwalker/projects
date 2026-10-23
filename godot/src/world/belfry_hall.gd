@@ -185,7 +185,7 @@ func land_t(i: int) -> float:
 func bell_mode(i: int, t: float) -> String:
 	var f0: float = fall_t0[i]
 	if f0 < 0.0:
-		return "hang"
+		return "crack" if float(crack_t0[i]) >= 0.0 and t >= float(crack_t0[i]) else "hang"     # (a chain being rattled: the bell shakes, it has not been ripped yet)
 	if t < f0:
 		var c0: float = crack_t0[i]
 		return "crack" if c0 >= 0.0 and t >= c0 else "hang"
@@ -308,6 +308,16 @@ func drop(i: int) -> bool:
 	crack_t0[i] = NONE_T
 	fall_t0[i] = snappedf(room.time, 0.01)
 	return true
+
+# the chain is being rattled (TOCK's bell drop): the bell shakes now and falls when `release` is called
+func rattle(i: int) -> void:
+	crack_t0[i] = snappedf(room.time, 0.01)
+
+# ... and ripped: it falls straight down now
+func release(i: int) -> void:
+	fall_t0[i] = snappedf(room.time, 0.01)
+	if float(crack_t0[i]) < 0.0:
+		crack_t0[i] = fall_t0[i]
 
 # is a bell between its crack and its landing over x? (the `bellfall` hazard's box)
 func fall_box(i: int, t: float) -> Rect2:

@@ -3599,6 +3599,9 @@ func sc_co_race() -> Array:
 		var forced := false
 		var dbl_log := {}
 		var lock_t := -1.0
+		var p2_in := false
+		var dropped := false
+		var fell_h := false
 		while Time.get_ticks_msec() - t0 < 40000.0 * slow:
 			p.inv = 999.0
 			p.hp = p.max_hp
@@ -3612,6 +3615,15 @@ func sc_co_race() -> Array:
 				dbl_log[int(b.th[0].plan.seq)] = bool(b.th[0].plan.get("hit", false)) or bool(b.th[0].plan.get("split", false))
 			if lock_t < 0.0 and hl.lock_cd_until > 0.0:
 				lock_t = r.time
+			var el_h: float = float(Time.get_ticks_msec() - t0) / 1000.0 / slow
+			if not p2_in and el_h > 26.0:
+				p2_in = true                                   # phase 2: the switch of contexts, then a bell dropped
+				b._begin_trans()
+			if p2_in and not dropped and el_h > 31.0 and b.th[0].plan.is_empty() and b.th[1].plan.is_empty():
+				dropped = true
+				b._start("drop", "p2")
+			if hl.fallen_count(r.time) >= 1:
+				fell_h = true
 			for q in b.th:                                      # (the guest's claws must not finish the fight: the rules are the test)
 				if q.st == 0 and float(q.hp) < 6.0:
 					q.hp = 6.0
@@ -3626,7 +3638,7 @@ func sc_co_race() -> Array:
 		var hit_doubles := 0
 		for dk in dbl_log:
 			hit_doubles += 1 if dbl_log[dk] else 0
-		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1 and doubles >= 1 and lock_t >= 0.0, "host: started %s, %d plans (p1 %d, p2 %d), %d double writes (%d hit or split), the guest's claw hits accepted %d (verdicts %s), the guest locked the escapement at %.1f" % [started, seen.size(), tg.p1, tg.p2, doubles, hit_doubles, ok_hits, str(coop().verdicts), lock_t]]
+		return [started and seen.size() >= 8 and tg.p1 >= 1 and tg.p2 >= 1 and ok_hits >= 1 and doubles >= 1 and lock_t >= 0.0 and fell_h, "host: fallen bell %s, started %s, %d plans (p1 %d, p2 %d), %d double writes (%d hit or split), the guest's claw hits accepted %d (verdicts %s), the guest locked the escapement at %.1f" % [str(fell_h), started, seen.size(), tg.p1, tg.p2, doubles, hit_doubles, ok_hits, str(coop().verdicts), lock_t]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("T06", 150.0, 300.0)
 	var found := {"b": null}
@@ -3649,6 +3661,7 @@ func sc_co_race() -> Array:
 	var bob_phase := false
 	var bob_swings := 0
 	var serial_seen := false
+	var fell_g := false
 	var gh: BelfryHall = r2.belfry
 	var t1 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t1 < 40000.0 * slow:
@@ -3670,6 +3683,9 @@ func sc_co_race() -> Array:
 				dbl_log2[int(q.plan.seq)] = bool(q.plan.get("hit", false)) or bool(q.plan.get("split", false))
 		if gh.serialized(r2.time):
 			serial_seen = true
+		for fb in range(BelfryHall.N_BELLS):                          # a fallen bell on this page is solid cover too
+			if gh.fallen[fb] and gh.bell_mode(fb, r2.time) == "lie" and r2.grid.solid(BelfryHall.BELLS[fb][0], 25):
+				fell_g = true
 		# the double write: stand still in it. Later (14 s on): the escapement's bob, from the air beside it, until the host has serialized
 		if not bob_phase and Time.get_ticks_msec() - t1 > 15000.0 * slow:
 			bob_phase = true
@@ -3720,7 +3736,7 @@ func sc_co_race() -> Array:
 	for dk in dbl_log2:
 		dbl_hit_seen += 1 if dbl_log2[dk] else 0
 	await wait_secs(1.0)
-	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1 and max_drop >= 2 and dbl_seen >= 1 and serial_seen, "guest: saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times (at most %d at once), %d swings, %d double writes seen (%d hit), %d swings at the bob, serialized seen %s, violations '%s' '%s'" % [seen2.size(), mine, short, hits, max_drop, swings, dbl_seen, dbl_hit_seen, bob_swings, str(serial_seen), pup.kit_violation, pup.arena_violation]]
+	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1 and max_drop >= 2 and dbl_seen >= 1 and serial_seen and fell_g, "guest: fallen bell lying %s, saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times (at most %d at once), %d swings, %d double writes seen (%d hit), %d swings at the bob, serialized seen %s, violations '%s' '%s'" % [str(fell_g), seen2.size(), mine, short, hits, max_drop, swings, dbl_seen, dbl_hit_seen, bob_swings, str(serial_seen), pup.kit_violation, pup.arena_violation]]
 
 func sc_co_loopboss() -> Array:
 	if not await wait_joined():

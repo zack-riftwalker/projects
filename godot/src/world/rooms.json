@@ -567,7 +567,7 @@
              ] },
     "T06": { "file": "T06.txt", "title": "RACE CONDITION", "size": [26, 30], "origin": [1164, -166], "world": 4, "music": "w4", "zone": "tower", "hall": "belfry",
              "signs": [],
-             "boss": {"id": "RACE", "class": "RaceBoss", "name": "RACE CONDITION", "sub": "two threads, one variable", "trigger_x": 96, "cam": "free", "T": 100, "u": 0.9, "reward": "breakpoint", "banner": "breakpoint", "banner_sub": "facing a machine or an enemy, press [special]: it stops for 3.5 s", "music": "boss", "drop": 45},
+             "boss": {"id": "RACE", "class": "RaceBoss", "name": "RACE CONDITION", "sub": "two threads, one variable", "trigger_x": 96, "cam": "free", "T": 140, "u": 0.9, "reward": "breakpoint", "banner": "breakpoint", "banner_sub": "facing a machine or an enemy, press [special]: it stops for 3.5 s", "music": "boss", "drop": 45},
              "doors": [
                  {"id": "T06:W", "side": "W", "a": 23, "b": 26, "to": "TB2:E", "lock": "fight"},
                  {"id": "T06:E", "side": "E", "a": 23, "b": 26, "to": "TC2:W", "lock": "until:boss:RACE"}

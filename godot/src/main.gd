@@ -314,6 +314,27 @@ func _ready() -> void:
 							rtr.belfry.crack(2)
 							for f in range(24):
 								rtr.step(Game.STEP)
+						"trans", "switch", "drop", "cover":                    # phase 2: the change of context (60 frames in), a switch's cue, a bell falling, two bells down as cover
+							rtb._begin_trans()
+							for f in range(60 if rt[1] == "trans" else 150):
+								rtp.inv = 999.0
+								rtr.step(Game.STEP)
+							if rt[1] != "trans":
+								for rq in rtb.th:
+									rq.gap = 999.0
+								rtb._start("switch" if rt[1] == "switch" else "drop", "p1")
+								var n_f := 30 if rt[1] == "switch" else (45 if rt[1] == "drop" else 100)
+								for f in range(n_f):
+									rtp.inv = 999.0
+									rtr.step(Game.STEP)
+							if rt[1] == "cover":
+								for f in range(120):
+									rtp.inv = 999.0
+									rtr.step(Game.STEP)
+								rtb._start("drop", "p2")
+								for f in range(140):
+									rtp.inv = 999.0
+									rtr.step(Game.STEP)
 		elif Game.scene.begins_with("race:"):          # screenshot helper: RACE CONDITION's belfry (race:<hp>:<x>:<y>[:<demo>]); 1.0 phase 1, 0.4 phase 2, 0 the after-state (M1: the hall alone, the boss inert); demo: bells struck / fallen, cells corrupt / open
 			var ra := Game.scene.substr(5).split(":")
 			var rhp := float(ra[0])
