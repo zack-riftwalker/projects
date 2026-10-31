@@ -1,6 +1,6 @@
 # RACE CONDITION: reference images
 
-Made by Zakaria with an image model from the prompts in `../../17-race-condition.md` (step 2). **References, not game files**: the builder draws the game's own sprites at the game's size and palette from them (or, for the backdrop, see open question 3 in `../../17-race-build.md` §11). Where an image disagrees with the build plan's geometry (`17-race-build.md` §3), **the plan wins**; take the look from the images.
+Made by Zakaria with an image model from the prompts in `../../17-race-condition.md` (step 2). **TICK and TOCK are game files now** (play-test 2026-10-31): `tools/godot/race_sprites.py` cuts their sprites from `tick_tock.webp`, `sheet_keys.webp` and the swatches of `sheet_4dir.webp` (`17-race-build.md`, "Fix after Zakaria's play-test"). The rest are references, not game files: the builder draws the game's own sprites at the game's size and palette from them (or, for the backdrop, see open question 3 in `../../17-race-build.md` §11). Where an image disagrees with the build plan's geometry (`17-race-build.md` §3), **the plan wins**; take the look from the images.
 
 | file | what | take from it |
 |---|---|---|

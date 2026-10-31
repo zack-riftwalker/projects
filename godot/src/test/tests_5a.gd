@@ -996,7 +996,7 @@ func race_m3(res: Dictionary) -> void:
 			r.player.hp = r.player.max_hp
 			if impact_t < 0.0:
 				impact_t = r.time
-		for hb in b.harmboxes():
+		for hb in b.attack_boxes():
 			box_dmg = maxi(box_dmg, int(hb.get("dmg", 1)))
 		if b.th[0].plan.is_empty() and b.th[1].plan.is_empty():
 			break
@@ -1029,7 +1029,7 @@ func race_m3(res: Dictionary) -> void:
 			var pq: Dictionary = b.th[i].plan
 			if not pq.is_empty() and pq.ph == "active" and act[i] < 0.0:
 				act[i] = r.time
-		for hb in b.harmboxes():
+		for hb in b.attack_boxes():
 			max_dmg = maxi(max_dmg, int(hb.get("dmg", 1)))
 			boxes += 1
 		if b.th[0].plan.is_empty() and b.th[1].plan.is_empty():
@@ -1053,7 +1053,7 @@ func race_m3(res: Dictionary) -> void:
 		r.player.x = 330.0 if left else 200.0
 		r.player.y = 422.0
 		r.step(Game.STEP)
-		boxes2 += b.harmboxes().size()
+		boxes2 += b.attack_boxes().size()
 		if float(b.clash_t0) > 0.0 and not clash_seen:
 			clash_seen = true
 			break
@@ -1358,7 +1358,7 @@ func race_m5(res: Dictionary) -> void:
 				music_at[mark] = b.music_now("boss")
 		if el > RaceBoss.DIE_DOT0 + 0.3 and not dot_seen and b.dot_pos(el).y > BelfryHall.PIVOT.y + 5.0:
 			dot_seen = true
-		if not b.harmboxes().is_empty() or not b.hurtboxes().is_empty():
+		if not b.attack_boxes().is_empty() or not b.hurtboxes().is_empty():
 			harm = true
 		if el >= 8.0 or b.dot_done:
 			break
@@ -1567,8 +1567,8 @@ func race_m4(res: Dictionary) -> void:
 		var evs: String = b2.plan_step(Game.STEP)
 		r2.time += Game.STEP
 		if not b2.th[0].plan.is_empty() and b2.th[0].plan.ph == "cue":
-			dmgs += b2.harmboxes().size()
-		for hb in b2.harmboxes():
+			dmgs += b2.attack_boxes().size()
+		for hb in b2.attack_boxes():
 			dmgs += 1000 if int(hb.get("dmg", 1)) != 1 else 0
 			maxr = maxf(maxr, 1.0)
 		if b2.th[0].plan.is_empty() and b2.th[1].plan.is_empty():
@@ -1632,10 +1632,10 @@ func race_m4(res: Dictionary) -> void:
 			break
 		var pd: Dictionary = b2.th[1].plan
 		if pd.ph == "cue":
-			for hb in b2.harmboxes():
+			for hb in b2.attack_boxes():
 				max_dd = 99
 		if pd.ph == "active":
-			for hb in b2.harmboxes():
+			for hb in b2.attack_boxes():
 				max_dd = maxi(max_dd, int(hb.get("dmg", 1)))
 			if h2.bell_mode(db, r2.time) == "fall":
 				fell = true
@@ -1750,7 +1750,7 @@ func race_m4(res: Dictionary) -> void:
 				break
 			var pa: Dictionary = b5.th[1].plan
 			if pa.ph == "active":
-				var hbx := b5.harmboxes()
+				var hbx := b5.attack_boxes()
 				if not hbx.is_empty():
 					boxes_t.append([b5._el(pa), hbx.size(), int(hbx[0].get("dmg", 1))])
 		var firsts: Array = []
@@ -1946,13 +1946,13 @@ func race_m2(res: Dictionary) -> void:
 				ev = b.plan_step(Game.STEP)
 				if not q.plan.is_empty():
 					if String(q.plan.ph) == "cue":
-						boxes_in_cue += b.harmboxes().size()
+						boxes_in_cue += b.attack_boxes().size()
 					elif String(q.plan.ph) == "active":
 						if id == "strike" and f % 5 == 0 and not race_ring_ok(b, b.ring_center(q.plan), RaceBoss.RING_R * clampf(b._el(q.plan) / float(q.plan.act_len), 0.0, 1.0)):
 							fail(res, "strike: a ring box is off its circle")
-						boxes_active += b.harmboxes().size()
+						boxes_active += b.attack_boxes().size()
 						t_act += Game.STEP
-						for hb in b.harmboxes():
+						for hb in b.attack_boxes():
 							max_dmg = maxi(max_dmg, int(hb.get("dmg", 1)))
 						if id == "clapper":
 							for pj in r.projs:
@@ -2015,7 +2015,8 @@ func race_m2(res: Dictionary) -> void:
 	if absf(float(bars[0][0]) - float(tick.hp) / float(tick.max)) > 0.001 or absf(float(bars[1][0]) - float(tock.hp) / float(tock.max)) > 0.001 or String(bars[0][2]) != "TICK" or String(bars[1][2]) != "TOCK":
 		fail(res, "the two bars read %s" % str(bars))
 	race_sim(res, r, b)
-	# 7. no contact damage: a body standing in an idle automaton is not hurt
+	# 7. touching a body hurts (Zakaria 2026-10-31: "the bosses' touch must hurt"): 1 damage and knocked away from it; a dazed body
+	# (a punish window) does not, and the guest's puppet builds the same touch boxes from the net fields
 	for q in b.th:
 		q.plan = {}
 		q.mode = "idle"
@@ -2024,18 +2025,40 @@ func race_m2(res: Dictionary) -> void:
 		q.hammer = 0
 		q.hp = float(q.max)
 	b._sync_mirror()
+	var hp_c: int = r.player.max_hp
+	r.player.hp = hp_c
+	r.player.inv = 0.0
+	r.player.grace = 0.0
 	r.player.x = float(b.th[0].x) - 5.0
 	r.player.y = float(b.th[0].y) - 12.0
-	r.player.hp = r.player.max_hp
-	var hp_c: int = r.player.hp
-	for f in range(90):
-		r.player.inv = 0.0
-		r.player.x = float(b.th[0].x) - 5.0
-		r.player.y = float(b.th[0].y) - 12.0
-		r.player.vy = 0.0
-		r.step(Game.STEP)
-	if r.player.hp != hp_c or not b.harmboxes().is_empty():
-		fail(res, "touching an idle automaton hurts (hp %d -> %d, %d harm boxes)" % [hp_c, r.player.hp, b.harmboxes().size()])
+	r.player.vy = 0.0
+	var side := signf(r.player.x + r.player.w * 0.5 - float(b.th[0].x))
+	r.step(Game.STEP)
+	if r.player.hp != hp_c - 1 or signf(r.player.vx) != (side if side != 0.0 else signf(r.player.vx)) or r.player.vx == 0.0:
+		fail(res, "touching an idle automaton: hp %d -> %d, knocked %.0f (side %.0f)" % [hp_c, r.player.hp, r.player.vx, side])
+	var tb := b.touch_boxes()
+	if tb.size() != 2:
+		fail(res, "%d touch boxes for two standing automata" % tb.size())
+	var pup0 := RaceBoss.new(r, 0, 0, 90)
+	pup0.puppet = true
+	pup0.net_apply(b.net_fields())
+	var same := pup0.touch_boxes().size() == tb.size()
+	for k in range(mini(tb.size(), pup0.touch_boxes().size())):
+		same = same and absf(float(pup0.touch_boxes()[k].x) - float(tb[k].x)) < 0.3 and int(pup0.touch_boxes()[k].touch) == int(tb[k].touch)
+	if not same:
+		fail(res, "the guest's touch boxes differ: %s / %s" % [str(pup0.touch_boxes()), str(tb)])
+	pup0.free()
+	b.th[0].daze_until = r.time + 5.0
+	r.player.hp = hp_c
+	r.player.inv = 0.0
+	r.player.grace = 0.0
+	r.player.x = float(b.th[0].x) - 5.0
+	r.player.y = float(b.th[0].y) - 12.0
+	r.player.vx = 0.0
+	r.step(Game.STEP)
+	if r.player.hp != hp_c:
+		fail(res, "a dazed automaton hurts on touch (hp %d -> %d)" % [hp_c, r.player.hp])
+	b.th[0].daze_until = -1.0
 	# 8. the net: what the host sends, a puppet applies and sends back unchanged (two bodies, two plans, the hall)
 	for q in b.th:
 		q.gap = 0.2
@@ -2125,7 +2148,7 @@ func race_m2(res: Dictionary) -> void:
 	Game.flags.erase("boss:RACE")
 	Game.tools["breakpoint"] = false
 
-# a 40 s fight with a player that stands on the floor under the bells: hops, surfaces, never the same plan twice, both automata at once, strikes not together, no contact damage
+# a 40 s fight with a player that stands on the floor under the bells: hops, surfaces, never the same plan twice, both automata at once, strikes not together
 func race_sim(res: Dictionary, r: Room, b: RaceBoss) -> void:
 	for q in b.th:
 		q.hp = float(q.max)

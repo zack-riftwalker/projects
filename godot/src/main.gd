@@ -125,6 +125,9 @@ func _ready() -> void:
 	if Game.scene.begins_with("gfxbench:"):               # MVGN-17: average frame time of a room (gfxbench:<room>[:<frames>]); web: ?scene=gfxbench:N05
 		_bench(Game.scene.substr(9).split(":"))
 		return
+	if Game.scene.begins_with("fightbench:"):             # the same with the room's boss fighting (fightbench:<room>[:<frames>[:<hp fraction>]]); RACE CONDITION's play-test
+		_fight_bench(Game.scene.substr(11).split(":"))
+		return
 	if Game.demo:
 		demo_frame = 0
 	elif Game.selftest:
@@ -685,6 +688,36 @@ func _bench(a: PackedStringArray) -> void:
 		await get_tree().process_frame
 	var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(n)
 	print("BENCH %s %s %.2f ms/frame %.1f fps" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms])
+	if not OS.has_feature("web"):
+		get_tree().quit()
+
+func _fight_bench(a: PackedStringArray) -> void:
+	manager.swap_to(a[0])
+	var r: Room = manager.room
+	var p = manager.player
+	p.x = float(r.pw) * 0.5
+	Game.flags["intro:" + String(r.def.boss.id)] = true
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	if a.size() > 2:
+		r.boss.hpf = float(r.boss.max_hp) * float(a[2])
+		r.boss.hp = ceili(r.boss.hpf)
+		r.boss.on_damage()
+	var n := int(a[1]) if a.size() > 1 else 600
+	var worst := 0.0
+	var t0 := 0
+	for i in range(n + 120):
+		p.inv = 999.0
+		p.hp = p.max_hp
+		if i == 120:
+			t0 = Time.get_ticks_usec()
+		var f0 := Time.get_ticks_usec()
+		await get_tree().process_frame
+		if i > 120:
+			worst = maxf(worst, (Time.get_ticks_usec() - f0) / 1000.0)
+	var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(n)
+	print("BENCH %s fight %s %.2f ms/frame %.1f fps worst %.1f ms" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms, worst])
 	if not OS.has_feature("web"):
 		get_tree().quit()
 

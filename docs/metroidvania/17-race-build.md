@@ -465,3 +465,48 @@ All answered (Zakaria, 2026-10-22: the backdrop "A", the rest left to Claude):
 3. **Backdrop:** the images themselves (§4.4).
 
 Anything else the player sees or hears that this plan does not settle: ask.
+
+---
+
+## Fix after Zakaria's play-test (2026-10-31, brief 03)
+
+Zakaria: "it runs very badly, my frame rate drops hard during it; touching the bosses does not hurt; the characters are not what I drew in pixels."
+
+### 1. Frame drops: measured
+
+New measuring tools (kept): `--test=perffight` (`tests_perf.gd`: the boss awake and fighting, two players (a partner body for the guest), phase 1 then phase 2; per room the CPU ms per frame incl. drawing, the logic ms, the frame-time spread and the boss's box cost; `PERF_ROOMS`, `PERF_N`) and the scene `fightbench:<room>[:<frames>[:<hp>]]` (`main.gd`; like `gfxbench` but mid-fight, native under xvfb or on the web: `?scene=fightbench:T06:300`). `perfrooms` only measures a room with its boss asleep.
+
+| ms per frame | pre-boss T06 (`029074a`) | T06 before the fix | T06 after | N09 CRAWLER | N15 FIREWALL |
+|---|---|---|---|---|---|
+| `perfrooms` (headless, boss asleep) | 0.63 | 1.10 | 1.03 | 1.57-1.77 | 1.37-1.57 |
+| `perffight` p1 / p2 (headless CPU incl. draw calls, 2 players) | 0.84 / 0.87 | 1.57 / 1.58 | 1.41 / 1.36 | 2.2 / 2.4 | 2.1-2.4 |
+| `fightbench` p1 / p2 (xvfb, real GL renderer, ultra) | 6.4 / 6.1 | 10.5 / 10.8 | 8.9 / 10.2 | 31.9 | 26.0 |
+| web build in Chromium (software GL), `fightbench` p1 / p2 | — | 40.0 / 43.7 | (export in this push) | 241.6 | 185.2 |
+| one `harmboxes()` call during a phase-2 ring | 4-7 µs | 338-483 µs | 113 µs | 3-12 µs | 2-25 µs |
+| co-op headless (`co-race` vs `co-crawler` / `co-firewall`), CPU % host / guest | — | ~22 / ~22 | — | ~33 / ~35 | ~28 / ~29 |
+
+What this says, honestly:
+- The new boss made T06 about **1.8x** its pre-boss cost (CPU 0.84 -> 1.5 ms, render 6.4 -> 10.5 ms). Where it went: the bodies drawn from ~20 primitives each (~1.0 ms render), the belfry's per-frame drawing (`draw_shaded`, ~1.7 ms render; chains, bells, escapement, floor cells, hands), the lamps' glow (10 big see-through circles + full-room washes every frame, ~0.6 ms render), and the ring waves' boxes (`ring_boxes`: up to 56 points, each tested against every lying bell with 17 samples; `harmboxes()` is called ~2.1 times per frame solo, more in co-op through `record_hist`).
+- But on every path measured here (native, real renderer, web/Chromium, co-op headless) **T06 mid-fight costs less than CRAWLER's and FIREWALL's rooms** (they have 8-23 2D lights and 160 particles; T06 has none). No moment of the fight showed a long frame either (`perffight` frame spread: no growth over 60 s, worst frames like the other rooms). So the drop Zakaria saw is **not reproduced** by these measurements; what was found and fixed is the extra cost above.
+- Fixed: the bodies are now one textured rect each (two while phase 2's heat fades in; section 3 below); the glow is three nodes drawn once whose alpha follows the flicker / heat / pin (`BelfryHall.make_glow_nodes`, `glow_step`); the ring waves ask for the lying bells once per ring and test each point with exact slab clipping (`cover_rects`, `seg_hits`) instead of 17 samples (also a hair more exact at grazing angles; `race3` unchanged).
+- Next time it drops: open both pages with `?debug` and send the overlay's first line (FPS, low 1 %) and which device dropped (the PC host or the phone guest), plus the LOG. A drop only on a real GPU (shader compiles on first use, a driver) or only on the phone cannot be seen from here.
+
+### 2. Bodies did not hurt on touch: why, and now they do
+
+`17-race-condition.md` never mentions touching the bodies, either way. The decision came from this build plan: §0 "Harm is plan harm, not hazards" (a ring wave, a slam's box, the rope's kick; nothing else) and the `race3` M2 check "no contact damage from bodies" (`tests_5a.gd` "7. no contact damage"). So it was the builder's reading, never asked of Zakaria. Zakaria answered (2026-10-31, for every boss): "the bosses' touch must hurt". Done as THE FIREWALL's door: `RaceBoss.touch_boxes()` (each standing body's 28 x 46 box, 1 damage, knocked away from its middle via `sx`), part of `harmboxes()`; `attack_boxes()` is the rest (the tests that ask for "no harm in a cue" read that). No touch harm while a body cannot fight: down, the punish windows (stuck hammer, dazed, kneeling to rewind), intro, the 2.0 s transition, death, loss menu. Both pages build it from the net fields. `race3` check 7 now: touching hurts 1 and knocks away, a dazed body does not, the puppet's boxes match. Also fixed: `BelfryHall._glow_of` read a freed boss on the guest (a script error in about 1 of 4 bad-line `co-race` runs, before this change too); 4 runs clean after.
+
+### 3. TICK and TOCK from Zakaria's pixel art
+
+Cause: the M2 builder drew the bodies from ~20 rectangles at 32 x 48 (`race_body.gd`), the plan said "not pixel-perfect copies", and `17-race-data/ref/README.md` called the images "references, not game files".
+
+Now: `tools/godot/race_sprites.py` cuts every pose out of the images themselves: `tick_tock.webp` (TICK `up`, TOCK `idle`: the main reference), `sheet_keys.webp` (the rest), `sheet_4dir.webp` (its swatches). The background is flood-filled away from each crop's border (the dark outlines inside stay), neighbours' blobs dropped, mirrored to face right, scaled so a standing body is 56 (TICK) / 58 (TOCK) px (each pixel is the source pixel at its centre, so the 1-px trims and eyes keep their colour), a 1-px ink outline (they vanished against the dark brick without it), one palette per character (fixed colours for ink, bronze, gold, paper, skirt, trims and eyes + the swatches + median cut). Poses not in the images come from the nearest one by moving its pieces: `crouch` = idle with the legs folded, `hang` = hammer-up with the legs drawn up. Out: `godot/assets/sprites/race_tick.png` / `race_tock.png` (12 frames of 64 x 80, feet on row 78), `_hot` (phase 2: the bronze heated, gold and trims kept), `_flash` (75 % white), `race_sprites.json` (pose order, each frame's eye pixels and chest clock).
+
+Pose sources (sheet components, top-left of `sheet_keys.webp` = row 1): TICK idle/crouch side stand, hop walk, up main image, strike bow with hammer, stuck/bow deep bow, dazed hurt, down lying flat, kneel kneeling, swing hammer low (mirrored), hang hammer up (front). TOCK idle/crouch main image, hop walk, up hammer up, strike/bow bow with hammer, stuck hammer down (mirrored), dazed hurt, down lying, kneel kneeling, swing hammer to the side (mirrored), hang hammer up.
+
+`RaceBody.draw` keeps its interface (the boss and the after-state call it the same way): the frame, a pixel of breathing in idle, the heat as the `_hot` frame faded in over the plain one, the white hit flash as the `_flash` frame, the eye dead in the frames and drawn lit (with its glow) for the READ, the chest clock's hand (the READ ticks it) where the clock shows. `RaceBody.eye_at` gives the READ beam its start (it was a fixed 38 px above the feet). **Hurtbox (28 x 46) and feet unchanged**, so the fight is the same: `fightsim BOSS=T06 FIGHT_S=120` TICK {slam 12, strike 9, double 11, rope 7, switch 4, triple 1}, TOCK {strike 15, slam 13, double 11, switch 4, drop 1}, phase 1 over at 70 s. The figures stand ~10 px taller than the box (cap and head); if that feels wrong when hitting them, raise `BODY_H`.
+
+Lost from the old drawing: the wind-up key turning (it is part of the picture now) and the hot springs from the seams (the `_hot` frames carry the heat).
+
+Pictures: `17-race-data/fix-2026-10-31/` (`ref_vs_game.png`: his image next to the game's frames at 5x; `before_after_p1.png`, `before_after_p2.png` (the heat), `before_after_bow.png` (the bow at the death)).
+
+Tests: `race3`, `arenas`, `bosspresets`, `tick5a`, `parity`, `fightsim`, `co-race`, `co-raceretry`, `co-race` with `BADLINE_ALL=1`: pass. Full `test-all.sh` and the web export: not run yet (session stopped by Zakaria; next session).

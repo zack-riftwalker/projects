@@ -284,14 +284,34 @@ func ring_boxes(c: Vector2, r: float) -> Array:
 		return out
 	var n := clampi(ceili(TAU * r / 9.0), 6, 56)
 	var hl := _hall()
+	var cover: Array = hl.cover_rects(room.time) if hl != null else []
 	for k in range(n):
 		var a := TAU * float(k) / float(n)
 		var pt := c + Vector2(cos(a), sin(a)) * r
 		if pt.x < 8.0 or pt.x > float(room.pw) - 8.0 or pt.y > FLOOR_Y - 2.0 or pt.y < 16.0:
 			continue
-		if hl != null and hl.cover_between(c, pt, room.time):
+		var hidden := false
+		for box in cover:
+			if BelfryHall.seg_hits(c, pt, box):
+				hidden = true
+				break
+		if hidden:
 			continue
 		out.append({"x": pt.x - 5.0, "y": pt.y - 5.0, "w": 10.0, "h": 10.0, "dmg": 1})
+	return out
+
+# touching a body hurts (Zakaria, play-test 2026-10-31: "the bosses' touch must hurt", for every boss): 1 damage, knocked away from the
+# body's middle (`sx`), as THE FIREWALL's door. Not while it cannot fight: down, the punish windows (stuck hammer, dazed, kneeling to
+# rewind), the intro, the 2.0 s transition, the death, the loss menu. Both pages build it from the bodies' net fields.
+func touch_boxes() -> Array:
+	var out: Array = []
+	if not active or dying or loss_on or (trans_t0 >= 0.0 and room.time - trans_t0 < TRANS_T):
+		return out
+	for q in th:
+		if q.st != 0 or _vulnerable(q):
+			continue
+		var br := body_rect(int(q.i))
+		out.append({"x": br.position.x, "y": br.position.y, "w": br.size.x, "h": br.size.y, "dmg": 1, "sx": float(q.x), "touch": int(q.i)})
 	return out
 
 func ring_center(p: Dictionary) -> Vector2:
@@ -303,6 +323,12 @@ func ring_center(p: Dictionary) -> Vector2:
 	return Vector2(float(p.sx), float(p.sy) - 8.0)
 
 func harmboxes() -> Array:
+	var out: Array = touch_boxes()
+	out.append_array(attack_boxes())
+	return out
+
+# the plans' harm and the floor layer's (everything but touching a body)
+func attack_boxes() -> Array:
 	var out: Array = []
 	for q in th:
 		var p: Dictionary = q.plan
@@ -2093,7 +2119,7 @@ func draw_boss_overlay(ci: CanvasItem) -> void:
 		if p.is_empty() or (p.ph != "cue" and not (p.ph == "active" and _el(p) < 0.12)):
 			continue
 		var c := Color(COL[q.i])
-		var eye := Vector2(float(q.x) + 3.0 * float(q.face), float(q.y) - 38.0 + (4.0 if p.id == "slam" and p.ph == "cue" else 0.0))
+		var eye := RaceBody.eye_at(int(q.i), _pose_of(q.i), float(q.x), float(q.y), float(q.face))
 		var rp := Vector2(float(p.rx), float(p.ry))
 		var k := 1.0 if p.ph == "cue" else 1.0 - _el(p) / 0.12
 		ci.draw_line(eye, rp, Color(c.r, c.g, c.b, 0.5 * k), 2.0)                         # the thin beam from the eye to the READ point

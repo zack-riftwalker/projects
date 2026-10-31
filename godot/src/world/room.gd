@@ -1085,12 +1085,8 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		bs.cb = belfry.draw_shaded
 		bs.z_index = 1
 		add_child(bs)
-		var bg := DrawProxy.new()
-		bg.name = "BelfryGlow"
-		bg.cb = belfry.draw_glow
-		bg.z_index = 1
-		add_child(bg)
-		hall_nodes = [bs, bg]
+		belfry.make_glow_nodes(self, 1)                     # (drawn once; only their alpha follows the phase and the lamps' flicker)
+		hall_nodes = [bs]
 	for spec in [["furniture", 1], ["top", 4]]:
 		var layer := RoomLayer.new()
 		layer.room = self

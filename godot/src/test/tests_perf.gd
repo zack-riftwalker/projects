@@ -6,9 +6,11 @@ class_name TestsPerf
 # A phone runs the web build several times slower.
 #   --test=perfrooms  every room (PERF_ROOMS=<prefix> for some), `PERF <room> <ms per frame> logic <ms>`, slowest last
 #   --test=perfgrow   the same rooms over and over (PERF_ROOMS=a,b,c, PERF_LAPS): a cost or a node count that grows lap after lap is a leak
+#   --test=perffight  a boss fight in full swing, two players (a partner body stands in for the guest): `PERFFIGHT <room> p<phase> <ms per frame>
+#                     logic <ms>` and what the boss's boxes cost; PERF_ROOMS=T06,N09,N15 (default), PERF_N frames per phase
 #   --test=perfstay   one room (PERF_ROOMS, D05) for PERF_LAPS x 600 frames, nothing rebuilt: the cost must stay flat
 
-const NAMES := ["perfrooms", "perfgrow", "perfstay", "perfflags", "updoors"]
+const NAMES := ["perfrooms", "perffight", "perfgrow", "perfstay", "perfflags", "updoors"]
 var main
 var logic_ms := 0.0
 
@@ -18,6 +20,7 @@ func _init(m) -> void:
 func run(name: String):
 	match name:
 		"perfrooms": return await t_perfrooms()
+		"perffight": return await t_perffight()
 		"perfgrow": return await t_perfgrow()
 		"perfstay": return await t_perfstay()
 		"perfflags": return t_perfflags()
@@ -77,6 +80,90 @@ func t_perfrooms() -> bool:
 		print("PERF %s %.2f logic %.2f" % [o[0], o[1], o[2]])
 	print("TEST perfrooms PASS %d rooms" % out.size())
 	return true
+
+# RACE CONDITION's play-test (2026-10-31, "the frame rate drops badly in the fight"): perfrooms only measures a room with its boss asleep,
+# so this one wakes the boss and keeps both players alive in it, phase 1 then phase 2
+func t_perffight() -> bool:
+	var mgr := _mgr()
+	var ids: Array = (OS.get_environment("PERF_ROOMS") if OS.get_environment("PERF_ROOMS") != "" else "T06,N09,N15").split(",")
+	var n := int(OS.get_environment("PERF_N")) if OS.get_environment("PERF_N") != "" else 600
+	for id in ids:
+		mgr.swap_to(String(id), null, null, true)
+		var r: Room = mgr.room
+		var b = r.boss
+		if b == null:
+			continue
+		var rp := RemotePlayer.new(r)
+		r.add_child(rp)
+		r.remote_players.append(rp)
+		var mid := float(r.pw) * 0.5
+		var on := 0
+		for f in range(1500):                                       # past the trigger, through the intro, 2 s into the fight
+			_keep(mgr, rp, mid, f)
+			mgr.tick(Game.STEP)
+			await main.get_tree().process_frame
+			if r.fight.state == "active" and bool(b.active):
+				on += 1
+				if on > 120:
+					break
+		for phase in [1, 2]:
+			if phase == 2:
+				b.hpf = float(b.max_hp) * (0.45 if String(id) == "T06" else 0.3)
+				b.hp = ceili(b.hpf)
+				b.on_damage()
+				if b.has_method("_begin_trans"):
+					b._begin_trans()
+				for f in range(300):
+					_keep(mgr, rp, mid, f)
+					mgr.tick(Game.STEP)
+					await main.get_tree().process_frame
+			var c0 := _cpu_ms()
+			var logic_us := 0
+			var walls: Array = []
+			var harm_f := 0
+			var thirds := [0.0, 0.0, 0.0]                              # (the cost of the first, middle and last third: a cost that grows is a leak)
+			for f in range(n):
+				_keep(mgr, rp, mid, f)
+				var t0 := Time.get_ticks_usec()
+				mgr.tick(Game.STEP)
+				logic_us += Time.get_ticks_usec() - t0
+				await main.get_tree().process_frame
+				var w := (Time.get_ticks_usec() - t0) / 1000.0
+				if f % 10 == 0 and not b.harmboxes().is_empty():
+					harm_f += 10
+				walls.append(w)
+				thirds[mini(2, f * 3 / n)] += w
+			var ms := (_cpu_ms() - c0) / n
+			walls.sort()
+			print("PERFFIGHT %s p%d frames: median %.2f p99 %.2f max %.2f ms, thirds %.2f %.2f %.2f, harm on %d%% of frames, gfx %s lights %d parts %d nodes %d" % [id, phase, walls[n / 2], walls[n * 99 / 100], walls[n - 1],
+				thirds[0] * 3.0 / n, thirds[1] * 3.0 / n, thirds[2] * 3.0 / n, harm_f * 100 / n, Game.GFX_NAMES[Game.gfx_tier], int(Game.gfx_stats.lights), int(Game.gfx_stats.parts), Performance.get_monitor(Performance.OBJECT_NODE_COUNT)])
+			var t1 := Time.get_ticks_usec()
+			var nb := 0
+			for k in range(100):
+				nb = b.harmboxes().size() + b.hurtboxes().size()
+			var box_us := (Time.get_ticks_usec() - t1) / 100.0
+			print("PERFFIGHT %s p%d %.2f logic %.2f boxes %.0f us (%d) state %s alive %s" % [id, phase, ms, logic_us / 1000.0 / n, box_us, nb, r.fight.state, str(not b.dead)])
+	print("TEST perffight PASS")
+	return true
+
+# the two bodies walk about the middle of the arena and never die
+func _keep(mgr: RoomManager, rp, mid: float, i: int) -> void:
+	_bot(mgr, i)
+	if mgr.player != null:
+		mgr.player.inv = 99.0
+		mgr.player.hp = mgr.player.max_hp
+		if i % 300 == 0:
+			mgr.player.x = mid + 60.0 * sin(i * 0.01)
+	rp.x = mid - 40.0 + 50.0 * sin(i * 0.013)
+	rp.dead = false
+	var b = mgr.room.boss                                           # (the guest's page would say it saw each plan: nothing here does)
+	if b != null:
+		if b.get("th") is Array and not b.th.is_empty() and b.th[0] is Dictionary and b.th[0].has("plan"):
+			for q in b.th:
+				if not q.plan.is_empty():
+					b.plan_seen(int(q.plan.seq))
+		elif b.get("plan") is Dictionary and not b.plan.is_empty():
+			b.plan_seen(int(b.plan.seq))
 
 func t_perfgrow() -> bool:
 	var mgr := _mgr()

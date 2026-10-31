@@ -603,6 +603,7 @@ func step(_dt: float) -> void:
 		var wa := wall2_alpha(room.time)
 		wall_nodes[1].visible = wa > 0.0
 		wall_nodes[1].modulate.a = wa
+	glow_step()
 
 # the masks as tiles: the open floor cells (phase 2) and the lying bells (phase 2: solid blocks, cover)
 func apply() -> void:
@@ -644,20 +645,47 @@ func _set_tile(g, tx: int, ty: int, t: int) -> void:
 
 # does a solid fallen bell (phase 2) stand between (x, y) and a ring's centre? A ring wave does not pass through it
 func cover_between(a: Vector2, b: Vector2, tm: float) -> bool:
-	for i in range(N_BELLS):
-		if ph == 2 and bell_mode(i, tm) == "lie":
-			var rc := rest_rect(i)
-			var box := Rect2(rc.position.x, lie_y(), rc.size.x, BODY_H)
-			if _seg_hits_rect(a, b, box):
-				return true
-	return false
-
-func _seg_hits_rect(a: Vector2, b: Vector2, r: Rect2) -> bool:
-	for k in range(0, 17):
-		var p := a.lerp(b, float(k) / 16.0)
-		if r.grow(-0.5).has_point(p):
+	for box in cover_rects(tm):
+		if seg_hits(a, b, box):
 			return true
 	return false
+
+# the lying bells that are cover now (a ring's boxes ask once per ring, not once per point: play-test 2026-10-31, frame drops)
+func cover_rects(tm: float) -> Array:
+	var out: Array = []
+	if ph != 2:
+		return out
+	for i in range(N_BELLS):
+		if bell_mode(i, tm) == "lie":
+			var rc := rest_rect(i)
+			out.append(Rect2(rc.position.x, lie_y(), rc.size.x, BODY_H).grow(-0.5))
+	return out
+
+# does the segment a-b pass through the inside of r (slab clipping: exact, where 17 samples along the segment were not)
+static func seg_hits(a: Vector2, b: Vector2, r: Rect2) -> bool:
+	var t0 := 0.0
+	var t1 := 1.0
+	var d := b - a
+	for ax in range(2):
+		var p0: float = a[ax]
+		var dd: float = d[ax]
+		var lo: float = r.position[ax]
+		var hi: float = r.end[ax]
+		if absf(dd) < 1e-6:
+			if p0 <= lo or p0 >= hi:
+				return false
+			continue
+		var u0 := (lo - p0) / dd
+		var u1 := (hi - p0) / dd
+		if u0 > u1:
+			var sw := u0
+			u0 = u1
+			u1 = sw
+		t0 = maxf(t0, u0)
+		t1 = minf(t1, u1)
+		if t0 >= t1:
+			return false
+	return true
 
 func cam_lock():
 	return cam_lock_v
@@ -716,7 +744,7 @@ func _draw_chain(ci: CanvasItem, x0: float, y0: float, x1: float, y1: float) -> 
 
 func _glow_of(i: int) -> float:
 	var b = room.boss
-	if b is RaceBoss:
+	if b != null and is_instance_valid(b) and b is RaceBoss:          # (the guest's boss can be freed a frame before the hall: a bad-line co-race)
 		return b.glow_of_bell(i)
 	return 0.0
 
@@ -931,23 +959,48 @@ func _draw_after(ci: CanvasItem, tm: float) -> void:
 	for i in range(2):
 		RaceBody.draw(ci, {"who": i, "x": AFTER_X[i], "y": FLOOR_Y, "face": 1.0 if i == 0 else -1.0, "pose": "bow", "t": tm + float(i) * 0.37, "hot": 0.0, "eye": false, "dial": 0, "a": 1.0, "still": true})
 
-# ---------------------------------------------------------------- the glow layer: the lamps, the phase-2 heat
-func draw_glow(ci: CanvasItem) -> void:
+# ---------------------------------------------------------------- the glow layer: the lamps, the phase-2 heat, the warm light after the pin
+# Three nodes drawn once (play-test 2026-10-31, frame drops: these were 10 big see-through circles and full-room washes redrawn every frame);
+# each frame only their alpha changes (glow_step).
+var glow_nodes: Array = []
+
+func make_glow_nodes(parent: Node, z: int) -> Array:
+	glow_nodes = []
+	for k in range(3):
+		var n := DrawProxy.new()
+		n.name = "BelfryGlow%d" % k
+		n.z_index = z
+		n.cb = func(ci): _draw_glow_part(ci, k)
+		parent.add_child(n)
+		glow_nodes.append(n)
+	glow_step()
+	return glow_nodes
+
+func _draw_glow_part(ci: CanvasItem, k: int) -> void:
+	if k == 2:                                                       # the warm light that returns with the pin
+		ci.draw_rect(Rect2(0.0, 0.0, PW, PH), Color(1.0, 0.78, 0.4, 0.07))
+		for j in range(4):
+			ci.draw_circle(Vector2(PW * 0.5, 150.0), 120.0 - float(j) * 24.0, Color(1.0, 0.8, 0.45, 0.04))
+		return
+	var lc := Color(1.0, 0.72, 0.3) if k == 0 else Color(1.0, 0.35, 0.2)          # 0 the lamps' warm light, 1 the same lamps red-hot and the room's heat
+	for lp in [Vector2(24.0, 192.0), Vector2(392.0, 192.0)]:
+		for j in range(5):
+			ci.draw_circle(lp, 70.0 - float(j) * 12.0, Color(lc.r, lc.g, lc.b, 0.035))
+	if k == 1:
+		ci.draw_rect(Rect2(0.0, 0.0, PW, PH), Color(1.0, 0.25, 0.1, 0.07))
+
+func glow_step() -> void:
+	if glow_nodes.size() != 3:
+		return
 	var tm: float = room.time
 	var hot := wall2_alpha(tm)
-	var warm := Color(1.0, 0.72, 0.3)
-	var red := Color(1.0, 0.35, 0.2)
-	var lc := warm.lerp(red, hot)
 	var flick := 0.9 + 0.1 * sin(tm * 9.0) * sin(tm * 3.7)
-	for lp in [Vector2(24.0, 192.0), Vector2(392.0, 192.0)]:
-		for k in range(5):
-			var r := 70.0 - float(k) * 12.0
-			ci.draw_circle(lp, r, Color(lc.r, lc.g, lc.b, 0.035 * flick))
-	if hot > 0.0:
-		ci.draw_rect(Rect2(0.0, 0.0, PW, PH), Color(1.0, 0.25, 0.1, 0.07 * hot))
+	var wa := 0.0
 	if pin_in:                                                       # warm light returns (0.5 s after the pin, over a second)
-		var wa := 1.0 if pin_t0 < -500.0 else clampf((tm - pin_t0 - 0.5) / 1.0, 0.0, 1.0)
-		if wa > 0.0:
-			ci.draw_rect(Rect2(0.0, 0.0, PW, PH), Color(1.0, 0.78, 0.4, 0.07 * wa))
-			for k in range(4):
-				ci.draw_circle(Vector2(PW * 0.5, 150.0), 120.0 - float(k) * 24.0, Color(1.0, 0.8, 0.45, 0.04 * wa))
+		wa = 1.0 if pin_t0 < -500.0 else clampf((tm - pin_t0 - 0.5) / 1.0, 0.0, 1.0)
+	var al := [flick * (1.0 - hot), flick * hot, wa]
+	for k in range(3):
+		var n = glow_nodes[k]
+		if is_instance_valid(n):
+			n.visible = al[k] > 0.001
+			n.modulate.a = al[k]
