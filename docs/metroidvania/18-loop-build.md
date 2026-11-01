@@ -1,6 +1,6 @@
 # 18b · INFINITE LOOP v3: build plan (for the builder)
 
-> **STATUS: DRAFT, NOT APPROVED. Do not build.** Every step of the design ([`18-loop.md`](18-loop.md), Persian) is a proposal waiting on Zakaria (2026-11-01). Build only after the status table there says every step is approved; then update this file with his changes first. The speed session (brief 05) is working on the tower and the boss files right now: rebase on it before M1.
+> **STATUS: DRAFT, NOT APPROVED. Do not build.** Every step of the design ([`18-loop.md`](18-loop.md), Persian) is a proposal waiting on Zakaria (2026-11-01). Build only after the status table there says every step is approved; then update this file with his changes first. The speed session (brief 05) changed the tower and the boss files (report: `docs/reports/perf-2026-11-01.md`, speed rules in `CLAUDE.md`): read both before M1 and follow them.
 
 This is the build plan for INFINITE LOOP v3, for the model that builds it (skill `boss-build`). The Persian doc is the source of truth for **what the player sees and hears**; this file is the source of truth for **how to build it**. If they disagree, the Persian doc wins and you ask Zakaria.
 
