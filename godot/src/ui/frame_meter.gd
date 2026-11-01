@@ -25,13 +25,14 @@ var last_us := 0
 var lastms := 0.0
 var vp: RID
 
-func _init() -> void:
+# measure_draw: the engine also times the drawing (the benches); the game's own speed report leaves it off (it is not free on the web)
+func _init(measure_draw := true) -> void:
 	hist.resize(251)
 	hist.fill(0)
 	steps0 = Engine.get_physics_frames()
 	last_us = Time.get_ticks_usec()
 	var tree := Engine.get_main_loop() as SceneTree
-	if tree != null:
+	if tree != null and measure_draw:
 		vp = tree.root.get_viewport_rid()
 		RenderingServer.viewport_set_measure_render_time(vp, true)
 
@@ -87,5 +88,5 @@ func summary() -> String:
 func short() -> String:
 	if n == 0:
 		return "-"
-	return "%ds p50 %.1f p99 %.1f max %.0f ms missed60 %.0f%% long %d | logic %.1f draw %.1f calls %d | 0st %.0f%% 2st %.0f%%" % [int(total / 1000.0),
-		pct(0.5), pct(0.99), worst, missed * 100.0 / n, long, phys / n, draw / n, int(calls / n), zero * 100.0 / n, multi * 100.0 / n]
+	return "%ds p50 %.1f p99 %.1f max %.0f ms missed60 %.0f%% long %d | logic %.1f calls %d | 0st %.0f%% 2st %.0f%%" % [int(total / 1000.0),
+		pct(0.5), pct(0.99), worst, missed * 100.0 / n, long, phys / n, int(calls / n), zero * 100.0 / n, multi * 100.0 / n]

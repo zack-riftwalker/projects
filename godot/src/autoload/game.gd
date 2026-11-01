@@ -1098,7 +1098,7 @@ func _perf_frame() -> void:
 		if r != null:
 			_perf_name = String(r.id) + (" fight" if fight else "")
 			if not perf.has(_perf_name):
-				perf[_perf_name] = FrameMeter.new()
+				perf[_perf_name] = FrameMeter.new(false)
 			_perf_m = perf[_perf_name]
 			_perf_t0 = _perf_m.total
 	elif _perf_m != null and _perf_us > 0:
