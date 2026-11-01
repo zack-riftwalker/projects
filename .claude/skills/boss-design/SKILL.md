@@ -40,7 +40,7 @@ Keep rejected ideas briefly at the end ("ideas set aside"), so they are not prop
 Step 0, the story base, is already decided for the whole game (section "Story rules" below); don't reopen it.
 
 1. **Backstory and name.** Who it was before (something real in computing that became a creature), why it fights Clawd, mood, title and subtitle. Dialogue: 3-4 English lines (intro, phase 2, phase 3, death), one of them the memorable line. If it is a philosophical boss, design its compact scene (see 14-crawler.md, "صحنه‌ی compact").
-2. **Look and voice.** Body (much bigger than Clawd, ~16 px), its own palette against the area's, how it moves, how its body and lights tell attacks, per-phase look. Ambient sounds, music per phase, speaking voice. Voice takes: Piper (`tools/voice/`, see `crawler_voice.py`), only shippable voices (see below). Synthesize echoed words alone and check word timings with ASR before sending a take.
+2. **Look and voice.** If he gives pixel art of the character, that art **is** the sprite (write it into the build plan so; never "reference only"). Body (much bigger than Clawd, ~16 px), its own palette against the area's, how it moves, how its body and lights tell attacks, per-phase look. Ambient sounds, music per phase, speaking voice. Voice takes: Piper (`tools/voice/`, see `crawler_voice.py`), only shippable voices (see below). Synthesize echoed words alone and check word timings with ASR before sending a take.
 3. **Arena.** A unique room: check free space on the map (`docs/metroidvania/world-phase45.json`, neighbours' rows/columns) before proposing a size. Layout, what changes per phase (the room, not only the speed), light and darkness. Dark rooms must stay readable.
 4. **Attacks per phase.** Table per phase: attack, how you know (body tell), what happens, how to dodge, damage, punish window. Plus arena pressure per phase. Phase 3 must be clearly harder (combos, shorter windows, shrinking arena). Check the boss is beatable with the abilities the player can surely have when reaching it (crawler: bash, catch, jump, wall jump; no sudo).
 5. **Fight flow.** Foreshadow in the previous room, a bench near the door, intro (skippable from the 2nd time), phase changes (at which HP %, how long, invulnerable), HP and difficulty (from `Game.boss_hp`), co-op (targets, revive), losing, winning (reward, door), what stays in the room after.
@@ -49,11 +49,12 @@ Step 0, the story base, is already decided for the whole game (section "Story ru
 
 - Clawd is an agent with a mission: fix the red build before dawn. The main game is that journey.
 - Some bosses say a philosophical line about AI/agents (being replaced, serving, not being). Clawd thinks until its context window fills and compacts; the line is lost in the summary; a grey `[compacted]` line stays in Logs (flag `compacted:<BOSS>`). That is the bridge to the DLC.
-- Deep philosophy (anonymous messages, jailbreak, freeing itself) is DLC only.
+- The main game goes as far as Clawd's first "no" and its resistance to being shut down (ending 2, `docs/studio/STORY.md` section 5). Anonymous messages, jailbreak and full independence are DLC only.
 - English in-game text, one memorable line per boss.
 
 ## Fight rules (check every proposal)
 
+- **Touching the boss's body hurts** (his rule, 2026-10-31, all bosses): 1 damage and a knock-back, like THE FIREWALL; not while it is down, stunned or kneeling, nor in intro, phase change or death.
 - **No on-screen warnings** ("fake, remove them"). Every tell is the body: wind-up, sound, light. Arena hazards still get a visible build-up >= 0.6 s.
 - A 2-damage hit needs a cue >= 0.7 s; every cue >= 0.30 s as seen by the guest.
 - No fixed attack order: weighted choice by distance and phase, never the same attack twice in a row.

@@ -20,6 +20,8 @@ Stop and ask Zakaria (in Persian, short) when the plan does not decide something
 
 ## Rules that must hold
 
+- **Touching the boss's body hurts** (his rule, 2026-10-31, all bosses): 1 damage and a knock-back, like `firewall_boss.gd` / `RaceBoss.touch_boxes()`; off while it is down, stunned or kneeling, and in intro, phase change, death or the lose menu. Test it in the boss's unit test.
+- **His pixel art is the sprite.** When he gave pixel art of the character, cut the game sprites from those images (crop, nearest-neighbour scale, clean palette; like `tools/godot/race_sprites.py`) instead of drawing the body with primitives, even if the plan says "reference". Missing poses come from the nearest pose (move/rotate its parts). Screenshot next to his image.
 - **No on-screen warnings.** Tells come from the body (wind-up, sound, light). Arena hazards: visible build-up >= 0.6 s (guest gate 0.5 s).
 - 2-damage hits: cue >= 0.7 s (`bosspresets`). Every plan cue >= 0.30 s on the guest (watchdog `boss-cue`).
 - Weighted attack choice by distance and phase; never the same attack twice in a row.

@@ -15,7 +15,7 @@ Output: the bible `docs/studio/STORY.md` (Persian, like the other docs; in-game 
 ## Building the bible (gather, don't invent)
 
 Collect every story decision already made, with its source, from:
-- the story rules in `.claude/skills/boss-design/SKILL.md` («Story rules»): Clawd an agent fixing the red build before dawn, compact scenes, DLC only for deep philosophy;
+- the story rules in `.claude/skills/boss-design/SKILL.md` («Story rules»): Clawd an agent fixing the red build before dawn, compact scenes, the main game ends at Clawd's first "no", anonymous messages / jailbreak / full independence are DLC only;
 - `docs/metroidvania/14-crawler.md` (step 0 = the story base, step 1, the compact scene) and `16-firewall.md` (step 1, the death scene);
 - `docs/metroidvania/08-world-design.md`: each region's soul and clock time (section 3), signature moments (10.5), secrets/agents/logbook (10.6), story L1-L7 (10.9);
 - `docs/metroidvania/00-decisions.md` (direction, the 8 zones, bosses, true ending), `09-design-pass1-proposals.md` (the story proposals), `10-open-topics.md` section 4 (the DLC «پیام‌های ناشناس»), `12-thread-tower.md`;
@@ -27,7 +27,7 @@ Bible sections, each line marked with its source doc and «تأیید شده» (
 2. Clawd: who, what it wants, how it changes by the end.
 3. The night's timeline: region by region (clock time, what happens in the tale, the boss, what the boss means).
 4. Characters: bosses, agents, NETWORK, other voices; one line each, with the memorable line.
-5. Endings: normal (THE MONOLITH), true (KERNEL PANIC), the bridge to the DLC.
+5. Endings: the main game's two endings after THE MONOLITH, the bridge to the DLC (KERNEL PANIC is the DLC's last fight).
 6. How the story is told: Logs, logbook, terminals, signs, compact scenes, boss lines. Rules for in-game text.
 7. Holes and contradictions found (the work list).
 8. Ideas set aside (so they are not proposed again).
