@@ -99,6 +99,8 @@ CLAWD: a 2-player co-op browser platformer. The owner is Zakaria, a vibe coder. 
 - Speed (the phone runs the web build several times slower than a PC; see `docs/reports/fix-2026-10-13-log.md`):
   - Nothing that runs every frame or every snapshot walks `Game.flags` (it grows to ~1000 with play). Cache on `Game.flags.hash()`, like `Game.world_digest`.
   - Static drawing is drawn once (its own node), not every frame. Measure with `--test=perfrooms` / `perfgrow` before and after.
+  - Never set `Engine.max_fps` directly: on the web it busy-waits on the page's only thread, which also mixes the sound (the 30 fps mode played the music at 0.73x). Use `Game.set_fps30`. Check: `node tools/godot/web-fps.js`.
+  - Measure frame spread, not averages: `?scene=fightbench:<room>` under xvfb with a real renderer, `tools/godot/web-bench.js`, and the in-game speed report (`?debug`, Copy log). See `docs/reports/perf-2026-11-01.md`.
 - Commit the web export (`public/mv`) as its own last commit. Both pages must run the same build (debug overlay line 3; "DIFFERENT BUILDS" notice).
 
 ## Style
