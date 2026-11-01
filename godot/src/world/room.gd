@@ -2387,7 +2387,8 @@ func interact_combat(p) -> void:
 				if res3 != "":
 					stop(0.05)
 			elif p.grace <= 0.0 and not (lenient and e.get_meta("ex", false)):
-				if p.hurt(int(b.get("dmg", e.dmg)) if b is Dictionary else e.dmg, float(b.get("sx", b.x + b.w / 2.0))) and e.has_method("on_contact"):
+				var src_x: float = float(b.get("sx", b.x + b.w / 2.0)) if b is Dictionary else e.x + e.w / 2.0       # (a creature's own body as its harm box: Object.get takes no default, the touch never hurt)
+				if p.hurt(int(b.get("dmg", e.dmg)) if b is Dictionary else e.dmg, src_x) and e.has_method("on_contact"):
 					e.on_contact()
 			break
 	# spikes, liquid, pits
