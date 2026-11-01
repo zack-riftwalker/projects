@@ -686,11 +686,16 @@ func _bench(a: PackedStringArray) -> void:
 	var n := int(a[1]) if a.size() > 1 else 600
 	for i in range(60):
 		await get_tree().process_frame
+	var m := FrameMeter.new()
+	print("BENCHSTART")                                  # (tools/godot/web-bench.js reads the page's main-thread time from here)
+	Game.prof.clear()
 	var t0 := Time.get_ticks_usec()
 	for i in range(n):
 		await get_tree().process_frame
+		m.sample()
 	var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(n)
-	print("BENCH %s %s %.2f ms/frame %.1f fps" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms])
+	_print_prof(m)
+	print("BENCH %s %s %.2f ms/frame %.1f fps | %s" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms, m.summary()])
 	if not OS.has_feature("web"):
 		get_tree().quit()
 
@@ -729,6 +734,15 @@ func _fps_probe(a: PackedStringArray) -> void:
 	if not OS.has_feature("web"):
 		get_tree().quit()
 
+# BENCH_PROF=1: the parts that Game.pmark timed (a profiling patch puts the marks in), slowest first
+func _print_prof(m: FrameMeter) -> void:
+	if OS.get_environment("BENCH_PROF") == "":
+		return
+	var ks := Game.prof.keys()
+	ks.sort_custom(func(x, y): return Game.prof[x] > Game.prof[y])
+	for k in ks.slice(0, 24):
+		print("PROF %7.1f us/frame  %s" % [Game.prof[k] / float(maxi(1, m.n)), k])
+
 func _fight_bench(a: PackedStringArray) -> void:
 	manager.swap_to(a[0])
 	var r: Room = manager.room
@@ -743,19 +757,25 @@ func _fight_bench(a: PackedStringArray) -> void:
 		r.boss.hp = ceili(r.boss.hpf)
 		r.boss.on_damage()
 	var n := int(a[1]) if a.size() > 1 else 600
-	var worst := 0.0
 	var t0 := 0
+	var m := FrameMeter.new()
 	for i in range(n + 120):
 		p.inv = 999.0
 		p.hp = p.max_hp
+		Controls.script_input = {"right": (i / 90) % 2 == 0, "left": (i / 90) % 2 == 1, "jump": i % 40 == 0, "attack": i % 25 == 0}   # (a fight with someone in it: swipes, sparks, hits)
 		if i == 120:
 			t0 = Time.get_ticks_usec()
-		var f0 := Time.get_ticks_usec()
+			m = FrameMeter.new()
+			print("BENCHSTART")
+			Game.prof.clear()
 		await get_tree().process_frame
-		if i > 120:
-			worst = maxf(worst, (Time.get_ticks_usec() - f0) / 1000.0)
+		m.sample()
+		if OS.get_environment("BENCH_SPIKES") != "" and m.lastms > 50.0 and m.lastms > 3.0 * m.pct(0.5):      # a hitch: when and in which phase
+			print("SPIKE f%d %.0f ms phase %d music %s" % [i, m.lastms, r.boss.phase if r.boss != null and is_instance_valid(r.boss) else -1, Audio.music_name])
+	Controls.script_input = null
 	var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(n)
-	print("BENCH %s fight %s %.2f ms/frame %.1f fps worst %.1f ms" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms, worst])
+	_print_prof(m)
+	print("BENCH %s fight %s %.2f ms/frame %.1f fps worst %.1f ms | %s" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms, m.worst, m.summary()])
 	if not OS.has_feature("web"):
 		get_tree().quit()
 

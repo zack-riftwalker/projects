@@ -1072,9 +1072,60 @@ func _fps30_frame() -> void:
 		_fps30_drawn_us = now
 	RenderingServer.render_loop_enabled = draw
 
+# The speed report (brief 05): how the frames went in each room, and in each boss fight apart, for the whole session (not only the
+# log's last 5 minutes). Copy log puts it on top; a room left after 3 s or more also gets a SPEED line in the log, which a guest
+# sends to the host's log like its other lines. One 1 ms histogram per room: O(1) a frame.
+var perf := {}                       # "T02" / "T06 fight" -> FrameMeter
+var _perf_m: FrameMeter = null
+var _perf_room = null
+var _perf_fight := false
+var _perf_us := 0
+var _perf_steps := 0
+
+func _perf_frame() -> void:
+	var now := Time.get_ticks_usec()
+	var st := Engine.get_physics_frames()
+	var r = Audio.listen_room
+	if r != null and not is_instance_valid(r):
+		r = null
+	var fight: bool = r != null and String(r.fight.state) == "active"
+	if r != _perf_room or fight != _perf_fight:
+		if _perf_m != null and _perf_m.total - _perf_t0 >= 3000.0:
+			dlog("SPEED %s %s" % [_perf_name, _perf_m.short()])
+		_perf_room = r
+		_perf_fight = fight
+		_perf_m = null
+		if r != null:
+			_perf_name = String(r.id) + (" fight" if fight else "")
+			if not perf.has(_perf_name):
+				perf[_perf_name] = FrameMeter.new()
+			_perf_m = perf[_perf_name]
+			_perf_t0 = _perf_m.total
+	elif _perf_m != null and _perf_us > 0:
+		_perf_m.add((now - _perf_us) / 1000.0, st - _perf_steps)
+	_perf_us = now
+	_perf_steps = st
+
+var _perf_name := ""
+var _perf_t0 := 0.0
+
+func speed_report() -> String:
+	var ws := DisplayServer.window_get_size()
+	var out := "SPEED REPORT | %s | %dx%d @%.2f | gfx %s | 30 fps %s | %s | debug overlay %s\n" % [build_text, ws.x, ws.y, DisplayServer.screen_get_scale(),
+		GFX_NAMES[gfx_tier], "on" if fps30 else "off", net_role if net_role != "" else "solo", "on" if debug else "off"]
+	if OS.has_feature("web"):
+		out += "browser: %s\n" % str(JavaScriptBridge.eval("navigator.userAgent"))
+	var keys := perf.keys()
+	keys.sort_custom(func(a, b): return perf[a].n > perf[b].n)
+	for k in keys:
+		if perf[k].n >= 60:
+			out += "  %-10s %s\n" % [k, perf[k].short()]
+	return out
+
 func _process(_dt: float) -> void:
 	if fps30 and OS.has_feature("web"):
 		_fps30_frame()
+	_perf_frame()
 	if err_log.q.is_empty():
 		return
 	err_log.mutex.lock()
@@ -1087,6 +1138,7 @@ func _process(_dt: float) -> void:
 
 func log_text() -> String:
 	var out := "CLAWD %s | %s | diff %s | role %s\n" % [build_text, Time.get_datetime_string_from_system(), diff, net_role if net_role != "" else "solo"]
+	out += speed_report()
 	for e in log_buf:
 		var s := int(e[0])
 		out += "%d:%02d.%d %s\n" % [s / 60, s % 60, int(fmod(e[0], 1.0) * 10.0), e[1]]
@@ -1179,3 +1231,13 @@ static func hash3(x, y = 0, s = 0) -> float:
 	var b := (h2 & 0xFFFFFFFF) >> 16
 	var h3 := h2 ^ b
 	return float(h3 & 0xFFFFFFFF) / 4294967296.0
+
+# A section profiler for speed work (brief 05; nothing in the game calls it). Put Game.pmark("") at the start of a function and
+# Game.pmark("<name>") after each part; ?scene=gfxbench / fightbench with BENCH_PROF=1 print the parts, slowest first, per frame.
+var prof := {}
+var _pm_us := 0
+func pmark(n: String) -> void:
+	var now := Time.get_ticks_usec()
+	if n != "":
+		prof[n] = int(prof.get(n, 0)) + (now - _pm_us)
+	_pm_us = Time.get_ticks_usec()

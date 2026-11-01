@@ -3,8 +3,8 @@ class_name TestsGfx
 # GFX-N (the NETWORK's look, docs/PLAN-metroidvania-gfx-network.md). Tests marked (render) need a real renderer: tools/godot/gfx-tests.sh runs them
 # under xvfb with --rendering-driver opengl3; the others run headless like the rest.
 
-const NAMES := ["moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel", "shadows", "gfxprobe"]
-const RENDER := ["gfxcontrast", "normals", "post", "gloss", "rim", "shadows", "gfxprobe"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
+const NAMES := ["textoutline", "moods", "gfxtier", "netbackdrop2", "gfxcontrast", "lights", "normals", "luts", "post", "moodshift", "foreground", "ambient", "gloss", "livingbg", "arenas", "rim", "feel", "shadows", "gfxprobe"]
+const RENDER := ["textoutline", "gfxcontrast", "normals", "post", "gloss", "rim", "shadows", "gfxprobe"]                                # the names that need a renderer (test-all runs them through gfx-tests.sh)
 var main
 
 func _init(m) -> void:
@@ -34,6 +34,7 @@ func run(name: String):
 		"shadows": return await t_shadows()
 		"gfxprobe": return await t_gfxprobe()
 		"post": return await t_post()
+		"textoutline": return await t_textoutline()
 
 func frames(n: int) -> void:
 	for i in range(n):
@@ -1554,3 +1555,44 @@ func t_gfxprobe() -> bool:
 		if r[1]:
 			yes += 1
 	return report("gfxprobe", pr.done and pr.results.size() == 7, "%d of 7 steps work here" % yes)
+
+# brief 05: PixelText's one-draw outline gives the same pixels as the 8 copies it replaced (both fonts, scales 1 to 3, a shadow,
+# odd letters). Two viewports draw the same lines, one the old way (a translucent-looking colour forces it: alpha 0.999 is drawn
+# like 1 in an 8-bit target), and every pixel must match.
+class _TextPanel extends Node2D:
+	var slow := false
+	func _draw() -> void:
+		draw_rect(Rect2(0, 0, 384, 216), Color("#2a3550"))
+		var oc := Color(0.106, 0.071, 0.149, 0.999 if slow else 1.0)
+		var lines := [["THE FIREWALL", false, 1], ["race condition: tick & tock!", true, 1], ["CLAWD 0123456789 ?", false, 2], ["i = 42", false, 3], ["ping 120 ms ~^_|", true, 2], ["a.b,c;d", true, 3]]
+		var y := 4.0
+		for l in lines:
+			PixelText.draw_text(self, l[0], 192.0, y, Color("#fff3e4"), {"align": "c", "tiny": l[1], "scale": l[2], "outline": oc, "shadow": Color(0.05, 0.05, 0.08) if l[2] == 2 else null} if l[2] == 2 else {"align": "c", "tiny": l[1], "scale": l[2], "outline": oc})
+			y += 12.0 * l[2] + 6.0
+
+func t_textoutline() -> bool:
+	var imgs: Array = []
+	for slow in [false, true]:
+		var vp := SubViewport.new()
+		vp.size = Vector2i(384, 216)
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+		var pn := _TextPanel.new()
+		pn.slow = slow
+		vp.add_child(pn)
+		main.add_child(vp)
+		await frames(4)
+		imgs.append(vp.get_texture().get_image())
+		vp.queue_free()
+	var diff := 0
+	var lit := 0
+	for y in range(216):
+		for x in range(384):
+			var a: Color = imgs[0].get_pixel(x, y)
+			var b: Color = imgs[1].get_pixel(x, y)
+			if not a.is_equal_approx(b):
+				diff += 1
+			if a.r > 0.8:
+				lit += 1
+	print("TEST textoutline %s %d pixels differ, %d letter pixels" % ["PASS" if diff == 0 and lit > 500 else "FAIL", diff, lit])
+	return diff == 0 and lit > 500

@@ -10,7 +10,7 @@ class_name TestsPerf
 #                     logic <ms>` and what the boss's boxes cost; PERF_ROOMS=T06,N09,N15 (default), PERF_N frames per phase
 #   --test=perfstay   one room (PERF_ROOMS, D05) for PERF_LAPS x 600 frames, nothing rebuilt: the cost must stay flat
 
-const NAMES := ["perfrooms", "perffight", "perfgrow", "perfstay", "perfflags", "updoors"]
+const NAMES := ["perfrooms", "perffight", "perfgrow", "perfstay", "perfflags", "updoors", "perfreport"]
 var main
 var logic_ms := 0.0
 
@@ -25,6 +25,7 @@ func run(name: String):
 		"perfstay": return await t_perfstay()
 		"perfflags": return t_perfflags()
 		"updoors": return await t_updoors()
+		"perfreport": return await t_perfreport()
 
 # the process's CPU time: wall time would only show the frame cap, and Godot's own monitors miss the _draw calls
 func _cpu_ms() -> float:
@@ -291,4 +292,29 @@ func t_updoors() -> bool:
 	Controls.script_input = null
 	var ok := bad.is_empty() and Game.errors == e0 and n > 20
 	print("TEST updoors %s %d doors up, problems %s, script errors %d" % ["PASS" if ok else "FAIL", n, str(bad), Game.errors - e0])
+	return ok
+
+# brief 05: the speed report Zakaria copies from his PC (pause menu, ?debug: Copy log). Each room gets a line with its frame spread,
+# a room left after 3 s gets a SPEED line in the log (a guest's reaches the host's log), and a boss fight is counted apart from its room.
+func t_perfreport() -> bool:
+	var mgr := _mgr()
+	for id in ["T02", "H02"]:
+		mgr.swap_to(id, null, null, true)
+		var t0 := Time.get_ticks_msec()
+		var i := 0
+		while Time.get_ticks_msec() - t0 < 3500:            # (wall time: a room is logged after 3 s)
+			_bot(mgr, i)
+			i += 1
+			mgr.tick(Game.STEP)
+			await main.get_tree().process_frame
+	mgr.swap_to("D02", null, null, true)
+	for i in range(5):
+		mgr.tick(Game.STEP)
+		await main.get_tree().process_frame
+	var text := Game.log_text()
+	var ok := text.contains("SPEED REPORT") and text.contains("  T02 ") and text.contains("  H02 ") and text.contains("SPEED T02 ") and text.contains("SPEED H02 ")
+	var m: FrameMeter = Game.perf.get("T02")
+	ok = ok and m != null and m.n >= 100 and m.total >= 3000.0
+	print(text.substr(0, 600))
+	print("TEST perfreport %s" % ("PASS" if ok else "FAIL"))
 	return ok
