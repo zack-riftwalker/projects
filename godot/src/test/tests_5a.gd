@@ -2265,6 +2265,8 @@ func race_fightsim() -> bool:
 		return roundi((432.0 - y) / 48.0)
 	var bot_level := 0
 	var hits_taken := 0
+	var touches := 0
+	var was_on := false
 	var swings := 0
 	var f := 0
 	while f < int(secs * 60.0):
@@ -2293,6 +2295,13 @@ func race_fightsim() -> bool:
 			if q.st == 0 and not q.plan.is_empty() and String(q.plan.id) == "strike" and q.plan.ph == "cue" and absf(float(q.x) - (r.player.x + 5.0)) < 100.0 and float(q.plan.t) < 0.4 and busy < 0.1:
 				busy = 0.7
 		r.step(Game.STEP)
+		var on_body := false                                        # touching a body (Zakaria 2026-10-31: it hurts): how often this bot would take it
+		for tb in b.touch_boxes():
+			if Game.overlap(r.player.hurtbox(), tb):
+				on_body = true
+		if on_body and not was_on:
+			touches += 1
+		was_on = on_body
 		if now >= next_hit and busy <= 0.0 and tgt >= 0 and tq.st == 0:
 			if race_open(tq):
 				swings += 1
@@ -2307,7 +2316,7 @@ func race_fightsim() -> bool:
 			t_p1 = now
 		if b.dying or b.dead or b.alive_n() == 0:
 			break
-	print("FIGHTSIM T06 %.0f s: TICK %s, TOCK %s, hp %.1f/%d, swings %d, phase 1 (to 50 %%) over at %.0f s, the fight ended at %.0f s" % [secs, str(counts[0]), str(counts[1]), b.hpf, b.max_hp, swings, t_p1, float(f) / 60.0])
+	print("FIGHTSIM T06 %.0f s: TICK %s, TOCK %s, hp %.1f/%d, swings %d, phase 1 (to 50 %%) over at %.0f s, the fight ended at %.0f s, body touches %d" % [secs, str(counts[0]), str(counts[1]), b.hpf, b.max_hp, swings, t_p1, float(f) / 60.0, touches])
 	r.queue_free()
 	Controls.script_input = null
 	Game.fresh()
