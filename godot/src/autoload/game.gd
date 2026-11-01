@@ -884,8 +884,7 @@ func load_settings() -> void:
 	vol_music = clampi(int(d.get("vol_music", vol_music)), 0, 10)
 	vol_sfx = clampi(int(d.get("vol_sfx", vol_sfx)), 0, 10)
 	if d.get("fps30", false):
-		fps30 = true
-		Engine.max_fps = 30
+		set_fps30(true)
 	gfx_saved = clampi(int(d.get("gfx", -1)), -1, 2)
 	reduce_flash = bool(d.get("reduce_flash", false))
 
@@ -994,7 +993,8 @@ var gfx_stats := {"lights": 0, "parts": 0, "post_ms": -1.0}
 # query options: ?debug ?fps30 ?mute ?selftest (web) or user args (native)
 var debug := false
 var lab := false                    # ?debug&lab: a new game starts in the lab rooms (Z05), nothing is saved
-var fps30 := false
+var fps30 := false                  # the 30 fps setting: set it with set_fps30 (on the web the engine's own cap breaks the sound)
+var _fps30_drawn_us := 0
 var mute := false
 var selftest := false
 var test_name := ""
@@ -1050,7 +1050,31 @@ class ErrLog extends Logger:
 var err_log := ErrLog.new()
 var errors := 0                      # how many script errors this page had (the debug overlay shows it)
 
+# 30 fps (brief 05, Zakaria's play-test 2026-11-01: "at 30 fps the music plays badly and the game feels slow"). Natively the engine's
+# cap sleeps between frames. On the web it can't sleep: it busy-waits on the page's only thread until 33 ms have gone, and with no
+# threads that same thread mixes the sound, so the music fell behind real time (0.73 s of song per second, tools/godot/web-fps.js)
+# and crackled, and the frames came late and uneven. So on the web every display frame runs (the browser paces them, the main
+# thread is free in between) and only every other one is drawn: when nothing is drawn the canvas keeps the last picture.
+func set_fps30(on: bool) -> void:
+	fps30 = on
+	if OS.has_feature("web"):
+		Engine.max_fps = 0
+		if not on:
+			RenderingServer.render_loop_enabled = true
+	else:
+		Engine.max_fps = 30 if on else 0
+
+func _fps30_frame() -> void:
+	var now := Time.get_ticks_usec()
+	# 26 ms: every 2nd frame of a 60 Hz screen, every 3rd at 90 Hz, every 4th at 120 Hz (all 33 ms); 36 fps at 144 Hz
+	var draw := now - _fps30_drawn_us >= 26000
+	if draw:
+		_fps30_drawn_us = now
+	RenderingServer.render_loop_enabled = draw
+
 func _process(_dt: float) -> void:
+	if fps30 and OS.has_feature("web"):
+		_fps30_frame()
 	if err_log.q.is_empty():
 		return
 	err_log.mutex.lock()
@@ -1120,7 +1144,7 @@ func _ready() -> void:
 			"wait": shot_wait = int(v)
 			"full": full_shot = true
 	if fps30:
-		Engine.max_fps = 30
+		set_fps30(true)
 	lab = lab and debug                 # (only together with ?debug)
 	if test_name != "" or selftest or shot_path != "" or demo or net_role == "guest" or scenario != "" or lab:
 		persist = false

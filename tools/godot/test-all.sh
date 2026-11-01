@@ -32,6 +32,7 @@ run etrace bash tools/godot/parity/enemy-cases.sh
 run export bash tools/godot/export-web.sh
 run web-check node tools/godot/web-check.js
 cat "$TMP/web-check.log" 2>/dev/null | grep -E "^(PASS|FAIL)" | sed 's/^/    /'
+run web-fps node tools/godot/web-fps.js T02 6
 run relay node tools/coop-harness.js mv-serve mv-coop mv-title mv-phone cache
 # two lanes of scenarios (own relay port and code each), so the co-op part takes about half the time
 ALLC=$(grep -E '^ALL=' tools/godot/coop-test.sh | sed -e 's/^ALL="//' -e 's/"$//')

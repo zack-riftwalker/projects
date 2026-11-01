@@ -170,8 +170,7 @@ func change(i: int, d: int) -> void:
 			Game.vol_sfx = clampi(Game.vol_sfx + d, 0, 10)
 			Audio.sfx("token")
 		4:
-			Game.fps30 = not Game.fps30
-			Engine.max_fps = 30 if Game.fps30 else 0
+			Game.set_fps30(not Game.fps30)
 		FS_ROW: fullscreen_requested.emit()
 		6: back()
 	Game.save_settings()

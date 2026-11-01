@@ -125,6 +125,9 @@ func _ready() -> void:
 	if Game.scene.begins_with("gfxbench:"):               # MVGN-17: average frame time of a room (gfxbench:<room>[:<frames>]); web: ?scene=gfxbench:N05
 		_bench(Game.scene.substr(9).split(":"))
 		return
+	if Game.scene.begins_with("fpsprobe:"):               # brief 05: how fast the game runs in real time (fpsprobe:<room>[:<seconds>]); 30 fps and 60 fps must print the same
+		_fps_probe(Game.scene.substr(9).split(":"))
+		return
 	if Game.scene.begins_with("fightbench:"):             # the same with the room's boss fighting (fightbench:<room>[:<frames>[:<hp fraction>]]); RACE CONDITION's play-test
 		_fight_bench(Game.scene.substr(11).split(":"))
 		return
@@ -688,6 +691,41 @@ func _bench(a: PackedStringArray) -> void:
 		await get_tree().process_frame
 	var ms := float(Time.get_ticks_usec() - t0) / 1000.0 / float(n)
 	print("BENCH %s %s %.2f ms/frame %.1f fps" % [a[0], Game.GFX_NAMES[Game.gfx_tier], ms, 1000.0 / ms])
+	if not OS.has_feature("web"):
+		get_tree().quit()
+
+# Clawd runs left and right for a fixed real time; the line says how far the game got in that time: physics steps, the room's clock,
+# the music's position (each per real second), the frames drawn and the longest gap between two frames. A 30 fps page must print the
+# same speeds as a 60 fps one (Zakaria's play-test 2026-11-01: "at 30 fps the whole game is slow and the music plays badly").
+func _fps_probe(a: PackedStringArray) -> void:
+	manager.swap_to(a[0])
+	var secs := float(a[1]) if a.size() > 1 else 6.0
+	for i in range(90):
+		await get_tree().process_frame
+	var r: Room = manager.room
+	var w0 := Time.get_ticks_usec()
+	var p0 := Engine.get_physics_frames()
+	var d0 := Engine.get_frames_drawn()
+	var t0 := r.time
+	var m0 := Audio.music_a.get_playback_position() if Audio.music_a.playing else -1.0
+	var last := w0
+	var worst := 0.0
+	var gaps: Array = []
+	while Time.get_ticks_usec() - w0 < int(secs * 1e6):
+		var k := int((Time.get_ticks_usec() - w0) / 1500000) % 2
+		Controls.script_input = {"right": k == 0, "left": k == 1}
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		gaps.append((now - last) / 1000.0)
+		worst = maxf(worst, (now - last) / 1000.0)
+		last = now
+	Controls.script_input = null
+	var wall := (Time.get_ticks_usec() - w0) / 1e6
+	var m1 := Audio.music_a.get_playback_position() if Audio.music_a.playing else -1.0
+	gaps.sort()
+	print("FPSPROBE %s fps30 %s wall %.2f s physics %.1f/s clock %.3f music %.3f drawn %.1f/s frames p50 %.1f p99 %.1f max %.1f ms" % [a[0], "on" if Game.fps30 else "off", wall,
+		(Engine.get_physics_frames() - p0) / wall, (r.time - t0) / wall, (m1 - m0) / wall if m0 >= 0.0 and m1 >= m0 else -1.0,
+		(Engine.get_frames_drawn() - d0) / wall, gaps[gaps.size() / 2], gaps[gaps.size() * 99 / 100], worst])
 	if not OS.has_feature("web"):
 		get_tree().quit()
 

@@ -124,8 +124,7 @@ func choose(i: int) -> void:
 		3: page = "fights"
 		4: restart_requested.emit()
 		5:
-			Game.fps30 = not Game.fps30
-			Engine.max_fps = 30 if Game.fps30 else 0
+			Game.set_fps30(not Game.fps30)
 		6: fullscreen_requested.emit()
 		7:                                       # Low -> High -> Ultra -> Low (kept: the settings file)
 			Game.gfx_tier = (Game.gfx_tier + 1) % 3

@@ -3428,6 +3428,52 @@ func sc_co_tick() -> Array:
 		return [true, "host: walked T02, TC1, TC2"]
 	return [checked > 300 and bad <= 5 and worst < 0.6 and seen_groups > 0 and seen_gears > 0 and seen_pistons > 0, "guest: %d checks, %d mismatches, clock off by at most %.2f s, %d blink groups, %d gears, %d pistons" % [checked, bad, worst, seen_groups, seen_gears, seen_pistons]]
 
+# brief 05: the guest plays at 30 fps, the host at 60. The game must run at the same real speed on both pages: the guest still makes
+# 60 steps a second (two per drawn frame), its tower clock agrees with the host's, and the host sees the guest walk at full speed
+func sc_co_fps30() -> Array:
+	if not await wait_joined():
+		return [false, "nobody joined"]
+	if role == "guest":
+		Game.set_fps30(true)
+	await wait_secs(1.0)
+	var r := tower_room("T02", 5.0 * 16.0 + 3.0, 5.0 * 16.0, 5.0 * 16.0 + 3.0, 5.0 * 16.0)
+	clear_creatures(r)
+	await wait_secs(1.0)
+	var t0 := Time.get_ticks_msec()
+	var p0 := Engine.get_physics_frames()
+	var f0 := Engine.get_process_frames()
+	var worst := 0.0
+	var checked := 0
+	var seen_x0 := -1.0
+	var seen_x1 := -1.0
+	while Time.get_ticks_msec() - t0 < 5000.0 * slow:
+		var el := Time.get_ticks_msec() - t0
+		if role == "guest":
+			Controls.script_input = {"right": el > 1000 and el < 3000}
+			if coop().last_rt_at > 0.0:
+				var rr: Room = mgr().room
+				if rr.id == "T02":
+					worst = maxf(worst, absf(rr.time - (coop().last_rt + (coop().hms() - coop().last_rt_at))))
+					checked += 1
+		else:
+			pin(mgr().player, 5.0 * 16.0 + 3.0, 5.0 * 16.0)
+			if coop().remote != null:
+				if el < 1000:
+					seen_x0 = coop().remote.x
+				elif el > 3800 and seen_x1 < 0.0:
+					seen_x1 = coop().remote.x
+		await get_tree().process_frame
+	var secs := (Time.get_ticks_msec() - t0) / 1000.0
+	var steps := (Engine.get_physics_frames() - p0) / secs
+	var frames := (Engine.get_process_frames() - f0) / secs
+	Controls.script_input = null
+	await wait_secs(1.0)
+	if role == "host":
+		var walked := seen_x1 - seen_x0
+		return [steps > 57.0 and frames > 45.0 and walked > 80.0, "host (60 fps): %.1f steps/s, %.1f frames/s, saw the 30 fps guest walk %.0f px in 2 s" % [steps, frames, walked]]
+	return [steps > 57.0 and steps < 63.0 and frames > 25.0 and frames < 35.0 and checked > 50 and worst < 0.3,
+		"guest (30 fps): %.1f steps/s, %.1f frames/s, %d clock checks, clock off the host's by at most %.2f s" % [steps, frames, checked, worst]]
+
 # the guest freezes a busy piston of TC2; the host sees it frozen, and the guest stands in the shaft for 2.5 s without a scratch
 func sc_co_breakpoint() -> Array:
 	if not await wait_joined():
