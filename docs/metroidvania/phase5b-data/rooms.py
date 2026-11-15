@@ -11,7 +11,7 @@ New letters (the build gives them meaning; the checker treats them as below):
   _  package-lock floor           solid until --force (not in the game yet)
   <  POLYMORPHIC   >  STASH       enemies (new)
 Reused: `4` gate + `Q` key look = a revert plate (open while a body or a revert marker stands on the plate; "plates" data),
-`~` crumble bridge (grows back after 4 s), `I` lever, `C` bench, `T` sign, `U` plugin, `*` memory fragment, `H` chest,
+`~` crumble bridge (grows back after 2.6 s, as built), `I` lever, `C` bench, `T` sign, `U` plugin, `*` memory fragment, `H` chest,
 `o` token, `D` end door, `B` boss spawn, `Z` ZOMBIE PROCESS, `b`/`a`/`t` Bug v0.1 and Typo (old SOURCE TREE enemies, sepia)."""
 import json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
