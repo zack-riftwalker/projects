@@ -3861,6 +3861,7 @@ func sc_co_loopboss() -> Array:
 		return [false, "nobody joined"]
 	Game.flags["intro:LOOP"] = true                            # (the short intro: no fake loop)
 	Game.flags["intro:LOOP_SEEN"] = true
+	Game.tools["breakpoint"] = true
 	if role == "host":
 		var r := boss_arena("T10", 60.0, 300.0)
 		await wait_secs(1.0)
@@ -3883,11 +3884,12 @@ func sc_co_loopboss() -> Array:
 				r.shaft.p3_t0 = r.time
 			await get_tree().physics_frame
 		p2_hits = int(r.stats.hits[1]) if r.stats.has("hits") else 0
+		var broke := b.breaks_total
 		var tg := {"p1": 0, "p2": 0}
 		for sq in seen:
 			tg[seen[sq]] = int(tg.get(seen[sq], 0)) + 1
 		await wait_secs(1.0)
-		return [started and seen.size() >= 6 and tg.p2 >= 2 and p2_hits >= 1, "host: started %s, %d plans (p1 %d, p2 %d), P2 hits %d, boss hp %.0f -> %.0f" % [str(started), seen.size(), tg.p1, tg.p2, p2_hits, hp0, b.hpf]]
+		return [started and seen.size() >= 6 and tg.p2 >= 2 and p2_hits >= 1 and broke >= 1, "host: started %s, %d plans (p1 %d, p2 %d), P2 hits %d, boss hp %.0f -> %.0f, breaks %d" % [str(started), seen.size(), tg.p1, tg.p2, p2_hits, hp0, b.hpf, broke]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("T10", 60.0, 300.0)
 	var found := {"b": null}
@@ -3908,6 +3910,9 @@ func sc_co_loopboss() -> Array:
 	var wrapped := false
 	var landed := false
 	var last_hp: int = mgr().player.hp
+	var saw_frozen := false
+	var saw_broken := false
+	var bp_try := -10.0
 	var t1 := Time.get_ticks_msec()
 	var f := 0
 	while Time.get_ticks_msec() - t1 < 44000.0 * slow:
@@ -3929,6 +3934,24 @@ func sc_co_loopboss() -> Array:
 			g.hp = g.max_hp
 		last_hp = g.hp
 		var keys := {}
+		var el2 := float(Time.get_ticks_msec() - t1) / 1000.0 / slow
+		if el2 > 12.0 and not saw_broken and not saw_crack:  # M3: freeze it with breakpoint, then claw the plate on its frozen head
+			g.inv = 999.0
+			if pup.bp_t > 0.0:
+				saw_frozen = true
+				pin(g, pup.hx - 22.0, pup.hy - 10.0)
+				g.face = 1
+				keys["attack"] = f % 10 < 2
+			elif pup.bp and el2 - bp_try > 0.8:
+				bp_try = el2
+				pin(g, pup.hx - 40.0, pup.hy - 5.0)
+				g.face = 1
+				rm.bp_press(g)
+			Controls.script_input = keys
+			await get_tree().physics_frame
+			if pup.mode == "broken":
+				saw_broken = true
+			continue
 		if not saw_crack:                                     # phase 1: go after the tail, claw it when it is near
 			var tp: Vector2 = pup.tail_point()
 			var gx: float = g.x + g.w / 2.0
@@ -3957,8 +3980,8 @@ func sc_co_loopboss() -> Array:
 		if String(seen2[sq]) == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [seen2.size() >= 6 and mine >= 2 and pup.kit_violation == "" and swings >= 1 and saw_crack and saw_pit and wrapped and landed,
-		"guest: saw %d plans (%d on me), hurt %d, %d swings, violation '%s'; pit: cracks %s, open %s, wrapped %s, landed %s" % [seen2.size(), mine, hurt, swings, pup.kit_violation, str(saw_crack), str(saw_pit), str(wrapped), str(landed)]]
+	return [seen2.size() >= 6 and mine >= 2 and pup.kit_violation == "" and swings >= 1 and saw_frozen and saw_broken and saw_crack and saw_pit and wrapped and landed,
+		"guest: saw %d plans (%d on me), hurt %d, %d swings, violation '%s'; froze it %s, broke it %s; pit: cracks %s, open %s, wrapped %s, landed %s" % [seen2.size(), mine, hurt, swings, pup.kit_violation, str(saw_frozen), str(saw_broken), str(saw_crack), str(saw_pit), str(wrapped), str(landed)]]
 
 func sc_co_deadlock() -> Array:
 	if not await wait_joined():

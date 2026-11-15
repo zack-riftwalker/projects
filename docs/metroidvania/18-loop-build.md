@@ -23,7 +23,7 @@ The old boss (`godot/src/enemies/loop_boss.gd`, kit-era, MV5A-07) is replaced. K
 |---|---|---|
 | M1 | arena: T10 24x32 (up only), the shaft hall (ledges, gears, rings, gantry, counter wall), per-phase room states incl. the phase-3 pit and vertical wrap, camera, route check | **done** (2026-11-15) |
 | M2 | the snake body (head + 14 links, trail following), swim, phase-1 attacks, contact damage, tail hits, the fake-loop intro, HP bar | **done** (2026-11-15) |
-| M3 | the condition plate: breakpoint freeze (links become platforms), half hits, the yellow ring catch, the break window, `i++` escalation | not started |
+| M3 | the condition plate: breakpoint freeze (links become platforms), half hits, the yellow ring catch, the break window, `i++` escalation | **done** (2026-11-15) |
 | M4 | phase 2 (transition, nested ring layer, recursion, escalate, gantry swing, gear reversal) and phase 3 (transition, pit + ceiling seam, wrap dive, combos, feints, HP = length) | not started |
 | M5 | death + compact scene (looping progress bar, echo `stop`), voices and subtitles, sounds, music (phase-3 stutter), logs lines | not started |
 | M6 | loss menu with the counter, the diff sign, after-state, T09 decor only if the world dept approved it, full tests, web export | not started |
@@ -62,6 +62,12 @@ Each one is also in the producer's inbox (`docs/studio/PRODUCER.md`), so he can 
 - **Intro:** first time 3.0 s of descent (straight down at x 228, then once round the gantry clockwise until the head meets its tail), `click`, the line from 3.2 s, the intro lasts as long as the line (`intro_len` = 3.6 s + the line); the camera looks up at the gantry and comes back down 0.7 s before the fight. Second time (`intro:LOOP_SEEN`) 2.0 s (1.6 s descent, no line). Before the first fight the fake loop (M1) runs; `intro:LOOP` is that flag.
 - **Hits:** the tail tip full damage and a flick (a player next to it is pushed 80 px/s); the head and the middle links clang (`block`) until M3's plate rules.
 - **Attack mix** (loop3, a bot moving slowly on the floor, 70 s): spit 6, lunge 7, dive 9, coil 12, calm 1, no repeats. The HP (`T`) is tuned with `fightsim` in M4 once the break window exists.
+
+**M3 (done, 2026-11-15).** The condition plate, breakpoint, the half hits, the yellow ring, the break window, `i++`. `loop3` M3 part (the freeze and its platforms on both pages, a player standing on a frozen link, the plate rules, the window, the 4 s rest with its shiver, no freeze in an active part, the gears' flip in phase 2), `breakpoint` still green, `co-loopboss` (the guest freezes the snake with its own breakpoint, claws the plate and breaks the condition on the host; with and without `BADLINE_ALL=1`), screenshot moments `looptell:frozen`, `looptell:break`.
+- **Engine hooks (scoped to the snake):** `Room._rebuild_bp_plats` asks a creature with `bp_plats()` for its platforms (the snake: the top 4 px of every link and of the head); `Room.bp_apply` asks `bp_refused()` before it freezes (the snake while it rests: the clang `loop_bpclang` and a blue shiver, nothing stops). The snake sets `bp` (the room's "may be stopped" flag) every frame on both pages: swimming, in a cue or recovery, stuck; never in an active part, lying, recoiling or in a scene.
+- **The plate is the head's hurt box** (grown 8 px up over the plate): hits on the head count as hits on the plate (a guest's hit is given to the nearest hurt box, and the plate sits on the head). Frozen: one hit breaks it. Stuck (after a lunge or a dive) or a caught yellow ring: a half hit (`tru_` flickers at 8 Hz, no damage); a second within 3.0 s breaks it. Otherwise the head clangs.
+- **The break:** the freeze ends at once (`bp_t = 0`), the plate `false`, the eye crossed; the body lies straight along the surface under its head, toward the middle of the room (a link past a ledge's end drops to the next surface: on the M ledge the chain drapes down to the floor), 2.0 / 1.8 / 1.6 s of full damage on every link and the head, no touch; then a 0.5 s recoil (invulnerable, `click`), `i++`: the wall counter +1, 6 % faster (`_speed`), in phase 2 the gears turn the other way. The first break shows `...again.` (subtitle, no voice: decision D4).
+- **The rest after a freeze** (4 s; 6 s in phase 3) starts when a freeze ends, by time or by a break (a break's window and recoil take 2.5 s of it).
 
 ---
 

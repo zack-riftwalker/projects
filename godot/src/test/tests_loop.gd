@@ -570,8 +570,131 @@ func t_loop3() -> bool:
 	pup.free()
 	rg.queue_free()
 	rf.queue_free()
+	loop3_m3(res)
 	return report("loop3", res.ok, info + res.info)
 
 func loop_fightsim() -> bool:
 	print("TEST fightsim SKIP (INFINITE LOOP: the snake comes in M2)")
 	return true
+
+func loop3_m3(res: Dictionary) -> void:
+	# --- M3 -------------------------------------------------------------------------------------------------------------
+	var r3m := loop_fight(60.0, 464.0)
+	var bm: LoopBoss = r3m.boss
+	var pm = r3m.player
+	bm.queue = []
+	bm.gap_t = 999.0
+	bm.hx = 120.0
+	bm.hy = 330.0
+	bm.ang = 0.0
+	bm._seed_trail(Vector2(120.0, 330.0), Vector2(0.0, 1.0))
+	loop_run(r3m, 2)
+	# 1. breakpoint takes when it is not in an active part: frozen 3.5 s, every link a one-way platform, no touch, nothing moves
+	if not bm.bp:
+		fail(res, "breakpoint does not take on a swimming snake")
+	if not r3m.bp_apply("c", bm.nid) or absf(bm.bp_t - Game.BP_TIME) > 0.01:
+		fail(res, "the freeze did not take (bp_t %.2f)" % bm.bp_t)
+	loop_run(r3m, 1)
+	var l5: Vector2 = bm.links[5]
+	if r3m.bp_plats.size() != 15 or not bm.touch_boxes().is_empty() or not bm.harmboxes().is_empty():
+		fail(res, "frozen: %d platforms, %d touch boxes" % [r3m.bp_plats.size(), bm.touch_boxes().size()])
+	# a player put on link 5 stands on it
+	pm.x = l5.x - 5.0
+	pm.y = l5.y - 7.0 - pm.h - 1.0
+	pm.vx = 0.0
+	pm.vy = 0.0
+	loop_run(r3m, 30)
+	if not pm.on_ground or absf(pm.y + pm.h - (l5.y - 7.0)) > 1.5 or (bm.links[5] as Vector2).distance_to(l5) > 0.01:
+		fail(res, "a frozen link is no platform (on ground %s, feet %.1f, link top %.1f)" % [str(pm.on_ground), pm.y + pm.h, l5.y - 7.0])
+	# the guest's copy builds the same platforms
+	var recm := NetClasses.record(bm)
+	var rgm := new_room("T10")
+	var pupm = NetClasses.make(int(recm[1]), rgm)
+	rgm.ents.append(pupm)
+	NetClasses.apply(pupm, JSON.parse_string(JSON.stringify(recm)))
+	pupm.net_sample(1.0)
+	pupm.puppet_follow_parts(1.0)
+	rgm._rebuild_bp_plats()
+	if rgm.bp_plats.size() != 15 or absf(float(rgm.bp_plats[5].y) - float(r3m.bp_plats[5].y)) > 0.6:
+		fail(res, "the guest's frozen platforms differ (%d)" % rgm.bp_plats.size())
+	rgm.ents.erase(pupm)
+	pupm.free()
+	rgm.queue_free()
+	# 2. one hit on the plate while frozen: `false`, it lets go and lies on the floor 2.0 s, every link takes full damage, no touch; then i++
+	var hl3: LoopHall = r3m.shaft
+	var cnt0 := hl3.counter
+	var hp3 := bm.hpf
+	var hr3: String = bm.hit(1, 1.0, 0.0, "swipe", {"head": 1})
+	if hr3 != "hit" or bm.mode != "broken" or bm.bp_t > 0.0 or absf(hp3 - bm.hpf) > 0.01:
+		fail(res, "a hit on the frozen plate: %s, mode %s" % [hr3, bm.mode])
+	loop_run(r3m, int(0.6 / Game.STEP))
+	var low := 0
+	for c in bm.links:
+		if (c as Vector2).y > 440.0:
+			low += 1
+	var hp4 := bm.hpf
+	var hl4: String = bm.hit(2, 1.0, 0.0, "swipe", {"link": 4})
+	if low < 10 or hl4 != "hit" or absf(hp4 - bm.hpf - 2.0) > 0.01 or not bm.touch_boxes().is_empty():
+		fail(res, "broken: %d links on the floor, a link hit %s (%.1f)" % [low, hl4, hp4 - bm.hpf])
+	loop_run(r3m, int((2.0 - 0.6 + 0.1) / Game.STEP))
+	if bm.mode != "recoil" or bm.hit(1, 1.0, 0.0, "swipe", {"link": 3}) != "block":
+		fail(res, "after 2.0 s: mode %s (want recoil, invulnerable)" % bm.mode)
+	loop_run(r3m, int(0.55 / Game.STEP))
+	if bm.mode != "swim" or bm.iter != 1 or hl3.counter != cnt0 + 1 or bm.say_k != 4:
+		fail(res, "after the recoil: mode %s, i %d, counter %d -> %d, line %d" % [bm.mode, bm.iter, cnt0, hl3.counter, bm.say_k])
+	if absf(bm._speed() - 90.0 * 1.06) > 0.01:
+		fail(res, "speed after one break %.1f, want %.1f" % [bm._speed(), 90.0 * 1.06])
+	# 3. after a freeze breakpoint rests 4 s (it shivers, nothing stops); then it takes again
+	bm.gap_t = 999.0
+	bm.immune_until = -10.0                                   # (the freeze that ended in the break above left it resting too)
+	loop_run(r3m, 1)
+	r3m.bp_apply("c", bm.nid)
+	loop_run(r3m, int((Game.BP_TIME + 0.2) / Game.STEP))
+	if bm.bp_t > 0.0 or bm.immune_until < r3m.time + 3.5:
+		fail(res, "after a freeze: bp_t %.2f, immune until %.2f (now %.2f)" % [bm.bp_t, bm.immune_until, r3m.time])
+	if r3m.bp_apply("c", bm.nid) or r3m.time - bm.shiver_t0 > 0.05:
+		fail(res, "breakpoint took while it rests, or no shiver")
+	loop_run(r3m, int(4.0 / Game.STEP))
+	if not r3m.bp_apply("c", bm.nid):
+		fail(res, "breakpoint does not take again after 4 s")
+	loop_run(r3m, int((Game.BP_TIME + 0.2) / Game.STEP))
+	# 4. never in an active part
+	bm.immune_until = -10.0
+	bm.hx = 300.0
+	bm.hy = 300.0
+	bm._start("lunge", "p1")
+	var bp_in_active := false
+	for f in range(120):
+		loop_run(r3m, 1)
+		if bm.plan_phase() == "active" and bm.bp:
+			bp_in_active = true
+	if bp_in_active:
+		fail(res, "breakpoint can take in the lunge's active part")
+	# 5. half hits: a stuck head's plate flickers (`tru_`); a second within 3 s breaks; later than 3 s it starts over. A caught yellow ring is a half
+	bm.mode = "stuck"
+	bm.stuck_t = 5.0
+	bm.plan = {}
+	bm.half_t0 = -10.0
+	bm.hit(1, 1.0, 0.0, "swipe", {"head": 1})
+	if bm.mode != "stuck" or bm.half_t0 < r3m.time - 0.01 or bm._plate_i() not in [0, 2]:
+		fail(res, "the first half hit: mode %s" % bm.mode)
+	r3m.time += 3.2
+	bm.hit(1, 1.0, 0.0, "swipe", {"head": 1})
+	if bm.mode != "stuck":
+		fail(res, "two half hits 3.2 s apart broke the condition")
+	bm.hit(1, 1.0, 0.0, "catch", {"head": 1})
+	if bm.mode != "broken":
+		fail(res, "a stuck half then a caught yellow ring within 3 s did not break it")
+	# a swimming head just clangs
+	loop_run(r3m, int(2.6 / Game.STEP))
+	bm.half_t0 = -10.0
+	if bm.mode != "swim" or bm.hit(1, 1.0, 0.0, "swipe", {"head": 1}) != "block":
+		fail(res, "a swimming head does not clang (mode %s)" % bm.mode)
+	# 6. phase 2: every i++ flips the gears
+	bm.ph = 2
+	var gd0 := hl3.gear_dir
+	bm._break()
+	loop_run(r3m, int(2.5 / Game.STEP))
+	if hl3.gear_dir != -gd0:
+		fail(res, "phase 2: the gears did not turn the other way at i++")
+	r3m.queue_free()

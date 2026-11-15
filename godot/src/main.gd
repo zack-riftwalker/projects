@@ -374,7 +374,23 @@ func _ready() -> void:
 				ltb.hx = 200.0
 				ltb.hy = 330.0
 				ltb.queue = []
-				ltb._start(lt[1], "p1")
+				if lt[1] == "frozen" or lt[1] == "break":          # looptell:frozen / looptell:break: the moment itself (frozen by breakpoint; the condition broken, lying)
+					ltb.gap_t = 999.0
+					ltb.hx = 150.0
+					ltb.hy = 300.0
+					ltb.ang = -PI / 4.0
+					ltb._seed_trail(Vector2(150.0, 300.0), Vector2(0.45, 0.89))
+					for f in range(4):
+						ltr.step(Game.STEP)
+					if lt[1] == "frozen":
+						ltr.bp_apply("c", ltb.nid)
+					else:
+						ltb._break()
+						for f in range(40):
+							ltp.inv = 999.0
+							ltr.step(Game.STEP)
+				else:
+					ltb._start(lt[1], "p1")
 		elif Game.scene.begins_with("loopfight:"):     # screenshot helper: INFINITE LOOP's shaft in a phase (loopfight:<p1|p2|p3>[:<x>:<y>]), the fight running
 			var la := Game.scene.substr(10).split(":")
 			var lph := clampi(int(la[0].substr(1)), 1, 3)

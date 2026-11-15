@@ -54,6 +54,11 @@ const OPUS := "#9b6bff"
 const HEAT := "#ff7a59"
 const YELLOW := "#ffd23f"
 const SAY := {1: "intro", 2: "p2", 3: "p3", 4: "again"}
+const BREAK_T := [2.0, 1.8, 1.6]           # the break window (it lies on the floor, every link takes full damage)
+const RECOIL_T := 0.5                      # then it bites its tail again (invulnerable), i++
+const HALF_WINDOW := 3.0                   # a second half hit on the plate within this breaks it
+const BP_IMMUNE := [4.0, 4.0, 6.0]         # after a freeze, breakpoint does not take this long
+const LIE_V := 520.0
 
 static var tex_head: Texture2D
 static var tex_links: Texture2D
@@ -91,6 +96,15 @@ var camp := {}                             # host: key -> [x, y, since]
 var camp_cd := 0.0
 var flick_t := -10.0                       # the tail's flick (a hit on it)
 var hsamp: Array = []                      # guest: [tm, hx, hy, ang, links]
+var bp := false                            # the room's breakpoint may stop it now (derived every frame, both pages)
+var half_t0 := -10.0                       # the first half hit on the plate (a stuck head, a caught yellow ring)
+var immune_until := -10.0                  # breakpoint does not take until then (it shivers blue)
+var shiver_t0 := -10.0
+var brk_t0 := -10.0                        # the condition broke: it lies on the floor
+var recoil_t0 := -10.0
+var breaks_total := 0                      # (the first break says `...again.`)
+var lie: Array = []                        # host: where each link (and the head, last) comes to lie
+var last_bp_off := 0.0
 var _flag_hash := 0
 
 func _init(r: Room, bx: float, by: float, base_hp := 126) -> void:
@@ -201,9 +215,33 @@ func plate_rect() -> Rect2:
 
 # ---------------------------------------------------------------- what can be touched, what hurts
 func _touch_on() -> bool:
-	if not active or dying or loss_on:
+	if not active or dying or loss_on or bp_t > 0.0:
 		return false
 	return mode == "swim" or mode == "plan" or mode == "stuck"
+
+# breakpoint takes when it is not in an active part, not lying, not in a scene; while immune it is still a target (and shivers)
+func _bp_now() -> bool:
+	if not active or dying or loss_on or bp_t > 0.0:
+		return false
+	if not (mode == "swim" or mode == "plan" or mode == "stuck"):
+		return false
+	return plan.is_empty() or plan.ph != "active"
+
+# host: room.bp_apply asks before it freezes; true = refused (immune): the clang and a blue shiver, nothing else
+func bp_refused() -> bool:
+	if room.time < immune_until:
+		shiver_t0 = room.time
+		Audio.sfx("loop_bpclang", {"vol": 0.8})
+		return true
+	return false
+
+# frozen: the top of every link (and the head) is a one-way platform, on both pages
+func bp_plats() -> Array:
+	var out: Array = []
+	for c in links:
+		out.append({"x": c.x - 8.0, "y": c.y - 7.0, "w": 16.0, "h": 4.0, "dx": 0.0, "dy": 0.0})
+	out.append({"x": hx - 14.0, "y": hy - 10.0, "w": 28.0, "h": 4.0, "dx": 0.0, "dy": 0.0})
+	return out
 
 func touch_boxes() -> Array:
 	var out: Array = []
@@ -239,7 +277,7 @@ func hurtboxes() -> Array:
 	if not active or dying or mode == "hidden" or mode == "descend":
 		return b
 	var hr := head_rect()
-	b.append({"x": hr.position.x, "y": hr.position.y, "w": hr.size.x, "h": hr.size.y, "head": 1})
+	b.append({"x": hr.position.x, "y": hr.position.y - 8.0, "w": hr.size.x, "h": hr.size.y + 8.0, "head": 1})       # (with the plate on the brow)
 	for k in range(links.size()):
 		var c: Vector2 = links[k]
 		b.append({"x": c.x - 7.0, "y": c.y - 7.0, "w": 14.0, "h": 14.0, "link": k})
@@ -254,6 +292,15 @@ func hit(d: int, dx: float, dy: float, how: String, box = null) -> String:
 	var k := -1
 	if box is Dictionary and box.has("link"):
 		k = int(box.link)
+	if mode == "broken":                                      # the break window: every link and the head take full damage
+		var at0: Vector2 = links[k] if k >= 0 and k < links.size() else Vector2(hx, hy)
+		return super.hit(d, dx, dy, how, {"x": at0.x - 7.0, "y": at0.y - 7.0, "w": 14.0, "h": 14.0})
+	if box is Dictionary and box.has("head"):                 # the condition plate (on the head)
+		if bp_t > 0.0:
+			_break()                                          # frozen: one hit and `true` becomes `false`
+			return "hit"
+		if mode == "stuck" or how == "catch":
+			return _half()
 	if k == links.size() - 1:                                 # the tail tip: full damage, it flicks
 		flick_t = room.time
 		var tp := tail_point()
@@ -266,6 +313,90 @@ func hit(d: int, dx: float, dy: float, how: String, box = null) -> String:
 	var at: Vector2 = links[k] if k >= 0 and k < links.size() else Vector2(hx, hy)
 	room.burst(at.x, at.y, 3, [VD[4], "#ffffff"], 70.0, 200.0)
 	return "block"
+
+# a half hit: `tru_` flickers; a second within 3 s breaks the condition
+func _half() -> String:
+	if room.time - half_t0 <= HALF_WINDOW:
+		_break()
+		return "hit"
+	half_t0 = room.time
+	Audio.sfx("loop_clack", {"vol": 0.5})
+	room.burst(hx, hy - 14.0, 4, [VD[4], "#ffffff"], 70.0, 200.0)
+	return "hit"
+
+# the loop breaks: `false`, it lets go and lies along the floor (or the ledge under it) for the window
+func _break() -> void:
+	bp_t = 0.0
+	plan = {}
+	mode = "broken"
+	brk_t0 = room.time
+	half_t0 = -10.0
+	lie.clear()
+	# it lies straight along the surface under its head, the body toward the middle of the room (a link past a ledge's end drops to the floor)
+	var gy := _ground_below(hx, hy - 4.0)
+	var side := -1.0 if hx > 192.0 else 1.0
+	var hx2 := clampf(hx, 36.0, float(room.pw) - 36.0)
+	for kk in range(links.size()):
+		var lx := hx2 + side * (NECK + GAP * float(kk))
+		if lx < 24.0 or lx > float(room.pw) - 24.0:            # (no room that way: it folds back along the floor)
+			lx = clampf(lx, 24.0, float(room.pw) - 24.0)
+		lie.append(Vector2(lx, _ground_below(lx, gy - 4.0) - 8.0))
+	lie.append(Vector2(hx2, gy - 12.0))
+	room.shake(0.6)
+	Audio.sfx("loop_clack", {"vol": 1.0})
+	Audio.sfx("loop_collapse", {"vol": 0.8})
+	room.burst(hx, hy - 14.0, 10, ["#ff4d5a", "#ffffff"], 110.0, 300.0)
+	breaks_total += 1
+	if breaks_total == 1:
+		_say(4)
+	Game.dlog("LOOP break %d (phase %d)" % [breaks_total, ph])
+
+func _step_broken(dt: float) -> void:
+	for kk in range(links.size()):
+		if kk < lie.size():
+			var c: Vector2 = links[kk]
+			links[kk] = c.move_toward(lie[kk], LIE_V * dt)
+	if lie.size() > links.size():
+		var hv := Vector2(hx, hy).move_toward(lie[lie.size() - 1], LIE_V * dt)
+		hx = hv.x
+		hy = hv.y
+		ang = 0.0 if float(lie[0].x) < hx else PI
+	if room.time - brk_t0 >= BREAK_T[ph - 1]:
+		mode = "recoil"
+		recoil_t0 = room.time
+		Audio.sfx("loop_click", {"vol": 0.9})
+
+# it gathers itself up and bites its tail again: i++ (the counter, a little faster)
+func _step_recoil(dt: float) -> void:
+	hy = move_toward(hy, maxf(60.0, hy - 40.0), 80.0 * dt)
+	if room.time - recoil_t0 >= RECOIL_T:
+		iter += 1
+		i_phase += 1
+		var hl := _hall()
+		if hl != null:
+			hl.set_counter(hl.counter + 1)
+			if ph == 2:
+				hl.flip_gears(room.time)
+		_trail_from_body()
+		mode = "swim"
+		gap_t = 0.4
+		swim_key = kit_pick_target()
+
+# the trail again from the body as it lies (so the chain swims on from where it is)
+func _trail_from_body() -> void:
+	var pts: Array = [Vector2(hx, hy)]
+	pts.append_array(links)
+	trail = PackedVector2Array()
+	for kk in range(pts.size() - 1):
+		var a: Vector2 = pts[kk]
+		var bb: Vector2 = pts[kk + 1]
+		var n := maxi(1, int(a.distance_to(bb) / TRAIL_STEP))
+		for j in range(n):
+			trail.append(a.lerp(bb, float(j) / float(n)))
+	var last: Vector2 = pts[pts.size() - 1]
+	while trail.size() < TRAIL_MAX:
+		trail.append(last)
+	_rebuild_links()
 
 func blocks(_dx: float, _dy: float, _how: String) -> bool:
 	return false
@@ -385,6 +516,18 @@ func update(dt: float) -> void:
 	if dying:
 		_place()
 		return
+	if bp_off != last_bp_off:                                 # a freeze just ended (the room does not update a frozen creature): breakpoint rests
+		last_bp_off = bp_off
+		immune_until = room.time + BP_IMMUNE[ph - 1]
+	bp = _bp_now()
+	if mode == "broken" or mode == "recoil":
+		if mode == "broken":
+			_step_broken(dt)
+		else:
+			_step_recoil(dt)
+		_sync_hall()
+		_place()
+		return
 	_track_camp(dt)
 	camp_cd = maxf(0.0, camp_cd - dt)
 	match mode:
@@ -406,6 +549,7 @@ func update(dt: float) -> void:
 	_push_trail()
 	_rebuild_links()
 	_steer_rings(dt)
+	bp = _bp_now()
 	_sync_hall()
 	_place()
 
@@ -752,6 +896,8 @@ func _head_row() -> int:
 func _plate_i() -> int:
 	if mode == "broken" or mode == "dead":
 		return 3
+	if room.time - half_t0 <= HALF_WINDOW and int(room.time * 8.0) % 2 == 0:
+		return 2
 	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["lunge", "escalate"]:
 		return 1
 	if ph == 3:
@@ -769,6 +915,13 @@ func draw_boss_body(ci: CanvasItem) -> void:
 	var ink := Color(INK)
 	var li := _link_i()
 	var flick := room.time - flick_t < 0.25
+	var tint := Color.WHITE
+	var jit := Vector2.ZERO
+	if bp_t > 0.0:
+		tint = Color(0.72, 0.88, 1.0)                         # frozen: the game's blue for a stopped thing
+	if room.time - shiver_t0 < 0.35:                          # breakpoint on it while it rests: a blue shiver, nothing else
+		tint = Color(0.6, 0.8, 1.0)
+		jit = Vector2(1.0 if int(room.time * 40.0) % 2 == 0 else -1.0, 0.0)
 	# the pins between the links, then the links from the tail up (the neck on top), then the head
 	var prev := Vector2(hx, hy)
 	for k in range(links.size()):
@@ -779,16 +932,16 @@ func draw_boss_body(ci: CanvasItem) -> void:
 	for k in range(links.size() - 1, -1, -1):
 		var c2: Vector2 = links[k]
 		var src := Rect2(float(li) * 16.0, 0.0, 16.0, 16.0)
-		var at := Vector2(floorf(c2.x - 8.0 + 0.5), floorf(c2.y - 8.0 + 0.5))
+		var at := Vector2(floorf(c2.x - 8.0 + 0.5), floorf(c2.y - 8.0 + 0.5)) + jit
 		if k == links.size() - 1 and flick:
 			at += Vector2(0.0, -2.0)
-		ci.draw_texture_rect_region(tex_links, Rect2(at, Vector2(16.0, 16.0)), src)
+		ci.draw_texture_rect_region(tex_links, Rect2(at, Vector2(16.0, 16.0)), src, tint)
 	var fs := float(lspr.get("frame", 56))
 	var row := _head_row()
 	var d := dir8()
 	var hsrc := Rect2(float(d) * fs, float(row) * fs, fs, fs)
-	var hat := Vector2(floorf(hx - fs / 2.0 + 0.5), floorf(hy - fs / 2.0 + 0.5))
-	ci.draw_texture_rect_region(tex_head, Rect2(hat, Vector2(fs, fs)), hsrc)
+	var hat := Vector2(floorf(hx - fs / 2.0 + 0.5), floorf(hy - fs / 2.0 + 0.5)) + jit
+	ci.draw_texture_rect_region(tex_head, Rect2(hat, Vector2(fs, fs)), hsrc, tint)
 	# the plate, upright on the brow (readable whichever way the head points)
 	var pr := plate_rect()
 	var pi_ := _plate_i()
@@ -815,11 +968,12 @@ func net_fields() -> Array:
 	var f: Array = [roundi(hpf * 10.0), max_hp, 1 if active else 0, 1 if dying else 0, ph, MODES.find(mode), roundi(hx * 4.0), roundi(hy * 4.0), roundi(ang * 1000.0),
 		_links_pack(), plan_fields(), [roundi(lunge_d.x * 1000.0), roundi(lunge_d.y * 1000.0), roundi(lunge_len * 10.0), roundi(dive_x * 4.0), roundi(coil_c.x), roundi(coil_c.y)],
 		iter, i_phase, roundi(stuck_t * 100.0), roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0), roundi(flick_t * 100.0),
-		hl.net_pack() if hl != null else [], [1 if loss_on else 0, loss_sel]]
+		hl.net_pack() if hl != null else [], [1 if loss_on else 0, loss_sel],
+		[roundi(half_t0 * 100.0), roundi(immune_until * 100.0), roundi(shiver_t0 * 100.0), roundi(brk_t0 * 100.0), roundi(recoil_t0 * 100.0), breaks_total]]
 	f.append(hz_pack())
 	return f
 
-const NF := 21
+const NF := 22
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -864,6 +1018,13 @@ func net_apply(f: Array) -> void:
 	var lf: Array = f[20]
 	loss_on = int(lf[0]) == 1
 	loss_sel = int(lf[1])
+	var cf: Array = f[21]
+	half_t0 = cf[0] / 100.0
+	immune_until = cf[1] / 100.0
+	shiver_t0 = cf[2] / 100.0
+	brk_t0 = cf[3] / 100.0
+	recoil_t0 = cf[4] / 100.0
+	breaks_total = int(cf[5])
 	hz_unpack(f[NF] if f.size() > NF else [])
 
 # guest: the snapshot just applied, at host time tm
@@ -909,3 +1070,4 @@ func puppet_follow_parts(rt: float) -> void:
 func puppet_tick(dt: float) -> void:
 	kit_puppet_tick(dt)
 	hz_puppet_tick(dt)
+	bp = _bp_now()

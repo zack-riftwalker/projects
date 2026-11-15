@@ -645,7 +645,10 @@ func _rebuild_bp_plats() -> void:
 	bp_plats = []
 	for e in ents:
 		if not e.dead and e.bp_t > 0.0 and e.bp_k == 1:
-			bp_plats.append({"x": e.x, "y": e.y, "w": e.w, "h": minf(e.h, 6.0), "dx": 0.0, "dy": 0.0})
+			if e.has_method("bp_plats"):
+				bp_plats.append_array(e.bp_plats())            # (INFINITE LOOP: every link of its frozen body)
+			else:
+				bp_plats.append({"x": e.x, "y": e.y, "w": e.w, "h": minf(e.h, 6.0), "dx": 0.0, "dy": 0.0})
 
 # in range, in front (or within 8 px behind), a clear line (a piston's own cells do not block the line to it)
 func _bp_ok(cx: float, cy: float, face: float, nx: float, ny: float) -> bool:
@@ -759,6 +762,8 @@ func bp_apply(kind: String, id, rewind := 0.0) -> bool:
 				hit_e = e
 		if hit_e == null:
 			return false
+		if hit_e.has_method("bp_refused") and hit_e.bp_refused():
+			return false                                   # (it is resting from the last one: it shivers, nothing stops)
 		hit_e.bp_t = Game.BP_TIME
 		at = Vector2(hit_e.cx, hit_e.cy)
 	else:
