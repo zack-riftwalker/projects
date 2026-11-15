@@ -97,6 +97,12 @@ func build(rm: Room) -> void:
 			bw2.visible = false
 			add_child(bw2)
 			room.belfry.wall_nodes = [bw1, bw2]
+		if room.shaft != null:                          # the iteration shaft: riveted panels, the counter, the diff sign (drawn once; again when the counter changes)
+			var lw := DrawProxy.new()
+			lw.name = "LoopWall"
+			lw.cb = room.shaft.draw_wall
+			add_child(lw)
+			room.shaft.wall_node = lw
 	if not room.def.get("landmarks", []).is_empty():           # far shapes between the sky and the tiles (MVB1-14)
 		var lm := Landmarks.new()
 		lm.name = "Landmarks"

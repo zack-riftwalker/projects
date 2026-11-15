@@ -58,6 +58,7 @@ var blink_period := 1.5
 var hall_nodes: Array = []
 var hall: IndexHall = null                # N09: the crawler's hall (drawers, web net, strands, the back wall screen), 14-crawler.md
 var belfry: BelfryHall = null            # T06: the bells, the escapement, the buffer floor and the beat clock of RACE CONDITION, 17-race-build.md
+var shaft: LoopHall = null                # T10: the iteration shaft of INFINITE LOOP (ledges, gears, gantry, counter, the phase-3 pit), 18-loop-build.md
 var hpot: HoneypotHall = null             # N15: the firewall's lobby / furnace (floor, furniture, walls, packets), 16-firewall-build.md
 var tower: Tower = null                    # world 4: gears, pistons, mutex gates, cables and the tick's blink blocks (MV5A-03)
 var iter := 0                              # T09's loop room: which pass this is (0..3)
@@ -335,6 +336,8 @@ func load_room(room_id: String, snap = null) -> void:
 		hpot = HoneypotHall.new(self)
 	if BelfryHall.wanted(def):
 		belfry = BelfryHall.new(self)
+	if LoopHall.wanted(def):
+		shaft = LoopHall.new(self)
 	if def.has("loop"):
 		iter = clampi(int(Game.loop_iter.get(id, 0)), 0, 3)
 		if mode != "guest" and not Game.flag("boss:LOOP"):
@@ -796,8 +799,8 @@ func update_doors() -> void:
 		var lock: String = d.lock
 		var open: bool = Game.rooms_meta.rooms.has(String(d.to).get_slice(":", 0))      # a door to a room that does not exist (yet) never opens
 		d["fightwrap"] = false
-		if fight_active and (d.side == "W" or d.side == "E") and def.has("boss") and String(def.boss.get("class", "")) == "LoopBoss":
-			open = true                            # INFINITE LOOP: while it runs the side doors are wrap portals (the boss moves a body that crosses)
+		if shaft != null and shaft.door_portal(d):
+			open = true                            # INFINITE LOOP's fake loop: the east door looks open, and whoever goes through comes back in by the west door (the hall moves the body)
 			d["fightwrap"] = true
 		elif not open:
 			pass
@@ -1087,6 +1090,8 @@ func build_nodes(p = null, spawn = null, local := true) -> void:
 		add_child(bs)
 		belfry.make_glow_nodes(self, 1)                     # (drawn once; only their alpha follows the phase and the lamps' flicker)
 		hall_nodes = [bs]
+	if shaft != null:                                       # the shaft: gears, chains, the pit's seam every frame; the gantry is its own node (drawn once, moved)
+		hall_nodes = shaft.make_nodes(self, 1)
 	for spec in [["furniture", 1], ["top", 4]]:
 		var layer := RoomLayer.new()
 		layer.room = self
@@ -1596,6 +1601,8 @@ func step_guest(dt: float) -> void:
 		hpot.step(dt)
 	if belfry != null:
 		belfry.step(dt)
+	if shaft != null:
+		shaft.step(dt)
 	if tower != null:
 		tower.step(dt, players())
 		_tick_sound()
@@ -1757,9 +1764,11 @@ func _move_platforms() -> void:
 		hpot.move_packets()
 	if belfry != null:
 		belfry.move_bells()
+	if shaft != null:
+		shaft.move_parts()
 	_update_ports(bodies())
 	for m in plats:
-		if m.get("packet", false) or m.has("gear") or m.has("fw") or m.has("bell"):
+		if m.get("packet", false) or m.has("gear") or m.has("fw") or m.has("bell") or m.has("lhall"):
 			continue
 		var span := absf(m.b - m.a)
 		if span < 1.0:
@@ -1894,6 +1903,8 @@ func step(dt: float) -> void:
 		hpot.step(dt)
 	if belfry != null:
 		belfry.step(dt)
+	if shaft != null:
+		shaft.step(dt)
 	if tower != null:
 		tower.step(dt, live)
 		_tick_sound()
@@ -2002,6 +2013,8 @@ func _step_fight(dt: float) -> void:
 		"none":
 			if fight_hold > 0.0:
 				return
+			if shaft != null and shaft.fake_on:
+				return                                          # (INFINITE LOOP's first time: the fake loop starts the fight, not trigger_x)
 			if String(def.boss.get("trigger", "")) == "land":
 				_step_land(dt)
 				return
@@ -3316,8 +3329,8 @@ func draw_layer(kind: String, ci: CanvasItem) -> void:
 				Fx._disc(ci, sxp, syp, 5, swc)
 				PixelText.draw_text(ci, "{}", sxp - 3, syp - 2, Game.COL.ink, {"tiny": true})
 		for m in plats:
-			if m.has("fw") or m.has("bell"):
-				continue                                    # the honeypot hall moves and draws its own packets, the belfry its bells
+			if m.has("fw") or m.has("bell") or m.has("lhall"):
+				continue                                    # the honeypot hall moves and draws its own packets, the belfry its bells, the shaft its gears and gantry
 			if m.get("packet", false):
 				_draw_packet(ci, m)
 				continue

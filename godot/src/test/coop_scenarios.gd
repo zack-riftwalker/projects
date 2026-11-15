@@ -3853,61 +3853,69 @@ func sc_co_race() -> Array:
 	await wait_secs(1.0)
 	return [seen2.size() >= 8 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and hits >= 1 and max_drop >= 2 and dbl_seen >= 1 and serial_seen and fell_g and die_g and bow_g and pin_g and words_g == 5, "guest: fallen bell lying %s, death %s bowing %s pin %s words %d, saw %d plans (%d on me), %d active shown < 0.30 s, hurt %d times (at most %d at once), %d swings, %d double writes seen (%d hit), %d swings at the bob, serialized seen %s, violations '%s' '%s'" % [str(fell_g), str(die_g), str(bow_g), str(pin_g), words_g, seen2.size(), mine, short, hits, max_drop, swings, dbl_seen, dbl_hit_seen, bob_swings, str(serial_seen), pup.kit_violation, pup.arena_violation]]
 
+# INFINITE LOOP v3 (18-loop-build.md). M1: the shaft on both pages: the host moves to phase 3, the guest sees the floor crack and open, falls through the
+# pit, comes back in at the top (each page moves its own body) and lands; the gears and gantry agree on both pages.
 func sc_co_loopboss() -> Array:
 	if not await wait_joined():
 		return [false, "nobody joined"]
+	Game.flags["intro:LOOP"] = true                            # (the short intro: no fake loop)
 	if role == "host":
-		var forced := [[2.0, "lap", "p2"], [15.0, "nested", "p2"], [23.0, "recursion", "p2"], [31.0, "rest", "p2"]]
-		var marks := [[16.0, 0.5], [24.0, 0.2]]
-		var res: Array = await tower_fight_host("T10", 120.0, 280.0, forced, marks, func(b, st, el): st["strips"] = bool(st.get("strips", false)) or b.strips_on)
-		return [res[0] and res[1] >= 4 and res[2].p2 >= 1, "host: started %s, %d plans (p1 %d, p2 %d), strips %s" % [res[0], res[1], res[2].p1, res[2].p2, str(res[3].get("strips", false))]]
+		var r := boss_arena("T10", 60.0, 186.0)
+		await wait_secs(1.0)
+		var p = mgr().player
+		var started := await wait_until(func(): return mgr().room.fight.state == "active", 25.0)
+		var hl: LoopHall = r.shaft
+		var t0 := Time.get_ticks_msec()
+		var moved := false
+		while Time.get_ticks_msec() - t0 < 20000.0 * slow:
+			p.inv = 999.0
+			p.hp = p.max_hp
+			if not moved and Time.get_ticks_msec() - t0 > 2000.0 * slow:
+				moved = true
+				hl.ph = 3
+				hl.p3_t0 = r.time
+			await get_tree().physics_frame
+		await wait_secs(1.0)
+		return [started and moved, "host: started %s, phase 3 at %.1f" % [str(started), hl.p3_t0]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
-	var r2 := boss_arena("T10", 120.0, 280.0)
-	var found := {"b": null}
-	await wait_until(func():
-		for e in mgr().room.ents:
-			if e is LoopBoss:
-				found.b = e
-		return found.b != null, 15.0)
-	var pup: LoopBoss = found.b
-	if pup == null:
-		return [false, "no LoopBoss puppet"]
-	var st2 := {"f": 0, "swings": 0}
-	var seen2 := {}
-	var wraps := 0
-	var last_x := 0.0
-	var modes := {}
-	var secs := 34.0 * slow
+	var r2 := boss_arena("T10", 60.0, 186.0)
 	var t1 := Time.get_ticks_msec()
-	while Time.get_ticks_msec() - t1 < secs * 1000.0:
+	var saw_crack := false
+	var saw_pit := false
+	var wrapped := false
+	var landed := false
+	var gear_diff := 0.0
+	var hurt := 0
+	var last_hp: int = mgr().player.hp
+	while Time.get_ticks_msec() - t1 < 22000.0 * slow:
 		var g = mgr().player
-		st2.f += 1
-		if not is_instance_valid(pup):
-			break
-		plan_stats(pup, seen2)
-		modes[pup.mode] = true
-		# walk left through the portal again and again, hitting the tail whenever it is close
-		var keys := {"left": true}
-		var tp: Vector2 = pup.tail_point()
-		if pup.mode != "idle" and tp.x > 0.0 and absf(tp.x - (g.x + 5.0)) < 26.0 and absf(tp.y - (g.y + 5.0)) < 20.0:
-			keys["attack"] = st2.f % 10 < 2
-		Controls.script_input = keys
-		hazard_probe(g, pup, st2)
-		if st2.f > 1 and absf(g.x - last_x) > 250.0:
-			wraps += 1
-		last_x = g.x
+		var rm: Room = mgr().room
+		if rm.id != "T10" or rm.shaft == null:
+			await get_tree().physics_frame
+			continue
+		var hl2: LoopHall = rm.shaft
+		if hl2.cracking(rm.time) >= 0.0:
+			saw_crack = true
+		if not saw_crack and not saw_pit and g.x < 120.0:
+			pin(g, 186.0, 454.0)                                   # (the follow into the arena may have put it at the west door)
+		if hl2.pit_open(rm.time):
+			saw_pit = true
+		if g.hp < last_hp:
+			hurt += last_hp - g.hp
+		last_hp = g.hp
+		var py0: float = g.y
+		Controls.script_input = {}
 		await get_tree().physics_frame
+		if py0 > 400.0 and g.y < 0.0:
+			wrapped = true
+		if wrapped and g.on_ground and not landed:
+			landed = true
+		if saw_pit and landed:
+			break
 	Controls.script_input = {}
-	var short := 0
-	for sq in pup.kit_active_seen:
-		if float(pup.cue_shown.get(sq, 0.0)) < 0.30 and sq != pup.kit_ignore_seq:
-			short += 1
-	var mine := 0
-	for sq in seen2:
-		if seen2[sq] == "p2":
-			mine += 1
 	await wait_secs(1.0)
-	return [seen2.size() >= 4 and short == 0 and mine >= 1 and pup.kit_violation == "" and pup.arena_violation == "" and wraps >= 1 and modes.has("recursion"), "guest: saw %d plans, %d shown < 0.30 s, targeted %d times, wrapped through the portal %d times, modes %s, violations '%s' '%s'" % [seen2.size(), short, mine, wraps, str(modes.keys()), pup.kit_violation, pup.arena_violation]]
+	var gq = mgr().player
+	return [saw_crack and saw_pit and wrapped and landed and hurt == 0, "guest: cracks %s, pit %s, wrapped %s, landed %s, hurt %d (at %.0f, %.0f, frozen %s, state %s, tile %d)" % [str(saw_crack), str(saw_pit), str(wrapped), str(landed), hurt, gq.x, gq.y, str(gq.frozen), mgr().room.fight.state, mgr().room.grid.tile(11, 29)]]
 
 func sc_co_deadlock() -> Array:
 	if not await wait_joined():

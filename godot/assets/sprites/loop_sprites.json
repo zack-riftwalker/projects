@@ -1,0 +1,50 @@
+{
+ "frame": 56,
+ "heads": [
+  "idle",
+  "tell",
+  "open",
+  "p2",
+  "p2open",
+  "p3",
+  "p3open",
+  "down"
+ ],
+ "dirs": [
+  0,
+  45,
+  90,
+  135,
+  180,
+  225,
+  270,
+  315
+ ],
+ "links": [
+  "p1",
+  "p2",
+  "p3",
+  "down",
+  "nest"
+ ],
+ "link": 16,
+ "plates": [
+  "true",
+  "lit",
+  "half",
+  "false",
+  "cracked"
+ ],
+ "plate": [
+  20,
+  10
+ ],
+ "plate_at": [
+  -6.0,
+  -12.0
+ ],
+ "eye_at": [
+  5.0,
+  -4.0
+ ]
+}

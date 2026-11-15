@@ -352,6 +352,33 @@ func _ready() -> void:
 								for f in range(140):
 									rtp.inv = 999.0
 									rtr.step(Game.STEP)
+		elif Game.scene.begins_with("loopfight:"):     # screenshot helper: INFINITE LOOP's shaft in a phase (loopfight:<p1|p2|p3>[:<x>:<y>]), the fight running
+			var la := Game.scene.substr(10).split(":")
+			var lph := clampi(int(la[0].substr(1)), 1, 3)
+			var lx := float(la[1]) if la.size() > 1 else 40.0
+			var ly := float(la[2]) if la.size() > 2 else 454.0
+			Game.flags["intro:LOOP"] = true
+			manager.swap_to("T10", Vector2(lx, ly))
+			var lp = manager.player
+			lp.x = lx
+			lp.y = ly
+			lp.inv = 999.0
+			var lr: Room = manager.room
+			lr.time = 20.0
+			lr._start_intro()
+			lr.fight.t = 0.0
+			lr._begin_fight()
+			if lr.boss != null and lr.boss.has_method("force_phase"):
+				lr.boss.force_phase(lph)
+			else:
+				var lh: LoopHall = lr.shaft
+				lh.ph = lph
+				if lph >= 2:
+					lh.p2_t0 = lr.time - 3.0
+					lh.violet = 1.0 if lph == 2 else 0.0
+				if lph == 3:
+					lh.p3_t0 = lr.time - 3.0
+					lh.heat = 1.0
 		elif Game.scene.begins_with("race:"):          # screenshot helper: RACE CONDITION's belfry (race:<hp>:<x>:<y>[:<demo>]); 1.0 phase 1, 0.4 phase 2, 0 the after-state (M1: the hall alone, the boss inert); demo: bells struck / fallen, cells corrupt / open
 			var ra := Game.scene.substr(5).split(":")
 			var rhp := float(ra[0])

@@ -599,12 +599,12 @@
                  {"id": "T09:S", "side": "S", "a": 30, "b": 33, "to": "TC2:N"},
                  {"id": "T09:E", "side": "E", "a": 11, "b": 14, "to": "T09:W", "wrap": true}
              ] },
-    "T10": { "file": "T10.txt", "title": "INFINITE LOOP", "size": [24, 14], "origin": [1230, -214], "world": 4, "music": "w4", "zone": "tower",
+    "T10": { "file": "T10.txt", "title": "INFINITE LOOP", "size": [24, 32], "origin": [1230, -232], "world": 4, "music": "w4", "zone": "tower", "hall": "loop",
              "signs": [],
-             "boss": {"id": "LOOP", "class": "LoopBoss", "name": "INFINITE LOOP", "sub": "while (true)", "trigger_x": 80, "T": 110, "u": 0.6, "reward": "opus", "banner": "opus", "banner_sub": "your claw reaches further and hits twice as hard; it cuts spaghetti cables", "music": "boss", "drop": 50},
+             "boss": {"id": "LOOP", "class": "LoopBoss", "name": "INFINITE LOOP", "sub": "while (true)", "trigger_x": 80, "cam": "free", "T": 140, "u": 0.6, "reward": "opus", "banner": "opus", "banner_sub": "your claw reaches further and hits twice as hard; it cuts spaghetti cables", "music": "boss", "drop": 50},
              "doors": [
-                 {"id": "T10:W", "side": "W", "a": 7, "b": 10, "to": "T09:E", "lock": "fight"},
-                 {"id": "T10:E", "side": "E", "a": 7, "b": 10, "to": "T11:W", "lock": "until:boss:LOOP"}
+                 {"id": "T10:W", "side": "W", "a": 25, "b": 28, "to": "T09:E", "lock": "fight"},
+                 {"id": "T10:E", "side": "E", "a": 25, "b": 28, "to": "T11:W", "lock": "until:boss:LOOP"}
              ] },
     "T11": { "file": "T11.txt", "title": "busy_wait.c", "size": [48, 20], "origin": [1254, -218], "world": 4, "music": "w4", "zone": "tower", "end": "to be continued in /var/prod",
              "signs": ["busy_wait: it never sleeps. (breakpoint)", "spaghetti under your feet: goto, all the way down. (opus)"],

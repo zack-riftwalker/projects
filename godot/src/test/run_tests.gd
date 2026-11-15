@@ -89,6 +89,8 @@ func run(name: String) -> bool:
 		return await TestsGfx.new(main).run(name)
 	if TestsPerf.NAMES.has(name):
 		return await TestsPerf.new(main).run(name)
+	if TestsLoop.NAMESL.has(name) or (name == "fightsim" and OS.get_environment("BOSS") == "T10"):
+		return await TestsLoop.new(main).run(name)
 	if Tests5a.NAMES5.has(name):
 		return await Tests5a.new(main).run(name)
 	if Tests4b3.NAMES3.has(name):

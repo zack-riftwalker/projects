@@ -1,6 +1,6 @@
 # 18b · INFINITE LOOP v3: build plan (for the builder)
 
-> **STATUS: DRAFT, NOT APPROVED. Do not build.** Every step of the design ([`18-loop.md`](18-loop.md), Persian) is a proposal waiting on Zakaria (2026-11-01). Build only after the status table there says every step is approved; then update this file with his changes first. The speed session (brief 05) changed the tower and the boss files (report: `docs/reports/perf-2026-11-01.md`, speed rules in `CLAUDE.md`): read both before M1 and follow them.
+> **STATUS: APPROVED (2026-11-15).** Zakaria approved every step of the design ([`18-loop.md`](18-loop.md)) as drafted and asked for the whole boss to be built in one session, M1 to M6, without asking him: the builder answers the open questions (§10) itself and lists its choices in "Decisions taken by the builder" below and in the producer's inbox. The speed session (brief 05) changed the tower and the boss files (report: `docs/reports/perf-2026-11-01.md`, speed rules in `CLAUDE.md`).
 
 This is the build plan for INFINITE LOOP v3, for the model that builds it (skill `boss-build`). The Persian doc is the source of truth for **what the player sees and hears**; this file is the source of truth for **how to build it**. If they disagree, the Persian doc wins and you ask Zakaria.
 
@@ -14,19 +14,45 @@ The old boss (`godot/src/enemies/loop_boss.gd`, kit-era, MV5A-07) is replaced. K
 
 ## 0. How to work
 
-- **One milestone per session.** Find the first milestone below whose status is not `done`, build only that one, test it, commit, push to `ph1`, mark it `done` (with anything that changed), report to Zakaria **in Persian**, short.
+- **One milestone per session** (this time all six in one session, Zakaria's call 2026-11-15). Find the first milestone below whose status is not `done`, build it, test it, commit, push to `ph1`, mark it `done` (with anything that changed), report to Zakaria **in Persian**, short.
 - Start: `git fetch origin ph1 && git checkout ph1 && git pull origin ph1`. `npm ci` if `node_modules` is missing. `GODOT=$(bash tools/godot/setup-godot.sh | tail -1)`.
 - **Ask, don't guess**, when something the player sees or hears is not decided here or in the Persian doc. Internal choices are yours.
 - Never invent dialogue: all lines are in §6. Never merge into `main`. Never skip, disable or loosen a test to get green.
 
 | milestone | what | status |
 |---|---|---|
-| M1 | arena: T10 24x32 (up only), the shaft hall (ledges, gears, rings, gantry, counter wall), per-phase room states incl. the phase-3 pit and vertical wrap, camera, route check | not started (design not approved) |
+| M1 | arena: T10 24x32 (up only), the shaft hall (ledges, gears, rings, gantry, counter wall), per-phase room states incl. the phase-3 pit and vertical wrap, camera, route check | **done** (2026-11-15) |
 | M2 | the snake body (head + 14 links, trail following), swim, phase-1 attacks, contact damage, tail hits, the fake-loop intro, HP bar | not started |
 | M3 | the condition plate: breakpoint freeze (links become platforms), half hits, the yellow ring catch, the break window, `i++` escalation | not started |
 | M4 | phase 2 (transition, nested ring layer, recursion, escalate, gantry swing, gear reversal) and phase 3 (transition, pit + ceiling seam, wrap dive, combos, feints, HP = length) | not started |
 | M5 | death + compact scene (looping progress bar, echo `stop`), voices and subtitles, sounds, music (phase-3 stutter), logs lines | not started |
 | M6 | loss menu with the counter, the diff sign, after-state, T09 decor only if the world dept approved it, full tests, web export | not started |
+
+---
+
+## Decisions taken by the builder (2026-11-15; Zakaria said: decide, write it down, do not ask)
+
+Each one is also in the producer's inbox (`docs/studio/PRODUCER.md`), so he can change it.
+
+| # | question | choice | why |
+|---|---|---|---|
+| D1 | The engine's `BREAK 3.5` text over a frozen creature (§10.1) | kept on the snake | it is the ability's own UI everywhere in the game, not an attack warning (the plan's recommendation) |
+| D2 | Voice takes before wiring (§10.2) | three takes per line made with Piper, the builder picked the best and wired it; the other takes are not shipped | Zakaria: "make three takes and pick the best yourself" |
+| D3 | Head directions (§10.3) | 8 directions made by the sprite script from the right-facing head (mirror + 45-degree turns at x3, read back per 3x3 block) | the sketch has one direction; a redraw only needs the right-facing poses |
+| D4 | `...again.` on the first break | subtitle only, no voice | the plan allows it; a one-word line over a punish window is clearer as text |
+
+## Milestone notes
+
+**M1 (done, 2026-11-15).** `loop_hall.gd` (the shaft), `rooms/T10.txt` (24 x 32), rooms.json and world-phase45.json (origin y -232, h 32, doors rows 25..28, `hall: loop`, `cam: free`), `loop3` (M1 part) replaces the old `loopboss` test, `co-loopboss` rewritten (M1: the guest sees the floor crack and open, falls through the pit, comes back in at the top and lands, with and without `BADLINE_ALL=1`), screenshot scene `loopfight:<p1|p2|p3>[:<x>:<y>]`. The old kit boss is gone: `loop_boss.gd` is an inert stub until M2 (it carries the hall's state to the guest).
+- **Map file:** M, L2, R2 and TOP are `=` tiles in `T10.txt` (they never change; `check5a.py` sees them); L1 / R1, the gear teeth, the gantry and the pit belong to the hall. The GET rings are `@` at (6, 7) / (17, 7).
+- **Gears:** four teeth (32 px platforms) on a 2-tile radius, one 45-degree step per tower tick (the tower's own easing). The direction flip (`flip_gears`) keeps the teeth where they are (state: `gear_dir`, `gear_s0`, `gear_k0`).
+- **Gantry:** a 128 px one-way platform on two 48 px chains from row 1; phase 2+ it swings 32 px each way (period 4 ticks, eased in over 1 s), staying level and rising a little at the ends. It is drawn once in its own node; the swing only moves the node.
+- **Low ledges:** phase 2 they go one column per 0.2 s from the room side into the wall; phase 3 they come back the same way from the start of the transition.
+- **Pit:** the floor's cracks glow 0.8 s (no damage), then columns 6..17 of rows 29..31 and row 0 open; `TileGrid.seam_a/b` makes the cells above the ceiling open there. A body whose centre passes y 512 inside the pit columns comes back in at y = -h with its fall speed capped (330); each page moves its own body; the camera cuts (moved by the same amount), no pan.
+- **Fake loop:** the hall arms it when `intro:LOOP` is not set; the east door is an open portal (`fightwrap`); a body past x 368 (352 for the partner seen late on the host) or 8 s in the room: everybody back at the west door (x 24, feet on the floor, facing east), a 0.35 s flash, the counter 4095 -> 4096, the flag, the intro. The guest moves itself when `wrap_n` changes. `trigger_x` is ignored while it is armed.
+- **Routes checked (real physics):** floor -> L1 / R1, L1 / R1 -> M, M -> each gear's side tooth, gear -> L2 / R2, L2 / R2 -> TOP, TOP -> gantry (sudo or curl), phase 3 floor sides -> L1 / R1 -> M, a fall through the pit lands on the gantry. **Gear -> L2 / R2 needs sudo** (the player surely has it); nothing needed a ledge moved.
+- **Back wall** drawn once (riveted panels, pipes, the counter, the diff sign in the normal font: the tiny font has no lower case); the phase washes are a `modulate` of that node (no redraw). Speed: `perfrooms` T10 0.67 ms (T06 0.93).
+- **Sprites:** `tools/godot/loop_sprites.py` cuts the snake from `18-loop-data/loop_body.png` (heads in 8 directions, links, plates); used from M2. To use a drawing of Zakaria's: replace the image (or `--src`), fix `HEAD_CUTS` / `LINK_CUTS`, run the script, `--import`.
 
 ---
 

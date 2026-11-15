@@ -38,10 +38,14 @@ var mgate_open := {}       # index -> true while that mutex gate is open
 var phead_on := {}         # index -> true while a piston covers that cell
 var port_open := {}        # index -> true while that port cell is open
 var gates_open := {"catch": false, "agents": false}        # the room sets them from its flags every step
+var seam_a := -1          # T10's phase 3: the columns open above the ceiling (the pit's top seam; a body comes back in there)
+var seam_b := -2
 var doors: Array = []      # {side: "W"|"E"|"N"|"S", a, b, open}: rows (W/E) or columns (N/S) a..b of the edge are walkable while open
 
 func tile(tx: int, ty: int) -> int:
 	if ty < 0:
+		if tx >= seam_a and tx <= seam_b:
+			return E
 		for d in doors:
 			if d.side == "N" and tx >= d.a and tx <= d.b:
 				return E if d.open else SOLID

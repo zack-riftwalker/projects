@@ -2137,9 +2137,9 @@
    "zone": "tower",
    "title": "INFINITE LOOP",
    "x": 1230,
-   "y": -214,
+   "y": -232,
    "w": 24,
-   "h": 14,
+   "h": 32,
    "role": "boss",
    "feats": [
     "boss:INFINITE LOOP"
@@ -2148,8 +2148,8 @@
    "doors": [
     {
      "side": "W",
-     "a": 7,
-     "b": 10,
+     "a": 25,
+     "b": 28,
      "to": "T09",
      "gate": "break",
      "note": "",
@@ -2157,8 +2157,8 @@
     },
     {
      "side": "E",
-     "a": 7,
-     "b": 10,
+     "a": 25,
+     "b": 28,
      "to": "T11",
      "gate": "boss",
      "note": "",
