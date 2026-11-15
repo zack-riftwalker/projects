@@ -341,6 +341,9 @@ func set_counter(n: int) -> void:
 		static_rev += 1
 
 func cam_lock():
+	var b = room.boss
+	if b != null and is_instance_valid(b) and b.has_method("cam_lock_now"):
+		return b.cam_lock_now()
 	return null
 
 # ---------------------------------------------------------------- the net (times x100)
@@ -435,8 +438,8 @@ func draw_gantry(ci: CanvasItem) -> void:
 	ci.draw_rect(r, Color(BRASS))
 	ci.draw_rect(Rect2(r.position.x, r.position.y, r.size.x, 2.0), Color(BRASS_CAP))
 	ci.draw_rect(Rect2(r.position.x, r.end.y - 2.0, r.size.x, 2.0), Color(BRASS_LO))
-	ci.draw_rect(Rect2(r.position.x + 4.0, r.end.y + 1.0, r.size.x - 8.0, 9.0), Color(INK))
-	PixelText.draw_text(ci, "while (true) {", r.get_center().x, r.end.y + 2.0, VD[3], {"align": "c", "tiny": true})
+	ci.draw_rect(Rect2(r.position.x + 20.0, r.end.y + 1.0, r.size.x - 40.0, 11.0), Color(INK))
+	PixelText.draw_text(ci, "while (true) {", r.get_center().x, r.end.y + 2.0, VD[3], {"align": "c"})
 	for k in range(8):
 		ci.draw_rect(Rect2(r.position.x + 6.0 + float(k) * 16.0, r.position.y + 4.0, 2.0, 2.0), Color(BRASS_LO))
 

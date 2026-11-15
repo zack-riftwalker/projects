@@ -1676,6 +1676,8 @@ func step_guest(dt: float) -> void:
 		cam.lock = hpot.cam_lock()                         # (the lobby shows no furnace: derived from the hall's state every frame, both pages)
 	if belfry != null:
 		cam.lock = belfry.cam_lock()                       # (the intro's pan up to the escapement: the boss's script, both pages)
+	if shaft != null:
+		cam.lock = shaft.cam_lock()                        # (the intro's look up at the gantry: the boss's script, both pages)
 	if cam.lock == null:
 		update_cam(dt)
 	else:
@@ -1971,6 +1973,8 @@ func step(dt: float) -> void:
 		cam.lock = hpot.cam_lock()                         # (the lobby shows no furnace: derived from the hall's state every frame, both pages)
 	if belfry != null:
 		cam.lock = belfry.cam_lock()                       # (the intro's pan up to the escapement: the boss's script, both pages)
+	if shaft != null:
+		cam.lock = shaft.cam_lock()                        # (the intro's look up at the gantry: the boss's script, both pages)
 	if cam.lock == null:
 		update_cam(dt)
 	else:
@@ -3010,6 +3014,9 @@ func _draw_proj(ci: CanvasItem, q: Dictionary) -> void:
 			ci.draw_rect(Rect2(px - 5, py - 3, 11, 6), ink)
 			ci.draw_rect(Rect2(px - 4, py - 2, 9, 2), col)
 			ci.draw_rect(Rect2(px - 4, py + 1, 9, 1), Color("#a8c4ff"))
+		"ring":                                          # INFINITE LOOP's spat ring: a brass ring (the yellow one can be caught)
+			ci.draw_arc(Vector2(px, py), q.r, 0.0, TAU, 12, ink, 3.0)
+			ci.draw_arc(Vector2(px, py), q.r, 0.0, TAU, 12, col, 1.5)
 		"diamond":                                       # a catchable orb of the boss kit: a yellow diamond
 			var dr: float = q.r + 1.0
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(px, py - dr - 1), Vector2(px + dr + 1, py), Vector2(px, py + dr + 1), Vector2(px - dr - 1, py)]), ink)

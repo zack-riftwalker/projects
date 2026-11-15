@@ -352,6 +352,29 @@ func _ready() -> void:
 								for f in range(140):
 									rtp.inv = 999.0
 									rtr.step(Game.STEP)
+		elif Game.scene == "loop_intro" or Game.scene.begins_with("looptell:"):     # screenshot helpers: INFINITE LOOP's long intro from its first frame (loop_intro), or a plan just begun (looptell:<id>[:<x>:<y>])
+			var lt := Game.scene.split(":")
+			var ltx := float(lt[2]) if lt.size() > 2 else 60.0
+			var lty := float(lt[3]) if lt.size() > 3 else 454.0
+			Game.flags["intro:LOOP"] = true
+			if lt[0] == "looptell":
+				Game.flags["intro:LOOP_SEEN"] = true
+			manager.swap_to("T10", Vector2(ltx, lty))
+			var ltp = manager.player
+			ltp.x = ltx
+			ltp.y = lty
+			ltp.inv = 999.0
+			var ltr: Room = manager.room
+			ltr.time = 20.0
+			ltr._start_intro()
+			if lt[0] == "looptell":
+				ltr.fight.t = 0.0
+				ltr._begin_fight()
+				var ltb = ltr.boss
+				ltb.hx = 200.0
+				ltb.hy = 330.0
+				ltb.queue = []
+				ltb._start(lt[1], "p1")
 		elif Game.scene.begins_with("loopfight:"):     # screenshot helper: INFINITE LOOP's shaft in a phase (loopfight:<p1|p2|p3>[:<x>:<y>]), the fight running
 			var la := Game.scene.substr(10).split(":")
 			var lph := clampi(int(la[0].substr(1)), 1, 3)

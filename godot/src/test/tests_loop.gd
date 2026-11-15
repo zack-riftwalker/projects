@@ -109,6 +109,26 @@ func loop_curl(r: Room, from: Vector2, target: Rect2) -> bool:
 						return true
 	return false
 
+# a T10 in the fight (phase 1, the intro skipped), the player at (px, feet py)
+func loop_fight(px := 60.0, py := 464.0) -> Room:
+	Game.flags["intro:LOOP"] = true
+	Game.flags["intro:LOOP_SEEN"] = true
+	var r := new_room("T10")
+	r.player.x = px
+	r.player.y = py - r.player.h
+	r._start_intro()
+	r.fight.t = 0.0
+	r._begin_fight()
+	return r
+
+# run the room n frames with the player held (immortal) at its spot
+func loop_run(r: Room, n: int, keys := {}) -> void:
+	var p = r.player
+	for f in range(n):
+		p.inv = 99.0
+		p.hp = p.max_hp
+		step_keys(r, keys)
+
 func t_loop3() -> bool:
 	loop_setup()
 	var res := checker()
@@ -161,7 +181,8 @@ func t_loop3() -> bool:
 		["left gear to L2", Vector2(gl_top.get_center().x, gl_top.position.y), tile_rect(2, 5, 13)], ["right gear to R2", Vector2(gr_top.get_center().x, gr_top.position.y), tile_rect(18, 21, 13)],
 		["L2 to TOP", Vector2(88.0, 208.0), tile_rect(10, 13, 9)], ["R2 to TOP", Vector2(296.0, 208.0), tile_rect(10, 13, 9)]]
 	var need_sudo: Array = []
-	for rt in routes:
+	var fast := OS.get_environment("LOOP_FAST") != ""            # (LOOP_FAST=1: skip the slow route checks while working on later milestones)
+	for rt in ([] if fast else routes):
 		var from: Vector2 = rt[1]
 		if loop_reach(r, from, rt[2], false):
 			continue
@@ -171,7 +192,7 @@ func t_loop3() -> bool:
 			fail(res, "%s is out of reach (even with sudo)" % rt[0])
 	# the side tooth to the top tooth of the same gear (riding: wait for the tick); and TOP to the gantry: sudo, or curl to a GET ring
 	var gt := plat_rect(hl.gantry_p)
-	if not loop_reach(r, Vector2(176.0, 144.0), gt, true) and not loop_curl(r, Vector2(176.0, 144.0), gt):
+	if not fast and not loop_reach(r, Vector2(176.0, 144.0), gt, true) and not loop_curl(r, Vector2(176.0, 144.0), gt):
 		fail(res, "TOP to the gantry is out of reach (sudo and curl)")
 	info += "routes ok, sudo needed for %s; " % (", ".join(need_sudo) if not need_sudo.is_empty() else "none")
 	# 4. the gears turn one step (45 degrees) per tick, clockwise; a flip at any moment is continuous (the teeth never jump)
@@ -243,9 +264,9 @@ func t_loop3() -> bool:
 	r2.queue_free()
 	# 6. phase 3 routes: from each floor side to L1 / R1 to M without the pit; a fall through the pit comes back in at the top and lands on the gantry
 	hl.gear_dir = 0
-	if not loop_reach(r, Vector2(24.0, 464.0), tile_rect(3, 5, 25), true) or not loop_reach(r, Vector2(360.0, 464.0), tile_rect(18, 20, 25), true):
+	if not fast and (not loop_reach(r, Vector2(24.0, 464.0), tile_rect(3, 5, 25), true) or not loop_reach(r, Vector2(360.0, 464.0), tile_rect(18, 20, 25), true)):
 		fail(res, "phase 3: a floor side cannot reach its low ledge")
-	if not loop_reach(r, Vector2(88.0, 400.0), m_r, true):
+	if not fast and not loop_reach(r, Vector2(88.0, 400.0), m_r, true):
 		fail(res, "phase 3: L1 to M")
 	var p = r.player
 	p.x = 186.0
@@ -319,6 +340,236 @@ func t_loop3() -> bool:
 	if r5.shaft.fake_on:
 		fail(res, "the fake loop again the second time")
 	r5.queue_free()
+	# --- M2 -------------------------------------------------------------------------------------------------------------
+	# 1. the long intro (first time): the chain comes down at x 228 and coils once round the gantry, the head meets its tail at 3.0 s; the line
+	Game.flags["intro:LOOP"] = true
+	Game.flags.erase("intro:LOOP_SEEN")
+	var ri := new_room("T10")
+	ri.player.x = 60.0
+	ri.player.y = 454.0
+	ri._start_intro()
+	var bi: LoopBoss = ri.boss
+	var il := bi.intro_len()
+	if il < 7.0 or il > 11.0:
+		fail(res, "the long intro is %.1f s" % il)
+	var cam_up := false
+	for f in range(int(1.5 / Game.STEP)):
+		step_keys(ri, {})
+		if ri.cam.lock != null and float(ri.cam.lock.y) < 20.0:
+			cam_up = true
+	if bi.mode != "descend" or bi.hy > 101.0 or bi.links.size() != 14:
+		fail(res, "intro at 1.5 s: mode %s head y %.0f" % [bi.mode, bi.hy])
+	for f in range(int(1.7 / Game.STEP)):
+		step_keys(ri, {})
+	var tail_gap: float = Vector2(bi.hx, bi.hy).distance_to(bi.tail_point())
+	if tail_gap > 30.0 or Vector2(bi.hx, bi.hy).distance_to(LoopBoss.COIL_C) > LoopBoss.COIL_RR + 1.0:
+		fail(res, "after the descent the head is %.0f px from its tail, %.0f from the gantry" % [tail_gap, Vector2(bi.hx, bi.hy).distance_to(LoopBoss.COIL_C)])
+	for f in range(int(0.4 / Game.STEP)):
+		step_keys(ri, {})
+	if bi.say_k != 1 or not cam_up:
+		fail(res, "the intro line %d, the camera looked up %s" % [bi.say_k, str(cam_up)])
+	if not bi.touch_boxes().is_empty() or not bi.harmboxes().is_empty():
+		fail(res, "the body hurts in the intro")
+	for f in range(int((il - 3.6 + 0.3) / Game.STEP)):
+		step_keys(ri, {})
+	if ri.fight.state != "active" or not bi.active or bi.mode != "swim" or ri.cam.lock != null:
+		fail(res, "after the intro: state %s mode %s" % [ri.fight.state, bi.mode])
+	ri.queue_free()
+	var rs := new_room("T10")
+	if (rs.boss as LoopBoss).intro_len() > 2.01:
+		fail(res, "the second time the intro is %.1f s" % (rs.boss as LoopBoss).intro_len())
+	rs.queue_free()
+	# 2. the body: 14 links, the first 24 px behind the head and 14 px apart along its path; it swims (90 px/s, turning <= 140 deg/s)
+	var rf := loop_fight(60.0, 464.0)
+	var b: LoopBoss = rf.boss
+	b.queue = []
+	b.gap_t = 999.0
+	b.hx = 200.0
+	b.hy = 300.0
+	b.ang = 0.0
+	b._seed_trail(Vector2(200.0, 300.0), Vector2(-1.0, 0.0))
+	loop_run(rf, 1)
+	var hp0 := Vector2(b.hx, b.hy)
+	if b.links.size() != 14 or absf(Vector2(b.hx, b.hy).distance_to(b.links[0]) - 24.0) > 1.5 or absf((b.links[1] as Vector2).distance_to(b.links[2]) - 14.0) > 0.6:
+		fail(res, "links: %d, neck %.1f, gap %.1f" % [b.links.size(), Vector2(b.hx, b.hy).distance_to(b.links[0]), (b.links[1] as Vector2).distance_to(b.links[2])])
+	var max_turn := 0.0
+	for f in range(60):
+		var aa := b.ang
+		loop_run(rf, 1)
+		max_turn = maxf(max_turn, absf(wrapf(b.ang - aa, -PI, PI)) / Game.STEP)
+	var moved := Vector2(b.hx, b.hy).distance_to(hp0)
+	if moved < 60.0 * 0.95 * 0.9 or moved > 92.0 * 1.0 + 2.0 or max_turn > deg_to_rad(141.0):
+		fail(res, "swim: %.0f px in 1 s, turn %.0f deg/s" % [moved, rad_to_deg(max_turn)])
+	# the links follow the head's path: after a turn the old path still holds the tail
+	# 3. touch: the head and every link hurt 1 with a knock-back from their side; none while hidden or in the intro (checked above)
+	var tb: Array = b.touch_boxes()
+	if tb.size() != 15:
+		fail(res, "%d touch boxes, want 15" % tb.size())
+	for t in tb:
+		if int(t.dmg) != 1 or not t.has("sx"):
+			fail(res, "a touch box without 1 damage and a side")
+			break
+	var pp = rf.player
+	pp.inv = 0.0
+	pp.grace = 0.0
+	pp.hp = pp.max_hp
+	var lk: Vector2 = b.links[6]
+	pp.x = lk.x - 5.0
+	pp.y = lk.y - 5.0
+	b.gap_t = 999.0
+	var hp_before: int = pp.hp
+	rf.step(Game.STEP)
+	if pp.hp != hp_before - 1:
+		fail(res, "touching a link took %d hp, want 1" % (hp_before - pp.hp))
+	pp.inv = 99.0
+	# 4. hits: the tail tip takes full damage and flicks; a middle link and the head block
+	var hp_b := b.hpf
+	rf.attacker = pp
+	var hr1: String = b.hit(2, 1.0, 0.0, "swipe", {"link": 13})
+	var hr2: String = b.hit(2, 1.0, 0.0, "swipe", {"link": 6})
+	var hr3: String = b.hit(2, 1.0, 0.0, "swipe", {"head": 1})
+	if hr1 != "hit" or absf(hp_b - b.hpf - 2.0) > 0.01 or hr2 != "block" or hr3 != "block" or rf.time - b.flick_t > 0.1:
+		fail(res, "hits: tail %s (%.1f), link %s, head %s" % [hr1, hp_b - b.hpf, hr2, hr3])
+	var hb: Array = b.hurtboxes()
+	if hb.size() != 15:
+		fail(res, "%d hurt boxes, want 15 (head + 14 links)" % hb.size())
+	# 5. the lunge: 0.75 s cue (no harm), straight 160 px at 420 px/s at the target locked at the cue's start, 2 damage; into a wall: stuck 0.6 s
+	b.hx = 120.0
+	b.hy = 380.0
+	b.ang = PI
+	b._seed_trail(Vector2(120.0, 380.0), Vector2(1.0, 0.0))
+	pp.x = 40.0
+	pp.y = 454.0
+	b._start("lunge", "p1")
+	var cue_t := 0.0
+	var harm_in_cue := false
+	var big := 0
+	var stuck := false
+	var start_pt := Vector2.ZERO
+	for f in range(240):
+		var was := b.plan_phase()
+		loop_run(rf, 1)
+		if b.plan_phase() == "cue":
+			cue_t += Game.STEP
+			if not b.attack_boxes().is_empty():
+				harm_in_cue = true
+		if was == "cue" and b.plan_phase() == "active":
+			start_pt = Vector2(b.hx, b.hy)
+		for hb2 in b.attack_boxes():
+			big = maxi(big, int(hb2.dmg))
+		if b.mode == "stuck":
+			stuck = true
+			break
+	if cue_t < 0.74 or harm_in_cue or big != 2 or not stuck or absf(b.stuck_t - 0.6) > 0.05 + Game.STEP:
+		fail(res, "lunge: cue %.2f, harm in the cue %s, damage %d, stuck %s (%.2f)" % [cue_t, str(harm_in_cue), big, str(stuck), b.stuck_t])
+	# 6. the dive: the head goes over the target, points down, drops to the floor: stuck 0.8 s, 1 damage
+	b.mode = "swim"
+	b.hx = 200.0
+	b.hy = 250.0
+	pp.x = 115.0
+	pp.y = 454.0
+	b._start("dive", "p1")
+	var dmax := 0
+	var dstuck := false
+	for f in range(240):
+		loop_run(rf, 1)
+		for hb3 in b.attack_boxes():
+			dmax = maxi(dmax, int(hb3.dmg))
+		if b.mode == "stuck":
+			dstuck = true
+			break
+	if not dstuck or dmax != 1 or b.hy < 430.0 or absf(b.hx - 120.0) > 12.0 or absf(b.stuck_t - 0.8) > 0.05 + Game.STEP:
+		fail(res, "dive: stuck %s at %.0f, %.0f (%.2f s), damage %d" % [str(dstuck), b.hx, b.hy, b.stuck_t, dmax])
+	# 7. the spit: three brass rings at the target, the middle one yellow and catchable
+	b.mode = "swim"
+	b.hx = 250.0
+	b.hy = 300.0
+	rf.projs.clear()
+	b._start("spit", "p1")
+	loop_run(rf, int(0.7 / Game.STEP))
+	var rings := rf.projs.filter(func(q): return q.get("kind", "") == "ring" and not q.dead)
+	var yellow := rings.filter(func(q): return bool(q.catchable))
+	if rings.size() != 3 or yellow.size() != 1 or String(yellow[0].col) != LoopBoss.YELLOW:
+		fail(res, "spit: %d rings, %d catchable" % [rings.size(), yellow.size()])
+	# 8. the coil: 1.0 s closing round the target (the ring is the body: touch hurts), then it squeezes
+	b.mode = "swim"
+	b.hx = 280.0
+	b.hy = 380.0
+	pp.x = 180.0
+	pp.y = 444.0
+	b._start("coil", "p1")
+	loop_run(rf, int(1.0 / Game.STEP))
+	var near_n := 0
+	for c in b.links:
+		if (c as Vector2).distance_to(b.coil_c) < 75.0:
+			near_n += 1
+	if near_n < 8:
+		fail(res, "coil: only %d links round the target after the cue" % near_n)
+	# 9. choosing: the first cycle spit, lunge, calm; then weighted, never the same twice; a camper gets the coil
+	var rc := loop_fight(60.0, 464.0)
+	var bc: LoopBoss = rc.boss
+	var ids: Array = []
+	var rep := 0
+	var counts := {}
+	var last := ""
+	for f in range(int(70.0 / Game.STEP)):
+		var pc = rc.player
+		pc.x = 60.0 + 260.0 * (0.5 + 0.5 * sin(float(f) * 0.004))
+		pc.y = 454.0
+		pc.vx = 0.0
+		pc.vy = 0.0
+		loop_run(rc, 1)
+		if not bc.plan.is_empty() and (ids.is_empty() or int(ids[ids.size() - 1][1]) != int(bc.plan.seq)):
+			var pid := String(bc.plan.id)
+			ids.append([pid, int(bc.plan.seq)])
+			counts[pid] = int(counts.get(pid, 0)) + 1
+			if pid == last:
+				rep += 1
+			last = pid
+	var first: Array = []
+	for k in range(mini(3, ids.size())):
+		first.append(ids[k][0])
+	if first != ["spit", "lunge", "calm"] or rep > 0 or ids.size() < 12:
+		fail(res, "choice: first %s, repeats %d, %d plans" % [str(first), rep, ids.size()])
+	for k in ["lunge", "dive", "coil", "spit"]:
+		if int(counts.get(k, 0)) == 0:
+			fail(res, "%s never chosen in 70 s (%s)" % [k, str(counts)])
+	info += "70 s: %s; " % str(counts)
+	bc.queue = []
+	bc.last_id = "spit"
+	bc.mode = "swim"
+	bc.plan = {}
+	bc.gap_t = 0.0
+	bc.camp_cd = 0.0
+	bc.camp["p1"] = [70.0, 459.0, rc.time - 3.0]
+	rc.player.x = 65.0
+	rc.player.y = 454.0
+	loop_run(rc, 2)
+	if bc.plan.is_empty() or String(bc.plan.id) != "coil":
+		fail(res, "a camper did not get the coil (%s)" % ("none" if bc.plan.is_empty() else String(bc.plan.id)))
+	rc.queue_free()
+	# 10. the guest's copy: the same head, links, plan and boxes from the net fields
+	b.mode = "swim"
+	b.plan = {}
+	b.hx = 150.0
+	b.hy = 200.0
+	loop_run(rf, 30)
+	var rec := NetClasses.record(b)
+	var rg := new_room("T10")
+	var pup = NetClasses.make(int(rec[1]), rg)
+	NetClasses.apply(pup, JSON.parse_string(JSON.stringify(rec)))
+	pup.net_sample(1.0)
+	pup.puppet_follow_parts(1.0)
+	var tb1: Array = b.touch_boxes()
+	var tb2: Array = pup.touch_boxes()
+	var same: bool = tb1.size() == tb2.size()
+	for k in range(mini(tb1.size(), tb2.size())):
+		same = same and absf(float(tb1[k].x) - float(tb2[k].x)) < 0.6 and absf(float(tb1[k].y) - float(tb2[k].y)) < 0.6
+	if not same:
+		fail(res, "the guest's touch boxes differ (%d / %d)" % [tb1.size(), tb2.size()])
+	pup.free()
+	rg.queue_free()
+	rf.queue_free()
 	return report("loop3", res.ok, info + res.info)
 
 func loop_fightsim() -> bool:
