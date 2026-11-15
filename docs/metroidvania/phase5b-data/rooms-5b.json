@@ -1,0 +1,840 @@
+{
+ "G01": {
+  "file": "G01.txt",
+  "title": "HEAD",
+  "size": [
+   48,
+   16
+  ],
+  "origin": [
+   1540,
+   76
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [
+   "HEAD -> main. Everything that ever was is still down here.",
+   "rollback machinery: out of order. (needs revert)"
+  ],
+  "landmarks": [
+   "rollback"
+  ],
+  "doors": [
+   {
+    "id": "G01:N",
+    "side": "N",
+    "a": 26,
+    "b": 29,
+    "to": "N17:S"
+   },
+   {
+    "id": "G01:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "G02:E"
+   }
+  ]
+ },
+ "G02": {
+  "file": "G02.txt",
+  "title": "git_log",
+  "size": [
+   140,
+   24
+  ],
+  "origin": [
+   1400,
+   80
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [
+   "log: your night, one commit per stone. (S6: the text comes from the flags)",
+   "fix: NULL pointer dereference -- Clawd, 02:51",
+   "b02: add stash door",
+   "b03: remove stash door (oops)",
+   "# TODO: an optional review you skipped",
+   "Co-authored-by: Clawd #2"
+  ],
+  "npc": [
+   {
+    "kind": "tree",
+    "x": 105,
+    "y": 8,
+    "zone": "git",
+    "price": 40
+   }
+  ],
+  "decor": [
+   {
+    "kind": "shadow",
+    "x": 6,
+    "y": 1,
+    "flag": "shadow:git"
+   }
+  ],
+  "variants": {
+   "b": "v0.1",
+   "t": "v0.1"
+  },
+  "doors": [
+   {
+    "id": "G02:E",
+    "side": "E",
+    "a": 5,
+    "b": 8,
+    "to": "G01:W"
+   },
+   {
+    "id": "G02:S",
+    "side": "S",
+    "a": 20,
+    "b": 23,
+    "to": "G16:N"
+   },
+   {
+    "id": "G02:W",
+    "side": "W",
+    "a": 19,
+    "b": 22,
+    "to": "G03:E"
+   }
+  ]
+ },
+ "G16": {
+  "file": "G16.txt",
+  "title": "old/hello_world.py",
+  "size": [
+   46,
+   24
+  ],
+  "origin": [
+   1404,
+   104
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "secret": true,
+  "plugins": [
+   "blame"
+  ],
+  "pages": [
+   [
+    24,
+    20,
+    4
+   ]
+  ],
+  "signs": [
+   "hello_world.py, three commits ago. // TODO: add a boss",
+   "ln -s ../../src : the way home, if you remember it."
+  ],
+  "decor": [
+   {
+    "kind": "cursor",
+    "x": 9,
+    "y": 20
+   },
+   {
+    "kind": "cursor",
+    "x": 11,
+    "y": 20
+   }
+  ],
+  "doors": [
+   {
+    "id": "G16:N",
+    "side": "N",
+    "a": 16,
+    "b": 19,
+    "to": "G02:S"
+   },
+   {
+    "id": "G16:E",
+    "side": "E",
+    "a": 17,
+    "b": 20,
+    "to": "R06:W",
+    "symlink": true,
+    "sets": "link:src"
+   }
+  ]
+ },
+ "G03": {
+  "file": "G03.txt",
+  "title": "branch",
+  "size": [
+   40,
+   40
+  ],
+  "origin": [
+   1360,
+   96
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "terminal": true,
+  "signs": [
+   "feature/a <- west.  feature/b: down.  merge needs both.",
+   "git graph: a branch turns green when its key is found."
+  ],
+  "decor": [
+   {
+    "kind": "graph",
+    "x": 4,
+    "y": 4,
+    "w": 22,
+    "h": 12
+   }
+  ],
+  "doors": [
+   {
+    "id": "G03:E",
+    "side": "E",
+    "a": 3,
+    "b": 6,
+    "to": "G02:W"
+   },
+   {
+    "id": "G03:W",
+    "side": "W",
+    "a": 17,
+    "b": 20,
+    "to": "G04:E"
+   },
+   {
+    "id": "G03:S",
+    "side": "S",
+    "a": 16,
+    "b": 19,
+    "to": "G06:N"
+   }
+  ]
+ },
+ "G04": {
+  "file": "G04.txt",
+  "title": "feature/a",
+  "size": [
+   90,
+   20
+  ],
+  "origin": [
+   1270,
+   104
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "checkout": {
+   "start": "b01",
+   "order": [
+    "b01",
+    "b02",
+    "b03"
+   ],
+   "solid": {
+    "6": [
+     "b03"
+    ],
+    "7": [
+     "b01"
+    ],
+    "8": [
+     "b01",
+     "b03"
+    ]
+   }
+  },
+  "signs": [
+   "You are in 'detached HEAD' state. git checkout <rev>: pull the lever.",
+   "git stash list: 1 entry",
+   "feature/a: three revisions of one room. HEAD is the newest."
+  ],
+  "doors": [
+   {
+    "id": "G04:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "G03:W"
+   },
+   {
+    "id": "G04:N",
+    "side": "N",
+    "a": 10,
+    "b": 13,
+    "to": "G05:S",
+    "lock": "until:checkout:G04:b02"
+   },
+   {
+    "id": "G04:S",
+    "side": "S",
+    "a": 10,
+    "b": 13,
+    "to": "G09:N"
+   },
+   {
+    "id": "G04:W",
+    "side": "W",
+    "a": 9,
+    "b": 12,
+    "to": "X12:E"
+   }
+  ]
+ },
+ "G05": {
+  "file": "G05.txt",
+  "title": "stash@{0}",
+  "size": [
+   40,
+   14
+  ],
+  "origin": [
+   1270,
+   90
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "secret": true,
+  "plugins": [
+   "nohup"
+  ],
+  "agents": [
+   [
+    20,
+    11
+   ]
+  ],
+  "signs": [
+   "stash@{0}: WIP on feature/a. Somebody meant to come back."
+  ],
+  "doors": [
+   {
+    "id": "G05:S",
+    "side": "S",
+    "a": 10,
+    "b": 13,
+    "to": "G04:N"
+   }
+  ]
+ },
+ "G09": {
+  "file": "G09.txt",
+  "title": "checkout",
+  "size": [
+   30,
+   60
+  ],
+  "origin": [
+   1270,
+   124
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "checkout": {
+   "start": "a",
+   "order": [
+    "a",
+    "b"
+   ],
+   "solid": {
+    "6": [
+     "a"
+    ],
+    "7": [
+     "b"
+    ]
+   }
+  },
+  "key": "branch:a",
+  "signs": [
+   "checkout: + is the way down, - is the way back up."
+  ],
+  "doors": [
+   {
+    "id": "G09:N",
+    "side": "N",
+    "a": 10,
+    "b": 13,
+    "to": "G04:S"
+   },
+   {
+    "id": "G09:E",
+    "side": "E",
+    "a": 51,
+    "b": 54,
+    "to": "G08:W"
+   }
+  ]
+ },
+ "G06": {
+  "file": "G06.txt",
+  "title": "feature/b",
+  "size": [
+   90,
+   20
+  ],
+  "origin": [
+   1360,
+   136
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [
+   "feature/b: old code, old bugs. They were never really fixed."
+  ],
+  "variants": {
+   "b": "v0.1",
+   "t": "v0.1"
+  },
+  "doors": [
+   {
+    "id": "G06:N",
+    "side": "N",
+    "a": 16,
+    "b": 19,
+    "to": "G03:S"
+   },
+   {
+    "id": "G06:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "G07:W"
+   }
+  ]
+ },
+ "G07": {
+  "file": "G07.txt",
+  "title": "bisect",
+  "size": [
+   64,
+   48
+  ],
+  "origin": [
+   1450,
+   128
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "key": "branch:b",
+  "signs": [
+   "git bisect start. Fall through the good half; the first bad commit holds the key.",
+   "bad: tests fail below",
+   "good: tests pass below",
+   "good: tests pass below",
+   "bad: tests fail below",
+   "found it: a1b2c3d is the first bad commit. Take it down.",
+   "bad: tests fail below"
+  ],
+  "doors": [
+   {
+    "id": "G07:W",
+    "side": "W",
+    "a": 17,
+    "b": 20,
+    "to": "G06:E"
+   },
+   {
+    "id": "G07:S",
+    "side": "S",
+    "a": 30,
+    "b": 33,
+    "to": "G10:N"
+   }
+  ]
+ },
+ "G10": {
+  "file": "G10.txt",
+  "title": "cherry-pick",
+  "size": [
+   154,
+   16
+  ],
+  "origin": [
+   1360,
+   176
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [
+   "cherry-pick: take only the commit you want."
+  ],
+  "doors": [
+   {
+    "id": "G10:W",
+    "side": "W",
+    "a": 5,
+    "b": 8,
+    "to": "G08:E"
+   },
+   {
+    "id": "G10:N",
+    "side": "N",
+    "a": 120,
+    "b": 123,
+    "to": "G07:S"
+   },
+   {
+    "id": "G10:S",
+    "side": "S",
+    "a": 34,
+    "b": 37,
+    "to": "G13:N",
+    "lock": "until:lever:reflog"
+   }
+  ]
+ },
+ "G08": {
+  "file": "G08.txt",
+  "title": "merge",
+  "size": [
+   60,
+   24
+  ],
+  "origin": [
+   1300,
+   170
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [
+   "merge: two keys, two branches, one way down.",
+   {
+    "text": "CONFLICT: waiting for feature/a and feature/b",
+    "alt": [
+     {
+      "if": "branch:a",
+      "text": "waiting for feature/b"
+     }
+    ]
+   },
+   "Merge branch 'feature/b'"
+  ],
+  "decor": [
+   {
+    "kind": "pedestal",
+    "x": 24,
+    "y": 19,
+    "flag": "branch:a"
+   },
+   {
+    "kind": "pedestal",
+    "x": 34,
+    "y": 19,
+    "flag": "branch:b"
+   }
+  ],
+  "doors": [
+   {
+    "id": "G08:W",
+    "side": "W",
+    "a": 5,
+    "b": 8,
+    "to": "G09:E"
+   },
+   {
+    "id": "G08:E",
+    "side": "E",
+    "a": 11,
+    "b": 14,
+    "to": "G10:W"
+   },
+   {
+    "id": "G08:S",
+    "side": "S",
+    "a": 16,
+    "b": 19,
+    "to": "G11:N",
+    "lock": "until:2of:branch:a,branch:b"
+   }
+  ]
+ },
+ "G11": {
+  "file": "G11.txt",
+  "title": "regression_test",
+  "size": [
+   40,
+   16
+  ],
+  "origin": [
+   1300,
+   194
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [
+   "regression_test: everything passed yesterday."
+  ],
+  "decor": [
+   {
+    "kind": "mirror",
+    "x": 33,
+    "y": 8,
+    "w": 4,
+    "h": 5
+   }
+  ],
+  "doors": [
+   {
+    "id": "G11:N",
+    "side": "N",
+    "a": 16,
+    "b": 19,
+    "to": "G08:S"
+   },
+   {
+    "id": "G11:E",
+    "side": "E",
+    "a": 9,
+    "b": 12,
+    "to": "G12:W",
+    "lock": "fight"
+   }
+  ]
+ },
+ "G12": {
+  "file": "G12.txt",
+  "title": "REGRESSION",
+  "size": [
+   24,
+   14
+  ],
+  "origin": [
+   1340,
+   196
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "signs": [],
+  "doors": [
+   {
+    "id": "G12:W",
+    "side": "W",
+    "a": 7,
+    "b": 10,
+    "to": "G11:E",
+    "lock": "fight"
+   },
+   {
+    "id": "G12:E",
+    "side": "E",
+    "a": 7,
+    "b": 10,
+    "to": "G13:W",
+    "lock": "until:boss:REGRESSION"
+   }
+  ]
+ },
+ "G13": {
+  "file": "G13.txt",
+  "title": "reflog",
+  "size": [
+   60,
+   20
+  ],
+  "origin": [
+   1364,
+   192
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "plates": [
+   {
+    "key": [
+     8,
+     14
+    ],
+    "cols": [
+     20
+    ],
+    "latch": [
+     23,
+     14
+    ]
+   }
+  ],
+  "signs": [
+   "revert: [down]+[special] drops a marker. [special] takes you back to it.",
+   "the plate holds the gate while something stands on it. A marker counts.",
+   "git reflog: every place HEAD has been. The lever opens a way back up."
+  ],
+  "doors": [
+   {
+    "id": "G13:W",
+    "side": "W",
+    "a": 11,
+    "b": 14,
+    "to": "G12:E"
+   },
+   {
+    "id": "G13:E",
+    "side": "E",
+    "a": 7,
+    "b": 10,
+    "to": "G14:W"
+   },
+   {
+    "id": "G13:N",
+    "side": "N",
+    "a": 30,
+    "b": 33,
+    "to": "G10:S",
+    "lock": "until:lever:reflog"
+   }
+  ]
+ },
+ "G14": {
+  "file": "G14.txt",
+  "title": "revert.sh",
+  "size": [
+   188,
+   20
+  ],
+  "origin": [
+   1424,
+   192
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "end": "to be continued in /var/prod",
+  "plates": [
+   {
+    "key": [
+     55,
+     12
+    ],
+    "cols": [
+     80
+    ],
+    "latch": [
+     84,
+     12
+    ]
+   },
+   {
+    "key": [
+     94,
+     12
+    ],
+    "cols": [
+     130
+    ],
+    "latch": [
+     134,
+     12
+    ]
+   },
+   {
+    "key": [
+     135,
+     12
+    ],
+    "cols": [
+     170
+    ],
+    "latch": [
+     174,
+     14
+    ]
+   }
+  ],
+  "signs": [
+   "revert.sh: every bridge falls behind you. Every gate wants a plate held.",
+   "initial (package-lock: locked)",
+   "rollback.sh -> /var/prod"
+  ],
+  "doors": [
+   {
+    "id": "G14:W",
+    "side": "W",
+    "a": 7,
+    "b": 10,
+    "to": "G13:E"
+   },
+   {
+    "id": "G14:S",
+    "side": "S",
+    "a": 46,
+    "b": 49,
+    "to": "G15:N"
+   },
+   {
+    "id": "G14:E",
+    "side": "E",
+    "a": 11,
+    "b": 14,
+    "to": "P07:W"
+   }
+  ]
+ },
+ "G15": {
+  "file": "G15.txt",
+  "title": "initial_commit",
+  "size": [
+   40,
+   16
+  ],
+  "origin": [
+   1460,
+   212
+  ],
+  "world": 7,
+  "music": "w7",
+  "zone": "git",
+  "secret": true,
+  "panel": {
+   "levers": [
+    [
+     22,
+     12
+    ],
+    [
+     25,
+     12
+    ],
+    [
+     28,
+     12
+    ],
+    [
+     31,
+     12
+    ]
+   ],
+   "order": [
+    3,
+    1,
+    4,
+    2
+   ]
+  },
+  "signs": [
+   "Initial commit. Panel F: four relays. The logbook knows the order."
+  ],
+  "doors": [
+   {
+    "id": "G15:N",
+    "side": "N",
+    "a": 10,
+    "b": 13,
+    "to": "G14:S"
+   }
+  ]
+ }
+}

@@ -1423,7 +1423,7 @@
      "to": "P15",
      "gate": "lever",
      "note": "",
-     "built": false
+     "built": true
     },
     {
      "side": "S",
@@ -1432,7 +1432,7 @@
      "to": "G01",
      "gate": "",
      "note": "",
-     "built": false
+     "built": true
     }
    ]
   },
@@ -3250,6 +3250,15 @@
      "gate": "",
      "note": "",
      "built": false
+    },
+    {
+     "side": "S",
+     "a": 34,
+     "b": 37,
+     "to": "G13",
+     "gate": "lever",
+     "note": "reflog (19)",
+     "built": false
     }
    ]
   },
@@ -3352,6 +3361,15 @@
      "to": "G14",
      "gate": "",
      "note": "",
+     "built": false
+    },
+    {
+     "side": "N",
+     "a": 30,
+     "b": 33,
+     "to": "G10",
+     "gate": "lever",
+     "note": "reflog (19)",
      "built": false
     }
    ]
@@ -5286,6 +5304,15 @@
    "hi": 1283,
    "gate": "drop",
    "note": ""
+  },
+  {
+   "a": "G13",
+   "side": "N",
+   "b": "G10",
+   "lo": 1394,
+   "hi": 1397,
+   "gate": "lever",
+   "note": "reflog: opened from below after REGRESSION (19)"
   }
  ],
  "aftermath": [
