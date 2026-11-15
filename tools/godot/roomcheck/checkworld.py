@@ -8,17 +8,20 @@
 #     blinking blocks are both on, ports open, mutex gates open, breakpoint freezes every busy piston, bulkheads blown):
 #     each room with such cells is explored a second time without them, and what only the optimistic pass finds is "uncertain".
 # Flags the player sets by playing are derived, latched, until nothing changes: door `sets` (hatches, threads), levers
-# (their cell within a jump), catch / agents gates (the room reached with the ability: optimistic, the projectile or the
+# (their cell within a jump), catch / agents gates and switches (the room reached with the ability: optimistic, the projectile or the
 # agents are not simulated), bulkheads `0` (the room reached: a SEGFAULT blows them), wave rooms (reached = cleared),
 # the loop room's `break;` key (cell reachable with the worst pass's spikes), HEAP flood levels (game.gd heap_flood).
 # Not simulated, only listed: rising water (H06), chases (N17), enemies, fights (every boss is assumed beaten).
 #
-# Usage: python3 -I tools/godot/roomcheck/checkworld.py [--stage DIR]... [--story] [--wall CHARS] [--no-cache] [-v]
+# Usage: python3 -I tools/godot/roomcheck/checkworld.py [--stage DIR]... [--story] [--wall CHARS] [--flag F]... [--no-cache] [-v]
 #   --stage DIR   lay a draft region over the live world, like check5a.py: DIR/rooms-*.json (new rooms, files in DIR/rooms/)
 #                 and DIR/room-edits-*.json (cells, doors_add, doors_lock, del, set on built rooms). Repeatable.
 #   --story       only the story-order pass (fast); the default also runs every order.
 #   --wall CHARS  tile letters to treat as walls (a draft's new obstacle the simulator does not know; it reads them as air).
-#   -v            list every room of every step, and the uncertain edges.
+#   --flag F      assume flag F is set from the start (a draft's lock whose mechanism the world data does not describe yet:
+#                 the check warns "nothing sets F" for each). Repeatable.
+#   -v            list every room of every step.
+# Exit code 1 when a room or boss is never reached or a trap is found.
 # Explore results are cached in the temp folder (keyed by the room's cells, doors, options and sim.py / reach.py), so a
 # second run takes seconds; the first takes about 20 minutes on 4 cores (--story alone about 8).
 import json, os, sys, copy, glob, hashlib, pickle, tempfile, argparse, inspect, time
@@ -116,6 +119,31 @@ class World:
     def __init__(self, start, rooms, files):
         self.start, self.rooms, self.files = start, rooms, files
         self.door = {d["id"]: (rid, d) for rid, m in rooms.items() for d in m["doors"]}
+        self.assume = set()
+
+    def unset_flags(self):
+        """flags a lock or a variant waits for that nothing in the world sets (a draft's new mechanism: --flag assumes one)"""
+        can = set(self.assume)
+        for rid, m in self.rooms.items():
+            can |= {d["sets"] for d in m["doors"] if d.get("sets")}
+            can |= {lv["flag"] for lv in m.get("levers", [])}
+            can |= {"gate:%s:catch" % rid, "gate:%s:agents" % rid}
+            for k in ("wave", "loop"):
+                if isinstance(m.get(k), dict) and m[k].get("flag"):
+                    can.add(m[k]["flag"])
+            if m.get("boss"):
+                can.add("boss:" + m["boss"]["id"])
+        need = {}
+        for rid, m in self.rooms.items():
+            conds = [d["lock"][6:] for d in m["doors"] if d.get("lock", "").startswith("until:")]
+            conds += [v["if"] for v in (m.get("variants") if isinstance(m.get("variants"), list) else [])]
+            for c in conds:
+                c = c.lstrip("!")
+                for f in (c.split("of:", 1)[1].split(",") if "of:" in c and c.split("of:")[0].isdigit() else [c]):
+                    if f.startswith(("ability:", "iter>=", "flood")) or f in can:
+                        continue
+                    need.setdefault(f, set()).add(rid)
+        return need
 
     def target(self, did, flags):
         """the entry a door leads to (None: a room that does not exist yet)"""
@@ -129,7 +157,7 @@ class World:
         """(rows, doors, opts, features) of a room as the player finds it"""
         m = self.rooms[rid]
         rows = [list(r) for r in self.files[rid]]
-        for v in m.get("variants", []):
+        for v in (m.get("variants") if isinstance(m.get("variants"), list) else []):
             if cond(v["if"], flags):
                 x0, y0, w, h = v["rect"]
                 for y in range(y0, min(y0 + h, len(rows))):
@@ -347,7 +375,7 @@ class State:
     the door graph (node = the entry door a player comes in by; "*" = the spawn), and which edges are sure."""
     def __init__(self, W, X, ab, beaten):
         self.W, self.X, self.ab, self.beaten = W, X, frozenset(ab), frozenset(beaten)
-        flags = {"boss:" + b for b in beaten} | {"ability:" + a for a in ab}
+        flags = {"boss:" + b for b in beaten} | {"ability:" + a for a in ab} | set(W.assume)
         self.edges, self.sure, self.seen, self.feats, self.memo = {}, {}, {}, {}, {}
         while True:
             self.flags = frozenset(flags)
@@ -433,7 +461,7 @@ class State:
             for lv in m.get("levers", []):
                 if near(seen, lv["x"], lv["y"]):
                     out.add(lv["flag"])
-            if "catch" in self.ab and "!" in text:
+            if "catch" in self.ab and ("!" in text or "Y" in text):          # (H07's valve is a switch `Y` with no gate)
                 out.add("gate:%s:catch" % rid)
             if "agents" in self.ab and ("&" in text or "k" in text):
                 out.add("gate:%s:agents" % rid)
@@ -529,11 +557,13 @@ def main():
     ap.add_argument("--stage", action="append", default=[])
     ap.add_argument("--story", action="store_true")
     ap.add_argument("--wall", default="")
+    ap.add_argument("--flag", action="append", default=[])
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("-v", action="store_true")
     a = ap.parse_args()
     start, rooms, files, staged, warn = load([os.path.abspath(s) for s in a.stage], a.wall)
     W = World(start, rooms, files)
+    W.assume = set(a.flag)
     X = Explorer(not a.no_cache)
     order_ix = {r: i for i, r in enumerate(rooms)}
 
@@ -541,6 +571,13 @@ def main():
         return " ".join(sorted(set(it), key=lambda r: order_ix[r]))
     problems = []
     print("CLAWD world check: %d rooms%s, start %s" % (len(rooms), " (%d staged: %s)" % (len(staged), " ".join(staged)) if staged else "", start["room"]))
+    for rid, m in rooms.items():
+        if m.get("variants") and not isinstance(m["variants"], list):
+            warn.append("%s: variants are not a list of {if, rect, from, to} (rooms.json form): left out" % rid)
+    for f, rr in sorted(W.unset_flags().items()):
+        warn.append("nothing sets %s (a lock or variant in %s waits for it; --flag %s assumes it)" % (f, " ".join(sorted(rr)), f))
+    if W.assume:
+        print("assumed flags: " + " ".join(sorted(W.assume)))
     for w in warn:
         print("WARN", w)
     timed = [r for r in rooms if rooms[r].get("rise") or rooms[r].get("chase")]
