@@ -371,6 +371,8 @@ func _ready() -> void:
 				ltr.fight.t = 0.0
 				ltr._begin_fight()
 				var ltb = ltr.boss
+				if lt.size() > 4:                                 # looptell:<id>:<x>:<y>:<phase>
+					ltb.force_phase(int(lt[4]))
 				ltb.hx = 200.0
 				ltb.hy = 330.0
 				ltb.queue = []

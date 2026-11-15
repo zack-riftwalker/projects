@@ -601,7 +601,7 @@
              ] },
     "T10": { "file": "T10.txt", "title": "INFINITE LOOP", "size": [24, 32], "origin": [1230, -232], "world": 4, "music": "w4", "zone": "tower", "hall": "loop",
              "signs": [],
-             "boss": {"id": "LOOP", "class": "LoopBoss", "name": "INFINITE LOOP", "sub": "while (true)", "trigger_x": 80, "cam": "free", "T": 140, "u": 0.6, "reward": "opus", "banner": "opus", "banner_sub": "your claw reaches further and hits twice as hard; it cuts spaghetti cables", "music": "boss", "drop": 50},
+             "boss": {"id": "LOOP", "class": "LoopBoss", "name": "INFINITE LOOP", "sub": "while (true)", "trigger_x": 80, "cam": "free", "T": 240, "u": 0.6, "reward": "opus", "banner": "opus", "banner_sub": "your claw reaches further and hits twice as hard; it cuts spaghetti cables", "music": "boss", "drop": 50},
              "doors": [
                  {"id": "T10:W", "side": "W", "a": 25, "b": 28, "to": "T09:E", "lock": "fight"},
                  {"id": "T10:E", "side": "E", "a": 25, "b": 28, "to": "T11:W", "lock": "until:boss:LOOP"}

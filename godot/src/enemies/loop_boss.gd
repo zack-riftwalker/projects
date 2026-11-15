@@ -10,8 +10,8 @@ extends Boss
 # Every page checks its own body against harmboxes(): the head and every link hurt by touch (1 and a knock-back) outside the scenes, a lunge's
 # head 2, the spat rings are projectiles.
 
-const IDS := ["lunge", "dive", "coil", "spit", "calm", "recursion", "escalate", "wrap_dive"]
-const FAM := {"lunge": "lunge", "dive": "slam", "coil": "sweep", "spit": "proj", "calm": "guard", "recursion": "proj", "escalate": "lunge", "wrap_dive": "slam"}
+const IDS := ["lunge", "dive", "coil", "spit", "calm", "recursion", "escalate", "wrap_dive", "esc2"]
+const FAM := {"lunge": "lunge", "dive": "slam", "coil": "sweep", "spit": "proj", "calm": "guard", "recursion": "proj", "escalate": "lunge", "wrap_dive": "slam", "esc2": "lunge"}
 const MODES := ["hidden", "descend", "swim", "plan", "stuck", "broken", "recoil", "trans", "dead"]
 const LINKS := 14
 const GAP := 14.0
@@ -59,6 +59,22 @@ const RECOIL_T := 0.5                      # then it bites its tail again (invul
 const HALF_WINDOW := 3.0                   # a second half hit on the plate within this breaks it
 const BP_IMMUNE := [4.0, 4.0, 6.0]         # after a freeze, breakpoint does not take this long
 const LIE_V := 520.0
+const TRANS_T := [0.0, 2.0, 2.5]           # the phase changes (invulnerable, no touch)
+const NEST_N := 6                          # phase 2: the nested ring of 6 small links round a gear
+const NEST_R := 54.0                       # its orbit (3.4 tiles)
+const NEST_RR := 14.0                      # the ring itself
+const NEST_ORBIT := 5.4                    # s round one gear,
+const NEST_SPIN := 0.6                     # a spin-up and a jingle (its cue),
+const NEST_CROSS := 1.2                    # then over M to the other gear
+const NEST_PER := 7.2
+const NEST_DROP := 4.0                     # a break drops it this long
+const COPY_DUR := 2.0                      # recursion: a 4-link copy replays the head's last 2.0 s
+const COPY_N := 4
+const COPY_DT := 0.1
+const SHED_MIN := 6                        # phase 3: a link falls off at every 1/8 of the phase's hp (14 -> 6)
+const FEINT_T := 0.25
+const WRAP_TOP := -18.0
+const NO_GROUND := 10000.0
 
 static var tex_head: Texture2D
 static var tex_links: Texture2D
@@ -105,6 +121,19 @@ var recoil_t0 := -10.0
 var breaks_total := 0                      # (the first break says `...again.`)
 var lie: Array = []                        # host: where each link (and the head, last) comes to lie
 var last_bp_off := 0.0
+var trans_t0 := -10.0                      # a phase change began (ph is already the new phase)
+var nest_on := false
+var nest_base := 0.0                       # the nested ring's clock starts here, on gear nest_g0
+var nest_g0 := 0
+var nest_drop_t0 := -10.0
+var copy_t0 := -10.0                       # recursion: the copy's start, and the path it replays (a point every COPY_DT)
+var copy_pts: Array = []
+var head_hist: Array = []                  # host: [time, head] of the last 2.5 s
+var shed: Array = []                       # phase 3: the links that fell off (they lie on the floor)
+var p3_hp0 := 0.0
+var feint := false                         # the plan in progress holds 0.25 s more after its full cue
+var combo_next := ""                       # host: phase 3's combo: this plan follows at once
+var jingle_k := -1
 var _flag_hash := 0
 
 func _init(r: Room, bx: float, by: float, base_hp := 126) -> void:
@@ -163,6 +192,11 @@ func _push_trail() -> void:
 	var d := hp_.distance_to(trail[0])
 	if d < TRAIL_STEP:
 		return                                      # (not far enough yet: the links read the head itself first)
+	if d > 120.0:                                    # it came in at the other seam (phase 3's wrap): a jump in the path, not a line across the room
+		trail.insert(0, hp_)
+		while trail.size() > TRAIL_MAX:
+			trail.remove_at(trail.size() - 1)
+		return
 	var n := mini(int(d / TRAIL_STEP), 40)
 	var from := trail[0]
 	for k in range(1, n + 1):
@@ -186,6 +220,10 @@ func _rebuild_links() -> void:
 			continue
 		var p := trail[i]
 		var seg := prev.distance_to(p)
+		if seg > 120.0:                              # the wrap's jump: the path goes on at the other seam
+			prev = p
+			i += 1
+			continue
 		if acc + seg >= want and seg > 0.0001:
 			var u := (want - acc) / seg
 			var q := prev.lerp(p, u)
@@ -262,14 +300,95 @@ func attack_boxes() -> Array:
 		"lunge", "escalate":
 			var hr := head_rect().grow(2.0)
 			out.append({"x": hr.position.x, "y": hr.position.y, "w": hr.size.x, "h": hr.size.y, "dmg": _big(), "sx": hx, "sid": int(plan.seq)})
+		"esc2":
+			var hr3 := head_rect().grow(2.0)
+			out.append({"x": hr3.position.x, "y": hr3.position.y, "w": hr3.size.x, "h": hr3.size.y, "dmg": 1, "sx": hx, "sid": int(plan.seq)})
 		"dive", "wrap_dive":
 			var hr2 := head_rect()
-			out.append({"x": hr2.position.x, "y": hr2.position.y, "w": hr2.size.x, "h": hr2.size.y + 6.0, "dmg": 1, "sx": hx, "sid": int(plan.seq)})
+			out.append({"x": hr2.position.x, "y": hr2.position.y, "w": hr2.size.x, "h": hr2.size.y + 6.0, "dmg": _big() if String(plan.id) == "wrap_dive" else 1, "sx": hx, "sid": int(plan.seq)})
 	return out
 
 func harmboxes() -> Array:
 	var out: Array = attack_boxes()
 	out.append_array(touch_boxes())
+	out.append_array(pressure_boxes(room.time))
+	return out
+
+# the phase pressure (pure functions of the fields and the room's clock, so the guest builds the same): the nested ring, the recursion copy
+func pressure_boxes(tm: float) -> Array:
+	var out: Array = []
+	if not active or dying or loss_on:
+		return out
+	if nest_live(tm):
+		for c in nest_members(tm):
+			out.append({"x": c.x - 5.0, "y": c.y - 5.0, "w": 10.0, "h": 10.0, "dmg": 1, "sx": c.x, "nest": 1})
+	var cp := copy_parts(tm)
+	if not cp.is_empty() and tm - copy_t0 < COPY_DUR - 0.3:
+		for c in cp:
+			out.append({"x": c.x - 6.0, "y": c.y - 6.0, "w": 12.0, "h": 12.0, "dmg": 1, "sx": c.x, "copy": 1})
+	return out
+
+# ---- the nested ring (phase 2)
+func nest_live(tm: float) -> bool:
+	return nest_on and not (nest_drop_t0 >= 0.0 and tm - nest_drop_t0 < NEST_DROP) and tm >= nest_base and mode != "trans"
+
+func nest_gear(tm: float) -> int:
+	return (nest_g0 + floori((tm - nest_base) / NEST_PER)) % 2
+
+func _nest_a(u: float) -> float:
+	return -PI / 2.0 + 1.1 * u
+
+# the ring's centre: round its gear, a 0.6 s spin-up, then an arc over M to the other gear
+func nest_center(tm: float) -> Vector2:
+	var u := fposmod(tm - nest_base, NEST_PER)
+	var g := nest_gear(tm)
+	var c0: Vector2 = LoopHall.GEAR_C[g]
+	if u < NEST_ORBIT + NEST_SPIN:
+		var a := _nest_a(u)
+		return c0 + Vector2(cos(a), sin(a)) * NEST_R
+	var c1: Vector2 = LoopHall.GEAR_C[1 - g]
+	var from := c0 + Vector2(cos(_nest_a(NEST_ORBIT + NEST_SPIN)), sin(_nest_a(NEST_ORBIT + NEST_SPIN))) * NEST_R
+	var to := c1 + Vector2(cos(_nest_a(0.0)), sin(_nest_a(0.0))) * NEST_R
+	var w := clampf((u - NEST_ORBIT - NEST_SPIN) / NEST_CROSS, 0.0, 1.0)
+	var e := w * w * (3.0 - 2.0 * w)
+	return from.lerp(to, e) + Vector2(0.0, -70.0 * sin(PI * w))
+
+# the spin-up (the ring's own cue before it crosses): 0..1, -1 outside
+func nest_spinup(tm: float) -> float:
+	var u := fposmod(tm - nest_base, NEST_PER)
+	if u < NEST_ORBIT or u >= NEST_ORBIT + NEST_SPIN:
+		return -1.0
+	return (u - NEST_ORBIT) / NEST_SPIN
+
+func nest_members(tm: float) -> Array:
+	var out: Array = []
+	if nest_drop_t0 >= 0.0 and tm - nest_drop_t0 < NEST_DROP:          # dropped by a break: on the floor under where it was
+		var dc: Vector2 = get_meta("nest_drop_at", Vector2(192.0, 456.0))
+		for i in range(NEST_N):
+			out.append(Vector2(clampf(dc.x + (float(i) - 2.5) * 10.0, 24.0, 360.0), _rest_y(dc.x, dc.y) - 6.0))
+		return out
+	var c := nest_center(tm)
+	var u := tm - nest_base
+	var sp := nest_spinup(tm)
+	var rot := 3.0 * u + (0.0 if sp < 0.0 else 9.0 * sp * sp)
+	for i in range(NEST_N):
+		var a := rot + TAU * float(i) / float(NEST_N)
+		out.append(c + Vector2(cos(a), sin(a)) * NEST_RR)
+	return out
+
+# ---- recursion: the copy's head and its 4 links along the replayed path
+func copy_parts(tm: float) -> Array:
+	var el := tm - copy_t0
+	if copy_pts.size() < 2 or el < 0.0 or el > COPY_DUR:
+		return []
+	var out: Array = []
+	for k in range(COPY_N + 1):
+		var f := el / COPY_DT - float(k) * 1.4
+		if f < 0.0:
+			break
+		var i := mini(floori(f), copy_pts.size() - 2)
+		var u := clampf(f - float(i), 0.0, 1.0)
+		out.append((copy_pts[i] as Vector2).lerp(copy_pts[i + 1], u))
 	return out
 
 func hurtboxes() -> Array:
@@ -333,19 +452,25 @@ func _break() -> void:
 	half_t0 = -10.0
 	lie.clear()
 	# it lies straight along the surface under its head, the body toward the middle of the room (a link past a ledge's end drops to the floor)
-	var gy := _ground_below(hx, hy - 4.0)
+	var gy := _rest_y(hx, hy - 4.0)
 	var side := -1.0 if hx > 192.0 else 1.0
 	var hx2 := clampf(hx, 36.0, float(room.pw) - 36.0)
 	for kk in range(links.size()):
 		var lx := hx2 + side * (NECK + GAP * float(kk))
 		if lx < 24.0 or lx > float(room.pw) - 24.0:            # (no room that way: it folds back along the floor)
 			lx = clampf(lx, 24.0, float(room.pw) - 24.0)
-		lie.append(Vector2(lx, _ground_below(lx, gy - 4.0) - 8.0))
+		lie.append(Vector2(lx, _rest_y(lx, gy - 4.0) - 8.0))
 	lie.append(Vector2(hx2, gy - 12.0))
 	room.shake(0.6)
 	Audio.sfx("loop_clack", {"vol": 1.0})
 	Audio.sfx("loop_collapse", {"vol": 0.8})
 	room.burst(hx, hy - 14.0, 10, ["#ff4d5a", "#ffffff"], 110.0, 300.0)
+	if nest_on and nest_live(room.time):
+		set_meta("nest_drop_at", nest_center(room.time))
+		set_meta("nest_drop_g", nest_gear(room.time))
+		nest_drop_t0 = room.time
+	feint = false
+	combo_next = ""
 	breaks_total += 1
 	if breaks_total == 1:
 		_say(4)
@@ -402,7 +527,95 @@ func blocks(_dx: float, _dy: float, _how: String) -> bool:
 	return false
 
 func on_damage() -> void:
-	pass
+	if dying or hpf <= 0.0:
+		return
+	var p := _phase_hp()
+	if p > ph and mode != "trans":
+		_begin_phase(p)
+	if ph == 3 and mode != "trans":
+		_shed_to(clampi(LINKS - floori((1.0 - hpf / maxf(1.0, p3_hp0)) * 8.0 + 0.0001), SHED_MIN, LINKS))
+
+# a phase change: it bites its tail and spins (phase 2: violet, the low ledges go, the gantry swings, the nested ring splits off; phase 3: the plate
+# cracks, the floor cracks and falls away, the ceiling opens, the low ledges come back)
+func _begin_phase(p: int) -> void:
+	ph = p
+	phase = p
+	mode = "trans"
+	trans_t0 = room.time
+	plan = {}
+	combo_next = ""
+	feint = false
+	i_phase = 0
+	half_t0 = -10.0
+	var hl := _hall()
+	if p == 2:
+		if hl != null:
+			hl.p2_t0 = room.time
+			hl.violet = 1.0
+		coil_c = Vector2(clampf(hx, 80.0, 304.0), clampf(hy, 120.0, 360.0))
+		queue = ["recursion", "escalate"]
+	else:
+		if hl != null:
+			hl.p3_t0 = room.time
+			hl.violet = 0.0
+			hl.heat = 1.0
+		nest_on = false
+		p3_hp0 = hpf
+		coil_c = Vector2(192.0, 200.0)
+		queue = ["wrap_dive", "lunge"]
+	coil_a = (Vector2(hx, hy) - coil_c).angle()
+	_sync_hall()
+	room.shake(0.8)
+	Audio.sfx("loop_click", {"vol": 1.0})
+	_say(p)
+	room.events.append("bossPhase")
+	Game.dlog("LOOP phase %d" % p)
+
+# (tests and screenshots) straight into a phase, its change already over
+func force_phase(p: int) -> void:
+	if p <= 1:
+		return
+	if p >= 2 and ph < 2:
+		hpf = float(max_hp) * 0.6
+		hp = ceili(hpf)
+		_begin_phase(2)
+		trans_t0 = room.time - 10.0
+		var hl := _hall()
+		if hl != null:
+			hl.p2_t0 = room.time - 3.0
+		_step_trans(0.0)
+	if p >= 3:
+		hpf = float(max_hp) * 0.3
+		hp = ceili(hpf)
+		_begin_phase(3)
+		trans_t0 = room.time - 10.0
+		var hl2 := _hall()
+		if hl2 != null:
+			hl2.p3_t0 = room.time - 3.0
+		_step_trans(0.0)
+	queue = []
+
+func _step_trans(dt: float) -> void:
+	_circle(dt, 30.0 if ph == 2 else 40.0, 7.0)
+	if room.time - trans_t0 >= TRANS_T[ph - 1]:
+		mode = "swim"
+		gap_t = 0.3
+		swim_key = kit_pick_target()
+		if ph == 2:
+			nest_on = true
+			nest_base = room.time
+			nest_g0 = 0 if hx < 192.0 else 1
+			nest_drop_t0 = -10.0
+
+# phase 3: hp = length. The tail link falls off and lies on the floor (no collision)
+func _shed_to(n: int) -> void:
+	while n_links > n and links.size() > 1:
+		var tp: Vector2 = links[links.size() - 1]
+		shed.append(Vector2(tp.x, _rest_y(tp.x, tp.y) - 8.0))
+		room.burst(tp.x, tp.y, 6, [HEAT, RIVET], 90.0, 300.0)
+		Audio.sfx("clang", {"vol": 0.7})
+		n_links -= 1
+		links.resize(n_links)
 
 # ---------------------------------------------------------------- the fight flow
 func intro_long() -> bool:
@@ -520,6 +733,19 @@ func update(dt: float) -> void:
 		last_bp_off = bp_off
 		immune_until = room.time + BP_IMMUNE[ph - 1]
 	bp = _bp_now()
+	_record_head()
+	if nest_drop_t0 >= 0.0 and room.time - nest_drop_t0 >= NEST_DROP:          # the ring is back on its feet: round the gear it fell from
+		nest_g0 = get_meta("nest_drop_g", 0)
+		nest_base = room.time
+		nest_drop_t0 = -10.0
+	_nest_jingle()
+	if mode == "trans":
+		_step_trans(dt)
+		_push_trail()
+		_rebuild_links()
+		_sync_hall()
+		_place()
+		return
 	if mode == "broken" or mode == "recoil":
 		if mode == "broken":
 			_step_broken(dt)
@@ -552,6 +778,20 @@ func update(dt: float) -> void:
 	bp = _bp_now()
 	_sync_hall()
 	_place()
+
+func _record_head() -> void:
+	head_hist.append([room.time, Vector2(hx, hy)])
+	while head_hist.size() > 2 and room.time - float(head_hist[0][0]) > 2.6:
+		head_hist.pop_front()
+
+# the ring's jingle as its spin-up starts (each crossing once)
+func _nest_jingle() -> void:
+	if not nest_live(room.time):
+		return
+	var k := floori((room.time - nest_base) / NEST_PER)
+	if nest_spinup(room.time) >= 0.0 and k != jingle_k:
+		jingle_k = k
+		Audio.sfx("loop_jingle", {"vol": 0.8})
 
 func _speed() -> float:
 	return SPEED[ph - 1] * minf(ITER_MAX, 1.0 + ITER_K * float(i_phase))
@@ -595,12 +835,20 @@ func _choose() -> void:
 	else:
 		var d := Vector2(hx, hy).distance_to(kit_aim(tgt))
 		var wts := {"lunge": 1.0, "dive": 1.0, "coil": 1.0, "spit": 1.0}
+		if ph >= 3 and _faller() != "":
+			tgt = _faller()
 		if d > FAR_PX:
 			wts.lunge = 3.0
 			wts.spit = 3.0
 		elif d < NEAR_PX:
 			wts.dive = 3.0
 			wts.coil = 2.0
+		wts.erase(last_id)
+		if ph >= 2:
+			wts["recursion"] = 1.5
+			wts["escalate"] = 1.5 if d > 120.0 else 0.7
+		if ph >= 3:
+			wts["wrap_dive"] = 4.0 if _faller() != "" else 2.0
 		wts.erase(last_id)
 		var tot := 0.0
 		for k in wts:
@@ -614,6 +862,23 @@ func _choose() -> void:
 		if id == "":
 			id = String(wts.keys()[0])
 	_start(id, tgt)
+	if ph >= 3 and plan.size() > 0:                            # phase 3: combos and feints
+		if id == "lunge" and room.rng.randf() < 0.35:
+			combo_next = "dive"
+		if (id == "lunge" or id == "wrap_dive") and room.rng.randf() < 0.35 and combo_next == "":
+			_feint()
+
+func _feint() -> void:
+	feint = true
+	plan.t = float(plan.t) + FEINT_T * _tm()                  # (only more waiting after the full cue: the cue never gets shorter)
+
+# phase 3: a player falling through the pit (the wrap dive likes them)
+func _faller() -> String:
+	for k in kit_keys():
+		var q = kit_body(k)
+		if not q.on_ground and q.vy > 60.0 and _hall() != null and _hall().in_pit_cols(q.x + q.w / 2.0) and q.y > 300.0:
+			return k
+	return ""
 
 # the plan begins (the harness calls this too)
 func _start(id: String, tgt := "p1") -> void:
@@ -626,14 +891,15 @@ func _start(id: String, tgt := "p1") -> void:
 	var act := 0.3
 	var rec := 0.4
 	var fp: Array = [aim.x, aim.y, hx, hy]
+	feint = false
 	match id:
-		"lunge":
-			cue = CUE_HEAVY[ph - 1]
+		"lunge", "escalate", "esc2":
+			cue = CUE_HEAVY[ph - 1] if id != "esc2" else 0.45
 			lunge_o = Vector2(hx, hy)
 			lunge_d = (aim - lunge_o).normalized() if aim.distance_to(lunge_o) > 4.0 else Vector2(cos(ang), sin(ang))
 			lunge_len = _ray_len(lunge_o, lunge_d, LUNGE_LEN)
 			act = lunge_len / LUNGE_V
-			rec = 0.4
+			rec = 0.4 if id != "escalate" else 0.05
 			fp = [lunge_o.x + lunge_d.x * 100.0, lunge_o.y + lunge_d.y * 100.0, lunge_o.x, lunge_o.y]
 		"dive":
 			cue = CUE_NORMAL[ph - 1]
@@ -652,6 +918,17 @@ func _start(id: String, tgt := "p1") -> void:
 			cue = CUE_NORMAL[ph - 1]
 			act = 0.12
 			rec = 0.5
+		"recursion":
+			cue = CUE_NORMAL[ph - 1]
+			act = 0.1
+			rec = 0.4
+		"wrap_dive":
+			cue = 0.75
+			var fq = kit_body(tgt)
+			dive_x = clampf(aim.x + (fq.vx * 0.3 if fq != null else 0.0), float(LoopHall.PIT_A * 16) + 8.0, float((LoopHall.PIT_B + 1) * 16) - 8.0)
+			act = 1.4
+			rec = 0.4
+			fp = [dive_x, aim.y, hx, hy]
 		"calm":
 			cue = 1.5
 			act = 0.05
@@ -686,7 +963,11 @@ func _ground_below(px: float, py: float) -> float:
 		if room.grid.solid(floori(px / 16.0), ty) or t == TileGrid.ONEWAY:
 			return float(ty * 16)
 		ty += 1
-	return LoopHall.FLOOR_Y
+	return NO_GROUND                                          # (phase 3: over the open pit there is nothing)
+
+# where a thing lying on the floor rests (over the open pit: at the floor's height, on the seam's light)
+func _rest_y(px: float, py: float) -> float:
+	return minf(_ground_below(px, py), LoopHall.FLOOR_Y)
 
 func _plan_logic(dt: float) -> void:
 	var nxt := plan_step(dt)
@@ -703,7 +984,7 @@ func _plan_logic(dt: float) -> void:
 	match String(plan.ph):
 		"cue":
 			match id:
-				"lunge", "escalate":
+				"lunge", "escalate", "esc2":
 					var want := lunge_d.angle()
 					ang += clampf(wrapf(want - ang, -PI, PI), -TURN * 3.0 * dt, TURN * 3.0 * dt)
 					hx -= cos(want) * 14.0 * dt                    # it draws back a little (the S-coil)
@@ -719,24 +1000,31 @@ func _plan_logic(dt: float) -> void:
 					var u := 1.0 - clampf(float(plan.t) / maxf(0.01, tot * _tm()), 0.0, 1.0)
 					var rr: float = lerpf(COIL_R[0], COIL_R[1], u) if id == "coil" else 44.0
 					_circle(dt, rr, 4.0 if id == "coil" else 2.4)
-				"spit":
+				"spit", "recursion":
 					var want2 := (kit_aim(String(plan.tgt)) - Vector2(hx, hy)).angle()
 					ang += clampf(wrapf(want2 - ang, -PI, PI), -TURN * 2.0 * dt, TURN * 2.0 * dt)
+				"wrap_dive":
+					_wrap_cue(dt)
 		"active":
 			match id:
-				"lunge", "escalate":
+				"lunge", "escalate", "esc2":
 					var s := minf(lunge_len, (lunge_len / LUNGE_V - maxf(0.0, float(plan.t))) * LUNGE_V)
 					hx = lunge_o.x + lunge_d.x * s
 					hy = lunge_o.y + lunge_d.y * s
 				"dive":
-					var gy := _ground_below(hx, hy + 16.0) - 14.0
+					var gy := _ground_below(hx, maxf(0.0, hy + 16.0)) - 14.0
 					hy = minf(hy + DIVE_V * dt, gy)
 					ang = PI / 2.0
 					if hy >= gy - 0.5:
 						plan.t = 0.0
+					elif hy > LoopHall.PH + 16.0:                  # (phase 3, over the pit: it comes back in at the top and goes on)
+						hy = WRAP_TOP
 				"coil":
 					var u2 := 1.0 - clampf(float(plan.t) / 0.5, 0.0, 1.0)
-					_circle(dt, lerpf(COIL_R[1], COIL_R[2], u2), 4.0)
+					var rc := 32.0 if ph == 3 else COIL_R[1]
+					_circle(dt, lerpf(rc, COIL_R[2], u2), 4.0)
+				"wrap_dive":
+					_wrap_fall(dt)
 				"spit":
 					if not spat:
 						spat = true
@@ -755,9 +1043,51 @@ func _circle(dt: float, rr: float, w: float) -> void:
 	if stepv.length() > 0.01:
 		ang = stepv.angle()
 
+# the wrap dive's cue: the head sinks into the pit (the chain rattles above), comes in at the top seam over the target's column and waits there
+func _wrap_cue(dt: float) -> void:
+	if hy > -1.0 and hy < 520.0 and not bool(get_meta("wrapped", false)):
+		var pit := Vector2(clampf(hx, 110.0, 274.0), 540.0)
+		var need := maxf(260.0, Vector2(hx, hy).distance_to(pit) / maxf(0.1, float(plan.t) - 0.25))
+		var v := Vector2(hx, hy).move_toward(pit, need * dt)
+		ang = (pit - Vector2(hx, hy)).angle() if v.distance_to(Vector2(hx, hy)) > 0.1 else ang
+		hx = v.x
+		hy = v.y
+		if hy > LoopHall.PH + 16.0:
+			hx = dive_x
+			hy = WRAP_TOP
+			set_meta("wrapped", true)
+			Audio.sfx("loop_chain", {"vol": 0.8})
+	else:
+		hx = move_toward(hx, dive_x, 200.0 * dt)
+		hy = WRAP_TOP
+		ang = PI / 2.0
+
+# ... then straight down its column; the gantry, a ledge or the floor beside the pit stops it (stuck 0.6 s); through the pit it wraps on
+func _wrap_fall(dt: float) -> void:
+	ang = PI / 2.0
+	var ny := hy + DIVE_V * dt
+	var stop := _ground_below(hx, maxf(0.0, hy + 14.0)) - 14.0
+	var hl := _hall()
+	if hl != null and hx > float(hl.gantry_p.x) and hx < float(hl.gantry_p.x) + float(hl.gantry_p.w) and hy + 14.0 <= float(hl.gantry_p.y) + 1.0 and ny + 14.0 >= float(hl.gantry_p.y):
+		stop = minf(stop, float(hl.gantry_p.y) - 14.0)
+	if ny >= stop:
+		hy = stop
+		set_meta("wrap_hit", true)
+		plan.t = 0.0
+		return
+	hy = ny
+	if hy > LoopHall.PH + 16.0:
+		hy = WRAP_TOP
+
 func _on_active(id: String) -> void:
 	match id:
-		"lunge", "escalate":
+		"recursion":
+			_make_copy()
+		"wrap_dive":
+			set_meta("wrap_hit", false)
+			hx = dive_x
+			hy = WRAP_TOP
+		"lunge", "escalate", "esc2":
 			lunge_o = Vector2(hx, hy)
 			lunge_len = _ray_len(lunge_o, lunge_d, LUNGE_LEN)
 			plan.t = maxf(0.05, lunge_len / LUNGE_V)
@@ -766,14 +1096,48 @@ func _on_active(id: String) -> void:
 		"dive":
 			ang = PI / 2.0
 			Audio.sfx("loop_chain", {"vol": 0.5})
+		"coil":
+			if ph >= 3:
+				_make_copy()
 
 func _on_recover(id: String) -> void:
+	set_meta("wrapped", false)
 	match id:
-		"lunge", "escalate":
+		"escalate":                                           # the second lunge at once: aimed again, a 0.45 s cue, 1 damage
+			_start("esc2", kit_pick_target())
+			return
+		"esc2":
+			_stuck(0.8)
+		"lunge":
+			if combo_next == "dive":
+				combo_next = ""
+				_start("dive", String(plan.tgt) if not plan.is_empty() else swim_key)
+				return
 			if lunge_len < LUNGE_LEN - 2.0:                   # it hit a wall, the floor or a ledge: the head is stuck
 				_stuck(0.6)
 		"dive":
 			_stuck(0.8)
+		"wrap_dive":
+			if bool(get_meta("wrap_hit", false)):
+				_stuck(0.6)
+			elif hy < 40.0:
+				hy = 60.0
+		"coil":
+			pass
+
+# recursion: a 4-link copy replays where the head was over the last 2.0 s (coil + recursion in phase 3: at the coil's squeeze)
+func _make_copy() -> void:
+	copy_pts.clear()
+	var t_end := room.time
+	for k in range(int(COPY_DUR / COPY_DT) + 1):
+		var tq := t_end - COPY_DUR + float(k) * COPY_DT
+		var best: Vector2 = head_hist[0][1] if not head_hist.is_empty() else Vector2(hx, hy)
+		for hh in head_hist:
+			if float(hh[0]) <= tq:
+				best = hh[1]
+		copy_pts.append(best)
+	copy_t0 = room.time
+	Audio.sfx("loop_chain", {"vol": 0.4})
 
 func _stuck(secs: float) -> void:
 	stuck_t = _pm_rec(secs)
@@ -878,9 +1242,9 @@ func _head_row() -> int:
 	var tell := false
 	if not plan.is_empty():
 		var pid := String(plan.id)
-		if plan.ph == "cue" and pid in ["lunge", "escalate", "spit", "dive", "wrap_dive"]:
+		if plan.ph == "cue" and pid in ["lunge", "escalate", "esc2", "spit", "dive", "wrap_dive", "recursion"]:
 			tell = true
-		if plan.ph == "active" and pid in ["lunge", "escalate", "dive", "wrap_dive"]:
+		if plan.ph == "active" and pid in ["lunge", "escalate", "esc2", "dive", "wrap_dive"]:
 			open = true
 	var k := "idle"
 	if mode == "broken" or mode == "dead":
@@ -898,7 +1262,7 @@ func _plate_i() -> int:
 		return 3
 	if room.time - half_t0 <= HALF_WINDOW and int(room.time * 8.0) % 2 == 0:
 		return 2
-	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["lunge", "escalate"]:
+	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) in ["lunge", "escalate", "esc2", "wrap_dive"]:
 		return 1
 	if ph == 3:
 		return 4
@@ -919,15 +1283,39 @@ func draw_boss_body(ci: CanvasItem) -> void:
 	var jit := Vector2.ZERO
 	if bp_t > 0.0:
 		tint = Color(0.72, 0.88, 1.0)                         # frozen: the game's blue for a stopped thing
+	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) == "escalate":
+		tint = Color(1.0, 0.7, 1.0).lerp(Color(OPUS).lightened(0.4), 0.5 + 0.5 * sin(room.time * 40.0))       # the next one comes twice: a violet flash
+	if mode == "trans":
+		tint = Color(OPUS).lightened(0.5) if ph == 2 else Color(HEAT).lightened(0.4)
 	if room.time - shiver_t0 < 0.35:                          # breakpoint on it while it rests: a blue shiver, nothing else
 		tint = Color(0.6, 0.8, 1.0)
 		jit = Vector2(1.0 if int(room.time * 40.0) % 2 == 0 else -1.0, 0.0)
 	# the pins between the links, then the links from the tail up (the neck on top), then the head
+	for c0 in shed:                                           # phase 3's lost links, lying where they fell
+		ci.draw_texture_rect_region(tex_links, Rect2(Vector2(floorf(c0.x - 8.0), floorf(c0.y - 8.0)), Vector2(16.0, 16.0)), Rect2(48.0, 0.0, 16.0, 16.0))
+	var tm := room.time
+	if nest_on and mode != "trans":                           # phase 2's nested ring (violet small links); its spin-up is its cue
+		var sp := nest_spinup(tm)
+		var ntint := Color(1.0, 0.9, 1.0) if sp < 0.0 else Color(1.0, 0.75, 1.0).lerp(Color.WHITE, 0.5 * sin(sp * 30.0) + 0.5)
+		for c1 in nest_members(tm):
+			ci.draw_texture_rect_region(tex_links, Rect2(Vector2(floorf(c1.x - 8.0), floorf(c1.y - 8.0)), Vector2(16.0, 16.0)), Rect2(64.0, 0.0, 16.0, 16.0), ntint)
+	var cp := copy_parts(tm)
+	if not cp.is_empty():                                     # recursion: a fading copy, its head first
+		var ca := clampf((COPY_DUR - (tm - copy_t0)) / 0.3, 0.0, 1.0) * 0.75
+		for kk in range(cp.size() - 1, 0, -1):
+			var c3: Vector2 = cp[kk]
+			ci.draw_texture_rect_region(tex_links, Rect2(Vector2(floorf(c3.x - 8.0), floorf(c3.y - 8.0)), Vector2(16.0, 16.0)), Rect2(16.0, 0.0, 16.0, 16.0), Color(1.0, 0.85, 1.0, ca))
+		var fs0 := float(lspr.get("frame", 56))
+		var c4: Vector2 = cp[0]
+		var row0 := maxi(0, (lspr.get("heads", []) as Array).find("p2"))
+		var dir0 := 0 if cp.size() < 2 or (cp[0] as Vector2).x >= (cp[1] as Vector2).x else 4
+		ci.draw_texture_rect_region(tex_head, Rect2(Vector2(floorf(c4.x - fs0 / 2.0), floorf(c4.y - fs0 / 2.0)), Vector2(fs0, fs0)), Rect2(float(dir0) * fs0, float(row0) * fs0, fs0, fs0), Color(1.0, 0.85, 1.0, ca))
 	var prev := Vector2(hx, hy)
 	for k in range(links.size()):
 		var c: Vector2 = links[k]
-		ci.draw_line(prev, c, ink, 4.0)
-		ci.draw_line(prev, c, Color(RIVET), 1.0)
+		if prev.distance_to(c) < 40.0:                        # (not across the wrap's jump)
+			ci.draw_line(prev, c, ink, 4.0)
+			ci.draw_line(prev, c, Color(RIVET), 1.0)
 		prev = c
 	for k in range(links.size() - 1, -1, -1):
 		var c2: Vector2 = links[k]
@@ -941,6 +1329,8 @@ func draw_boss_body(ci: CanvasItem) -> void:
 	var d := dir8()
 	var hsrc := Rect2(float(d) * fs, float(row) * fs, fs, fs)
 	var hat := Vector2(floorf(hx - fs / 2.0 + 0.5), floorf(hy - fs / 2.0 + 0.5)) + jit
+	if not plan.is_empty() and plan.ph == "cue" and String(plan.id) == "recursion" and int(room.time * 20.0) % 2 == 0:
+		ci.draw_texture_rect_region(tex_head, Rect2(hat + Vector2(-6.0, -5.0), Vector2(fs, fs)), hsrc, Color(1.0, 0.85, 1.0, 0.6))      # it doubles: two heads, two eyes
 	ci.draw_texture_rect_region(tex_head, Rect2(hat, Vector2(fs, fs)), hsrc, tint)
 	# the plate, upright on the brow (readable whichever way the head points)
 	var pr := plate_rect()
@@ -969,11 +1359,30 @@ func net_fields() -> Array:
 		_links_pack(), plan_fields(), [roundi(lunge_d.x * 1000.0), roundi(lunge_d.y * 1000.0), roundi(lunge_len * 10.0), roundi(dive_x * 4.0), roundi(coil_c.x), roundi(coil_c.y)],
 		iter, i_phase, roundi(stuck_t * 100.0), roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0), roundi(flick_t * 100.0),
 		hl.net_pack() if hl != null else [], [1 if loss_on else 0, loss_sel],
-		[roundi(half_t0 * 100.0), roundi(immune_until * 100.0), roundi(shiver_t0 * 100.0), roundi(brk_t0 * 100.0), roundi(recoil_t0 * 100.0), breaks_total]]
+		[roundi(half_t0 * 100.0), roundi(immune_until * 100.0), roundi(shiver_t0 * 100.0), roundi(brk_t0 * 100.0), roundi(recoil_t0 * 100.0), breaks_total],
+		_p23_pack()]
 	f.append(hz_pack())
 	return f
 
-const NF := 22
+const NF := 23
+
+func _vpack(arr: Array) -> Array:
+	var a: Array = []
+	for v in arr:
+		a.append(roundi(v.x))
+		a.append(roundi(v.y))
+	return a
+
+func _vunpack(a: Array) -> Array:
+	var out: Array = []
+	for k in range(a.size() / 2):
+		out.append(Vector2(float(a[k * 2]), float(a[k * 2 + 1])))
+	return out
+
+func _p23_pack() -> Array:
+	var da: Vector2 = get_meta("nest_drop_at", Vector2(192.0, 456.0))
+	return [roundi(trans_t0 * 100.0), 1 if nest_on else 0, roundi(nest_base * 1000.0), nest_g0, roundi(nest_drop_t0 * 100.0), roundi(da.x), roundi(da.y),
+		roundi(copy_t0 * 1000.0), _vpack(copy_pts), _vpack(shed), 1 if feint else 0, roundi(p3_hp0 * 10.0)]
 
 func net_apply(f: Array) -> void:
 	hpf = f[0] / 10.0
@@ -1025,6 +1434,18 @@ func net_apply(f: Array) -> void:
 	brk_t0 = cf[3] / 100.0
 	recoil_t0 = cf[4] / 100.0
 	breaks_total = int(cf[5])
+	var pf: Array = f[22]
+	trans_t0 = pf[0] / 100.0
+	nest_on = int(pf[1]) == 1
+	nest_base = pf[2] / 1000.0
+	nest_g0 = int(pf[3])
+	nest_drop_t0 = pf[4] / 100.0
+	set_meta("nest_drop_at", Vector2(float(pf[5]), float(pf[6])))
+	copy_t0 = pf[7] / 1000.0
+	copy_pts = _vunpack(pf[8])
+	shed = _vunpack(pf[9])
+	feint = int(pf[10]) == 1
+	p3_hp0 = pf[11] / 10.0
 	hz_unpack(f[NF] if f.size() > NF else [])
 
 # guest: the snapshot just applied, at host time tm
@@ -1055,7 +1476,7 @@ func puppet_follow_parts(rt: float) -> void:
 				break
 	var ha: Vector2 = a[1]
 	var hb: Vector2 = b[1]
-	var hp_ := ha.lerp(hb, u)
+	var hp_ := ha.lerp(hb, u) if ha.distance_to(hb) < 100.0 else hb      # (the wrap: no slide across the room)
 	hx = hp_.x
 	hy = hp_.y
 	var la: Array = a[2]
@@ -1063,7 +1484,7 @@ func puppet_follow_parts(rt: float) -> void:
 	var nl: Array = []
 	for k in range(lb.size()):
 		var pa_: Vector2 = la[k] if k < la.size() else lb[k]
-		nl.append(pa_.lerp(lb[k], u))
+		nl.append(pa_.lerp(lb[k], u) if pa_.distance_to(lb[k]) < 100.0 else lb[k])
 	links = nl
 	_place()
 

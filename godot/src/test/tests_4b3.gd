@@ -2824,7 +2824,8 @@ func t_bosspresets() -> bool:
 			["N22", "cached", 1.0, -0.4], ["N22", "double", 0.75, 0.6], ["N22", "verdict", 0.6, 0.6], ["N22", "nitpick", 0.7, 0.6], ["N22", "cross", 0.9, 0.6], ["N22", "signoff", 0.75, 0.2], ["N22", "slash", 0.45, 0.2], ["N22", "sdiamond", 0.45, 0.7], ["N22", "riposte", 0.75, -0.9],
 			["T06", "strike", 0.7, 0.3], ["T06", "double", 1.05, 0.5], ["T06", "slam", 0.7, 0.5], ["T06", "clapper", 0.7, 0.4], ["T06", "rope", 0.7, 0.3],
 			["T06", "switch", 0.6, 0.3], ["T06", "drop", 0.9, 0.8], ["T06", "triple", 0.6, 0.8],
-			["T10", "lunge", 0.75, 0.4], ["T10", "dive", 0.5, 0.3], ["T10", "coil", 1.0, 0.4], ["T10", "spit", 0.5, 0.5]]
+			["T10", "lunge", 0.75, 0.4], ["T10", "dive", 0.5, 0.3], ["T10", "coil", 1.0, 0.4], ["T10", "spit", 0.5, 0.5],
+			["T10", "recursion", 0.5, 0.4], ["T10", "escalate", 0.75, 0.05], ["T10", "esc2", 0.45, 0.4], ["T10", "wrap_dive", 0.75, 0.4]]
 		wanted += table.size()
 		var rooms := {}
 		for row in table:

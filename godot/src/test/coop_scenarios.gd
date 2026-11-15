@@ -3879,9 +3879,9 @@ func sc_co_loopboss() -> Array:
 			plan_stats(b, seen)
 			if not moved and Time.get_ticks_msec() - t0 > 28000.0 * slow:
 				moved = true
-				b.ph = 3                                       # (M2: the room's phase-3 state alone; the boss's phase 3 comes in M4)
-				r.shaft.ph = 3
-				r.shaft.p3_t0 = r.time
+				b.hpf = float(b.max_hp) * 0.34                 # (straight to phase 3: its change opens the pit)
+				b.mode = "swim" if b.mode == "broken" or b.mode == "recoil" else b.mode
+				b.hit(2, 1.0, 0.0, "swipe", {"link": b.links.size() - 1})
 			await get_tree().physics_frame
 		p2_hits = int(r.stats.hits[1]) if r.stats.has("hits") else 0
 		var broke := b.breaks_total

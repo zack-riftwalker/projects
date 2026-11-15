@@ -571,11 +571,115 @@ func t_loop3() -> bool:
 	rg.queue_free()
 	rf.queue_free()
 	loop3_m3(res)
+	loop3_m4(res)
 	return report("loop3", res.ok, info + res.info)
 
 func loop_fightsim() -> bool:
-	print("TEST fightsim SKIP (INFINITE LOOP: the snake comes in M2)")
-	return true
+	# Two bots against the real boss (its real choices, cues, windows), no damage taken: the floor of the fight's length. "bp" freezes it when it
+	# can (6 s cooldown, ~0.8 s to get in reach and face it), climbs (1.0 s) and claws the plate, then claws the lying body at the claw's rate
+	# (0.4 s); "nobp" never freezes: it claws the plate of a stuck head (a half, 0.25 s to react) and catches some yellow rings (half). Both claw
+	# the tail when it comes low. Prints the time of each phase.
+	loop_setup()
+	var secs := float(OS.get_environment("FIGHT_S")) if OS.get_environment("FIGHT_S") != "" else 400.0
+	var out := {}
+	for mode_ in ["bp", "nobp"]:
+		var r := loop_fight(60.0, 464.0)
+		var b: LoopBoss = r.boss
+		var p = r.player
+		var t_ph := {1: 0.0}
+		var counts := {}
+		var seen := {}
+		var bp_ready := 0.0
+		var want_bp := -1.0
+		var climb := -1.0
+		var next_claw := 0.0
+		var stuck_seen := -1.0
+		var ring_seen := {}
+		var breaks := 0
+		var was_broken := false
+		var tail_ready := 0.0
+		var f := 0
+		var now := 0.0
+		while f < int(secs * 60.0) and not b.dying and b.hpf > 0.0:
+			f += 1
+			now = float(f) / 60.0
+			p.inv = 999.0
+			p.hp = p.max_hp
+			p.x = 40.0 if b.hx > 192.0 else 330.0
+			p.y = 454.0
+			step_keys(r, {})
+			if not b.plan.is_empty() and not seen.has(int(b.plan.seq)):
+				seen[int(b.plan.seq)] = true
+				counts[String(b.plan.id)] = int(counts.get(String(b.plan.id), 0)) + 1
+			if not t_ph.has(b.ph):
+				t_ph[b.ph] = now
+			if b.mode == "broken":
+				if not was_broken:
+					breaks += 1
+					next_claw = now + 0.3
+				was_broken = true
+				if now >= next_claw:
+					next_claw = now + 0.4
+					r.attacker = p
+					b.hit(1, 1.0, 0.0, "swipe", {"link": room_link(b)})
+				continue
+			was_broken = false
+			if b.bp_t > 0.0:
+				if climb < 0.0:
+					climb = now + 1.0
+				if now >= climb:
+					climb = -1.0
+					r.attacker = p
+					b.hit(1, 1.0, 0.0, "swipe", {"head": 1})
+				continue
+			climb = -1.0
+			if mode_ == "bp":
+				if b.bp and now >= bp_ready and now >= b.immune_until - r.time + now:
+					if want_bp < 0.0:
+						want_bp = now + 0.8
+					if now >= want_bp:
+						want_bp = -1.0
+						if r.bp_apply("c", b.nid):
+							bp_ready = now + Game.BP_COOLDOWN
+				else:
+					want_bp = -1.0
+			else:
+				if b.mode == "stuck":
+					if stuck_seen < 0.0:
+						stuck_seen = now
+					if now - stuck_seen >= 0.25 and now >= next_claw:
+						next_claw = now + 0.4
+						r.attacker = p
+						b.hit(1, 1.0, 0.0, "swipe", {"head": 1})
+				else:
+					stuck_seen = -1.0
+				for q in r.projs:
+					if not q.dead and q.get("catchable", false) and not ring_seen.has(int(q.id)):
+						ring_seen[int(q.id)] = true
+						if ring_seen.size() % 2 == 0:            # (half of the yellow rings are caught and thrown back at the plate)
+							q.dead = true
+							r.attacker = p
+							b.hit(1, 1.0, 0.0, "catch", {"head": 1})
+			var tp: Vector2 = b.tail_point()
+			if (b.mode == "swim" or b.mode == "plan" or b.mode == "stuck") and tp.y > 420.0 and now >= next_claw and now >= tail_ready and b.bp_t <= 0.0:
+				next_claw = now + 0.4
+				tail_ready = now + 1.2                            # (the tail flicks the claw away: one hit, then it has to come back)
+				r.attacker = p
+				b.hit(1, 1.0, 0.0, "swipe", {"link": b.links.size() - 1})
+		var end := now
+		var p1: float = float(t_ph.get(2, end))
+		var p2: float = float(t_ph.get(3, end)) - p1
+		var p3: float = end - float(t_ph.get(3, end))
+		print("FIGHTSIM T10 %s: phase 1 %.0f s, phase 2 %.0f s, phase 3 %.0f s, total %.0f s (hp %d, %s), breaks %d, plans %s" % [mode_, p1, p2, p3, end, b.max_hp, "dead" if (b.dying or b.hpf <= 0.0) else "ALIVE", breaks, str(counts)])
+		out[mode_] = end if (b.dying or b.hpf <= 0.0) else 1e9
+		r.queue_free()
+	var ok: bool = out.bp < 1e8 and out.nobp < 2.0 * out.bp
+	print("TEST fightsim %s bp %.0f s, without breakpoint %.0f s (must be < 2x)" % ["PASS" if ok else "FAIL", out.bp, out.nobp])
+	return ok
+
+# the link nearest the middle of the body (the bot claws the lying chain)
+func room_link(b: LoopBoss) -> int:
+	return clampi(b.links.size() / 2, 0, b.links.size() - 1)
 
 func loop3_m3(res: Dictionary) -> void:
 	# --- M3 -------------------------------------------------------------------------------------------------------------
@@ -698,3 +802,166 @@ func loop3_m3(res: Dictionary) -> void:
 	if hl3.gear_dir != -gd0:
 		fail(res, "phase 2: the gears did not turn the other way at i++")
 	r3m.queue_free()
+
+func loop3_m4(res: Dictionary) -> void:
+	# --- M4 -------------------------------------------------------------------------------------------------------------
+	var r := loop_fight(60.0, 464.0)
+	var b: LoopBoss = r.boss
+	var hl: LoopHall = r.shaft
+	b.queue = []
+	b.gap_t = 999.0
+	# 1. 66 %: phase 2, a 2.0 s change: invulnerable, no touch; the low ledges go, the gantry swings, the nested ring splits off; then recursion, escalate
+	b.hpf = float(b.max_hp) * 0.67
+	b.hit(2, 1.0, 0.0, "swipe", {"link": b.links.size() - 1})
+	if b.mode != "trans" or b.ph != 2 or hl.ph != 2 or hl.p2_t0 < 0.0:
+		fail(res, "66 %%: mode %s, phase %d / hall %d" % [b.mode, b.ph, hl.ph])
+	if b.hit(2, 1.0, 0.0, "swipe", {"link": b.links.size() - 1}) != "block" or not b.touch_boxes().is_empty():
+		fail(res, "the phase change is not invulnerable / harmless")
+	loop_run(r, int(2.05 / Game.STEP))
+	if b.mode != "swim" or not b.nest_on:
+		fail(res, "after the change to phase 2: mode %s, nest %s" % [b.mode, str(b.nest_on)])
+	b.gap_t = 0.0
+	var firsts: Array = []
+	var seen := {}
+	var esc_seen := false
+	var esc2_seen := false
+	var esc2_dmg := 0
+	var esc2_cue := 0.0
+	var two_big := false
+	var copy_harm := false
+	for f in range(int(16.0 / Game.STEP)):
+		loop_run(r, 1)
+		if not b.plan.is_empty() and not seen.has(int(b.plan.seq)):
+			seen[int(b.plan.seq)] = true
+			firsts.append(String(b.plan.id))
+			if String(b.plan.id) == "esc2":
+				esc2_seen = true
+				esc2_cue = float(b.plan.t)
+		if not b.plan.is_empty() and String(b.plan.id) == "esc2" and b.plan_active():
+			for hb in b.attack_boxes():
+				esc2_dmg = maxi(esc2_dmg, int(hb.dmg))
+		var big := 0
+		for hb2 in b.harmboxes():
+			if int(hb2.get("dmg", 1)) >= 2:
+				big += 1
+		if big > 1:
+			two_big = true
+		for hb3 in b.pressure_boxes(r.time):
+			if hb3.has("copy"):
+				copy_harm = true
+	if firsts.size() < 3 or firsts[0] != "recursion" or firsts[1] != "escalate" or firsts[2] != "esc2":
+		fail(res, "phase 2's first cycle: %s" % str(firsts.slice(0, 4)))
+	if not esc2_seen or esc2_dmg != 1 or esc2_cue < 0.45 * float(Game.dv("telegraph_mult")) - 0.01:
+		fail(res, "escalate's second lunge: seen %s, damage %d, cue %.2f" % [str(esc2_seen), esc2_dmg, esc2_cue])
+	if not copy_harm or two_big:
+		fail(res, "recursion's copy hurt %s; two 2-damage boxes at once %s" % [str(copy_harm), str(two_big)])
+	# 2. the nested ring: round a gear (1 damage), a 0.6 s spin-up (its cue) and over M to the other gear; a break drops it 4 s
+	b.nest_base = r.time
+	b.nest_g0 = 0
+	var g0 := b.nest_gear(r.time + 1.0)
+	var g1 := b.nest_gear(r.time + LoopBoss.NEST_PER + 0.5)
+	var c_or := b.nest_center(r.time + 2.0)
+	var c_x := b.nest_center(r.time + LoopBoss.NEST_ORBIT + LoopBoss.NEST_SPIN + LoopBoss.NEST_CROSS * 0.5)
+	if g0 != 0 or g1 != 1 or absf(c_or.distance_to(LoopHall.GEAR_C[0]) - LoopBoss.NEST_R) > 0.5 or absf(c_x.x - 192.0) > 20.0 or c_x.y > 260.0:
+		fail(res, "nest: gears %d -> %d, orbit %.1f, crossing at %.0f, %.0f" % [g0, g1, c_or.distance_to(LoopHall.GEAR_C[0]), c_x.x, c_x.y])
+	var spin := 0.0
+	for k in range(200):
+		if b.nest_spinup(r.time + float(k) * 0.05) >= 0.0:
+			spin += 0.05
+	if spin < 0.55:
+		fail(res, "the ring's spin-up lasts %.2f s (want >= 0.6)" % spin)
+	var nb := 0
+	for hb4 in b.pressure_boxes(r.time + 1.0):
+		if hb4.has("nest"):
+			nb += 1
+			if int(hb4.dmg) != 1:
+				fail(res, "a nest link hurts %d" % int(hb4.dmg))
+	if nb != 6:
+		fail(res, "%d nest boxes" % nb)
+	b.mode = "swim"
+	b.plan = {}
+	b._break()
+	var dropped := true
+	for hb5 in b.pressure_boxes(r.time + 1.0):
+		if hb5.has("nest"):
+			dropped = false
+	if not dropped or b.pressure_boxes(r.time + 4.2).filter(func(q): return q.has("nest")).is_empty():
+		fail(res, "a break does not drop the ring for 4 s")
+	loop_run(r, int(2.6 / Game.STEP))
+	# 3. 33 %: phase 3, a 2.5 s change: the plate cracks, the floor cracks 0.8 s and falls away, the ceiling opens, the ring is gone
+	b.mode = "swim"
+	b.hpf = float(b.max_hp) * 0.34
+	b.hit(2, 1.0, 0.0, "swipe", {"link": b.links.size() - 1})
+	if b.mode != "trans" or b.ph != 3 or b.nest_on:
+		fail(res, "33 %%: mode %s phase %d nest %s" % [b.mode, b.ph, str(b.nest_on)])
+	loop_run(r, int(1.0 / Game.STEP))
+	if not hl.pit_open(r.time):
+		fail(res, "phase 3: the pit is not open 1.0 s into the change")
+	loop_run(r, int(1.6 / Game.STEP))
+	if b.mode != "swim" or b._plate_i() != 4:
+		fail(res, "after the change to phase 3: mode %s, plate %d" % [b.mode, b._plate_i()])
+	# 4. the wrap dive: a 0.75 s cue (into the pit, in at the top seam over the target's column), down the column, 2 damage; on the gantry: stuck
+	b.gap_t = 999.0
+	b.queue = []
+	var pq = r.player
+	pq.x = 180.0
+	pq.y = 30.0
+	pq.vx = 0.0
+	b.hx = 100.0
+	b.hy = 300.0
+	b._start("wrap_dive", "p1")
+	var wcue := float(b.plan.t)
+	var top_seen := false
+	var wdmg := 0
+	var wstuck := false
+	for f in range(200):
+		var gl_y: float = float(hl.gantry_p.y)
+		loop_run(r, 1)
+		pq.x = 180.0
+		pq.y = gl_y - pq.h
+		if b.plan_phase() == "cue" and b.hy < 0.0:
+			top_seen = true
+		for hb6 in b.attack_boxes():
+			wdmg = maxi(wdmg, int(hb6.dmg))
+		if b.mode == "stuck":
+			wstuck = true
+			break
+	if wcue < 0.749 or not top_seen or wdmg != 2 or not wstuck or absf(b.hy - (float(hl.gantry_p.y) - 14.0)) > 1.0:
+		fail(res, "wrap dive: cue %.2f, at the top %s, damage %d, stuck %s at %.0f (gantry %.0f)" % [wcue, str(top_seen), wdmg, str(wstuck), b.hy, float(hl.gantry_p.y)])
+	# a feint only adds 0.25 s to a full cue
+	b.mode = "swim"
+	b._start("lunge", "p1")
+	var c0 := float(b.plan.t)
+	b._feint()
+	if absf(float(b.plan.t) - c0 - 0.25 * float(Game.dv("telegraph_mult"))) > 0.001:
+		fail(res, "a feint adds %.2f s" % (float(b.plan.t) - c0))
+	# 5. hp = length: phase 3's hp lost in eighths sheds links (14 -> 6), they lie on the floor
+	b.plan = {}
+	b.mode = "swim"
+	var n0 := b.links.size()
+	b.hpf = b.p3_hp0 * 0.5
+	b.on_damage()
+	var n1 := b.links.size()
+	b.hpf = b.p3_hp0 * 0.01
+	b.on_damage()
+	if n0 != 14 or n1 != 10 or b.links.size() != 7 or b.shed.size() != 7:          # (the eighth link goes with the last hit)
+		fail(res, "shedding: %d -> %d -> %d links, %d shed" % [n0, n1, b.links.size(), b.shed.size()])
+	# 6. the guest's copy: the ring and the copy are pure functions of the fields
+	b.nest_on = true
+	b.nest_base = r.time - 2.0
+	b._make_copy()
+	var rec := NetClasses.record(b)
+	var rg := new_room("T10")
+	var pup = NetClasses.make(int(rec[1]), rg)
+	NetClasses.apply(pup, JSON.parse_string(JSON.stringify(rec)))
+	rg.time = r.time
+	var pa: Array = b.pressure_boxes(r.time + 0.5)
+	var pb: Array = pup.pressure_boxes(r.time + 0.5)
+	var same: bool = pa.size() == pb.size()
+	for k in range(mini(pa.size(), pb.size())):
+		same = same and absf(float(pa[k].x) - float(pb[k].x)) < 1.5 and absf(float(pa[k].y) - float(pb[k].y)) < 1.5
+	if not same or pup.links.size() != 7 or pup.shed.size() != 7:
+		fail(res, "the guest's ring / copy / length differ (%d / %d boxes) %s / %s" % [pa.size(), pb.size(), str(pa.slice(0, 2)), str(pb.slice(0, 2))])
+	pup.free()
+	rg.queue_free()
+	r.queue_free()
