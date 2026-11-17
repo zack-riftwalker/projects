@@ -27,11 +27,11 @@ T('page loads without errors, register screen is active', async ({ browser }) =>
   await context.close();
 });
 
-T('new user: zero -> register -> home screen', async ({ browser }) => {
+T('new user: zero -> register -> path screen (landing)', async ({ browser }) => {
   const { page, context } = await open(browser);
   await register(page, { name: 'نگار احمدی', user: 'negar1', pass: '1234', grade: 7 });
-  eq(await curScreen(page), 'home');
-  assert(await visible(page, '#s-home'), 'home not visible');
+  eq(await curScreen(page), 'path');
+  assert(await visible(page, '#s-path'), 'path not visible');
   assert(await visible(page, '#topbar'), 'topbar not visible');
   const r = await page.evaluate(() => ({ user: USER, name: S.name, grade: S.grade, who: $('#who').textContent, regActive: $('#s-reg').classList.contains('active') }));
   eq(r.user, 'negar1'); eq(r.name, 'نگار احمدی'); eq(r.grade, 7); assert(r.who.includes('نگار'), 'who label'); assert(!r.regActive, 'reg still active');
@@ -118,13 +118,12 @@ T('starting activities gives NO coins (new user and legacy user)', async ({ brow
   }
 });
 
-T('floating 🧑‍🏫/🛟 buttons are hidden on register screen and back on home', async ({ browser }) => {
+T('floating 🧑‍🏫/🛟 buttons never cover the UI (hidden; reachable from profile)', async ({ browser }) => {
   const { page, context } = await open(browser);
   assert(!(await visible(page, '#btnSup')), '🛟 visible on register screen');
   assert(!(await visible(page, '#btnTch')), '🧑‍🏫 visible on register screen');
   await register(page);
-  assert(await visible(page, '#btnSup'), '🛟 should be visible after login');
-  assert(await visible(page, '#btnTch'), '🧑‍🏫 should be visible after login');
+  assert(!(await visible(page, '#btnSup')) && !(await visible(page, '#btnTch')), 'floating buttons must not overlap the bottom nav');
   await context.close();
 });
 
@@ -133,8 +132,9 @@ T('developer credit text appears once', async ({ browser }) => {
   const reg = await page.evaluate(() => document.body.innerText);
   assert(count(reg, 'توسعه‌دهنده') <= 1, 'dup credit on register: ' + count(reg, 'توسعه‌دهنده'));
   await register(page);
+  await page.evaluate(() => go('prof'));
   const home = await page.evaluate(() => document.body.innerText);
-  eq(count(home, 'توسعه‌دهنده'), 1, 'credit count on home');
+  eq(count(home, 'توسعه‌دهنده'), 1, 'credit count on profile');
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   eq(count(html, '<footer'), 1, '<footer> tags in source');
   await context.close();
@@ -144,7 +144,7 @@ T('logout is in the profile screen (not next to 🏠) and asks for confirmation'
   const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
   await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
   assert(!(await page.evaluate(() => !!document.querySelector('#topbar #btnOut'))), '🚪 still in topbar');
-  assert(await visible(page, '#btnProf'), 'profile button missing');
+  assert(await visible(page, '#btnProf'), 'profile tab missing');
   await page.click('#btnProf');
   eq(await curScreen(page), 'prof');
   assert(await visible(page, '#s-prof #btnOut'), 'logout button not in profile');
@@ -217,7 +217,165 @@ T('a11y: topbar buttons are >= 44x44 and have aria-label', async ({ browser }) =
   await context.close();
 });
 
-/* ============================== PHASE 1+ : append below ============================== */
+
+/* ============================== PHASE 1 ============================== */
+const inView = (page, scope) => page.evaluate((scope) => [...document.querySelectorAll(scope + ' button')].filter((b) => {
+  const r = b.getBoundingClientRect(), cs = getComputedStyle(b);
+  return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && !b.closest('[hidden]') && !(b.closest('.screen') && !b.closest('.screen').classList.contains('active'));
+}).map((b) => ({ id: b.id, t: b.textContent.trim(), h: b.getBoundingClientRect().height })), scope);
+
+T('PHASE1: new user lands on path with exactly ONE primary CTA «شروع» in first viewport', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'cta1', name: 'نگار' });
+  eq(await curScreen(page), 'path');
+  const cta = (await inView(page, '#s-path')).filter((b) => b.t === 'شروع');
+  eq(cta.length, 1, 'visible «شروع» buttons');
+  eq((await inView(page, '#s-path')).length, 1, 'all buttons inside the path map in first viewport');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE1: path first viewport has <= 12 visible buttons (header + nav included)', async ({ browser }) => {
+  for (const mode of ['new', 'legacy']) {
+    const { page, context } = mode === 'new' ? await open(browser) : await open(browser, { fixture: 'legacy-user.json' });
+    if (mode === 'new') await register(page, { user: 'btn1' });
+    await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+    await page.waitForTimeout(300);
+    const all = await inView(page, 'body');
+    assert(all.length <= 12, `${mode}: ${all.length} visible buttons: ` + all.map((b) => b.id || b.t).join(','));
+    assert(all.every((b) => b.h >= 43.5), `${mode}: a visible button is < 44px high: ` + all.filter((b) => b.h < 43.5).map((b) => b.id || b.t).join(','));
+    await context.close();
+  }
+});
+
+T('PHASE1: legacy auto-login lands on path; adv progress => completed chapters, current node scrolled into view', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await curScreen(page), 'path');
+  const r = await page.evaluate(() => ({
+    states: [...document.querySelectorAll('#pathBox .pch')].map((c) => c.dataset.state),
+    doneNodes: document.querySelectorAll('#pathBox .pn.done').length,
+    cur: (() => { const c = document.querySelector('#pcur'); return c && { ch: +c.closest('.pch').dataset.ch, k: c.dataset.k, top: c.getBoundingClientRect().top }; })(),
+    h: innerHeight, n: CH[8].length
+  }));
+  eq(r.states.slice(0, 4), ['done', 'done', 'done', 'current'], 'chapter states (adv[8]=3)');
+  assert(r.states.slice(4).every((s) => s === 'locked'), 'later chapters must be locked');
+  eq(r.states.length, r.n, 'chapter count');
+  eq(r.doneNodes, 18, 'done nodes = 3 chapters x 6');
+  assert(r.cur && r.cur.ch === 3 && r.cur.k === 'L', 'current node should be first lesson of chapter 4');
+  assert(r.cur.top > 0 && r.cur.top < r.h, 'current node not scrolled into view: ' + r.cur.top);
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE1: lesson node quick quiz records stars, unlocks next node, persists in us[USER].d.path; boss state follows S.adv', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'path2', grade: 8 });
+  await page.click('#pathBox .pgo');
+  eq(await curScreen(page), 'pq');
+  for (let k = 0; k < 5; k++) {
+    await page.waitForSelector('#pqBox .opt:not([disabled])');
+    await page.evaluate(() => { const P = v9Pq(), q = P.q[P.k]; document.querySelectorAll('#pqBox .opt')[q.opts.findIndex((o) => o.ok)].click(); });
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForSelector('#pqGo');
+  await page.click('#pqGo');
+  eq(await curScreen(page), 'path');
+  const r = await page.evaluate(() => ({ stars: document.querySelector('.pch .pn.done .pst')?.getAttribute('aria-label'), curJ: [...document.querySelectorAll('.pch[data-ch="0"] .pn')].findIndex((n) => n.id === 'pcur') }));
+  assert(/۳/.test(r.stars || ''), 'expected 3 stars, got ' + r.stars);
+  eq(r.curJ, 1, 'second lesson should now be current');
+  const d = (await lsGet(page, 'mh_users')).path2.d;
+  eq(d.path.l[8][0].L[0].s, 3, 'stored stars');
+  assert(!(d.coins > 0), 'lessons must not give coins');
+  await context.close();
+});
+
+T('PHASE1: chest gives no coins and unlocks the boss node (S.path seeded for chapter 1)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'chest1' });
+  await page.evaluate(() => { S.path = { l: { 8: { 0: { L: [{ s: 2, a: 70 }, { s: 3, a: 100 }, { s: 1, a: 40 }, { s: 3, a: 100 }], c: 0 } } }, xp: { d: 0, b: 0, v: 0 } }; go('path'); });
+  const before = await page.evaluate(() => [S.coins || 0, MathHeroShop.coins()]);
+  assert(await page.evaluate(() => document.querySelector('#pcur').dataset.k === 'C'), 'chest should be current');
+  await page.click('#pathBox .pgo');
+  await page.click('#chOk');
+  eq(await page.evaluate(() => [S.coins || 0, MathHeroShop.coins()]), before, 'coins changed by chest');
+  assert(await page.evaluate(() => document.querySelector('#pcur').dataset.k === 'B'), 'boss should be current after chest');
+  await page.click('#pathBox .pgo');
+  eq(await curScreen(page), 'adv');
+  assert(await page.evaluate(() => document.querySelector('#advBox').textContent.includes('فصل ۱')), 'boss fight of chapter 1 not shown');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE1: every bottom-nav tab navigates to an existing active screen without errors; nav is accessible', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  const tabs = await page.evaluate(() => [...document.querySelectorAll('#bnav button')].map((b) => ({ go: b.dataset.go, label: b.getAttribute('aria-label'), txt: b.textContent.trim(), h: b.getBoundingClientRect().height, w: b.getBoundingClientRect().width })));
+  eq(tabs.map((t) => t.go), ['path', 'league', 'shop', 'prof']);
+  assert(tabs.every((t) => t.label && t.txt.includes(t.label) && t.h >= 44 && t.w >= 44), 'nav tab a11y: ' + JSON.stringify(tabs));
+  for (const t of tabs) {
+    await page.click(`#bnav [data-go="${t.go}"]`);
+    const r = await page.evaluate(() => ({ cur, act: [...document.querySelectorAll('main .screen.active')].map((e) => e.id), pressed: document.querySelector('#bnav [aria-current="page"]')?.dataset.go }));
+    eq(r.cur, t.go); eq(r.act, ['s-' + t.go], 'active screens'); eq(r.pressed, t.go, 'active tab highlight');
+  }
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE1: every profile→بیشتر entry opens an existing active screen without errors', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  await page.click('#btnProf');
+  const ids = await page.evaluate(() => [...document.querySelectorAll('#pMore [data-more]')].map((b) => b.dataset.more));
+  assert(ids.length >= 14, 'too few entries: ' + ids.length);
+  for (const id of ids) {
+    await page.click('#btnProf');
+    await page.click(`#pMore [data-more="${id}"]`);
+    const r = await page.evaluate(() => ({ cur, act: [...document.querySelectorAll('main .screen.active')].map((e) => e.id) }));
+    eq(r.act.length, 1, id + ' active screens ' + r.act);
+    assert(r.act[0] === 's-' + r.cur && r.cur !== 'prof', `${id}: went to ${r.cur} / ${r.act}`);
+    await page.evaluate(() => go('path')); /* leave game-ish screens (timers) */
+  }
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE1: sound toggle lives in profile; brand and back buttons go to path (not old menu/home)', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  await page.click('#btnProf');
+  const t0 = await page.textContent('#btnSound'); await page.click('#btnSound');
+  assert((await page.textContent('#btnSound')) !== t0, 'sound label did not change');
+  await page.click('#btnBrand'); eq(await curScreen(page), 'path');
+  await page.evaluate(() => go('menu')); eq(await curScreen(page), 'path', "go('menu') redirect");
+  await page.evaluate(() => go('shop')); await page.click('#shopBox [data-back]'); eq(await curScreen(page), 'path', 'shop back button');
+  await context.close();
+});
+
+T('PHASE1: page height outside the path map does not balloon; one visible screen only', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  const r = await page.evaluate(() => ({
+    total: document.documentElement.scrollHeight, map: document.querySelector('#s-path').getBoundingClientRect().height,
+    vis: [...document.querySelectorAll('main > *')].filter((e) => e.getBoundingClientRect().height > 0).map((e) => e.id),
+    stray: [...document.querySelectorAll('#app > *')].filter((e) => !['topbar', 'MAIN'].includes(e.id || e.tagName) && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0).map((e) => e.id || e.tagName)
+  }));
+  eq(r.vis, ['s-path'], 'visible sections inside main');
+  assert(r.total - r.map < 330, `non-map height ${r.total - r.map}px`);
+  eq(r.stray, [], 'stray visible blocks in #app');
+  await context.close();
+});
+
+T('PHASE1: old entry points are detached (old menu/home never active after login; hub has no shop/wheel dup)', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  await page.evaluate(() => go('hub'));
+  const r = await page.evaluate(() => ({ shopBtn: !!(document.querySelector('#hubShop') && getComputedStyle(document.querySelector('#hubShop')).display !== 'none'), wheel: !!document.querySelector('#tiles [data-t="wheel"]'), tiles: document.querySelectorAll('#tiles .tile').length }));
+  eq(r.shopBtn, false); eq(r.wheel, false); assert(r.tiles > 30, 'hub games should still exist: ' + r.tiles);
+  await context.close();
+});
+
+/* ============================== PHASE 2+ : append below ============================== */
 
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {

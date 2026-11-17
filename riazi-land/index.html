@@ -318,11 +318,9 @@ body.th-sunset{background:linear-gradient(160deg,#2b1055,#7a2e5e 55%,#ff7a59) fi
 <svg width="0" height="0" style="position:absolute"><symbol id="ic" viewBox="0 0 512 512"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34e0c0"/><stop offset="1" stop-color="#ff7a59"/></linearGradient><radialGradient id="b2" cx=".5" cy=".3" r=".9"><stop offset="0" stop-color="#2c1280"/><stop offset="1" stop-color="#0a0e17"/></radialGradient></defs><rect width="512" height="512" rx="112" fill="url(#b2)"/><polygon points="256,56 430,156 430,356 256,456 82,356 82,156" fill="#34e0c0" fill-opacity=".08" stroke="url(#g2)" stroke-width="20" stroke-linejoin="round"/><polygon points="256,118 376,187 376,325 256,394 136,325 136,187" fill="none" stroke="url(#g2)" stroke-width="5" opacity=".45"/><path d="M164 204h184M214 204v112q0 26 26 26M302 204v112q0 26 26 26" fill="none" stroke="#ffd166" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/></symbol></svg>
 <div id="app">
   <header id="topbar">
-    <span class="brand"><svg width="24" height="24" viewBox="0 0 512 512"><use href="#ic"/></svg>ریاضی‌لند</span>
-    <span class="who" id="who"></span>
-    <button class="ib" id="btnSound" title="صدا" aria-label="صدا">🔊</button>
-    <button class="ib" id="btnProf" title="پروفایل" aria-label="پروفایل">👤</button>
-    <button class="ib" id="btnHome" title="منوی اصلی" aria-label="منوی اصلی">🏠</button>
+    <button type="button" class="brand" id="btnBrand" aria-label="مسیر (صفحهٔ اصلی)"><svg width="24" height="24" viewBox="0 0 512 512"><use href="#ic"/></svg><span>ریاضی‌لند</span></button>
+    <span id="who" hidden></span>
+    <span class="hst" id="hStk" title="روزهای پشت‌سرهم">🔥 ۰</span><span class="hst" id="hCoin" title="سکه">🪙 ۰</span><span class="hst" id="hXp" title="امتیاز امروز / هدف روزانه">⚡ ۰/۵۰</span>
   </header>
 
   <main>
@@ -730,6 +728,7 @@ function go(id){
   if(id==='game')gameIntro();
   if(id==='quiz')quizStart();
   window.scrollTo({top:0,behavior:'smooth'});
+  if(window.v9Go)v9Go(id);
 }
 function refreshMenu(){
   const lab=Object.values(S.lab).filter(v=>v.a&&v.c).length;
@@ -1227,8 +1226,6 @@ go=function(id){_go(id);if(id==='report')reportShow();if(id==='expo')expoInit();
 
 $$('.mission').forEach(b=>b.addEventListener('click',()=>{SFX.init();SFX.click();go(b.dataset.go)}));
 $('#btnReport').onclick=()=>{SFX.init();if(!S.quiz){toast('اول خودآزمایی و پرسشنامه را تمام کن 📝');return}go('report')};
-$('#btnHome').onclick=()=>{SFX.init();SFX.click();go('menu')};
-$('#btnSound').onclick=()=>{SFX.init();const m=SFX.toggle();$('#btnSound').textContent=m?'🔇':'🔊';if(!m)SFX.ok()};
 document.addEventListener('pointerdown',()=>SFX.init(),{once:true});
 (function(){
   
@@ -1246,7 +1243,7 @@ const UK='mh_users',SK='mh_session';let USER=null,authMode='reg';
 const users=()=>store(UK)||{};
 async function sha(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('mh|'+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){let h=5381;for(const c of 'mh|'+t)h=(h*33^c.charCodeAt(0))>>>0;return'f'+h}}
 function persist(){if(!USER)return;const us=users();if(!us[USER])return;us[USER].d={learn:S.learn,lab:S.lab,game:S.game,quiz:S.quiz,survey:S.survey,expo:S.expo,memo:S.memo};store(UK,us)}
-function enter(u,rec){USER=u;Object.assign(S,{name:rec.n,phone:rec.m||'',cls:'هشتم',learn:false,lab:{},game:null,quiz:null,survey:null,expo:{},memo:null,run:null,duel:null,grade:8},rec.d||{});store(SK,u);$('#who').innerHTML='🎮 <b>'+esc(S.name)+'</b>';$('#inPass').value='';go('menu')}
+function enter(u,rec){USER=u;Object.assign(S,{name:rec.n,phone:rec.m||'',cls:'هشتم',learn:false,lab:{},game:null,quiz:null,survey:null,expo:{},memo:null,run:null,duel:null,grade:8},rec.d||{});store(SK,u);$('#who').innerHTML='🎮 <b>'+esc(S.name)+'</b>';$('#inPass').value='';go('path')}
 $$('.tabs button').forEach(b=>b.onclick=()=>{authMode=b.dataset.m;$$('.tabs button').forEach(x=>x.classList.toggle('sel',x===b));$('#fName').style.display=authMode==='reg'?'':'none';$('#grade').style.display=$('#fPhone').style.display=authMode==='reg'?'':'none';$('#regBtn').textContent=authMode==='reg'?'ثبت‌نام':'ورود'});
 $('#regForm').addEventListener('submit',async e=>{
   e.preventDefault();const n=$('#inName').value.trim(),u=$('#inUser').value.trim().toLowerCase(),p=$('#inPass').value;
@@ -1487,7 +1484,7 @@ const lgKey=u=>encodeURIComponent(String(u).replace(/[.#$\[\]\/]/g,'_'));
 async function lgReq(path,opt){const c=new AbortController(),t=setTimeout(()=>c.abort(),7000);try{const r=await fetch(lgBase()+path+'.json',Object.assign({signal:c.signal},opt||{}));if(!r.ok)throw 0;return await r.json()}finally{clearTimeout(t)}}
 function myRec(){const a=S.arc||{};return{n:S.name,g:S.grade||8,x:xpOf(),r:S.run?S.run.best:0,w:S.duel?S.duel.wins:0,a:Object.values(a).reduce((p,q)=>p+q,0),t:Date.now()}}
 async function lgSync(force){if(!lgOn()||!USER)return;const r=myRec(),sig=[r.x,r.r,r.w,r.a].join('|'),now=Date.now();if(!force&&(sig===lgSig||now-lgT<8000))return;lgT=now;lgSig=sig;try{await lgReq('/'+lgKey(USER),{method:'PUT',body:JSON.stringify(r)});lgFetch()}catch(e){ONL=null}}
-async function lgFetch(){if(!lgOn())return;try{ONL=(await lgReq(''))||{};ONL._ok=1}catch(e){ONL=null}if(cur==='menu')renderLeague()}
+async function lgFetch(){if(!lgOn())return;try{ONL=(await lgReq(''))||{};ONL._ok=1}catch(e){ONL=null}if(cur==='menu'||cur==='league')renderLeague()}
 function renderLeague(){
   const on=lgOn()&&ONL&&ONL._ok,me=myRec();let rows;
   if(on)rows=Object.entries(ONL).filter(([k])=>k!=='_ok').map(([k,v])=>({u:decodeURIComponent(k),n:v.n||'؟',g:v.g||8,x:v.x||0,r:v.r||0,w:v.w||0,a:v.a||0,e:v.e||0,av:v.av||''}));
@@ -1568,7 +1565,7 @@ function arcEnd(){clearInterval(AR.iv);const m=AR.m;S.arc=S.arc||{};const nb=AR.
 BADGES.push(['⚡','برق‌آسا',d=>d.arc&&d.arc.blitz>=150],['💣','بمب‌گریز',d=>d.arc&&d.arc.bomb>=120],['🧗','برج‌گشا',d=>d.arc&&d.arc.surv>=100]);
 const _xd=xpD;xpD=function(d){return _xd(d)+Object.values(d.arc||{}).reduce((a,b)=>a+Math.floor(b/3),0)+((d.stk&&d.stk.n)||0)*5};
 const _p4=persist;persist=function(){_p4();if(USER){const us=users();if(us[USER]){us[USER].d.arc=S.arc||{};us[USER].d.stk=S.stk;store(UK,us)}lgSync()}};
-const _e4=enter;enter=function(u,r){S.arc=null;S.stk=null;_e4(u,r);S.arc=S.arc||{};lgSig='';lgFetch();clearInterval(lgIv);lgIv=setInterval(()=>{if(cur==='menu')lgFetch()},30000)};
+const _e4=enter;enter=function(u,r){S.arc=null;S.stk=null;_e4(u,r);S.arc=S.arc||{};lgSig='';lgFetch();clearInterval(lgIv);lgIv=setInterval(()=>{if(cur==='menu'||cur==='league')lgFetch()},30000)};
 const dayN=()=>Math.floor((Date.now()+12600000)/864e5);
 const _rm4=refreshMenu;refreshMenu=function(){_rm4();ensureMenu();S.arc=S.arc||{};S.cls=GN[S.grade||8];
   const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d){S.stk={n:s.d===d-1?s.n+1:1,d};if(S.stk.n>1)toast('🔥 '+fa(S.stk.n)+' روز پشت‌سرهم! +'+fa(S.stk.n*5)+' امتیاز')}
@@ -1577,7 +1574,7 @@ const _rm4=refreshMenu;refreshMenu=function(){_rm4();ensureMenu();S.arc=S.arc||{
 const _calc=calc;calc=function(){const r=_calc();if(S.quiz)return r;const a=Object.values(S.arc||{}).reduce((x,y)=>x+y,0);return{gp:0,qp:0,total:Math.min(100,Math.round((S.run?S.run.best:0)/2+(S.duel?S.duel.best:0)/3+a/6))}};
 const _rt=reportText;reportText=function(){let t=_rt();const g=S.grade||8;if(g!==8)t=t.replace(/گزارش درس:.*?ریاضی هشتم/,'گزارش تمرین‌ها | ریاضی '+GN[g]);const a=S.arc||{};
   return t.replace(/\n━━━━━━━━━━\nبازخورد/,`\n⚡ برق‌آسا: ${fa(a.blitz||0)} • 💣 بمب: ${fa(a.bomb||0)} • 🧗 برج: ${fa(a.surv||0)}\n🏃 رانر: ${fa(S.run?S.run.best:0)} • ⚔️ برد نبرد: ${fa(S.duel?S.duel.wins:0)}\n━━━━━━━━━━\nبازخورد`)};
-if(window.__auto&&users()[window.__auto])enter(window.__auto,users()[window.__auto]);
+/* ورود خودکار از mh_session: به انتهای بخش «نسخهٔ ۹» منتقل شد (بعد از نصب همهٔ لایه‌ها) */
 /* ---- پیام خطای واضح در ثبت‌نام/ورود ---- */
 $('#regBtn').insertAdjacentHTML('afterend','<div id="regErr" class="msg bad" role="alert" style="display:none;margin-top:12px;min-height:0"></div>');
 const _t4=toast;toast=function(m){_t4(m);if(cur==='reg'){const e=$('#regErr');e.style.display='block';e.textContent='⚠️ '+m;if(/قبلاً ثبت/.test(m)){$('.tabs button[data-m="login"]').click();e.textContent='⚠️ '+m+' — به حالت «ورود» رفتم؛ رمزت را بزن.'}}};
@@ -1944,7 +1941,7 @@ function shopShow(){const C=SHOP[SHC];$('#shopBox').innerHTML=hdr('🛒 فروش
   $$('#shopBox [data-e]').forEach(b=>{b.onclick=()=>{S.eq[SHC]=b.dataset.e;applyTheme();persist();lgSync(true);SFX.ok();shopShow();chip()}});
   $$('#shopBox [data-b]').forEach(b=>{b.onclick=()=>{const p=+b.dataset.p;if((S.coins||0)<p){SFX.err();toast('سکهٔ کافی نداری 😅 بازی کن و سکه جمع کن');return}S.coins-=p;S.items.push(SHC+':'+b.dataset.b);S.eq[SHC]=b.dataset.b;applyTheme();SFX.win();confetti(25);persist();lgSync(true);shopShow();chip()}})}
 /* ---- پروفایل و دسترسی سریع ---- */
-function chip(){const m=$('#s-menu');if(!m||!USER)return;let c=$('#pChip');if(!c){c=document.createElement('div');c.id='pChip';m.prepend(c)}
+function chip(){if(window.v9Hdr)v9Hdr();const m=$('#s-menu');if(!m||!USER)return;let c=$('#pChip');if(!c){c=document.createElement('div');c.id='pChip';m.prepend(c)}
   c.innerHTML=`<div class="pc1"><span class="pav" style="background:${frameCss((S.eq||{}).fr)}"><b>${(S.eq||{}).av||'🛡️'}</b></span><div style="flex:1"><b>${esc(S.name||'')}</b><div class="muted" style="font-size:13px">🪙 ${fa(S.coins||0)} • <a id="pTm">🏫 ${S.team?esc(S.team):'تیم را انتخاب کن'}</a></div></div><button class="btn sm gh" id="pIns" title="نصب">📲</button></div>
   <div class="qk"><button data-q="shop">🛒<span>فروشگاه</span></button><button data-q="adv">🗺️<span>ماجراجویی</span></button><button data-q="live">📡<span>مسابقهٔ زنده</span></button><button data-q="weak">🧠<span>مرور هوشمند</span></button></div>`;
   $$('#pChip [data-q]').forEach(b=>{b.onclick=()=>{SFX.init();SFX.click();go(b.dataset.q)}});$('#pIns').onclick=installHelp;$('#pTm').onclick=teamPick}
@@ -2501,7 +2498,7 @@ sec.innerHTML=`<div class="hc"><span class="av">${e.ch||'🦸'}</span><div style
 <div class="hm">${T.map(([i,n,g])=>`<button class="hb" data-g="${g}"><i>${i}</i><b>${n}</b></button>`).join('')}<button class="hb big" data-g="adv">⚔️ ادامهٔ ماجراجویی</button></div>
 <div class="mini"><span>${DEV}</span></div>`;
 sec.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();const g=b.dataset.g;if(g==='menu!'){raw=true;go('menu');raw=false}else go(g)})}
-const _g=go;go=function(id){if(id==='menu'&&!raw)id='home';_g(id);if(id==='home')home()};
+const _g=go;go=function(id){if(id==='menu'&&!raw)id='path';_g(id);if(id==='home')home()};
 document.getElementById('btnHome')&&(document.getElementById('btnHome').onclick=()=>go('home'));
 /* ثبت‌نام */
 const r=document.querySelector('#s-reg .card')||document.getElementById('s-reg');
@@ -2653,31 +2650,181 @@ r.insertAdjacentHTML('afterbegin','<div class="stk"><span>🧮</span><span>🚀<
 </script>
 
 <!-- ===== نسخهٔ ۹ ===== -->
+<style>
+/* ===== نسخهٔ ۹: مسیر (استایل‌ها) ===== */
+#topbar{position:sticky;top:6px;z-index:30;gap:8px;padding:4px 10px;background:rgba(10,14,23,.96)}
+#topbar .brand{display:inline-flex;align-items:center;gap:6px;min-height:44px;min-width:44px;font-family:var(--fh);font-size:18px;color:var(--cy);text-shadow:0 0 12px rgba(52,224,192,.7)}
+.hst{flex:1;text-align:center;font-weight:700;font-size:14px;white-space:nowrap;padding:5px 4px;border-radius:99px;background:rgba(255,255,255,.06)}
+#bnav{position:fixed;right:0;left:0;bottom:0;z-index:50;display:flex;justify-content:center;padding:0 4px env(safe-area-inset-bottom);background:rgba(10,14,23,.97);border-top:1px solid var(--line);backdrop-filter:blur(8px)}
+#bnav button{flex:1;max-width:220px;min-height:56px;min-width:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;line-height:1.4;color:var(--mut);border-radius:12px}
+#bnav button i{font-style:normal;font-size:22px;line-height:1.2}
+#bnav button[aria-current=page]{color:var(--cy);background:rgba(52,224,192,.12);box-shadow:inset 0 -3px 0 var(--cy)}
+body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bnav,body[data-scr="gm"] #bnav,body[data-scr="sg"] #bnav{display:none}
+#app{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+#toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+#btnSup,#btnTch,#hubShop{display:none!important}
+#dev{display:none}body[data-scr="reg"] #dev,body[data-scr="prof"] #dev{display:block}
+#pathBox{padding-bottom:24px}
+.pbn{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:16px;color:#fff;background:linear-gradient(120deg,hsl(var(--h) 60% 32%),hsl(calc(var(--h) + 40) 55% 22%));border:1px solid hsl(var(--h) 70% 55%/.6)}
+.pbn b{font-family:var(--fh);font-weight:400;font-size:18px;white-space:nowrap}.pbn span{flex:1;font-size:15px}.pbn i{font-style:normal}
+.pch[data-state="locked"] .pbn{filter:saturate(.35) brightness(.8)}
+.pnodes{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 0 12px}
+.pnodes:before{content:"";position:absolute;top:0;bottom:0;left:50%;border-left:3px dotted rgba(255,255,255,.12)}
+.pn{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;transform:translateX(var(--x))}
+.pcir{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:30px;background:rgba(255,255,255,.08);border:3px solid rgba(255,255,255,.15)}
+.pn.locked .pcir{opacity:.55;font-size:24px}
+.pn.done .pcir{background:linear-gradient(145deg,#ffd166,#ff9d2e);border-color:#fff3c4;box-shadow:0 0 16px rgba(255,209,102,.5)}
+.pn.cur .pcir{width:88px;height:88px;font-size:42px;background:linear-gradient(145deg,var(--cy),var(--pu));border-color:#fff;animation:ppulse 1.6s ease-in-out infinite}
+@keyframes ppulse{50%{box-shadow:0 0 0 12px rgba(52,224,192,.18),0 0 28px rgba(52,224,192,.7)}}
+.pst{font-size:13px;letter-spacing:1px}
+.pgo{min-height:44px;min-width:110px}
+.pmore{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0}
+.pmore button{min-height:56px;padding:8px 10px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.05);display:flex;align-items:center;gap:8px;text-align:right;font-size:14px;line-height:1.5}
+.pmore button i{font-style:normal;font-size:24px}
+#pqBox .opt{min-height:48px;width:100%}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+</style>
 <script>
 /* ===== نسخهٔ ۹: مسیر ===== */
-/* همهٔ کدهای تازهٔ نسخهٔ ۹ فقط در همین بخش اضافه می‌شوند؛ هیچ wrapper تازه‌ای روی go/persist/enter نگذار. */
+/* همهٔ کدهای تازهٔ نسخهٔ ۹ فقط در همین بخش اضافه می‌شوند؛ هیچ wrapper تازه‌ای روی go/persist/enter نگذار.
+   نقاط اتصال به هستهٔ قدیم (ویرایش درجا، نه wrapper): انتهای go() پایه → v9Go(id)؛ ابتدای chip() → v9Hdr()؛ enter() پایه → go('path'). */
 (function(){
-  /* --- فاز ۰: صفحهٔ پروفایل + خروج با تأیید (به‌جای 🚪 کنار 🏠) --- */
-  SCREENS.push('prof');
-  const sec=document.createElement('section');sec.id='s-prof';sec.className='screen';
-  document.getElementById('s-menu').parentNode.appendChild(sec);
+  const host=document.getElementById('s-menu').parentNode;
+  ST.push('path'); /* S.path در us[USER].d ذخیره می‌شود (همان الگوی advExtra) */
+  const mk=(id,html)=>{const s=document.createElement('section');s.id='s-'+id;s.className='screen';s.innerHTML=html;host.appendChild(s);SCREENS.push(id);return s};
+  mk('path','<div id="pathBox"></div>');
+  mk('pq','<div class="card" id="pqBox"></div>');
+  mk('league','').appendChild($('#lb')); /* کارت لیگ موجود به صفحهٔ خودش منتقل شد */
+  const secProf=mk('prof','');
+  const GOAL=50; /* هدف روزانهٔ موقت؛ فاز ۵ تنظیمش می‌کند */
+
+  /* ---------- داده ---------- */
+  function pd(){if(!S.path||typeof S.path!=='object')S.path={};const P=S.path;P.l=P.l||{};P.xp=P.xp||{d:0,b:0,v:0};return P}
+  function rec(g,i){const P=pd();const G=P.l[g]=P.l[g]||{};const r=G[i]=G[i]||{L:[],c:0};r.L=r.L||[];return r}
+  function dayXp(){const P=pd(),d=dayN();if(P.xp.d!==d)P.xp={d,b:xpOf(),v:0};return Math.max(0,xpOf()-P.xp.b)+P.xp.v}
+  function touchStreak(){const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d)S.stk={n:s.d===d-1?s.n+1:1,d}}
+  window.v9Hdr=function(){if(!USER)return;
+    $('#hStk').textContent='🔥 '+fa((S.stk&&S.stk.n)||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);$('#hXp').textContent='⚡ '+fa(Math.min(dayXp(),999))+'/'+fa(GOAL)};
+
+  /* ---------- نقشهٔ مسیر ---------- */
+  /* S.adv[grade] = تعداد فصل‌هایی که غولشان شکست خورده؛ فصل i کامل است اگر i < S.adv[grade] */
+  function plan(g){
+    const adv=(S.adv||{})[g]||0;let cur=null;
+    const chs=CH[g].map((name,i)=>{
+      const r=rec(g,i),complete=i<adv,nodes=[];
+      for(let j=0;j<6;j++){
+        const kind=j<4?'L':j===4?'C':'B';let st,stars=0;
+        if(complete){st='done';if(kind==='L')stars=(r.L[j]&&r.L[j].s)||1}
+        else if(i>adv)st='locked';
+        else{const dn=kind==='L'?!!r.L[j]:kind==='C'?!!r.c:false;
+          if(dn){st='done';if(kind==='L')stars=r.L[j].s}else if(!cur){st='cur';cur={i,j}}else st='locked'}
+        nodes.push({kind,j,st,stars});
+      }
+      return{i,name,nodes,state:complete?'done':i===adv?'current':'locked'};
+    });
+    return{chs,cur};
+  }
+  function nodeHtml(c,n){
+    const x=Math.round(Math.sin((c.i*6+n.j)*1.15)*54),emoji=['📘','📘','📘','📘','🎁','👹'][n.j];
+    const nm=n.kind==='L'?'درس '+fa(n.j+1):n.kind==='C'?'صندوقچه':'غول فصل',lab=nm+' فصل '+fa(c.i+1);
+    const stt=n.st==='locked'?' (قفل)':n.st==='done'?' (انجام شد)':'';
+    let h=`<span class="pcir" role="img" aria-label="${lab+stt}">${n.st==='locked'?'🔒':emoji}</span>`;
+    if(n.st==='done'&&n.kind==='L')h+=`<span class="pst" role="img" aria-label="${fa(n.stars)} ستاره از ۳">${'⭐'.repeat(n.stars)}${'☆'.repeat(3-n.stars)}</span>`;
+    if(n.st==='cur')h+=`<button type="button" class="btn mg pgo" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='C'?'باز کردن ':'شروع ')+lab}">${n.kind==='C'?'باز کردن':'شروع'}</button>`;
+    return`<div class="pn ${n.st} k${n.kind}" data-st="${n.st}" data-k="${n.kind}" style="--x:${x}px"${n.st==='cur'?' id="pcur"':''}>${h}</div>`;
+  }
+  function pathShow(){
+    const g=S.grade||8,P=plan(g),hues=[172,215,265,330,28,95,190,300,45];
+    $('#pathBox').innerHTML=P.chs.map(c=>`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--h:${hues[c.i%9]}"><div class="pbn"><b>فصل ${fa(c.i+1)}</b><span>${esc(c.name)}</span>${c.state==='done'?'<i aria-label="کامل شد">✅</i>':''}</div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`).join('');
+    $$('#pathBox .pgo').forEach(b=>b.onclick=()=>act(+b.dataset.ch,+b.dataset.j));
+    const el=$('#pcur');if(el)el.scrollIntoView({block:'center'});
+  }
+  function act(i,j){SFX.init();SFX.click();const g=S.grade||8;
+    if(j<4)return pqStart(g,i,j);
+    if(j===4)return chestOpen(g,i);
+    go('adv');advFight(i); /* غول فصل = همان نبرد موجود */
+  }
+  function chestOpen(g,i){rec(g,i).c=1;persist();pathShow();v9Hdr();SFX.win();
+    modal(`<div class="center"><div style="font-size:64px">🎁</div><h3 class="neon" style="font-size:22px">صندوقچه باز شد!</h3><p style="line-height:2">آفرین! حالا نوبت غول فصل است. (بازی‌های جایزه بعداً به صندوقچه‌ها اضافه می‌شوند.)</p><button type="button" class="btn mg" id="chOk" style="min-height:44px">ادامه</button></div>`);
+    $('#chOk').onclick=()=>$('#modal').classList.remove('on');
+  }
+
+  /* ---------- درس موقت: آزمونک ۵ سؤالی از بانک همان فصل (فاز ۳ جایگزینش می‌کند) ---------- */
+  let PQ=null;window.v9Pq=()=>PQ; /* فقط برای تست */
+  function pqStart(g,i,j){
+    let pool=exBuild(g,[chTopic(CH[g][i])]);if(pool.length<5)pool=pool.concat(exBuild(g));
+    const seen=new Set();pool=pool.filter(q=>!seen.has(q.q)&&seen.add(q.q));
+    PQ={g,i,j,q:shuffle(pool).slice(0,5),k:0,ok:0,lock:false};go('pq');pqShow();
+  }
+  function pqShow(){
+    const q=PQ.q[PQ.k],n=PQ.q.length,me=PQ;
+    $('#pqBox').innerHTML=`<div class="lgh"><b>📘 درس ${fa(PQ.j+1)} • فصل ${fa(PQ.i+1)}</b><button type="button" class="btn sm gh" id="pqX" aria-label="خروج از درس" style="min-height:44px">✕ خروج</button></div>
+    <div class="bar" style="margin:8px 0"><i style="width:${PQ.k/n*100}%"></i></div><p class="muted" style="font-size:14px">سؤال ${fa(PQ.k+1)} از ${fa(n)}</p>
+    <h3 style="font-size:20px;margin:8px 0;line-height:1.9">${esc(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}">${esc(o.t)}</button>`).join('')}</div><div class="msg" id="pqM" style="min-height:44px"></div>`;
+    $('#pqX').onclick=()=>{PQ=null;go('path')};
+    $$('#pqBox .opt').forEach(b=>b.onclick=()=>{
+      if(PQ!==me||me.lock)return;me.lock=true;const ok=!!q.opts[+b.dataset.k].ok;recW(me.g,q,ok);
+      $$('#pqBox .opt').forEach(x=>{x.disabled=true;if(q.opts[+x.dataset.k].ok)x.classList.add('ok')});
+      if(ok){me.ok++;SFX.ok();$('#pqM').textContent='✅ درست!'}else{SFX.err();b.classList.add('no');$('#pqM').textContent='جواب درست مشخص شد؛ مهم این است که یاد می‌گیری 💪'}
+      setTimeout(()=>{if(PQ!==me||cur!=='pq')return;me.k++;me.lock=false;me.k>=me.q.length?pqEnd():pqShow()},900);
+    });
+  }
+  function pqEnd(){
+    const{g,i,j,ok,q}=PQ,acc=ok/q.length,s=acc>=.9?3:acc>=.6?2:1,r=rec(g,i),old=r.L[j];
+    r.L[j]={s:Math.max(s,old?old.s:0),a:Math.max(Math.round(acc*100),old?old.a:0)};
+    const P=pd();if(P.xp.d!==dayN())P.xp={d:dayN(),b:xpOf(),v:0};P.xp.v+=ok*10;
+    persist();PQ=null;SFX.win();if(s===3)confetti(30);v9Hdr();
+    $('#pqBox').innerHTML=`<div class="center"><div style="font-size:64px">${'⭐'.repeat(s)}</div><h2 class="neon" style="font-size:26px">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p>${fa(ok)} پاسخ درست از ${fa(q.length)}</p><button type="button" class="btn mg" id="pqGo" style="min-height:44px">ادامهٔ مسیر</button></div>`;
+    $('#pqGo').onclick=()=>go('path');
+  }
+
+  /* ---------- لیگ ---------- */
+  function leagueShow(){renderLeague();lgFetch()}
+
+  /* ---------- پروفایل ← بیشتر ---------- */
+  const MORE=[['tch','🧑‍🏫','معلم هوشمند'],['subj','📚','کتاب‌ها: فارسی، علوم، اجتماعی'],['vid','🎬','ویدیو و حل تمرین'],['exam','📝','آزمون آنلاین'],['quiz','📋','خودآزمایی'],['expo','🏛️','موزهٔ ریاضی'],['lab','🔬','آزمایشگاه تقارن'],['learn','📘','درسنامه'],['weak','🧠','مرور هوشمند'],['move','🕺','ورزش و حرکات موزون'],['adv','🗺️','ماجراجویی و مأموریت‌های ویژه'],['live','📡','مسابقهٔ زنده'],['hub','🎮','باشگاه بازی‌ها'],['wheel','🎡','گردونهٔ شانس'],['report','📊','گزارش برای دبیر']];
+  function logout(){persist();USER=null;try{localStorage.removeItem(SK)}catch(e){}$('#who').textContent='';go('reg')}
   function profShow(){
     const e=S.eq||{},xp=xpOf(),lv=Math.floor(xp/200)+1;
-    sec.innerHTML=`<div class="card center"><h2 class="neon" style="font-size:28px">👤 پروفایل</h2>
-    <div style="font-size:64px;line-height:1.3">${e.ch||e.av||'🦸'}</div>
-    <h3 style="font-size:24px">${esc(S.name||'')}</h3>
-    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div>
-    <div class="row" style="justify-content:center;margin-top:14px"><button type="button" class="btn gh" id="profHome" style="min-height:44px">🏠 خانه</button><button type="button" class="btn gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
-    sec.querySelector('#profHome').onclick=()=>{SFX.init();SFX.click();go('home')};
-    sec.querySelector('#btnOut').onclick=()=>{SFX.click();
+    secProf.innerHTML=`<div class="card center"><h2 class="neon" style="font-size:28px">👤 پروفایل</h2>
+    <div style="font-size:64px;line-height:1.3">${e.ch||e.av||'🦸'}</div><h3 style="font-size:24px">${esc(S.name||'')}</h3>
+    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div></div>
+    <div class="card" style="margin-top:12px"><h3 style="font-size:20px;color:var(--ye)">بیشتر</h3><div class="pmore" id="pMore">${MORE.map(([id,i,t])=>`<button type="button" data-more="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')}</div>
+    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
+    $$('#pMore [data-more]').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();const id=b.dataset.more;
+      if(id==='report'&&!S.quiz){toast('اول خودآزمایی و پرسشنامه را تمام کن 📝');return}go(id)});
+    $('#btnSound').onclick=()=>{SFX.init();const m=SFX.toggle();$('#btnSound').textContent=m?'🔇 صدا: خاموش':'🔊 صدا: روشن';if(!m)SFX.ok()};
+    $('#btnSup2').onclick=()=>{SFX.init();SFX.click();supportOpen()};
+    $('#btnOut').onclick=()=>{SFX.click();
       modal(`<h3 class="neon" style="font-size:22px">🚪 خروج از حساب</h3><p style="line-height:2">می‌خواهی از حساب خارج شوی؟ پیشرفتت ذخیره می‌ماند و بعداً با نام کاربری و رمز دوباره وارد می‌شوی.</p>
       <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="outYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
       $('#outNo').onclick=()=>$('#modal').classList.remove('on');
       $('#outYes').onclick=()=>{$('#modal').classList.remove('on');logout()};
     };
   }
-  function logout(){persist();USER=null;try{localStorage.removeItem(SK)}catch(e){}$('#who').textContent='';go('reg')}
-  $('#btnProf').onclick=()=>{SFX.init();SFX.click();profShow();go('prof')};
+
+  /* ---------- نوار پایین + هدر ---------- */
+  const TABS=[['path','🗺️','مسیر','nav-path'],['league','🏆','لیگ','nav-league'],['shop','🛒','فروشگاه','nav-shop'],['prof','👤','پروفایل','btnProf']];
+  document.body.insertAdjacentHTML('beforeend','<nav id="bnav" aria-label="ناوبری اصلی">'+TABS.map(([id,i,t,aid])=>`<button type="button" id="${aid}" data-go="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')+'</nav>');
+  $$('#bnav button').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();go(b.dataset.go)});
+  $('#btnBrand').onclick=()=>{SFX.init();SFX.click();go('path')};
+
+  /* هاب بازی‌ها: ورودی‌های تکراری حذف شد (گردونه در پروفایل← بیشتر است) */
+  const wi=HG.findIndex(g=>g[1].some(x=>x[0]==='wheel'));if(wi>=0)HG.splice(wi,1);
+
+  /* ---------- اتصال به go() پایه ---------- */
+  const TABOF={path:'path',pq:'path',adv:'path',league:'league',shop:'shop',prof:'prof'};
+  window.v9Go=function(id){
+    $$('#bnav button').forEach(b=>{if(b.dataset.go===TABOF[id])b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+    if(!USER)return;
+    if(id==='path'){touchStreak();try{applyTheme()}catch(e){}pathShow()}
+    else if(id==='league')leagueShow();
+    else if(id==='prof')profShow();
+    v9Hdr();
+  };
+
+  /* ورود خودکار از نشست ذخیره‌شده (قبلاً قبل از نصب لایه‌ها اجرا می‌شد و به منوی قدیمی می‌رسید) */
+  if(window.__auto&&users()[window.__auto])enter(window.__auto,users()[window.__auto]);
 })();
 </script>
 

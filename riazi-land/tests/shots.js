@@ -15,23 +15,19 @@ const go = (id) => (page) => page.evaluate((id) => go(id), id);
 /* name, options, setup */
 const SCREENS = [
   ['register', { fresh: true, noLogin: true }, async () => {}],
-  ['login-tab', { fresh: true, noLogin: true }, (page) => page.click('.tabs button[data-m="login"]')],
-  ['home-new-user', { fresh: true }, async () => {}],
-  ['legacy-auto-login-landing', { raw: true }, async () => {}], /* where a returning user lands after reload (phase-0 finding: old #s-menu, not #s-home) */
-  ['home-legacy-user', {}, async () => {}],
-  ['missions-menu', {}, (page) => page.click('#s-home [data-g="menu!"]')],
-  ['learn', {}, go('learn')],
-  ['lab', {}, go('lab')],
-  ['game-intro', {}, go('game')],
-  ['quiz', {}, go('quiz')],
-  ['expo', {}, go('expo')],
-  ['adventure', {}, go('adv')],
-  ['hub', {}, go('hub')],
-  ['shop', {}, go('shop')],
-  ['move-rhythm', {}, go('move')],
-  ['profile', {}, (page) => page.click('#btnProf')],
+  ['path-new-user', { fresh: true }, async () => {}],
+  ['path-legacy-user', {}, async () => {}],
+  ['path-legacy-chapter-top', {}, (page) => page.evaluate(() => window.scrollTo(0, 0))],
+  ['lesson-quiz', { fresh: true }, async (page) => { await page.click('#pathBox .pgo'); }],
+  ['tab-league', {}, (page) => page.click('#bnav [data-go="league"]')],
+  ['tab-shop', {}, (page) => page.click('#bnav [data-go="shop"]')],
+  ['tab-profile', {}, (page) => page.click('#btnProf')],
+  ['profile-more', {}, async (page) => { await page.click('#btnProf'); await page.evaluate(() => document.querySelector('#pMore').scrollIntoView()); }],
   ['logout-confirm', {}, async (page) => { await page.click('#btnProf'); await page.click('#s-prof #btnOut'); }],
-  /* PHASE 1+ : append new screens here */
+  ['more-exam', {}, async (page) => { await page.click('#btnProf'); await page.click('#pMore [data-more="exam"]'); }],
+  ['more-hub', {}, async (page) => { await page.click('#btnProf'); await page.click('#pMore [data-more="hub"]'); }],
+  ['move-rhythm', {}, go('move')],
+  /* PHASE 2+ : append new screens here */
 ];
 
 (async () => {
@@ -41,7 +37,7 @@ const SCREENS = [
     const { page, context } = o.fresh ? await open(browser) : await open(browser, { fixture: 'legacy-user.json' });
     try {
       if (o.fresh && !o.noLogin) await register(page, { name: 'نگار احمدی', user: 'shot1', pass: '1234', grade: 8 });
-      if (!o.fresh) { await page.waitForFunction(() => typeof USER !== 'undefined' && USER); if (!o.raw) await page.evaluate(() => go('home')); }
+      if (!o.fresh) await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
       await setup(page);
       await page.waitForTimeout(700); /* let the fade-in animation finish */
       const file = path.join(OUT, String(++n).padStart(2, '0') + '-' + name + '.png');
