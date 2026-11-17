@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Final screenshots for the presentation: docs/shots/final/<390x844|1280x800>/NN-name.png, deviceScaleFactor 2.
+/* Final screenshots (JPEG q82 to keep the repo small) for the presentation: docs/shots/final/<390x844|1280x800>/NN-name, deviceScaleFactor 2.
    Run: node riazi-land/tests/final-shots.js */
 const fs = require('fs');
 const path = require('path');
@@ -48,7 +48,7 @@ const SHOTS = [
         if (o.legacy) await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
         await setup(page);
         await page.waitForTimeout(700);
-        await page.screenshot({ path: path.join(out, String(++n).padStart(2, '0') + '-' + name + '.png') });
+        await page.screenshot({ path: path.join(out, String(++n).padStart(2, '0') + '-' + name + '.jpg'), type: 'jpeg', quality: 82 });
         if (page.errors.length) console.log('  pageerror in ' + name + ': ' + page.errors[0]);
       } catch (e) { console.log('SKIP ' + vp + ' ' + name + ': ' + String(e.message).split('\n')[0]); }
       await context.close();
