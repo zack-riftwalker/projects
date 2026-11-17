@@ -854,7 +854,7 @@ T('PHASE4: combo — 5 correct in a row => ×2 shown and computed (8 correct = 1
   assert(/۱۰ XP/.test(seen[4][1]) && !/کمبو/.test(seen[4][1]), '5th still ×1: ' + seen[4][1]);
   assert(/۲۰ XP/.test(seen[5][1]) && /کمبو ×۲/.test(seen[5][1]), '6th ×2: ' + seen[5][1]);
   eq(await page.evaluate(() => S.xp), 110);
-  await page.waitForSelector('#pqGo'); assert((await page.textContent('.xpl')).includes('۱۱۰ XP'), 'XP summary');
+  await page.waitForSelector('#pqGo'); eq(await page.evaluate(() => document.querySelector('.cnt[data-k="xp"]').dataset.v), '110', 'XP summary card');
   await context.close();
 });
 
@@ -1063,7 +1063,113 @@ T('PHASE4b: collection names use Persian digits, no Latin digits or broken glyph
   await context.close();
 });
 
-/* ============================== PHASE 6+ : append below ============================== */
+
+/* ============================== PHASE 8 ============================== */
+const endNums = (page) => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#pqBox .cnt')].map((e) => [e.dataset.k, { v: e.dataset.v, t: e.textContent }])));
+const faT = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+T('PHASE8: lesson end screen — XP / accuracy / time match real computation; robot cheers; no «به‌زودی» text', async ({ browser }) => {
+  const { page, context } = await open(browser, { clock: UTC(2026, 1, 10, 9) });
+  await register(page, { user: 'end1', grade: 8 });
+  await page.evaluate(() => Lesson.start(8, 3, 0));
+  await setClock(page, UTC(2026, 1, 10, 9, 0) + 125000); /* 2:05 later */
+  await page.evaluate(() => { let first = true; for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(first ? '99999' : i.ans)) Lesson.key(c); } else Lesson.pick(first ? (i.ans === 0 ? 1 : 0) : i.ans); first = false; Lesson.check(); Lesson.next(); } });
+  await page.waitForSelector('#eGoal'); await page.waitForTimeout(1300); /* counting animation */
+  const n = await endNums(page);
+  const real = await page.evaluate(() => ({ xp: S.xp }));
+  eq(n.xp.v, String(real.xp), 'XP card = S.xp'); eq(real.xp, 90, '1 wrong first: 5x10 + 2x20');
+  eq(n.acc.v, '88', '7/8 first-try = 87.5 -> 88'); eq(n.time.v, '125', 'time from mocked clock'); eq(n.time.t, '۲:۰۵'); eq(n.xp.t, faT(real.xp)); eq(n.acc.t, '۸۸٪');
+  assert(await visible(page, '.erobot.cheer svg'), 'cheering robot'); assert(await visible(page, '#pqMore') && await visible(page, '#pqGo'), 'ادامه + بازگشت');
+  eq(await page.evaluate(() => document.querySelector('#pqMore').textContent.trim()), 'ادامه');
+  const txt = await page.evaluate(() => document.body.innerText); assert(!/به‌زودی|بزودی/.test(txt), 'no «soon» text');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE8: «تقریباً رسیدی» is the smallest REAL gap (chest / boss / level / goal)', async ({ browser }) => {
+  const { page, context } = await open(browser, { clock: UTC(2026, 1, 10, 9) });
+  await register(page, { user: 'end2', grade: 8 });
+  const run = async (xpGapTarget, goal) => {
+    await page.evaluate(([g]) => { S.goal = g; S.tl = { d: v9Tday(), n: 0, sd: 0 }; S.path = { l: {}, xp: { d: 0, b: 0, v: 0 } }; S.xp = 0; }, [goal]);
+    if (xpGapTarget != null) await page.evaluate((gap) => { S.xp = 0; const base = xpOf(); /* after the lesson +110 XP: xpOf % 200 must be 200-gap */ S.xp = ((200 - gap - 110 - base) % 200 + 200) % 200; }, xpGapTarget);
+    await fastLesson(page, 8, 0, 0);
+    return page.evaluate(() => ({ t: document.querySelector('#eTarget') && document.querySelector('#eTarget').textContent, gap: 200 - (xpOf() % 200), lv: v9Lv(xpOf()), goalN: todayLogN() }));
+  };
+  await page.evaluate(() => { window.todayLogN = () => S.tl.n; });
+  /* A: goal 1 met, level gap 195 XP (~3 lessons) => chest in 3 lessons wins the tie */
+  let r = await run(195, 1);
+  assert(/۳ درس تا صندوقچهٔ بعدی/.test(r.t), 'A: ' + r.t);
+  /* B: XP 30 short of next level => level wins */
+  await page.evaluate(() => go('path')); r = await run(30, 1);
+  eq(r.gap, 30, 'crafted XP gap'); assert(r.t.includes('۳۰ XP تا سطح ' + faT(r.lv + 1)), 'B: ' + r.t);
+  /* C: goal 3 => after 1 lesson 2 lessons to goal (equal to... chest 3 lessons) => goal gap 2 is smaller */
+  await page.evaluate(() => go('path')); r = await run(195, 3);
+  assert(/۲ درس تا هدف امروز/.test(r.t), 'C: ' + r.t);
+  /* D: chest ready after 4 lessons: seed 3 lessons done, 4th completes => chest opens now */
+  await page.evaluate(() => go('path'));
+  await page.evaluate(() => { S.goal = 1; S.tl = { d: v9Tday(), n: 1, sd: 1 }; S.xp = 0; S.path = { l: { 8: { 0: { L: [{ s: 3, a: 100 }, { s: 3, a: 100 }, { s: 3, a: 100 }], c: 0 } } }, xp: { d: 0, b: 0, v: 0 } }; const b = xpOf(); S.xp = 0; S.xp = ((200 - 100 - 110 - b) % 200 + 200) % 200; });
+  await fastLesson(page, 8, 0, 3);
+  assert(/صندوقچهٔ این فصل آمادهٔ باز کردن است/.test(await page.textContent('#eTarget')), 'D');
+  /* no fake league: no league configured => never mentions league */
+  assert(!/لیگ/.test(await page.textContent('#eTarget')), 'league only when real');
+  await context.close();
+});
+
+T('PHASE8: «ادامه» opens the next node; «بازگشت به مسیر» returns; guest signup card still appears on the first lesson', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await startGuest(page, 8, 0); await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq');
+  const first = await page.evaluate(() => [v9Lesson().type !== undefined, Lesson.st.i, Lesson.st.j]);
+  await finishLesson(page);
+  assert(await visible(page, '#suBox'), 'signup card still shown after the first lesson');
+  await page.click('#suLater'); eq(await curScreen(page), 'path');
+  await startLesson(page, 8, first[1], first[2]); await finishLesson(page);
+  await page.click('#pqMore'); await page.waitForSelector('#lsGo');
+  eq(await curScreen(page), 'pq'); eq(await page.evaluate(() => [Lesson.st.i, Lesson.st.j]), [first[1], first[2] + 1], 'next node = next lesson');
+  await page.click('#lsX'); await page.click('#lxYes');
+  await startLesson(page, 8, first[1], first[2] + 1); await finishLesson(page);
+  await page.click('#pqGo'); eq(await curScreen(page), 'path');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE8: boss fight uses the shared end screen: win -> XP 30, 100%, «ادامه» starts next node; loss -> retry; back to path', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'boss8', grade: 8 });
+  await page.evaluate(() => { S.path = { l: { 8: { 0: { L: [{ s: 3, a: 100 }, { s: 3, a: 100 }, { s: 3, a: 100 }, { s: 3, a: 100 }], c: 1 } } }, xp: { d: 0, b: 0, v: 0 } }; go('path'); });
+  const bossAnswer = async (correct) => { await page.waitForSelector('#advBox .opt:not([disabled])'); await page.evaluate((c) => { const q = AD.q[AD.k]; const idx = q.opts.findIndex((o) => !!o.ok === c); document.querySelectorAll('#advBox .opt')[idx].click(); }, correct); await page.waitForTimeout(950); };
+  assert(await page.evaluate(() => document.querySelector('#pcur').dataset.k === 'B'), 'boss is current');
+  const xp0 = await page.evaluate(() => S.xp || 0);
+  /* loss first */
+  await page.click('#pathBox .pgo'); eq(await curScreen(page), 'adv');
+  for (let k = 0; k < 3; k++) await bossAnswer(false);
+  await page.waitForSelector('#pqMore'); eq(await curScreen(page), 'pq');
+  eq(await page.evaluate(() => document.querySelector('#pqMore').textContent.trim()), 'دوباره امتحان کن');
+  await page.waitForTimeout(1200); const L = await endNums(page); eq(L.acc.v, '0'); eq(L.xp.v, '0');
+  await page.click('#pqMore'); eq(await curScreen(page), 'adv', 'retry restarts the battle');
+  /* win */
+  for (let k = 0; k < 3; k++) await bossAnswer(true);
+  await page.waitForSelector('#eGoal'); await page.waitForTimeout(1300);
+  const W = await endNums(page);
+  eq(W.xp.v, '30'); eq(W.acc.v, '100'); assert(W.time.v !== '', 'boss time recorded from path entry');
+  eq(await page.evaluate(() => [S.xp - 0, S.adv[8]]), [xp0 + 30, 1], 'XP +30 and chapter 1 beaten');
+  assert((await page.textContent('#pqBox')).includes('غول فصل شکست خورد'), 'win title');
+  await page.click('#pqMore'); await page.waitForSelector('#lsGo');
+  eq(await page.evaluate(() => [cur, Lesson.st.i, Lesson.st.j]), ['pq', 1, 0], '«ادامه» starts chapter 2 lesson 1');
+  await page.click('#lsX'); await page.click('#lxYes'); eq(await curScreen(page), 'path');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE8: no «به‌زودی» / coming-soon text in the source or main screens', async ({ browser }) => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert(!/به‌زودی|بزودی|بعداً (اضافه|می‌آید)|coming soon/i.test(html.replace(/\/\*[\s\S]*?\*\//g, '')), 'a «soon» phrase is still in the source');
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  for (const id of ['path', 'shop', 'prof', 'league']) { await page.evaluate((id) => go(id), id); const t = await page.evaluate(() => document.body.innerText); assert(!/به‌زودی/.test(t), id); }
+  await context.close();
+});
+
+/* ============================== PHASE 9+ : append below ============================== */
 
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {

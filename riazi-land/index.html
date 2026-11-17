@@ -1976,6 +1976,7 @@ function advQ(){const q=AD.q[AD.k];$('#advBox').innerHTML=hdr('⚔️ فصل '+f
   bindBack();$$('#advBox .opt').forEach(b=>{b.onclick=()=>{const ok=q.opts[+b.dataset.k].ok;recW(AD.g,q,ok);$$('#advBox .opt').forEach(x=>{x.disabled=true;if(q.opts[+x.dataset.k].ok)x.classList.add('ok')});if(ok){AD.hp--;SFX.ok()}else{AD.lv--;SFX.err();b.classList.add('bad')}
     setTimeout(()=>{if(cur!=='adv')return;if(AD.hp<=0)return advEnd(1);if(AD.lv<=0||AD.k+1>=AD.q.length)return advEnd(0);AD.k++;advQ()},800)}})}
 function advEnd(win){const{i,g}=AD;if(win){if((S.adv[g]||0)===i){S.adv[g]=i+1;earn(15+i*3)}SFX.win();confetti(60)}else SFX.err();persist();lgSync(true);
+  if(window.v9BossEnd){v9BossEnd(win,i,g);return}
   $('#advBox').innerHTML=hdr(win?'🎉 غول شکست خورد!':'💀 باختی')+`<div class="center"><div style="font-size:70px">${win?'🏆':BOSS[i%9]}</div><p>${win?'فصل بعدی باز شد!':'مرور کن و دوباره امتحان کن.'}</p><div class="row" style="justify-content:center"><button class="btn mg" id="adA">${win?'🗺️ نقشه':'🔁 دوباره'}</button>${win?'':'<button class="btn gh" id="adM">🗺️ نقشه</button>'}</div></div>`;bindBack();
   $('#adA').onclick=()=>win?advShow():advFight(i);const m=$('#adM');if(m)m.onclick=advShow}
 /* ---- مسابقهٔ زنده و نبرد دونفره ---- */
@@ -2362,7 +2363,7 @@ function tcCfg(){modal(`<h3 class="neon" style="font-size:22px">⚙️ اتصا�
 /* ---- نوار موضوع‌ها، دکمهٔ معلم و یکپارچه‌سازی ---- */
 function strip(){if($('#subStrip')||!$('#s-menu'))return;const d=document.createElement('div');d.id='subStrip';
   d.innerHTML=[['📐','ریاضی','math'],['📖','فارسی','per'],['🔬','علوم','sci'],['🌍','اجتماعی','soc'],['🧑‍🏫','معلم','tch'],['🇬🇧','انگلیسی','x'],['🕌','عربی','x'],['📿','دینی','x']].map(([i,n,k])=>`<button data-k="${k}"><span>${i}</span>${n}</button>`).join('');$('#s-menu').prepend(d);
-  $$('#subStrip button').forEach(b=>{b.onclick=()=>{SFX.init();SFX.click();const k=b.dataset.k;if(k==='math')$('.missions').scrollIntoView({behavior:'smooth'});else if(k==='tch')go('tch');else if(k==='x')toast('به‌زودی: این کتاب در نسخهٔ بعد اضافه می‌شود');else{go('subj');subjShow(k,S.grade)}}})}
+  $$('#subStrip button').forEach(b=>{b.onclick=()=>{SFX.init();SFX.click();const k=b.dataset.k;if(k==='math')$('.missions').scrollIntoView({behavior:'smooth'});else if(k==='tch')go('tch');else if(k==='x'){}else{go('subj');subjShow(k,S.grade)}}})}
 document.body.insertAdjacentHTML('beforeend','<button id="btnTch" type="button" aria-label="معلم هوشمند" title="معلم هوشمند">🧑‍🏫<span>معلم هوشمند</span></button>');$('#btnTch').onclick=()=>{SFX.init();SFX.click();go('tch')};
 HG.unshift(['📚 کتاب‌ها و معلم',[['subj','📚','کتاب‌های درسی'],['tch','🧑‍🏫','معلم هوشمند']]]);
 const _g9=go;go=function(id){if(cur==='sg'&&id!=='sg')sgStop();_g9(id);const fab=(id==='game'||id==='run'||id==='gm'||id==='sg')?'none':'';$('#btnSup').style.display=fab;$('#btnTch').style.display=fab;if(id==='subj')subjShow();if(id==='tch')tchShow()};
@@ -2753,6 +2754,17 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
 .cal-h{font-size:13px;color:var(--mut);padding:2px 0}.cal-e{display:block}
 .cal-d{min-height:38px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:14px;background:rgba(255,255,255,.05)}
 .cal-d.cal-on{background:rgba(255,157,46,.25);font-size:18px}.cal-d.cal-t{outline:2px solid var(--cy)}
+.endx{padding:4px 0 12px}
+.erobot{width:116px;margin:0 auto}
+.erobot.cheer .rbt{animation:ebounce .8s ease-in-out infinite alternate;transform-origin:50% 100%}
+@keyframes ebounce{from{transform:translateY(0)}to{transform:translateY(-10px) rotate(2deg)}}
+.estars{font-size:30px;line-height:1.2}
+.ecards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
+.ecard{display:flex;flex-direction:column;align-items:center;padding:8px 4px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.06)}
+.ecard i{font-style:normal;font-size:22px}.ecard b{font-family:var(--fh);font-weight:400;font-size:28px;color:var(--ye);line-height:1.3;direction:ltr}
+.ecard span{font-size:12.5px;color:var(--mut)}
+.esub{margin:0 0 6px;font-size:14px}.egoal{font-size:14px;margin:4px 0}
+.etg{margin:8px 0 12px;padding:8px 12px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.4);font-size:15px}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 <script>
@@ -2815,10 +2827,10 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   function act(i,j){SFX.init();SFX.click();const g=S.grade||8;
     if(j<4)return pqStart(g,i,j);
     if(j===4)return chestOpen(g,i);
-    go('adv');advFight(i); /* غول فصل = همان نبرد موجود */
+    bossT0=Date.now();bossPrev=(S.adv||{})[g]||0;go('adv');advFight(i); /* غول فصل = همان نبرد موجود */
   }
   function chestOpen(g,i){const cr=rec(g,i),first=!cr.c;cr.c=1;const gc=first?v9Coins(10,'صندوقچه'):0;persist();pathShow();v9Hdr();SFX.win();
-    modal(`<div class="center"><div style="font-size:64px">🎁</div><h3 class="neon" style="font-size:22px">صندوقچه باز شد!</h3><p style="line-height:2">آفرین! ${gc?'۱۰ سکه گرفتی 🪙. ':''}حالا نوبت غول فصل است. (بازی‌های جایزه بعداً به صندوقچه‌ها اضافه می‌شوند.)</p><button type="button" class="btn mg" id="chOk" style="min-height:44px">ادامه</button></div>`);
+    modal(`<div class="center"><div style="font-size:64px">🎁</div><h3 class="neon" style="font-size:22px">صندوقچه باز شد!</h3><p style="line-height:2">آفرین! ${gc?'۱۰ سکه گرفتی 🪙. ':''}حالا نوبت غول فصل است.</p><button type="button" class="btn mg" id="chOk" style="min-height:44px">ادامه</button></div>`);
     $('#chOk').onclick=()=>$('#modal').classList.remove('on');
   }
 
@@ -3152,7 +3164,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
       v9Hdr()},
     start(g,i,j){
       const cards=pickCards(g,i,8);
-      this.st={g,i,j,cards,queue:cards.map(c=>({c,first:true})),done:0,total:cards.length,firstOk:0,sel:null,val:'',checked:false,ok:null,combo:0,gain:0,xp:0,lv0:lvOf(xpOf())};
+      this.st={g,i,j,cards,queue:cards.map(c=>({c,first:true})),done:0,total:cards.length,firstOk:0,sel:null,val:'',checked:false,ok:null,combo:0,gain:0,xp:0,lv0:lvOf(xpOf()),t0:Date.now()};
       go('pq');this.show();
     },
     cur(){const s=this.st;return s&&s.queue[0]},
@@ -3209,10 +3221,9 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
       const nag=isGuest()&&(!P.nag||P.lc-P.nag.at>=3||(P.lc>P.nag.at&&P.nag.d!==dayN()));
       if(nag)P.nag={at:P.lc,d:dayN()};
       const coin=v9Coins(firstOk===total?10:5,'درس'),lv1=lvOf(xpOf()),evo=tierOf(lv1)>tierOf(st.lv0);persist();this.st=null;SFX.win();if(s===3)confetti(30);v9Hdr();if(lv1>st.lv0)toast('🎉 سطح '+fa(lv1)+'!'+(evo?' ربات تو تکامل پیدا کرد 🤖✨':''));
-      $('#pqBox').innerHTML=`<div class="center" style="margin-top:8px"><span style="font-size:${nag?34:64}px">${'⭐'.repeat(s)}</span><h2 class="neon" style="font-size:${nag?21:26}px;margin:2px 0">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p style="margin:0 0 6px">${fa(firstOk)} پاسخ درستِ بار اول از ${fa(total)}${firstOk===total?' — همه درست! 🎉':''}</p><p class="xpl" style="margin:0 0 6px">+${fa(st.xp)} XP${coin?' • 🪙 +'+fa(coin)+' سکه':''}${lv1>st.lv0?' • سطح '+fa(lv1)+'!':''}</p>${nag||up?'':'<button type="button" class="btn mg" id="pqGo" style="min-height:48px;width:100%;margin-top:10px">ادامهٔ مسیر</button>'}${up?goalDoneHtml():''}</div>${nag?'<div class="card" id="suBox" style="margin-top:10px;padding:12px">'+signupHtml()+'</div>':''}`;
-      if(nag)bindSignup($('#suBox'),()=>go('path'));
-      if($('#pqGo'))$('#pqGo').onclick=()=>go('path');
-      if($('#pqMore'))$('#pqMore').onclick=()=>{go('path');const b=$('#pathBox .pgo');if(b)b.click()};
+      showEnd({kind:'lesson',stars:s,xp:st.xp,acc:Math.round(acc*100),time:Math.max(0,Math.round((Date.now()-st.t0)/1000)),up,nag,
+        title:s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!',
+        sub:(coin?'🪙 +'+fa(coin)+' سکه':'')+(firstOk===total?(coin?' • ':'')+'همه درست! 🎉':'')+(lv1>st.lv0?' • سطح '+fa(lv1)+'!':'')+(evo?' • ربات تکامل پیدا کرد 🤖✨':'')});
     }
   };
   Lesson.same=same;window.Lesson=Lesson;window.rich0=rich;
@@ -3354,7 +3365,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
     o=o||{};const c=RBC[o.col||'']||RBC[''],t=o.tier||0;let a='';
     if(t>=3)a+='<circle cx="50" cy="64" r="54" fill="rgba(255,209,102,.2)"/><circle cx="14" cy="30" r="2.5" fill="#ffd166"/><circle cx="88" cy="22" r="2" fill="#fff"/><circle cx="90" cy="70" r="2.5" fill="#ffd166"/>';
     if(o.out==='out-cape')a+='<path d="M28 64 L8 114 L92 114 L72 64Z" fill="#e03a5a"/>';
-    a+=`<rect x="30" y="62" width="40" height="38" rx="10" fill="${c[0]}"/><rect x="38" y="72" width="24" height="16" rx="5" fill="${c[1]}"/><rect x="20" y="66" width="10" height="26" rx="5" fill="${c[1]}"/><rect x="70" y="66" width="10" height="26" rx="5" fill="${c[1]}"/><rect x="36" y="98" width="10" height="14" rx="4" fill="${c[1]}"/><rect x="54" y="98" width="10" height="14" rx="4" fill="${c[1]}"/>`;
+    a+=`<rect x="30" y="62" width="40" height="38" rx="10" fill="${c[0]}"/><rect x="38" y="72" width="24" height="16" rx="5" fill="${c[1]}"/>${o.pose==='cheer'?`<rect x="14" y="44" width="10" height="28" rx="5" fill="${c[1]}" transform="rotate(25 19 70)"/><rect x="76" y="44" width="10" height="28" rx="5" fill="${c[1]}" transform="rotate(-25 81 70)"/>`:`<rect x="20" y="66" width="10" height="26" rx="5" fill="${c[1]}"/><rect x="70" y="66" width="10" height="26" rx="5" fill="${c[1]}"/>`}<rect x="36" y="98" width="10" height="14" rx="4" fill="${c[1]}"/><rect x="54" y="98" width="10" height="14" rx="4" fill="${c[1]}"/>`;
     if(t>=2)a+='<circle cx="25" cy="68" r="8" fill="#ff9d2e"/><circle cx="75" cy="68" r="8" fill="#ff9d2e"/><polygon points="50,74 53,81 60,81 54,85 56,92 50,88 44,92 46,85 40,81 47,81" fill="#ffd166"/>';
     a+=`<line x1="50" y1="22" x2="50" y2="11" stroke="${c[1]}" stroke-width="3"/>`;
     a+=t>=1?'<polygon points="50,1 52.2,6 57.6,6.3 53.4,9.7 54.8,15 50,12 45.2,15 46.6,9.7 42.4,6.3 47.8,6" fill="#ffd166"/>':'<circle cx="50" cy="8" r="4.5" fill="#ff7a59"/>';
@@ -3517,6 +3528,71 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   }
   function bindCal(){const f=d=>()=>{SFX.click();calOff+=d;const e=$('#calBox');if(e){e.outerHTML=calHtml();bindCal()}};$('#calPrev').onclick=f(-1);$('#calNext').onclick=f(1)}
 
+  /* ===================== فاز ۸: صفحهٔ پایان جلسه (مشترک بین درس و غول فصل) ===================== */
+  var bossT0=null,bossPrev=null;
+  const nextNode=()=>plan(S.grade||8).cur;
+  /* نزدیک‌ترین هدف «واقعی»؛ فاصله‌ها همه از وضعیت واقعی محاسبه می‌شوند (e فقط برای مقایسهٔ واحدهای مختلف است) */
+  function nearTarget(){
+    const g=S.grade||8,pl=plan(g),c=pl.cur,C=[];
+    if(c){
+      if(c.j<4)C.push({e:4-c.j,t:fa(4-c.j)+' درس تا صندوقچهٔ بعدی'});
+      else if(c.j===4)C.push({e:0,t:'صندوقچهٔ این فصل آمادهٔ باز کردن است 🎁'});
+      if(c.j<=4)C.push({e:5-c.j,t:fa(5-c.j)+' قدم تا غول فصل'});else C.push({e:0,t:'غول فصل منتظر توست 👹'});
+    }
+    const tl=todayLog(),gl=goalN();
+    if(tl.n<gl)C.push({e:gl-tl.n,t:fa(gl-tl.n)+' درس تا هدف امروز'});
+    const x=xpOf(),gap=200-(x%200);C.push({e:Math.ceil(gap/80),t:fa(gap)+' XP تا سطح '+fa(lvOf(x)+1)});
+    try{if(typeof lgOn==='function'&&lgOn()&&ONL&&ONL._ok){
+      const hi=Object.entries(ONL).filter(([k])=>k!=='_ok'&&decodeURIComponent(k)!==USER).map(([,v])=>(v&&v.x)||0).filter(v=>v>x);
+      if(hi.length){const d=Math.min(...hi)-x;C.push({e:Math.ceil(d/80),t:fa(d)+' XP تا نفر بعدی در لیگ کلاس'})}}}catch(e){}
+    let b=null;C.forEach(k=>{if(!b||k.e<b.e)b=k});return b&&b.t}
+  const fmtT=sec=>fa(Math.floor(sec/60))+':'+fa(String(sec%60).padStart(2,'0'));
+  function countUp(){
+    const rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $$('#pqBox .cnt').forEach(el=>{
+      const v=el.dataset.v;if(v===''||v==null)return;const V=+v,k=el.dataset.k;
+      const fmt=n=>k==='acc'?fa(n)+'٪':k==='time'?fmtT(n):fa(n);
+      el.textContent=fmt(V);if(rm||!(V>0))return;
+      const t0=performance.now();el.textContent=fmt(0);
+      const step=t=>{const p=Math.min(1,(t-t0)/800);el.textContent=fmt(Math.round(V*p));if(p<1&&document.body.contains(el))requestAnimationFrame(step)};
+      requestAnimationFrame(step);setTimeout(()=>{el.textContent=fmt(V)},1100)});
+  }
+  function showEnd(o){
+    if(cur!=='pq')go('pq');
+    const k=streakInit(),n=todayLog().n,gl=goalN(),tg=nearTarget(),lost=o.kind==='boss'&&!o.win;
+    $('#pqBox').innerHTML=`<div class="endx center">
+      <div class="erobot${lost?'':' cheer'}">${robotSVG(Object.assign(rbOpt(),{pose:lost?'':'cheer'}))}</div>
+      <h2 class="neon" style="font-size:24px;margin:2px 0">${o.title}</h2>
+      ${o.stars?`<div class="estars" role="img" aria-label="${fa(o.stars)} ستاره از ۳">${'⭐'.repeat(o.stars)}${'☆'.repeat(3-o.stars)}</div>`:''}
+      <div class="ecards">
+        <div class="ecard"><i aria-hidden="true">⚡</i><b class="cnt" data-k="xp" data-v="${o.xp}">${fa(o.xp)}</b><span>XP</span></div>
+        <div class="ecard"><i aria-hidden="true">🎯</i><b class="cnt" data-k="acc" data-v="${o.acc}">${fa(o.acc)}٪</b><span>دقت</span></div>
+        <div class="ecard"><i aria-hidden="true">⏱</i><b class="cnt" data-k="time" data-v="${o.time==null?'':o.time}">${o.time==null?'—':fmtT(o.time)}</b><span>زمان</span></div>
+      </div>
+      ${o.sub?`<p class="muted esub">${o.sub}</p>`:''}
+      <div class="egoal" id="eGoal">🎯 هدف امروز: ${fa(Math.min(n,gl))}/${fa(gl)} • 🔥 استریک: ${fa(k.n||0)} روز</div>
+      ${o.up?`<div class="streakup" role="status">🔥 استریک +۱ <b>(${fa(k.n)} روز)</b></div><div class="card goalcard" id="goalDone"><h3 class="neon" style="font-size:20px;margin:0">امروز کافیه، آفرین! 🎉</h3><p style="margin:2px 0 0">فردا ادامه بده.</p></div>`:''}
+      ${tg?`<p class="etg" id="eTarget">✨ تقریباً رسیدی: ${tg}</p>`:''}
+      <button type="button" class="btn mg endnext" id="pqMore" style="min-height:56px;width:100%;font-size:19px">${lost?'دوباره امتحان کن':'ادامه'}</button>
+      <button type="button" class="btn sm gh" id="pqGo" style="min-height:44px;margin-top:8px">بازگشت به مسیر</button>
+      ${o.nag?'<div class="card" id="suBox" style="margin-top:10px;padding:12px">'+signupHtml()+'</div>':''}</div>`;
+    countUp();
+    if(o.nag)bindSignup($('#suBox'),()=>go('path'));
+    $('#pqGo').onclick=()=>go('path');
+    $('#pqMore').onclick=()=>{
+      if(o.retry){go('adv');bossT0=Date.now();bossPrev=(S.adv||{})[o.g]||0;advFight(o.i);return}
+      const t=nextNode();go('path');if(t)act(t.i,t.j)};
+  }
+  /* غول فصل: ورودی/خروجی موتور قدیمی (advEnd فقط یک خط ویرایش درجا دارد؛ منطق نبرد دست‌نخورده) */
+  window.v9BossEnd=function(win,i,g){
+    const correct=Math.max(0,3-AD.hp),wrong=Math.max(0,3-AD.lv),total=correct+wrong,xp=10*correct;
+    addXp(xp);persist();v9Hdr();
+    const coin=(win&&bossPrev!=null&&bossPrev===i)?15+i*3:0;
+    showEnd({kind:'boss',win,retry:!win,i,g,xp,acc:total?Math.round(correct/total*100):0,time:bossT0?Math.max(0,Math.round((Date.now()-bossT0)/1000)):null,
+      title:win?'🏆 غول فصل شکست خورد!':'غول هنوز نشکسته؛ دوباره!',sub:(coin?'🪙 +'+fa(coin)+' سکه • ':'')+(win?'فصل بعدی باز شد!':'مرور کن و دوباره امتحان کن 💪')});
+    bossT0=null;bossPrev=null;
+  };
+
   /* ---------- لیگ ---------- */
   function leagueShow(){renderLeague();lgFetch()}
 
@@ -3561,7 +3637,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   const wi=HG.findIndex(g=>g[1].some(x=>x[0]==='wheel'));if(wi>=0)HG.splice(wi,1);
 
   /* ---------- اتصال به go() پایه ---------- */
-  const TABOF={path:'path',pq:'path',adv:'path',league:'league',shop:'shop',prof:'prof'};
+  const TABOF={path:'path',pq:'path',end:'path',adv:'path',league:'league',shop:'shop',prof:'prof'};
   window.v9Go=function(id){
     $$('#bnav button').forEach(b=>{if(b.dataset.go===TABOF[id])b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
     if(id==='reg')obWelcome();
