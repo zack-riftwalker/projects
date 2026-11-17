@@ -55,7 +55,7 @@ T('MIGRATION: legacy snapshot opens logged-in with all progress intact', async (
   assert(r.cur !== 'reg', 'screen is reg');
   assert(r.who.includes('علی'), 'who label missing name: ' + r.who);
   eq(r.name, 'علی رضایی'); eq(r.grade, 8);
-  eq(r.coins, D.coins, 'S.coins'); eq(r.items, D.items, 'items'); eq(r.eq, D.eq, 'eq'); eq(r.wrong, D.wrong, 'wrong'); eq(r.adv, D.adv, 'adv'); eq(r.team, D.team, 'team');
+  eq(r.coins, D.coins + 85, 'S.coins = old coins + shop.v1 coins (migration)'); eq(r.items, D.items, 'items'); eq(r.eq, D.eq, 'eq'); eq(r.wrong, D.wrong, 'wrong'); eq(r.adv, D.adv, 'adv'); eq(r.team, D.team, 'team');
   eq(r.learn, true); eq(r.labN, Object.keys(D.lab).length, 'lab shapes'); eq(r.game, D.game, 'game'); eq(r.quiz, D.quiz, 'quiz'); eq(r.expo, D.expo, 'expo'); eq(r.memo, D.memo, 'memo');
   eq(r.run, D.run, 'run'); eq(r.duel, D.duel, 'duel'); eq(r.arc, D.arc, 'arc'); eq(r.advExtra, D.advExtra, 'advExtra');
   eq(r.shopCoins, L['mathHero.shop.v1'].users['علیرضایی'].coins, 'shop.v1 coins');
@@ -72,7 +72,8 @@ T('MIGRATION: saved data is not lost after navigating around (persist round-trip
   await page.evaluate(() => { go('learn'); go('lab'); go('quiz'); go('expo'); go('memo'); go('adv'); go('shop'); go('home'); });
   const us = await lsGet(page, 'mh_users');
   const d = us.ali_r.d;
-  for (const k of ['coins', 'items', 'eq', 'wrong', 'adv', 'team', 'learn', 'lab', 'game', 'quiz', 'survey', 'expo', 'memo', 'run', 'duel', 'grade', 'advExtra'])
+  eq(d.coins, D.coins + 85, 'coins after migration');
+  for (const k of ['items', 'eq', 'wrong', 'adv', 'team', 'learn', 'lab', 'game', 'quiz', 'survey', 'expo', 'memo', 'run', 'duel', 'grade', 'advExtra'])
     eq(d[k], D[k], 'mh_users.ali_r.d.' + k);
   eq(d.arc.blitz, D.arc.blitz, 'arc.blitz');
   eq(us.sara_k, L.mh_users.sara_k, 'other user untouched');
@@ -86,7 +87,7 @@ T('MIGRATION: saved data is not lost after navigating around (persist round-trip
   assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
   // reload keeps session
   await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
-  eq(await page.evaluate(() => [USER, S.coins]), ['ali_r', 235], 'after reload');
+  eq(await page.evaluate(() => [USER, S.coins]), ['ali_r', 320], 'after reload (no double migration)');
   await context.close();
 });
 
@@ -96,12 +97,12 @@ T('MIGRATION: legacy user can log in with the form (hash compatibility)', async 
   await openForm(page, 'login');
   await page.fill('#inUser', 'ali_r'); await page.fill('#inPass', '1234'); await page.click('#regBtn');
   await page.waitForFunction(() => typeof USER !== 'undefined' && USER && cur !== 'reg', null, { timeout: 8000 });
-  eq(await page.evaluate(() => [USER, S.coins, S.adv[8]]), ['ali_r', 235, 3]);
+  eq(await page.evaluate(() => [USER, S.coins, S.adv[8]]), ['ali_r', 320, 3]);
   await context.close();
 });
 
 T('starting activities gives NO coins (new user and legacy user)', async ({ browser }) => {
-  const screens = ['learn', 'lab', 'game', 'quiz', 'expo', 'memo', 'run', 'duel', 'arc:blitz'];
+  const screens = ['learn', 'lab', 'game', 'quiz', 'expo', 'memo', 'run', 'duel', 'arc:blitz', 'shop', 'prof', 'league', 'weak', 'subj', 'vid', 'exam', 'tch', 'hub', 'adv', 'move', 'wheel', 'path'];
   for (const mode of ['new', 'legacy']) {
     const { page, context } = mode === 'new' ? await open(browser) : await open(browser, { fixture: 'legacy-user.json' });
     if (mode === 'new') await register(page, { user: 'coin1', name: 'سکه' });
@@ -158,7 +159,7 @@ T('logout is in the profile screen (not next to 🏠) and asks for confirmation'
   eq(await curScreen(page), 'reg');
   eq(await page.evaluate(() => USER), null);
   eq(await lsGet(page, 'mh_session'), null);
-  eq((await lsGet(page, 'mh_users')).ali_r.d.coins, 235, 'progress kept after logout');
+  eq((await lsGet(page, 'mh_users')).ali_r.d.coins, 320, 'progress kept after logout');
   assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
   await context.close();
 });
@@ -281,11 +282,11 @@ T('PHASE1: lesson node completes via the Lesson engine, records stars, unlocks n
   eq(r.curJ, 1, 'second lesson should now be current');
   const d = (await lsGet(page, 'mh_users')).path2.d;
   eq(d.path.l[8][0].L[0].s, 3, 'stored stars');
-  assert(!(d.coins > 0), 'lessons must not give coins');
+  eq(d.coins, 10, 'flawless lesson = 5 + 5 coins');
   await context.close();
 });
 
-T('PHASE1: chest gives no coins and unlocks the boss node (S.path seeded for chapter 1)', async ({ browser }) => {
+T('PHASE1: chest gives 10 coins once and unlocks the boss node (S.path seeded for chapter 1)', async ({ browser }) => {
   const { page, context } = await open(browser);
   await register(page, { user: 'chest1' });
   await page.evaluate(() => { S.path = { l: { 8: { 0: { L: [{ s: 2, a: 70 }, { s: 3, a: 100 }, { s: 1, a: 40 }, { s: 3, a: 100 }], c: 0 } } }, xp: { d: 0, b: 0, v: 0 } }; go('path'); });
@@ -293,7 +294,7 @@ T('PHASE1: chest gives no coins and unlocks the boss node (S.path seeded for cha
   assert(await page.evaluate(() => document.querySelector('#pcur').dataset.k === 'C'), 'chest should be current');
   await page.click('#pathBox .pgo');
   await page.click('#chOk');
-  eq(await page.evaluate(() => [S.coins || 0, MathHeroShop.coins()]), before, 'coins changed by chest');
+  eq(await page.evaluate(() => S.coins || 0), before[0] + 10, 'chest = +10 coins'); eq(await page.evaluate(() => MathHeroShop.coins()), before[1], 'shop.v1 untouched');
   assert(await page.evaluate(() => document.querySelector('#pcur').dataset.k === 'B'), 'boss should be current after chest');
   await page.click('#pathBox .pgo');
   eq(await curScreen(page), 'adv');
@@ -343,7 +344,7 @@ T('PHASE1: sound toggle lives in profile; brand and back buttons go to path (not
   assert((await page.textContent('#btnSound')) !== t0, 'sound label did not change');
   await page.click('#btnBrand'); eq(await curScreen(page), 'path');
   await page.evaluate(() => go('menu')); eq(await curScreen(page), 'path', "go('menu') redirect");
-  await page.evaluate(() => go('shop')); await page.click('#shopBox [data-back]'); eq(await curScreen(page), 'path', 'shop back button');
+  await page.evaluate(() => go('hub')); await page.click('#hubBack'); eq(await curScreen(page), 'path', 'hub back button');
   await context.close();
 });
 
@@ -438,7 +439,7 @@ T('PHASE2: «حساب دارم» opens the classic form; login/register still wo
   await page.waitForTimeout(400); eq(await curScreen(page), 'reg', 'wrong password must not log in');
   await page.fill('#inPass', '1234'); await page.click('#regBtn');
   await page.waitForFunction(() => typeof USER !== 'undefined' && USER, null, { timeout: 8000 });
-  eq(await page.evaluate(() => [USER, cur, S.coins]), ['ali_r', 'path', 235]);
+  eq(await page.evaluate(() => [USER, cur, S.coins]), ['ali_r', 'path', 320]);
   await context.close();
 });
 
@@ -554,7 +555,7 @@ T('PHASE2: «بعداً» keeps the guest across reload; reminder is not shown o
 T('PHASE2: legacy fixture: auto-login still lands on path with data intact (no guest created)', async ({ browser }) => {
   const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
   await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
-  eq(await page.evaluate(() => [USER, cur, S.coins, S.adv[8]]), ['ali_r', 'path', 235, 3]);
+  eq(await page.evaluate(() => [USER, cur, S.coins, S.adv[8]]), ['ali_r', 'path', 320, 3]);
   assert(!Object.keys(await lsGet(page, 'mh_users')).some((k) => k.startsWith('guest_')), 'guest created for legacy user');
   assert(!(await visible(page, '#s-reg')), 'welcome visible for logged-in user');
   await context.close();
@@ -563,6 +564,7 @@ T('PHASE2: legacy fixture: auto-login still lands on path with data intact (no g
 
 /* ============================== PHASE 3 ============================== */
 const startLesson = async (page, g, ch, j = 0) => { await page.evaluate(([g, ch, j]) => Lesson.start(g, ch, j), [g, ch, j]); await page.waitForSelector('#lsGo'); };
+const lessonUntilQ = async (page, g, ch, pred) => { for (let t = 0; t < 80; t++) { await page.evaluate(([g, ch]) => Lesson.start(g, ch, 0), [g, ch]); await page.waitForSelector('#lsGo'); const i = await page.evaluate(() => v9Lesson()); if (pred(i)) return i; } throw new Error('no card'); };
 const lessonUntil = async (page, g, ch, pred) => { for (let t = 0; t < 60; t++) { await startLesson(page, g, ch); const i = await page.evaluate(() => v9Lesson()); if (pred(i)) return i; } throw new Error('no card of the wanted type'); };
 
 T('PHASE3: content — every chapter of every grade yields >= 20 distinct questions; MCQ = 4 unique options incl. answer; numeric answers parse; shapes valid', async ({ browser }) => {
@@ -643,7 +645,7 @@ T('PHASE3: full lesson with real clicks completes in < 4 min, bar/aria/feedback 
   await page.click('#pqGo'); eq(await curScreen(page), 'path');
   const d = (await lsGet(page, 'mh_users')).les1.d;
   eq(d.path.l[8][0].L[0].s, 3); eq(d.path.l[8][0].L[0].a, 100);
-  assert(d.path.xp.v >= 80, 'today XP via hook: ' + JSON.stringify(d.path.xp));
+  eq(d.xp, 110, '8 first-try correct = 10x5 + 20x3'); eq(d.coins, 10);
   assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
   await context.close();
 });
@@ -665,6 +667,7 @@ T('PHASE3: wrong answer shows red bar + correct answer, re-queues once at the en
   await page.click('#pqGo');
   const d = (await lsGet(page, 'mh_users')).les2.d;
   eq(d.path.l[7][1].L[0].s, 2, '7/8 first-try -> 2 stars'); eq(d.path.l[7][1].L[0].a, 88);
+  eq(d.xp, 90, 'wrong first card resets combo: 5x10 + 2x20'); eq(d.coins, 5, 'non-flawless lesson = 5 coins');
   await context.close();
 });
 
@@ -726,7 +729,199 @@ T('PHASE3: placement uses V9 questions (5 MCQ, start chapter capped at 4)', asyn
   await context.close();
 });
 
-/* ============================== PHASE 4+ : append below ============================== */
+
+/* ============================== PHASE 3 review fixes ============================== */
+T('PHASE3b: wrong pick is red ✗, correct is green ✓, others dimmed (not colour alone); math isolates do not wrap', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'rv1', grade: 9 });
+  await lessonUntilQ(page, 9, 0, (i) => i.type === 'mcq');
+  const i = await page.evaluate(() => v9Lesson());
+  await page.click(`#pqBox .opt[data-k="${i.ans === 0 ? 1 : 0}"]`); await page.click('#lsGo');
+  await page.waitForTimeout(400);
+  await page.waitForTimeout(450);
+  const r = await page.evaluate(() => [...document.querySelectorAll('#pqBox .opt')].map((b) => ({ c: b.className, mk: b.querySelector('.mk') && b.querySelector('.mk').textContent, bg: getComputedStyle(b).backgroundColor, op: getComputedStyle(b).opacity })));
+  eq(r.filter((x) => /\bno\b/.test(x.c)).length, 1); eq(r.filter((x) => /\bok\b/.test(x.c)).length, 1);
+  eq(r.find((x) => /\bno\b/.test(x.c)).mk, '✗'); eq(r.find((x) => /\bok\b/.test(x.c)).mk, '✓');
+  assert(r.filter((x) => /dim/.test(x.c)).every((x) => +x.op < .6) && r.filter((x) => /dim/.test(x.c)).length === 2, 'others dimmed');
+  assert(r.find((x) => /\bno\b/.test(x.c)).bg !== r.find((x) => /\bok\b/.test(x.c)).bg, 'bg must differ');
+  assert(!r.some((x) => /\bsel\b/.test(x.c)), 'selected highlight removed after check');
+  const m = await page.evaluate(() => { const e = document.createElement('div'); document.body.appendChild(e); e.innerHTML = rich0('x ⁦A = {۱ , ۲}⁩ y'); const c = getComputedStyle(e.querySelector('.mth')); return [c.whiteSpace, c.display, c.direction]; });
+  eq(m, ['nowrap', 'inline-block', 'ltr']);
+  await context.close();
+});
+
+T('PHASE3b: keypad display is LTR (minus on the left) and «٫»/«/» keys are labelled', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'rv2', grade: 8 });
+  await lessonUntilQ(page, 8, 3, (i) => i.type === 'num');
+  await page.click('#pqBox .kpk[data-k="-"]'); await page.click('#pqBox .kpk[data-k="5"]');
+  const d = await page.evaluate(() => { const e = document.querySelector('#lsVal'), c = getComputedStyle(e); const r = document.createRange(); r.selectNodeContents(e); const rects = [...r.getClientRects()]; return { dir: c.direction, ub: c.unicodeBidi, txt: e.textContent }; });
+  eq([d.dir, d.txt], ['ltr', '−۵']); assert(/override|isolate/.test(d.ub), 'unicode-bidi: ' + d.ub);
+  const k = await page.evaluate(() => ['.', '/'].map((x) => { const b = document.querySelector(`#pqBox .kpk[data-k="${x}"]`); return [b.getAttribute('aria-label'), b.textContent]; }));
+  eq(k[0][0], 'ممیز اعشاری'); eq(k[1][0], 'خط کسری'); assert(k[0][1].includes('ممیز') && k[1][1].includes('کسر'), 'visible captions');
+  await context.close();
+});
+
+T('PHASE3b: long questions (sets, equations, vectors) never split mid-expression', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'rv3', grade: 9 });
+  for (const [g, ch] of [[9, 0], [8, 4], [8, 3], [9, 5]]) {
+    await page.evaluate(([g, ch]) => Lesson.start(g, ch, 0), [g, ch]);
+    for (let k = 0; k < 6; k++) {
+      const bad = await page.evaluate(() => [...document.querySelectorAll('#pqBox .mth')].filter((e) => { const rs = [...e.getClientRects()]; return rs.length > 1; }).length);
+      eq(bad, 0, `${g}.${ch}: a math span is split over lines`);
+      await page.evaluate(([g, ch]) => Lesson.start(g, ch, 0), [g, ch]);
+    }
+  }
+  await context.close();
+});
+
+/* ============================== PHASE 4 ============================== */
+T('PHASE4: opening every screen/tab gives 0 coins (incl. shop, profile, league, all «بیشتر» entries)', async ({ browser }) => {
+  for (const mode of ['new', 'legacy']) {
+    const { page, context } = mode === 'new' ? await open(browser) : await open(browser, { fixture: 'legacy-user.json' });
+    if (mode === 'new') await register(page, { user: 'z4' + mode, name: 'سکه' });
+    await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+    await page.waitForTimeout(200);
+    const before = await page.evaluate(() => S.coins || 0);
+    for (const tab of ['league', 'shop', 'prof', 'path']) await page.click(`#bnav [data-go="${tab}"]`);
+    await page.click('#btnProf');
+    const ids = await page.evaluate(() => [...document.querySelectorAll('#pMore [data-more]')].map((b) => b.dataset.more).filter((x) => !['live', 'report'].includes(x)));
+    for (const id of ids) { await page.evaluate((id) => go(id), id); await page.evaluate(() => go('path')); }
+    eq(await page.evaluate(() => S.coins || 0), before, `coins changed while only opening screens (${mode})`);
+    assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+    await context.close();
+  }
+});
+
+T('PHASE4: wheel entry is gone from profile→بیشتر; daily login bonus stays off', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json', keepDaily: true });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  await page.click('#btnProf');
+  eq(await page.evaluate(() => !!document.querySelector('#pMore [data-more="wheel"]')), false);
+  eq(await page.evaluate(() => S.coins), 320, 'old daily bonus (cd != today) must not add coins');
+  await context.close();
+});
+
+T('PHASE4: legacy migration — coins = v6 coins + shop.v1 coins once; all old items in collection; idempotent across reloads/re-login', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [S.coins, S.mig9]), [320, 1]);
+  const shop = await lsGet(page, 'mathHero.shop.v1');
+  assert(shop.users['علیرضایی'] && shop.users['علیرضایی'].mig9 && shop.users['علیرضایی'].coins === 85, 'shop.v1 profile flagged, key and data kept');
+  eq(await page.evaluate(() => v9Coll()), ['av:🦊', 'av:🐼', 'fr:#ffd166', 'th:sunset', 'v1:theme_3', 'v1:avatar_2', 'v1:char_3']);
+  await page.click('#btnProf');
+  eq(await page.evaluate(() => document.querySelectorAll('#colBox .ctile').length), 7, 'collection tiles');
+  /* equip an old v6 item and an old shop.v1 item */
+  await page.click('#colBox .ctile[data-id="th:sunset"] button');
+  eq(await page.evaluate(() => [S.eq.th, document.body.classList.contains('th-sunset')]), ['sunset', true]);
+  await page.click('#colBox .ctile[data-id="v1:theme_3"] button');
+  eq(await page.evaluate(() => [S.col.eq.theme, S.eq.th, document.body.classList.contains('th-sunset')]), ['theme_3', '', false]);
+  for (let k = 0; k < 2; k++) { await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER); await page.waitForTimeout(200); }
+  eq(await page.evaluate(() => S.coins), 320, 'no double add after reloads');
+  /* logout + form login + enter() again */
+  await page.click('#btnProf'); await page.click('#s-prof #btnOut'); await page.click('#outYes');
+  await openForm(page, 'login'); await page.fill('#inUser', 'ali_r'); await page.fill('#inPass', '1234'); await page.click('#regBtn');
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER && cur !== 'reg');
+  eq(await page.evaluate(() => S.coins), 320, 'no double add after re-login');
+  eq((await lsGet(page, 'mh_users')).ali_r.d.coins, 320);
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE4: migration does not touch other users, new accounts or guests (no stolen coins)', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json', drop: ['mh_session'] });
+  /* a brand-new user whose name equals the old shop.v1 profile key */
+  await register(page, { name: 'علی رضایی', user: 'newali', pass: '1234' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER && cur === 'path');
+  eq(await page.evaluate(() => [S.coins || 0, S.mig9]), [0, 1], 'new registrations start fresh');
+  const shop = await lsGet(page, 'mathHero.shop.v1');
+  assert(!shop.users['علیرضایی'].mig9, 'old profile untouched');
+  await context.close();
+});
+
+T('PHASE4: combo — 5 correct in a row => ×2 shown and computed (8 correct = 110 XP); wrong resets', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'cmb1', grade: 8 });
+  await startLesson(page, 8, 3);
+  const seen = [];
+  for (let k = 0; k < 8; k++) {
+    const info = await page.evaluate(() => v9Lesson()); await answerCard(page, info);
+    seen.push(await page.evaluate(() => [document.querySelector('#lsCombo').hidden, document.querySelector('#lsFb .xpg').textContent.replace(/\s+/g, ' ')]));
+    await page.click('#lsGo');
+  }
+  eq(seen.map((x) => x[0]), [true, true, true, true, false, false, false, false], 'combo badge appears after the 5th correct');
+  assert(/۱۰ XP/.test(seen[4][1]) && !/کمبو/.test(seen[4][1]), '5th still ×1: ' + seen[4][1]);
+  assert(/۲۰ XP/.test(seen[5][1]) && /کمبو ×۲/.test(seen[5][1]), '6th ×2: ' + seen[5][1]);
+  eq(await page.evaluate(() => S.xp), 110);
+  await page.waitForSelector('#pqGo'); assert((await page.textContent('.xpl')).includes('۱۱۰ XP'), 'XP summary');
+  await context.close();
+});
+
+T('PHASE4: XP total = legacy xpOf + lesson XP; level = floor(total/200)+1 in profile', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  const r = await page.evaluate(() => { const legacy = xpOf(); S.xp = 400; return [xpOf() - legacy, Math.floor(xpOf() / 200) + 1, v9Lv(xpOf())]; });
+  eq(r[0], 400); eq(r[1], r[2]);
+  await page.click('#btnProf');
+  assert((await page.textContent('#s-prof')).includes('سطح ' + await page.evaluate(() => fa(v9Lv(xpOf())))), 'profile level text');
+  await context.close();
+});
+
+T('PHASE4: lesson coins 5, flawless 10; daily cap 50', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'coin4', grade: 8 });
+  await startLesson(page, 8, 3); await finishLesson(page); await page.click('#pqGo');
+  eq(await page.evaluate(() => S.coins), 10);
+  await startLesson(page, 8, 3); await finishLesson(page, { wrongFirst: true }); await page.click('#pqGo');
+  eq(await page.evaluate(() => S.coins), 15);
+  eq(await page.evaluate(() => [v9Coins(100, 'x'), S.coins]), [35, 50], 'cap leaves 35 of the remaining 100 (50 per day)');
+  eq(await page.evaluate(() => [v9Coins(5, 'x'), S.coins]), [0, 50], 'nothing more today');
+  await context.close();
+});
+
+T('PHASE4: ONE shop — buying deducts coins after confirm, persists after reload, owned item usable; insufficient coins blocked; freeze max 2', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'shp1', grade: 8 });
+  await page.evaluate(() => { S.coins = 100; persist(); });
+  await page.click('#bnav [data-go="shop"]');
+  assert((await page.evaluate(() => document.querySelectorAll('#shopBox [data-buy]').length)) >= 15, 'catalog size');
+  eq(await page.evaluate(() => !document.querySelector('#shopLayer') && !document.querySelector('#s-shop .shopbtn') && !document.querySelector('#s-shop [data-c]')), true, 'old shop UI must not be reachable');
+  /* insufficient */
+  await page.evaluate(() => { S.coins = 30; });
+  await page.click('#shopBox [data-buy="rb:col-gold"]');
+  eq(await page.evaluate(() => [S.coins, document.querySelector('#modal').classList.contains('on'), S.items.includes('rb:col-gold')]), [30, false, false], 'no purchase, no confirm without coins');
+  await page.evaluate(() => { S.coins = 100; });
+  /* confirm flow */
+  await page.click('#shopBox [data-buy="rb:hat-cap"]');
+  assert((await page.textContent('#modal')).includes('۵۰ سکه'), 'confirm shows price');
+  await page.click('#bNo'); eq(await page.evaluate(() => S.coins), 100);
+  await page.click('#shopBox [data-buy="rb:hat-cap"]'); await page.click('#bYes');
+  eq(await page.evaluate(() => [S.coins, S.items.includes('rb:hat-cap'), S.eq.rbh]), [50, true, 'hat-cap']);
+  await page.click('#shopBox [data-buy="fz"]'); await page.click('#bYes'); await page.click('#shopBox [data-buy="fz"]'); 
+  eq(await page.evaluate(() => [S.coins, S.streak.freezes]), [10, 1]);
+  await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [S.coins, S.items.includes('rb:hat-cap'), S.eq.rbh, S.streak.freezes]), [10, true, 'hat-cap', 1], 'persisted');
+  await page.evaluate(() => { S.coins = 200; S.streak.freezes = 2; go('shop'); });
+  assert(await page.evaluate(() => document.querySelector('#shopBox [data-buy="fz"]').disabled), 'freeze capped at 2');
+  assert(await page.evaluate(() => [...document.querySelectorAll('#shopBox button')].every((b) => b.getBoundingClientRect().height >= 43.5 && (b.getAttribute('aria-label') || b.textContent.trim()))), 'shop buttons >= 44px and labelled');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE4: robot evolves at level 5 / 10 / 20 (profile + header)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'evo1', grade: 8 });
+  for (const [xp, tier, lv] of [[0, 0, 1], [799, 0, 4], [800, 1, 5], [1799, 1, 9], [1800, 2, 10], [3799, 2, 19], [3800, 3, 20]]) {
+    await page.evaluate((xp) => { S.xp = 0; const base = xpOf(); S.xp = xp - base; go('prof'); }, xp);
+    eq(await page.evaluate(() => v9Lv(xpOf())), lv);
+    eq(await page.evaluate(() => +document.querySelector('#profAv svg').dataset.tier), tier, `profile tier @${xp}xp`);
+    eq(await page.evaluate(() => +document.querySelector('#hAv svg').dataset.tier), tier, `header tier @${xp}xp`);
+  }
+  await context.close();
+});
+
+/* ============================== PHASE 5+ : append below ============================== */
 
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {

@@ -47,7 +47,16 @@ const SCREENS = [
   ['lesson-numeric-keypad', { fresh: true }, lessonShot(8, 3, 'num', async (p) => { await p.click('#pqBox .kpk[data-k="-"]'); await p.click('#pqBox .kpk[data-k="5"]'); })],
   ['lesson-shape-card', { fresh: true }, lessonShot(8, 2, 'shape')],
   ['lesson-end', { fresh: true }, async (page) => { await page.evaluate(() => Lesson.start(8, 3, 0)); for (let g = 0; g < 40; g++) { const i = await page.evaluate(() => v9Lesson()); if (!i) break; if (i.type === 'num') { for (const ch of String(i.ans)) await page.click(`#pqBox .kpk[data-k="${/\d/.test(ch) ? ch : ch}"]`); } else await page.click(`#pqBox .opt[data-k="${i.ans}"]`); await page.click('#lsGo'); await page.click('#lsGo'); } }],
-  /* PHASE 4+ : append new screens here */
+  ['lesson-combo', { fresh: true }, async (page) => { await page.evaluate(() => Lesson.start(8, 3, 0)); for (let k = 0; k < 5; k++) { const i = await page.evaluate(() => v9Lesson()); if (i.type === 'num') { for (const ch of String(i.ans)) await page.click(`#pqBox .kpk[data-k="${ch}"]`); } else await page.click(`#pqBox .opt[data-k="${i.ans}"]`); await page.click('#lsGo'); if (k < 4) await page.click('#lsGo'); } }],
+  ['shop', { fresh: true }, async (page) => { await page.evaluate(() => { S.coins = 120; persist(); }); await page.click('#bnav [data-go="shop"]'); }],
+  ['shop-purchase-confirm', { fresh: true }, async (page) => { await page.evaluate(() => { S.coins = 120; persist(); }); await page.click('#bnav [data-go="shop"]'); await page.click('#shopBox [data-buy="rb:hat-top"]'); }],
+  ['collection-legacy', {}, async (page) => { await page.click('#btnProf'); await page.evaluate(() => document.querySelector('#colBox').scrollIntoView()); }],
+  ['avatar-tier1-lv5', { fresh: true }, async (page) => { await page.evaluate(() => { S.xp = 800; go('prof'); }); }],
+  ['avatar-tier2-lv10', { fresh: true }, async (page) => { await page.evaluate(() => { S.xp = 1800; S.eq = { rbh: 'hat-cap', rbc: 'col-pink' }; go('prof'); }); }],
+  ['avatar-tier3-lv20', { fresh: true }, async (page) => { await page.evaluate(() => { S.xp = 3800; S.eq = { rbo: 'out-cape', rbc: 'col-gold' }; go('prof'); }); }],
+  ['lesson-sets-question', { fresh: true }, lessonShot(9, 0, 'mcq')],
+  ['lesson-vector-question', { fresh: true }, lessonShot(8, 4, 'mcq')],
+  /* PHASE 5+ : append new screens here */
 ];
 
 (async () => {
