@@ -1079,6 +1079,9 @@ T('PHASE8: lesson end screen — XP / accuracy / time match real computation; ro
   const real = await page.evaluate(() => ({ xp: S.xp }));
   eq(n.xp.v, String(real.xp), 'XP card = S.xp'); eq(real.xp, 90, '1 wrong first: 5x10 + 2x20');
   eq(n.acc.v, '88', '7/8 first-try = 87.5 -> 88'); eq(n.time.v, '125', 'time from mocked clock'); eq(n.time.t, '۲:۰۵'); eq(n.xp.t, faT(real.xp)); eq(n.acc.t, '۸۸٪');
+  const tt = await page.evaluate(() => { const t = document.querySelector('#toast').getBoundingClientRect(), b = document.querySelector('#pqMore').getBoundingClientRect(); return { hit: !(t.right < b.left || t.left > b.right || t.bottom < b.top || t.top > b.bottom), txt: document.querySelector('#toast').textContent }; });
+  assert(!tt.hit, 'toast must not cover the «ادامه» button'); assert(!/سکه/.test(tt.txt), 'no separate coin toast on the end screen: ' + tt.txt);
+  assert(/🪙 \+۵ سکه/.test(await page.textContent('.esub')), 'coins are shown in the summary line');
   assert(await visible(page, '.erobot.cheer svg'), 'cheering robot'); assert(await visible(page, '#pqMore') && await visible(page, '#pqGo'), 'ادامه + بازگشت');
   eq(await page.evaluate(() => document.querySelector('#pqMore').textContent.trim()), 'ادامه');
   const txt = await page.evaluate(() => document.body.innerText); assert(!/به‌زودی|بزودی/.test(txt), 'no «soon» text');

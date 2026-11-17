@@ -1,6 +1,6 @@
 /* ریاضی‌لند — service worker: کش‌اول برای خود برنامه (آفلاین)، با تازه‌سازی در پس‌زمینه.
    با هر انتشار تازه، نسخهٔ CACHE را عوض کن تا کش قدیمی پاک شود. */
-const CACHE='riazi-land-v1';
+const CACHE='riazi-land-v12';
 const CORE=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));

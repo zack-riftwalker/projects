@@ -15,7 +15,7 @@ const FIXTURE = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtu
 /* Opens a fresh isolated page. opts.fixture = 'legacy-user.json' seeds localStorage BEFORE the app scripts run
    (only on the first load of the tab, so reloads keep whatever the app saved). opts.drop = [keys] to skip some keys. */
 async function open(browser, opts = {}) {
-  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: opts.dsf || 1, locale: 'fa-IR' });
+  const context = await browser.newContext({ viewport: opts.viewport || VIEWPORT, deviceScaleFactor: opts.dsf || 1, locale: 'fa-IR' });
   const page = await context.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message));

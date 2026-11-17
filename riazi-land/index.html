@@ -2663,6 +2663,8 @@ r.insertAdjacentHTML('afterbegin','<div class="stk"><span>🧮</span><span>🚀<
 body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bnav,body[data-scr="gm"] #bnav,body[data-scr="sg"] #bnav{display:none}
 #app{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 #toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+body[data-scr="pq"] #toast{bottom:auto;top:calc(12px + env(safe-area-inset-top));transform:translate(-50%,-40px)}
+body[data-scr="pq"] #toast.on{transform:translate(-50%,0)}
 #btnSup,#btnTch,#hubShop{display:none!important}
 #dev{display:none}body[data-scr="reg"] #dev,body[data-scr="prof"] #dev{display:block}
 #pathBox{padding-bottom:24px}
@@ -3220,7 +3222,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
       /* مهمان: بار اول بعد از اولین درس؛ بعد فقط هر ۳ درس یا اولین درس هر روز */
       const nag=isGuest()&&(!P.nag||P.lc-P.nag.at>=3||(P.lc>P.nag.at&&P.nag.d!==dayN()));
       if(nag)P.nag={at:P.lc,d:dayN()};
-      const coin=v9Coins(firstOk===total?10:5,'درس'),lv1=lvOf(xpOf()),evo=tierOf(lv1)>tierOf(st.lv0);persist();this.st=null;SFX.win();if(s===3)confetti(30);v9Hdr();if(lv1>st.lv0)toast('🎉 سطح '+fa(lv1)+'!'+(evo?' ربات تو تکامل پیدا کرد 🤖✨':''));
+      const coin=v9Coins(firstOk===total?10:5,'درس',true),lv1=lvOf(xpOf()),evo=tierOf(lv1)>tierOf(st.lv0);persist();this.st=null;SFX.win();if(s===3)confetti(30);v9Hdr();if(lv1>st.lv0)toast('🎉 سطح '+fa(lv1)+'!'+(evo?' ربات تو تکامل پیدا کرد 🤖✨':''));
       showEnd({kind:'lesson',stars:s,xp:st.xp,acc:Math.round(acc*100),time:Math.max(0,Math.round((Date.now()-st.t0)/1000)),up,nag,
         title:s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!',
         sub:(coin?'🪙 +'+fa(coin)+' سکه':'')+(firstOk===total?(coin?' • ':'')+'همه درست! 🎉':'')+(lv1>st.lv0?' • سطح '+fa(lv1)+'!':'')+(evo?' • ربات تکامل پیدا کرد 🤖✨':'')});
@@ -3332,9 +3334,9 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
 
   /* ---- سکه: فقط از درس، صندوقچه، (ماموریت روزانه در فاز ۱۰) و غول فصل (earn در advEnd). سقف روزانهٔ این منابع: ۵۰ ---- */
   const COIN_CAP=50;
-  window.v9Coins=function(n,reason){const P=pd(),d=dayN();if(!P.cc||P.cc.d!==d)P.cc={d,n:0};
+  window.v9Coins=function(n,reason,quiet){const P=pd(),d=dayN();if(!P.cc||P.cc.d!==d)P.cc={d,n:0};
     const g=Math.max(0,Math.min(n,COIN_CAP-P.cc.n));
-    if(g>0){P.cc.n+=g;earn(g)}else toast('سقف سکهٔ امروز پر شد؛ فردا دوباره سکه بگیر 🌙');
+    if(g>0){P.cc.n+=g;if(quiet){S.coins=(S.coins||0)+g;v9Hdr()}else earn(g)}else if(!quiet)toast('سقف سکهٔ امروز پر شد؛ فردا دوباره سکه بگیر 🌙');
     return g};
 
   /* ---- مهاجرت یک‌باره: سکهٔ فروشگاه قدیمی (mathHero.shop.v1) به S.coins ---- */
