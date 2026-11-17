@@ -3317,7 +3317,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   const lvOf=x=>Math.floor(x/200)+1,tierOf=lv=>lv>=20?3:lv>=10?2:lv>=5?1:0;
   window.v9Lv=lvOf;window.v9Tier=tierOf;
   var hAvKey='';
-  function streakInit(){if(!S.streak||typeof S.streak!=='object'){const k=S.stk||{};S.streak={n:k.n||0,last:k.d||0,freezes:0,best:k.n||0}}S.streak.freezes=Math.min(2,Math.max(0,S.streak.freezes||0));return S.streak}
+  function streakInit(){if(!S.streak||typeof S.streak!=='object')S.streak={n:0,last:0,freezes:0,best:0};S.streak.freezes=Math.min(2,Math.max(0,S.streak.freezes||0));return S.streak}
 
   /* ---- سکه: فقط از درس، صندوقچه، (ماموریت روزانه در فاز ۱۰) و غول فصل (earn در advEnd). سقف روزانهٔ این منابع: ۵۰ ---- */
   const COIN_CAP=50;
@@ -3339,6 +3339,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   function migrate9(){
     if(S.mig9||!USER)return;
     if(isGuest()){S.mig9=1;return}
+    if(!S.streak){const k=S.stk||{};S.streak={n:k.n||0,last:k.d||0,freezes:0,best:k.n||0}} /* حساب قدیمی: استریک ورود قدیمی به استریک تازه منتقل می‌شود */
     let add=0;const db=readShop1();
     if(db&&db.users){const k=findShopKey(db.users),p=k&&db.users[k];
       if(p&&!p.mig9){const c=Math.max(0,Math.floor(+p.coins||0));p.mig9=1;p.migTo=USER;p.migCoins=c;
@@ -3565,7 +3566,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
     $$('#bnav button').forEach(b=>{if(b.dataset.go===TABOF[id])b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
     if(id==='reg')obWelcome();
     if(!USER)return;
-    if(id==='path'){migrate9();touchStreak();streakCheck();try{applyTheme()}catch(e){}applyCol();pathShow()}
+    if(id==='path'){migrate9();if(![1,2,3].includes(S.goal))S.goal=1;touchStreak();streakCheck();try{applyTheme()}catch(e){}applyCol();pathShow()}
     else if(id==='league')leagueShow();
     else if(id==='prof')profShow();
     v9Hdr();

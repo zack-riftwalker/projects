@@ -1041,7 +1041,7 @@ T('PHASE4b: collection names use Persian digits, no Latin digits or broken glyph
   const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
   await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
   await page.click('#btnProf');
-  const names = await page.evaluate(() => [...document.querySelectorAll('#colBox .ctile b')].map((b) => b.textContent));
+  const names = await page.evaluate(() => [...document.querySelectorAll('#colBox .ctile > b')].map((b) => b.textContent));
   assert(names.length === 7 && names.every((n) => !/[0-9]/.test(n)), 'names: ' + names.join(' | '));
   assert(await page.evaluate(() => getComputedStyle(document.querySelector('.mth') || document.body).marginLeft !== undefined), 'ok');
   await context.close();
