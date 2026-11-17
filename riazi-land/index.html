@@ -45,7 +45,7 @@ main{flex:1}
 #topbar .brand{font-family:var(--fh);font-size:20px;color:var(--cy);text-shadow:0 0 12px rgba(52,224,192,.7);white-space:nowrap}
 #topbar .who{flex:1;text-align:center;font-size:14px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #topbar .who b{color:var(--ye)}
-.ib{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(52,224,192,.08);display:inline-flex;align-items:center;justify-content:center;font-size:18px;transition:.2s}
+.ib{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:rgba(52,224,192,.08);display:inline-flex;align-items:center;justify-content:center;font-size:18px;transition:.2s}
 .ib:hover{background:rgba(52,224,192,.2);box-shadow:0 0 14px rgba(52,224,192,.5)}
 
 /* generic */
@@ -254,7 +254,7 @@ input[type=password]:focus{border-color:var(--cy);box-shadow:0 0 16px rgba(52,22
 .btn.mg{background:linear-gradient(135deg,rgba(255,122,89,.5),rgba(255,122,89,.14));border-color:rgba(255,122,89,.7)}.btn.ye{background:linear-gradient(135deg,rgba(255,209,102,.45),rgba(255,209,102,.12));border-color:rgba(255,209,102,.7);color:var(--tx)}.btn.gh{background:rgba(255,255,255,.04)}.btn.sm{padding:4px 11px;font-size:13px}
 .missions{perspective:900px}.mission:hover{transform:translateY(-3px) rotateX(5deg) rotateY(-3deg)}
 .grade{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}.gc{padding:3px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--tx)}.gc.sel{border-color:var(--gold);background:rgba(255,209,102,.22);color:var(--gold)}
-.gnote{display:none}body:not([data-gr="8"]) .gnote{display:block}body:not([data-gr="8"]) .g8{display:none}
+body:not([data-gr="8"]) .g8{display:none}
 #rWrap{position:relative;width:100%;height:clamp(420px,64vh,600px);border-radius:20px;overflow:hidden;border:1px solid var(--line);background:#0a0e17}#rCv{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #rOv{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(6,8,16,.7);backdrop-filter:blur(5px);padding:16px}#rOv.on{display:flex}#rOv .card{max-width:480px;text-align:center}#rOv h2{font-size:30px;color:var(--cy)}
 .fd{min-height:40px;margin-top:8px;padding:6px 14px;border-radius:12px;border:1px dashed var(--line);font-size:14.5px;background:rgba(0,0,0,.3)}.fd.ok{border-color:var(--ok)}.fd.bad{border-color:var(--rd)}
@@ -277,6 +277,7 @@ input[type=password]:focus{border-color:var(--cy);box-shadow:0 0 16px rgba(52,22
 #modal summary{cursor:pointer;font-weight:700;color:var(--ye)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:6px;background:#777}.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
 .lgh{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+body[data-scr="reg"] #btnSup,body[data-scr="reg"] #btnTch{display:none!important}
 #btnSup{position:fixed;left:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:40;display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:99px;border:1px solid var(--gold);background:rgba(10,14,23,.92);color:var(--gold);font-weight:700;font-size:14px;box-shadow:0 0 16px rgba(255,200,61,.4)}
 #btnSup span{font-size:13px}@media(max-width:420px){#btnSup span{display:none}#btnSup{width:46px;height:46px;justify-content:center;padding:0;font-size:22px}}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
@@ -313,14 +314,14 @@ body.th-sunset{background:linear-gradient(160deg,#2b1055,#7a2e5e 55%,#ff7a59) fi
 #tcV.rec{background:#ff4d6d;color:#fff;animation:bmb .5s infinite alternate}
 </style>
 </head>
-<body>
+<body data-scr="reg">
 <svg width="0" height="0" style="position:absolute"><symbol id="ic" viewBox="0 0 512 512"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34e0c0"/><stop offset="1" stop-color="#ff7a59"/></linearGradient><radialGradient id="b2" cx=".5" cy=".3" r=".9"><stop offset="0" stop-color="#2c1280"/><stop offset="1" stop-color="#0a0e17"/></radialGradient></defs><rect width="512" height="512" rx="112" fill="url(#b2)"/><polygon points="256,56 430,156 430,356 256,456 82,356 82,156" fill="#34e0c0" fill-opacity=".08" stroke="url(#g2)" stroke-width="20" stroke-linejoin="round"/><polygon points="256,118 376,187 376,325 256,394 136,325 136,187" fill="none" stroke="url(#g2)" stroke-width="5" opacity=".45"/><path d="M164 204h184M214 204v112q0 26 26 26M302 204v112q0 26 26 26" fill="none" stroke="#ffd166" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/></symbol></svg>
 <div id="app">
   <header id="topbar">
     <span class="brand"><svg width="24" height="24" viewBox="0 0 512 512"><use href="#ic"/></svg>ریاضی‌لند</span>
     <span class="who" id="who"></span>
     <button class="ib" id="btnSound" title="صدا" aria-label="صدا">🔊</button>
-    <button class="ib" id="btnOut" title="خروج" aria-label="خروج">🚪</button>
+    <button class="ib" id="btnProf" title="پروفایل" aria-label="پروفایل">👤</button>
     <button class="ib" id="btnHome" title="منوی اصلی" aria-label="منوی اصلی">🏠</button>
   </header>
 
@@ -356,7 +357,6 @@ body.th-sunset{background:linear-gradient(160deg,#2b1055,#7a2e5e 55%,#ff7a59) fi
     <div class="center" id="heroM"></div>
     <div class="pc"><div class="av" id="pcLv">۱</div><div class="pi"><div class="pn" id="pcRank"></div><div class="bar" style="margin:4px 0"><i id="pcBar" style="width:0"></i></div><div class="muted px" id="pcXp"></div></div></div>
     <div class="badges" id="badges"></div>
-    <div class="note gnote">درسنامه و آزمایشگاه تعاملی این پایه به‌زودی اضافه می‌شود؛ تا آن موقع رانر، نبرد، نمایشگاه و جفت‌یاب را بازی کن.</div>
     <div class="missions">
       <button class="mission g8" data-go="learn"><span class="n">۱</span><h3>📘 درسنامهٔ تعاملی</h3><p>چندضلعی، منتظم، محدب و مقعر، مرکز و محور تقارن را قدم‌به‌قدم یاد بگیر.</p><span class="st" id="st-learn"></span></button>
       <button class="mission g8" data-go="lab"><span class="n">۲</span><h3>🔬 آزمایشگاه تقارن</h3><p>با دکمه‌های «محور تقارن»، «مرکز تقارن»، «تا کردن» و «خط‌کش» شکل‌ها را بررسی کن.</p><span class="st" id="st-lab"></span></button>
@@ -721,7 +721,7 @@ const SCREENS=['reg','menu','learn','lab','game','quiz','report','expo','memo','
 let cur='reg';
 function go(id){
   if(cur==='game'&&id!=='game')gameStop();
-  cur=id;
+  cur=id;document.body.dataset.scr=id;
   SCREENS.forEach(s=>$('#s-'+s).classList.toggle('active',s===id));
   $('#topbar').classList.toggle('on',id!=='reg');
   if(id==='menu')refreshMenu();
@@ -1241,8 +1241,7 @@ document.addEventListener('pointerdown',()=>SFX.init(),{once:true});
 
 
 /* ===== نسخهٔ ۲: حساب کاربری، سطح، نمایشگاه، جفت‌یاب ===== */
-try{const mf={name:'ریاضی‌لند',short_name:'ریاضی‌لند',lang:'fa',dir:'rtl',display:'standalone',background_color:'#0a0e17',theme_color:'#0a0e17',start_url:'.',icons:[{src:document.querySelector('link[rel=icon]').href,sizes:'any',type:'image/svg+xml',purpose:'any'}]};
- const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/manifest+json'}));document.head.appendChild(l)}catch(e){}
+/* مانیفست واقعی: manifest.webmanifest (کنار همین فایل) */
 const UK='mh_users',SK='mh_session';let USER=null,authMode='reg';
 const users=()=>store(UK)||{};
 async function sha(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('mh|'+t));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){let h=5381;for(const c of 'mh|'+t)h=(h*33^c.charCodeAt(0))>>>0;return'f'+h}}
@@ -1264,7 +1263,7 @@ $('#regForm').addEventListener('submit',async e=>{
     SFX.win();enter(u,us[u]);
   }
 });
-$('#btnOut').onclick=()=>{persist();USER=null;try{localStorage.removeItem(SK)}catch(e){}SFX.click();$('#who').textContent='';go('reg')};
+/* خروج از حساب: به بخش «نسخهٔ ۹» (صفحهٔ پروفایل) منتقل شد */
 /* سطح و تجربه */
 const RANKS=['تازه‌کار','شاگرد زرنگ','کاشف','ریاضی‌باز','استاد','قهرمان','اسطورهٔ ریاضی'];
 function xpOf(){const lab=Object.values(S.lab).filter(v=>v.a&&v.c).length;return(S.learn?120:0)+Math.min(lab,8)*25+(S.game?S.game.score:0)+(S.quiz?S.quiz.score*30:0)+Object.keys(S.expo||{}).length*40+(S.memo?S.memo.stars*50:0)}
@@ -1953,9 +1952,7 @@ function teamPick(){modal(`<h3 class="neon" style="font-size:22px">🏫 تیم /
   $('#tmS').onclick=()=>{S.team=$('#tmI').value.trim().slice(0,20);persist();lgSync(true);$('#modal').classList.remove('on');chip();toast('✅ ذخیره شد')}}
 let DIP=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();DIP=e});
 function installHelp(){if(DIP){DIP.prompt();return}modal(`<h3 class="neon" style="font-size:22px">📲 نصب مثل اپ</h3><p style="line-height:2;font-size:14.5px">اندروید (کروم): منوی ⋮ ← «افزودن به صفحهٔ اصلی» یا «نصب برنامه».<br>آیفون (سافاری): دکمهٔ اشتراک ⬆️ ← Add to Home Screen.<br><b style="color:var(--ye)">نکته:</b> نصب واقعی و آفلاین فقط وقتی کار می‌کند که فایل روی یک سایت (مثل GitHub Pages) باشد؛ از حالت فایل محلی نصب نمی‌شود.</p>`)}
-try{const ic='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#0a0e17"/><text x="50" y="68" font-size="58" text-anchor="middle">🛡️</text></svg>');
-  document.head.insertAdjacentHTML('beforeend','<meta name="theme-color" content="#0a0e17"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">');
-  const l=document.createElement('link');l.rel='manifest';l.href=URL.createObjectURL(new Blob([JSON.stringify({name:'ریاضی‌لند',short_name:'ریاضی‌لند',display:'standalone',start_url:'.',background_color:'#0a0e17',theme_color:'#0a0e17',dir:'rtl',lang:'fa',icons:[{src:ic,sizes:'192x192',type:'image/svg+xml'}]})],{type:'application/manifest+json'}));document.head.appendChild(l)}catch(e){}
+
 /* ---- مرور هوشمند ---- */
 const TOP={7:['عددهای صحیح','اعداد اول و شمارنده','اعداد اول و شمارنده','جبر و معادله','هندسه','هندسه','عددهای صحیح','اعداد اول و شمارنده'],8:['توان و جذر','توان و جذر','هندسه','اعداد اول و شمارنده','جبر و معادله','هندسه','آمار و احتمال','هندسه'],9:['جبر و معادله','مجموعه‌ها','توان و جذر','هندسه','جبر و معادله','توان و جذر','جبر و معادله','عددهای حقیقی']};
 const topicOf=t=>/√|ریشه|توان|\^|²|³/.test(t)?'توان و جذر':/اول|مقسوم|ب\.م\.م|ک\.م\.م|شمارنده/.test(t)?'اعداد اول و شمارنده':/x|معادله|عبارت/.test(t)?'جبر و معادله':/زاویه|ضلع|مساحت|محیط|مثلث|حجم|قطر/.test(t)?'هندسه':/میانگین|احتمال|آمار|میانه/.test(t)?'آمار و احتمال':'محاسبات';
@@ -2407,7 +2404,7 @@ function admin(){if(localStorage.getItem(ADMIN)!=='yes'&&!confirm('پنل مدی
 // Preserve a strict 100-item catalog; restore admin active settings and prices.
 for(const i of items){if(db.config.active&&i.id in db.config.active)i.active=db.config.active[i.id]}
 function addEntryPoints(){let m=document.querySelector('#s-menu');if(m&&!document.querySelector('#economyMenu')){let d=document.createElement('div');d.id='economyMenu';d.className='economy-card center';d.innerHTML=`<div class="shop-mini"><span class="shopcoin">🪙 سکه: <b data-coins>۰</b></span><span class="character-badge" id="menuHero"></span><button class="shopbtn" id="openShop">🛍️ فروشگاه و کاراکترها</button></div><p class="shop-note">با بازی و تمرین سکه بگیر؛ پاداش روزانه را از فروشگاه دریافت کن.</p>`;m.insertBefore(d,m.firstChild);d.querySelector('#openShop').onclick=showShop}let hub=document.querySelector('#s-hub');if(hub&&!hub.querySelector('#hubShop')){let b=document.createElement('div');b.id='hubShop';b.className='shop-mini';b.innerHTML='<button class="shopbtn">🛍️ فروشگاه</button><span class="character-badge"></span>';hub.querySelector('.card')?.prepend(b);b.querySelector('button').onclick=showShop}updateCoins();let p=profile(),c=chars[p.character]||chars[5],el=document.querySelector('#menuHero');if(el)el.textContent=c[0]+' '+c[1]+' • '+c[2];let h=document.querySelector('#hubShop .character-badge');if(h)h.textContent='انتخاب کاراکتر: '+c[0]+' '+c[1]}
-const oldGo=window.go;if(typeof oldGo==='function'){window.go=function(id){let p=profile(),before=(window.cur||'');let result=oldGo.apply(this,arguments);addEntryPoints();applyTheme();if(/^(learn|lab|game|quiz|expo|memo|run|duel|gm|arc:|sg)$/.test(id)){award(db.config.reward,'شروع فعالیت')}if(id==='gm'||id==='game'||id==='run'||id==='duel'||id==='memo'){let sid=id==='gm'?'gm':id;let sec=document.querySelector('#s-'+sid);if(sec&&!sec.querySelector('.activeHero')){let c=chars[profile().character]||chars[5],badge=document.createElement('div');badge.className='activeHero character-badge';badge.textContent=c[0]+' کاراکتر تو: '+c[1]+' ('+c[2]+')';let anchor=sec.querySelector('.card')||sec;anchor.insertBefore(badge,anchor.firstChild)}}return result}}
+const oldGo=window.go;if(typeof oldGo==='function'){window.go=function(id){let p=profile(),before=(window.cur||'');let result=oldGo.apply(this,arguments);addEntryPoints();applyTheme();if(id==='gm'||id==='game'||id==='run'||id==='duel'||id==='memo'){let sid=id==='gm'?'gm':id;let sec=document.querySelector('#s-'+sid);if(sec&&!sec.querySelector('.activeHero')){let c=chars[profile().character]||chars[5],badge=document.createElement('div');badge.className='activeHero character-badge';badge.textContent=c[0]+' کاراکتر تو: '+c[1]+' ('+c[2]+')';let anchor=sec.querySelector('.card')||sec;anchor.insertBefore(badge,anchor.firstChild)}}return result}}
 addEventListener('DOMContentLoaded',()=>{addEntryPoints();applyTheme()});setTimeout(()=>{addEntryPoints();applyTheme()},0);
 window.MathHeroShop={items:()=>items.length,coins:()=>profile().coins,award};
 })();
@@ -2440,7 +2437,7 @@ const MV=[['🙆','کشش دست‌ها','دو دست را بالا ببر؛ ش�
 let i=0,t=0,iv=0,ac=null,on=false;const q=s=>sec.querySelector(s),F=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
 q('#mvPl').innerHTML=MV.map((m,k)=>`<span>${m[0]}</span>`).join('');
 function beep(f){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.08)}catch(e){}}
-function show(){const m=MV[i];q('#mvFig').textContent=m[0];q('#mvName').textContent=m[1];q('#mvQ').innerHTML=m[2]+'<br><b>'+m[3]()+'</b>  (جواب: '+m[4]+')';[...q('#mvPl').children].forEach((e,k)=>e.classList.toggle('on',k===i));q('#mvT').textContent=F(t)}
+function show(){const m=MV[i];q('#mvFig').textContent=m[0];q('#mvName').textContent=m[1];q('#mvQ').innerHTML=m[2]+'<br><b>'+m[3]()+'</b> <button type="button" class="btn sm gh" id="mvAn" style="min-height:44px;min-width:44px">جواب</button> <b id="mvAv" style="color:var(--ok)"></b>';q('#mvAn').onclick=()=>{q('#mvAv').textContent=m[4];q('#mvAn').style.display='none'};[...q('#mvPl').children].forEach((e,k)=>e.classList.toggle('on',k===i));q('#mvT').textContent=F(t)}
 function stop(){clearInterval(iv);on=false;q('#mvGo').textContent='▶ شروع'}
 function done(){stop();let n=(store('mv_'+USER)||0)+1;store('mv_'+USER,n);q('#mvS').textContent='🎉 آفرین! دور '+F(n)+' کامل شد (+۶۰ امتیاز)';try{if(S.game)S.game.score+=60;persist()}catch(e){}try{confetti(40)}catch(e){}}
 q('#mvGo').onclick=()=>{if(on){stop();return}on=true;i=0;t=20;show();q('#mvGo').textContent='⏸ توقف';iv=setInterval(()=>{t--;beep(t%2?440:660);q('#mvT').textContent=F(t);if(t<=0){i++;if(i>=MV.length){done();return}t=20;show()}},1000)};
@@ -2511,7 +2508,6 @@ const r=document.querySelector('#s-reg .card')||document.getElementById('s-reg')
 r.insertAdjacentHTML('afterbegin','<div class="stk"><span>🧮</span><span>🚀</span><span>⭐</span><span>🎯</span><span>🦄</span><span>🏆</span></div><div class="tg">بازی کن، یاد بگیر، قهرمان شو ✨</div>');
 })();
 </script>
-<footer style="text-align:center;opacity:.7;padding:18px;font-size:13px">توسعه‌دهنده و طراح بازی: محمد طاها حسینی • همیار طراح: محمد حسنی</footer>
 
 
 <!-- ===== ارتقای نمایشگاهی: شخصیت‌های برداری، رابط تازه و مأموریت‌های ماجراجویی ===== -->
@@ -2653,6 +2649,35 @@ r.insertAdjacentHTML('afterbegin','<div class="stk"><span>🧮</span><span>🚀<
     window.scrollTo({top:0,behavior:'smooth'});
   };
   ensureAdventureScreen();
+})();
+</script>
+
+<!-- ===== نسخهٔ ۹ ===== -->
+<script>
+/* ===== نسخهٔ ۹: مسیر ===== */
+/* همهٔ کدهای تازهٔ نسخهٔ ۹ فقط در همین بخش اضافه می‌شوند؛ هیچ wrapper تازه‌ای روی go/persist/enter نگذار. */
+(function(){
+  /* --- فاز ۰: صفحهٔ پروفایل + خروج با تأیید (به‌جای 🚪 کنار 🏠) --- */
+  SCREENS.push('prof');
+  const sec=document.createElement('section');sec.id='s-prof';sec.className='screen';
+  document.getElementById('s-menu').parentNode.appendChild(sec);
+  function profShow(){
+    const e=S.eq||{},xp=xpOf(),lv=Math.floor(xp/200)+1;
+    sec.innerHTML=`<div class="card center"><h2 class="neon" style="font-size:28px">👤 پروفایل</h2>
+    <div style="font-size:64px;line-height:1.3">${e.ch||e.av||'🦸'}</div>
+    <h3 style="font-size:24px">${esc(S.name||'')}</h3>
+    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div>
+    <div class="row" style="justify-content:center;margin-top:14px"><button type="button" class="btn gh" id="profHome" style="min-height:44px">🏠 خانه</button><button type="button" class="btn gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
+    sec.querySelector('#profHome').onclick=()=>{SFX.init();SFX.click();go('home')};
+    sec.querySelector('#btnOut').onclick=()=>{SFX.click();
+      modal(`<h3 class="neon" style="font-size:22px">🚪 خروج از حساب</h3><p style="line-height:2">می‌خواهی از حساب خارج شوی؟ پیشرفتت ذخیره می‌ماند و بعداً با نام کاربری و رمز دوباره وارد می‌شوی.</p>
+      <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="outYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
+      $('#outNo').onclick=()=>$('#modal').classList.remove('on');
+      $('#outYes').onclick=()=>{$('#modal').classList.remove('on');logout()};
+    };
+  }
+  function logout(){persist();USER=null;try{localStorage.removeItem(SK)}catch(e){}$('#who').textContent='';go('reg')}
+  $('#btnProf').onclick=()=>{SFX.init();SFX.click();profShow();go('prof')};
 })();
 </script>
 

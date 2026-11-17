@@ -1,0 +1,221 @@
+{
+ "_doc": "Realistic localStorage snapshot of a legacy (pre-v9) player, built from the structures written by index.html at the time of phase 0. Values are JSON values; the test harness JSON.stringify()s each one into localStorage before the page loads. Login: user ali_r / password 1234.",
+ "localStorage": {
+  "mh_users": {
+   "ali_r": {
+    "n": "علی رضایی",
+    "h": "00567257bb5043953f28ef9b47faf74b397daac4cc66ea43f39a5479ce35cdad",
+    "m": "09123456789",
+    "d": {
+     "grade": 8,
+     "learn": true,
+     "lab": {
+      "tri3": {
+       "a": 1,
+       "c": 1
+      },
+      "sq": {
+       "a": 1,
+       "c": 1,
+       "r": 1
+      },
+      "hex": {
+       "a": 1,
+       "c": 1
+      },
+      "star5": {
+       "a": 1,
+       "c": 1
+      },
+      "rhomb": {
+       "a": 1,
+       "c": 1
+      },
+      "pent": {
+       "a": 1
+      },
+      "arrow": {
+       "r": 1
+      }
+     },
+     "game": {
+      "maxc": 4,
+      "score": 420,
+      "hits": 14,
+      "targets": 16,
+      "wrong": 2,
+      "won": true,
+      "rounds": 3
+     },
+     "quiz": {
+      "score": 10,
+      "total": 13
+     },
+     "survey": [
+      3,
+      2,
+      3,
+      4,
+      3
+     ],
+     "expo": {
+      "frac": 1,
+      "ang": 1,
+      "prime": 1
+     },
+     "memo": {
+      "stars": 3,
+      "best": 12
+     },
+     "run": {
+      "best": 240,
+      "games": 5
+     },
+     "duel": {
+      "wins": 3,
+      "best": 90
+     },
+     "arc": {
+      "blitz": 310,
+      "exam": 150,
+      "per8quiz": 80
+     },
+     "stk": {
+      "n": 3,
+      "d": 20400
+     },
+     "coins": 235,
+     "items": [
+      "av:🦊",
+      "av:🐼",
+      "fr:#ffd166",
+      "th:sunset"
+     ],
+     "eq": {
+      "av": "🐼",
+      "fr": "#ffd166",
+      "th": "sunset",
+      "cx": "#34e0c0"
+     },
+     "wrong": {
+      "8|توان و جذر": 3,
+      "8|هندسه": 1,
+      "7|جبر و معادله": 2
+     },
+     "adv": {
+      "7": 1,
+      "8": 3
+     },
+     "team": "هشتم الف",
+     "wk": {
+      "w": 2900,
+      "b": 300
+     },
+     "cd": 20400,
+     "advExtra": {
+      "done": {
+       "cave": 2,
+       "tower": 1
+      },
+      "daily": "2025-01-01"
+     }
+    }
+   },
+   "sara_k": {
+    "n": "سارا کریمی",
+    "h": "5118d42b95f5991d338922a336f70b33f3133c3282c230017133a56ef22a5c73",
+    "m": "",
+    "d": {
+     "grade": 7,
+     "learn": true,
+     "lab": {},
+     "game": null,
+     "quiz": null,
+     "survey": null,
+     "expo": {},
+     "memo": null,
+     "run": null,
+     "duel": null,
+     "coins": 40,
+     "items": [],
+     "eq": {},
+     "wrong": {},
+     "adv": {
+      "7": 1
+     },
+     "team": "",
+     "advExtra": {
+      "done": {},
+      "daily": ""
+     }
+    }
+   }
+  },
+  "mh_session": "ali_r",
+  "mathHero.shop.v1": {
+   "users": {
+    "علیرضایی": {
+     "coins": 85,
+     "owned": [
+      "theme_1",
+      "theme_3",
+      "avatar_2"
+     ],
+     "equip": {
+      "theme": "theme_3",
+      "avatar": "avatar_2"
+     },
+     "character": 5,
+     "day": "2025-01-01",
+     "earned": 20,
+     "claims": "2025-01-01",
+     "chars": [
+      5,
+      9,
+      10,
+      11,
+      3
+     ]
+    },
+    "سارا‌کریمی": {
+     "coins": 40,
+     "owned": [
+      "theme_1"
+     ],
+     "equip": {
+      "theme": "theme_1"
+     },
+     "character": 5,
+     "day": "",
+     "earned": 0,
+     "claims": ""
+    }
+   },
+   "config": {
+    "reward": 5,
+    "items": {}
+   }
+  },
+  "wh_ali_r": 20400,
+  "tm_ali_r": {
+   "h": [
+    {
+     "q": "قدر مطلق چیست"
+    },
+    {
+     "q": "مساحت دایره"
+    }
+   ]
+  },
+  "mv_ali_r": 2,
+  "mh_lg": {
+   "url": "",
+   "code": ""
+  },
+  "mh_ai": {
+   "url": "",
+   "key": "",
+   "model": ""
+  }
+ }
+}
