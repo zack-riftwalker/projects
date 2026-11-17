@@ -19,6 +19,14 @@ async function open(browser, opts = {}) {
   const page = await context.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message));
+  if (opts.clock) { /* deterministic clock: window.__T (ms) is persisted in sessionStorage so reloads keep it */
+    await context.addInitScript((t0) => {
+      try { if (t0 != null && !sessionStorage.getItem('__T')) sessionStorage.setItem('__T', String(t0)); } catch (e) {}
+      const RD = Date, T = () => { try { const v = sessionStorage.getItem('__T'); return v ? +v : null; } catch (e) { return null; } };
+      class MD extends RD { constructor(...a) { if (a.length) super(...a); else super(T() != null ? T() : RD.now()); } static now() { const t = T(); return t != null ? t : RD.now(); } }
+      window.Date = MD;
+    }, opts.clock === true ? null : opts.clock);
+  }
   if (opts.fixture) {
     const fx = FIXTURE(opts.fixture).localStorage;
     for (const k of opts.drop || []) delete fx[k];
@@ -58,6 +66,7 @@ async function register(page, { name = 'تست', user = 'tester1', pass = '1234'
 }
 
 const lsGet = (page, k) => page.evaluate((k) => { const r = localStorage.getItem(k); return r === null ? null : JSON.parse(r); }, k);
+const setClock = (page, ms) => page.evaluate((ms) => sessionStorage.setItem('__T', String(ms)), ms);
 const curScreen = (page) => page.evaluate(() => cur);
 
-module.exports = { openForm, chromium, ROOT, URL_APP, VIEWPORT, FIXTURE, open, register, lsGet, curScreen };
+module.exports = { setClock, openForm, chromium, ROOT, URL_APP, VIEWPORT, FIXTURE, open, register, lsGet, curScreen };

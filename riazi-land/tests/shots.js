@@ -7,6 +7,10 @@ const path = require('path');
 const { chromium, ROOT, open, register, openForm } = require('./lib');
 
 const phase = process.argv[2];
+/* Housekeeping (phase 5+): only screens tagged with { p: N } (new/changed in phase N) are shot for `phase-N`.
+   Entries without `p` are older screens; run `node shots.js phase-N --all` for the complete set (phase 12). */
+const PN = +(String(phase || '').match(/(\d+)/) || [0, -1])[1];
+const ALL = process.argv.includes('--all');
 if (!phase || !/^[\w.-]+$/.test(phase)) { console.error('usage: node shots.js <phase-name>   e.g. phase-0'); process.exit(2); }
 const OUT = path.join(ROOT, 'docs', 'shots', phase);
 fs.mkdirSync(OUT, { recursive: true });
@@ -56,14 +60,19 @@ const SCREENS = [
   ['avatar-tier3-lv20', { fresh: true }, async (page) => { await page.evaluate(() => { S.xp = 3800; S.eq = { rbo: 'out-cape', rbc: 'col-gold' }; go('prof'); }); }],
   ['lesson-sets-question', { fresh: true }, lessonShot(9, 0, 'mcq')],
   ['lesson-vector-question', { fresh: true }, lessonShot(8, 4, 'mcq')],
-  /* PHASE 5+ : append new screens here */
+  ['goal-picker-calendar', { fresh: true, p: 5, clock: Date.UTC(2026, 0, 10, 9) }, async (page) => { await page.evaluate(() => { Lesson.start(8, 3, 0); for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(i.ans)) Lesson.key(c); } else Lesson.pick(i.ans); Lesson.check(); Lesson.next(); } }); await page.click('#pqGo'); await page.click('#btnProf'); await page.evaluate(() => document.querySelector('#goalPick').scrollIntoView()); }],
+  ['streak-plus-one', { fresh: true, p: 5, clock: Date.UTC(2026, 0, 10, 9) }, async (page) => { await page.evaluate(() => { Lesson.start(8, 3, 0); for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(i.ans)) Lesson.key(c); } else Lesson.pick(i.ans); Lesson.check(); Lesson.next(); } }); }],
+  ['today-enough-card', { fresh: true, p: 5, clock: Date.UTC(2026, 0, 10, 9) }, async (page) => { await page.evaluate(() => { Lesson.start(8, 3, 0); for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(i.ans)) Lesson.key(c); } else Lesson.pick(i.ans); Lesson.check(); Lesson.next(); } }); await page.evaluate(() => document.querySelector('#goalDone').scrollIntoView()); }],
+  ['freeze-toast', { fresh: true, p: 5, clock: Date.UTC(2026, 0, 10, 9) }, async (page) => { await page.evaluate(() => { Lesson.start(8, 3, 0); for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(i.ans)) Lesson.key(c); } else Lesson.pick(i.ans); Lesson.check(); Lesson.next(); } }); await page.click('#pqGo'); await page.evaluate(() => { S.streak.freezes = 1; persist(); sessionStorage.setItem('__T', String(Date.UTC(2026, 0, 12, 9))); }); await page.reload(); await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('یخ‌استریک')); }],
+  /* PHASE 6+ : append new screens here */
 ];
 
 (async () => {
   const browser = await chromium.launch();
   let n = 0;
   for (const [name, o, setup] of SCREENS) {
-    const { page, context } = o.fresh ? await open(browser) : await open(browser, { fixture: 'legacy-user.json' });
+    if (!ALL && (o.p || 0) !== PN) continue;
+    const { page, context } = o.fresh ? await open(browser, { clock: o.clock || undefined }) : await open(browser, { fixture: 'legacy-user.json' });
     try {
       if (o.fresh && !o.noLogin) await register(page, { name: 'نگار احمدی', user: 'shot1', pass: '1234', grade: 8 });
       if (!o.fresh) await page.waitForFunction(() => typeof USER !== 'undefined' && USER);

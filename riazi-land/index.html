@@ -2719,7 +2719,7 @@ body[data-scr="pq"] #bnav,body[data-scr="pq"] #topbar{display:none!important}
 .lsn-bar.ok{background:#0f3b2a;border-top-color:var(--ok)}
 .lsn-bar.bad{background:#401622;border-top-color:var(--rd)}
 .lsfb{font-size:15px;line-height:1.8;margin-bottom:8px}.lsfb:empty{display:none}.lsfb .lsh{font-size:13.5px;color:#d5def7}
-.mth{display:inline-block;direction:ltr;unicode-bidi:isolate;white-space:nowrap;max-width:100%;overflow-x:auto;vertical-align:bottom}
+.mth{margin:0 .3em;display:inline-block;direction:ltr;unicode-bidi:isolate;white-space:nowrap;max-width:100%;overflow-x:auto;vertical-align:bottom}
 #pqBox .opt{position:relative}
 #pqBox .opt.ok{border-color:var(--ok)!important;background:rgba(45,255,154,.2)!important}
 #pqBox .opt.no{border-color:var(--rd)!important;background:rgba(255,77,109,.22)!important}
@@ -2775,7 +2775,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   function touchStreak(){const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d)S.stk={n:s.d===d-1?s.n+1:1,d};}
   window.v9Hdr=function(){if(!USER)return;
     {const k=rbKey();if(k!==hAvKey){hAvKey=k;$('#hAv').innerHTML=rbSvg(false)}}
-    $('#hStk').textContent='🔥 '+fa(streakInit().n||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);$('#hXp').textContent='⚡ '+fa(Math.min(todayLog().n,99))+'/'+fa(goalN())};
+    $('#hStk').textContent='🔥 '+fa(streakInit().n||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);{const n=todayLog().n,g=goalN();$('#hXp').textContent=n>=g?'✓ '+fa(g)+'/'+fa(g):'⚡ '+fa(n)+'/'+fa(g)}};
 
   /* ---------- نقشهٔ مسیر ---------- */
   /* S.adv[grade] = تعداد فصل‌هایی که غولشان شکست خورده؛ فصل i کامل است اگر i < S.adv[grade] */
@@ -3421,9 +3421,17 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   const V1T=[['اقیانوس','🌊','#10243a','#27c2d5'],['غروب','🌇','#38203c','#ff8b62'],['جنگل','🌿','#12372d','#63d297'],['کهکشانی','🌌','#171435','#b18cff'],['آبنبات','🍬','#472344','#ff83ca'],['طلایی','👑','#382e18','#ffd166'],['یخی','❄️','#193344','#8ee5ff'],['آتش','🔥','#421e20','#ff7058'],['مینیمال','☁️','#253044','#d2d9e8'],['شفق','🌈','#20254c','#60e1cb']];
   const V1C=[['🐉','اژدهای آتشین','افسانه‌ای'],['🛡️','شوالیهٔ طلایی','افسانه‌ای'],['🐼','پاندای جنگجو','کمیاب'],['🧙','جادوگر بنفش','کمیاب'],['🥷','نینجا','کمیاب'],['🚀','فضانورد','معمولی'],['🦁','شیر طلایی','افسانه‌ای'],['🦊','روباه جادویی','کمیاب'],['🦄','تک‌شاخ ستاره‌ای','افسانه‌ای'],['🤖','ربات نابغه','معمولی'],['🐢','لاک‌پشت تیزهوش','معمولی'],['🦉','جغد دانا','معمولی']];
   const V1G=[['avatar','آواتار','😀🐸🐱🐯🐻🦋🐙🐳🦖🐨🦝🐰🦊🐼🦁🐲👾🧙🦄🤖🐢'.split(''),25],['frame','قاب','🟣🔵🟢🟠🔴🟡💠💎🌟✨🌈🪙🎀🌸🌙⚡🔥❄️🍀👑'.split(''),20],['theme','تم','',10],['crosshair','نشانه‌گیر','🎯✳️❇️🔆🔱💫☄️✴️🌀🔮🌟⚡💠🪄🎲🧿🌈❄️🔥🍀'.split(''),20],['decor','تزئین','🎈🎉🎊🎁🏅🏆⭐🌻🌺🍀🪴🎨🎵🎼📚🧩🪁🪄🧸🪙'.split(''),25]];
+  /* ایموجی‌ای که در این دستگاه رندر نمی‌شود (توفو) با آیکون دستهٔ خودش جایگزین می‌شود */
+  const V1ICON={avatar:'🙂',frame:'🖼️',theme:'🎨',crosshair:'🎯',decor:'🎀'},GL={};
+  function glyph(ch,fb){
+    if(ch in GL)return GL[ch]?ch:fb;
+    let ok=true;
+    try{const mk=t=>{const c=document.createElement('canvas');c.width=c.height=36;const x=c.getContext('2d');x.font='28px sans-serif';x.textBaseline='top';x.fillText(t,2,2);return x.getImageData(0,0,36,36).data.join(',')};
+      ok=mk(ch)!==mk('\u{10FFFF}')}catch(e){ok=true}
+    GL[ch]=ok;return ok?ch:fb}
   function v1Info(id){const m=id.match(/^([a-z]+)_(\d+)$/);if(!m)return null;const type=m[1],j=+m[2]-1,g=V1G.find(x=>x[0]===type);if(!g)return null;
-    if(type==='theme'){const t=V1T[j];return t?{type,name:'تم '+t[0]+' '+t[1],icon:t[1]}:null}
-    const icons=g[2];return{type,name:g[1]+' '+['درخشان','شادی','ستاره','قهرمانی','رنگین'][j%5]+' '+(j+1),icon:icons[j%icons.length]}}
+    if(type==='theme'){const t=V1T[j];return t?{type,name:'تم '+t[0]+' '+t[1],icon:glyph(t[1],'🎨')}:null}
+    const icons=g[2];return{type,name:g[1]+' '+['درخشان','شادی','ستاره','قهرمانی','رنگین'][j%5]+' '+fa(j+1),icon:glyph(icons[j%icons.length],V1ICON[type])}}
   function colList(){
     const L=[],eq=S.eq||{},ce=((S.col||{}).eq)||{};
     (S.items||[]).forEach(id=>{const i=id.indexOf(':'),cat=id.slice(0,i),val=id.slice(i+1);
@@ -3433,7 +3441,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
       }catch(e){}});
     const v1=legacyV1();
     if(v1){(v1.owned||[]).filter(x=>x!=='theme_1').forEach(id=>{const f=v1Info(id);if(f)L.push({id:'v1:'+id,name:f.name,prv:`<span class="v1p">${f.icon}</span>`,slot:f.type,val:id,on:ce[f.type]===id,src:'v1'})});
-      (v1.chars||[]).filter(i=>![5,9,10,11].includes(i)).forEach(i=>{const c=V1C[i];if(c)L.push({id:'v1:char_'+i,name:'کاراکتر '+c[1]+' ('+c[2]+')',prv:`<span class="v1p">${c[0]}</span>`,slot:'char',val:'char_'+i,on:ce.char==='char_'+i,src:'v1'})})}
+      (v1.chars||[]).filter(i=>![5,9,10,11].includes(i)).forEach(i=>{const c=V1C[i];if(c)L.push({id:'v1:char_'+i,name:'کاراکتر '+c[1]+' ('+c[2]+')',prv:`<span class="v1p">${glyph(c[0],'🦸')}</span>`,slot:'char',val:'char_'+i,on:ce.char==='char_'+i,src:'v1'})})}
     return L}
   function colHtml(){
     const L=colList();

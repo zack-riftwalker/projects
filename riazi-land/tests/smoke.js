@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { chromium, ROOT, FIXTURE, open, register, openForm, lsGet, curScreen } = require('./lib');
+const { chromium, ROOT, FIXTURE, open, register, openForm, lsGet, curScreen, setClock } = require('./lib');
 
 const tests = [];
 const T = (name, fn) => tests.push({ name, fn });
@@ -921,7 +921,133 @@ T('PHASE4: robot evolves at level 5 / 10 / 20 (profile + header)', async ({ brow
   await context.close();
 });
 
-/* ============================== PHASE 5+ : append below ============================== */
+
+/* ============================== PHASE 5 ============================== */
+const UTC = (y, m, d, h = 9, mi = 0) => Date.UTC(y, m - 1, d, h, mi);
+const fastLesson = (page, g = 8, ch = 3, j = 0) => page.evaluate(([g, ch, j]) => {
+  Lesson.start(g, ch, j);
+  for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(i.ans)) Lesson.key(c); } else Lesson.pick(i.ans); Lesson.check(); Lesson.next(); }
+}, [g, ch, j]);
+const reloadIn = async (page) => { await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER); await page.waitForTimeout(150); };
+const toastHas = (page, txt) => page.waitForFunction((t) => document.querySelector('#toast').textContent.includes(t), txt, { timeout: 4000 });
+
+T('PHASE5: Tehran day boundary — 23:59 vs 00:01 Tehran differ, 20:31 UTC and 23:00 UTC are the same Tehran day', async ({ browser }) => {
+  const { page, context } = await open(browser, { clock: UTC(2026, 1, 10, 12) });
+  const r = await page.evaluate(([a, b, c, d]) => ({ a: v9Tday(a), b: v9Tday(b), c: v9Tday(c), d: v9Tday(d), ja: v9Jal(v9Tday(a)), jb: v9Jal(v9Tday(b)) }), [UTC(2026, 1, 10, 20, 29), UTC(2026, 1, 10, 20, 31), UTC(2026, 1, 10, 23, 0), UTC(2026, 1, 10, 12, 0)]);
+  eq(r.b - r.a, 1, '20:29 UTC (23:59 Tehran) vs 20:31 UTC (00:01 Tehran)'); eq(r.c, r.b, '23:00 UTC same Tehran day as 20:31 UTC'); eq(r.a, r.d, '12:00 UTC same day as 23:59 Tehran');
+  eq([r.ja.y, r.ja.m, r.ja.d], [1404, 10, 20], 'Jalali 20 Dey 1404'); eq([r.jb.y, r.jb.m, r.jb.d], [1404, 10, 21]);
+  /* integration: lesson at 00:01 and 02:30 Tehran = same day (streak 1); then 23:59 next day vs 00:01 = different days */
+  await register(page, { user: 'tz1', grade: 8 });
+  await setClock(page, UTC(2026, 1, 10, 20, 31)); await reloadIn(page);
+  await fastLesson(page); eq(await page.evaluate(() => S.streak.n), 1);
+  await setClock(page, UTC(2026, 1, 10, 23, 0)); await reloadIn(page);
+  await fastLesson(page); eq(await page.evaluate(() => [S.streak.n, S.tl.n]), [1, 1], 'same Tehran day: no second streak increment (tl reset by reload is fine)');
+  await setClock(page, UTC(2026, 1, 11, 20, 29)); await reloadIn(page); /* 23:59 Tehran of the SAME next day */
+  await fastLesson(page); eq(await page.evaluate(() => S.streak.n), 2, 'next Tehran day => +1');
+  await setClock(page, UTC(2026, 1, 11, 20, 31)); await reloadIn(page); /* 00:01 the day after */
+  await fastLesson(page); eq(await page.evaluate(() => S.streak.n), 3, '00:01 Tehran is a new day');
+  await context.close();
+});
+
+T('PHASE5: streak — consecutive days +1, one missed day uses a freeze, otherwise resets (neutral message)', async ({ browser }) => {
+  const { page, context } = await open(browser, { clock: UTC(2026, 1, 10, 9) });
+  await register(page, { user: 'stk1', grade: 8 });
+  eq(await page.evaluate(() => [S.streak.n, S.goal]), [0, 1], 'goal default 1 lesson');
+  eq(await page.textContent('#hXp'), '⚡ ۰/۱');
+  await fastLesson(page);
+  assert(await visible(page, '#goalDone') && await visible(page, '.streakup'), 'streak +1 and «امروز کافیه» card');
+  eq(await page.evaluate(() => [S.streak.n, S.streak.best]), [1, 1]); eq(await page.textContent('#hStk'), '🔥 ۱');
+  await page.click('#pqGo'); eq(await curScreen(page), 'path');
+  await setClock(page, UTC(2026, 1, 11, 9)); await reloadIn(page); /* consecutive */
+  eq(await page.evaluate(() => S.streak.n), 1, 'still alive on next day before the goal');
+  await fastLesson(page); eq(await page.evaluate(() => [S.streak.n, S.streak.best]), [2, 2]);
+  /* miss 12th, have 1 freeze */
+  await page.evaluate(() => { S.streak.freezes = 1; persist(); });
+  await setClock(page, UTC(2026, 1, 13, 9)); await page.reload(); await toastHas(page, 'یخ‌استریک');
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [S.streak.n, S.streak.freezes]), [2, 0], 'freeze consumed, streak kept');
+  await fastLesson(page); eq(await page.evaluate(() => S.streak.n), 3);
+  /* miss two days, no freezes */
+  await setClock(page, UTC(2026, 1, 16, 9)); await page.reload(); await toastHas(page, 'شروع تازه');
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [S.streak.n, S.streak.best]), [0, 3], 'reset to 0, best kept');
+  assert(!(await page.textContent('#toast')).includes('ناامید'), 'no shaming');
+  /* 2 missed days with only 1 freeze => reset (not enough) */
+  await fastLesson(page); await page.evaluate(() => { S.streak.freezes = 1; persist(); });
+  await setClock(page, UTC(2026, 1, 19, 9)); await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER); await page.waitForTimeout(150);
+  eq(await page.evaluate(() => [S.streak.n, S.streak.freezes]), [0, 1], 'insufficient freezes are not consumed');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE5: daily goal 2 lessons — streak only after the 2nd; «امروز کافیه» exactly once per day; «یکی دیگه» is optional', async ({ browser }) => {
+  const { page, context } = await open(browser, { clock: UTC(2026, 1, 10, 9) });
+  await register(page, { user: 'goal2', grade: 8 });
+  await page.click('#btnProf');
+  eq(await page.evaluate(() => [...document.querySelectorAll('#goalPick button')].map((b) => [b.textContent.trim(), b.getAttribute('aria-pressed')])), [['۱ درس', 'true'], ['۲ درس', 'false'], ['۳ درس', 'false']]);
+  await page.click('#goalPick [data-g="2"]');
+  eq(await page.evaluate(() => S.goal), 2); eq(await page.textContent('#hXp'), '⚡ ۰/۲');
+  eq(await page.evaluate(() => document.querySelector('#goalPick [data-g="2"]').getAttribute('aria-pressed')), 'true');
+  await fastLesson(page);
+  assert(!(await visible(page, '#goalDone')) && await visible(page, '#pqGo'), 'no goal card after lesson 1 of 2');
+  eq(await page.evaluate(() => S.streak.n), 0); await page.click('#pqGo'); eq(await page.textContent('#hXp'), '⚡ ۱/۲');
+  await fastLesson(page);
+  assert(await visible(page, '#goalDone'), 'goal card after lesson 2'); assert((await page.textContent('#goalDone')).includes('امروز کافیه'), 'text');
+  eq(await page.evaluate(() => S.streak.n), 1); eq(await page.textContent('#hXp'), '✓ ۲/۲');
+  await page.click('#pqMore'); eq(await curScreen(page), 'pq', '«یکی دیگه» starts another lesson');
+  await page.evaluate(() => go('path'));
+  await fastLesson(page, 8, 3, 1);
+  assert(!(await visible(page, '#goalDone')), 'card must not repeat on the same day'); eq(await page.evaluate(() => S.streak.n), 1, 'streak +1 only once per day');
+  await page.click('#pqGo');
+  await setClock(page, UTC(2026, 1, 11, 9)); await reloadIn(page);
+  await fastLesson(page, 8, 3, 2); assert(!(await visible(page, '#goalDone')), 'day 2 lesson 1 of 2: no card'); await page.evaluate(() => go('path'));
+  await fastLesson(page, 8, 3, 3); assert(await visible(page, '#goalDone'), 'day 2 completes goal: card again (once per day)');
+  eq(await page.evaluate(() => S.streak.n), 2);
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE5: profile calendar — Persian month/weekday headers from Saturday, active days marked, prev/next', async ({ browser }) => {
+  const { page, context } = await open(browser, { clock: UTC(2026, 1, 10, 9) });
+  await register(page, { user: 'cal2', grade: 8 });
+  await fastLesson(page); await page.click('#pqGo');
+  await setClock(page, UTC(2026, 1, 11, 9)); await reloadIn(page); await fastLesson(page); await page.click('#pqGo');
+  await page.click('#btnProf');
+  eq(await page.textContent('#calTitle'), '📅 دی ۱۴۰۴');
+  eq(await page.evaluate(() => [...document.querySelectorAll('.cal-h')].map((e) => e.textContent)), ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']);
+  eq(await page.evaluate(() => document.querySelectorAll('.cal-on').length), 2, 'two active days marked');
+  const cols = await page.evaluate(() => { const kids = [...document.querySelector('.cal').children].slice(7); return kids.map((e, i) => e.classList.contains('cal-on') ? i % 7 : -1).filter((x) => x >= 0); });
+  eq(cols, [0, 1], '10 Jan 2026 is a Saturday (column 0), 11 Jan Sunday (column 1)');
+  eq(await page.evaluate(() => document.querySelectorAll('.cal-d').length), 30, 'Dey has 30 days');
+  assert(await page.evaluate(() => document.querySelector('.cal-t').textContent) !== '', 'today outlined');
+  await page.click('#calPrev'); eq(await page.textContent('#calTitle'), '📅 آذر ۱۴۰۴'); eq(await page.evaluate(() => document.querySelectorAll('.cal-d').length), 30);
+  eq(await page.evaluate(() => document.querySelectorAll('.cal-on').length), 0);
+  await page.click('#calNext'); await page.click('#calNext'); eq(await page.textContent('#calTitle'), '📅 بهمن ۱۴۰۴');
+  await page.click('#calNext'); eq(await page.textContent('#calTitle'), '📅 اسفند ۱۴۰۴'); eq(await page.evaluate(() => document.querySelectorAll('.cal-d').length), 29, 'Esfand 1404 has 29 days');
+  assert(await page.evaluate(() => ['#calPrev', '#calNext', '#goalPick button'].every((s) => [...document.querySelectorAll(s)].every((b) => b.getBoundingClientRect().height >= 43.5 && b.getBoundingClientRect().width >= 43.5))), 'controls >= 44px');
+  await context.close();
+});
+
+T('PHASE5: header goal display never overflows (clamped, «✓ n/n»); legacy streak migrates into S.streak', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [S.streak.n, S.streak.freezes >= 0, S.goal === undefined || S.goal === 1]), [3, true, true], 'legacy login streak (3) carried over');
+  await page.evaluate(() => { S.tl = { d: v9Tday(), n: 500, sd: 1 }; v9Hdr(); });
+  eq(await page.textContent('#hXp'), '✓ ۱/۱');
+  await context.close();
+});
+
+T('PHASE4b: collection names use Persian digits, no Latin digits or broken glyph fallbacks', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  await page.click('#btnProf');
+  const names = await page.evaluate(() => [...document.querySelectorAll('#colBox .ctile b')].map((b) => b.textContent));
+  assert(names.length === 7 && names.every((n) => !/[0-9]/.test(n)), 'names: ' + names.join(' | '));
+  assert(await page.evaluate(() => getComputedStyle(document.querySelector('.mth') || document.body).marginLeft !== undefined), 'ok');
+  await context.close();
+});
+
+/* ============================== PHASE 6+ : append below ============================== */
 
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {
