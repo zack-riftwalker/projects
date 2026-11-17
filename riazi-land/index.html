@@ -329,7 +329,7 @@ body.th-sunset{background:linear-gradient(160deg,#2b1055,#7a2e5e 55%,#ff7a59) fi
     <div class="hero">
       <svg class="logo" viewBox="0 0 512 512"><use href="#ic"/></svg>
       <h1>ریاضی‌لند</h1>
-      <div class="sub">ماجراجویی ریاضی • پایهٔ هشتم • چندضلعی‌ها، کسرها و بیشتر</div>
+      <div class="sub">ماجراجویی ریاضی • پایهٔ هفتم تا نهم</div>
       <div class="floaters" id="floaters"></div>
     </div>
     <div class="card regbox">
@@ -2693,6 +2693,32 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
 .pn.skip .pcir{background:rgba(124,140,255,.16);border:3px solid rgba(124,140,255,.55)}
 .pn.skip button.pcir{cursor:pointer;color:inherit}
 .pch[data-state="skipped"] .pbn{background:linear-gradient(120deg,hsl(var(--h) 25% 28%),hsl(var(--h) 20% 20%))}
+body[data-scr="pq"] #bnav,body[data-scr="pq"] #topbar{display:none!important}
+#s-reg .btn,#s-prof .btn,#pqBox .btn,#suBox .btn,#modal .row>.btn,#pathBox .btn{display:inline-flex!important;align-items:center;white-space:nowrap;text-align:center;justify-content:center}
+#pqBox .opt{display:flex;align-items:center;justify-content:center}
+#pqBox .opt.ok{border-color:var(--ok);background:rgba(45,255,154,.18)}
+#pqBox .opt.no{border-color:var(--rd);background:rgba(255,77,109,.18)}
+#pqBox{padding-bottom:200px}
+.lsn-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.lsx{min-width:44px;min-height:44px;border-radius:50%;font-size:20px;color:var(--mut);border:1px solid var(--line)}
+.lsn-prog{flex:1;height:14px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+.lsn-prog i{display:block;height:100%;background:linear-gradient(90deg,var(--ok),var(--cy));border-radius:99px;transition:width .4s}
+.lsn-cnt{font-size:13px;color:var(--mut);min-width:34px;text-align:center}
+.lsn-q{font-size:21px;line-height:2;margin:8px 0 14px;color:#fff}
+#pqBox .opts{gap:12px}
+#pqBox .opt{min-height:56px;font-size:18px;text-align:center;border-width:2px}
+#pqBox .opt.sel{border-color:var(--cy);background:rgba(52,224,192,.14)}
+#pqBox .opts.img{grid-template-columns:repeat(2,minmax(0,1fr))}
+#pqBox .opt.img{min-height:120px;padding:8px}
+.kpv{min-height:64px;display:flex;align-items:center;justify-content:center;font-size:34px;font-family:var(--fh);border-radius:16px;border:2px solid var(--line);background:rgba(0,0,0,.35);direction:ltr;color:var(--mut);margin:6px 0 10px}
+.kpv.has{color:#fff}
+.kp{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kpk{min-height:52px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.07);font-size:24px;font-weight:700}
+.kpk.w2{grid-column:span 2}.kpk:active{background:rgba(52,224,192,.2)}.kpk:disabled{opacity:.5}
+.lsn-bar{position:fixed;right:0;left:0;bottom:0;z-index:60;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:rgba(10,14,23,.98);border-top:2px solid var(--line);max-width:1040px;margin:0 auto}
+.lsn-bar.ok{background:#0f3b2a;border-top-color:var(--ok)}
+.lsn-bar.bad{background:#401622;border-top-color:var(--rd)}
+.lsfb{font-size:15px;line-height:1.8;margin-bottom:8px}.lsfb:empty{display:none}.lsfb .lsh{font-size:13.5px;color:#d5def7}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 <script>
@@ -2762,37 +2788,403 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
     $('#chOk').onclick=()=>$('#modal').classList.remove('on');
   }
 
-  /* ---------- درس موقت: آزمونک ۵ سؤالی از بانک همان فصل (فاز ۳ جایگزینش می‌کند) ---------- */
-  let PQ=null;window.v9Pq=()=>PQ; /* فقط برای تست */
-  function pqStart(g,i,j){
-    let pool=exBuild(g,[chTopic(CH[g][i])]);if(pool.length<5)pool=pool.concat(exBuild(g));
-    const seen=new Set();pool=pool.filter(q=>!seen.has(q.q)&&seen.add(q.q));
-    PQ={g,i,j,q:shuffle(pool).slice(0,5),k:0,ok:0,lock:false};go('pq');pqShow();
+  /* ---------- درس‌ها: محتوا + موتور Lesson ---------- */  /* ===================== محتوا: بانک قالب‌های هر فصل (V9Q[پایه][فصل]) =====================
+     هر قالب تابعی است که یک سؤال تصادفی با عددهای تازه می‌سازد. جواب‌ها را خود کد حساب می‌کند.
+     NUM: جواب عددی (قابل تایپ)، TXT: فقط چندگزینه‌ای متنی، SHP: انتخاب شکل از SH. */
+  const xp=a=>a<0?'x − '+fa(-a):'x + '+fa(a);
+  const ex=n=>n<0?'('+sg(n)+')':fa(n);
+  const E=s=>'⁦'+s+'⁩';                       /* عبارت ریاضی همیشه چپ‌به‌راست نمایش داده شود */
+  const pk=a=>a[Math.floor(Math.random()*a.length)];
+  const gd=(a,b)=>b?gd(b,a%b):Math.abs(a);
+  const lcm2=(a,b)=>a/gd(a,b)*b;
+  const frs=(n,d)=>{if(d<0){n=-n;d=-d}const g=gd(n,d)||1;n/=g;d/=g;return d===1?String(n):n+'/'+d};
+  const q2=(n,d)=>fa(n)+'/'+fa(d);
+  const fq=(n,d)=>sg(n)+'/'+fa(d);
+  const P=x=>x<0?'('+sg(x)+')':fa(x);
+  const lin=(a,b)=>(a===1?'x':a===-1?'−x':sg(a)+'x')+(b?(b>0?' + '+fa(b):' − '+fa(-b)):'');
+  const Dp=s=>{s=String(s);const neg=s[0]==='-';if(neg)s=s.slice(1);return(neg?'−':'')+fa(s).replace(/\./g,'٫')};
+  const D=s=>{const r=Dp(s);return /[−\/٫]/.test(r)?'\u2066'+r+'\u2069':r};
+  const sg=x=>x<0?'\u2066−'+fa(-x)+'\u2069':fa(x); /* منفی در متن راست‌به‌چپ جابه‌جا نشود */
+  const pt=(x,y)=>E('('+sg(x)+' , '+sg(y)+')');
+  const setS=a=>E('{'+a.map(fa).join(' , ')+'}');
+  const rint=(a,b,not0)=>{let v;do v=rn(a,b);while(not0&&v===0);return v};
+  const isPrime=n=>{if(n<2)return false;for(let i=2;i*i<=n;i++)if(n%i===0)return false;return true};
+  const NUM=(q,a,hint,w)=>({q,a:String(a),w:w?w.map(String):null,hint,num:true});
+  const TXT=(q,a,w,hint)=>({q,a,w,hint,num:false});
+  const SHP=(q,good,bad,hint)=>{const a=pk(good),w=shuffle(bad.filter(s=>s!==a)).slice(0,3);return{q,a:a.id,w:w.map(s=>s.id),hint:hint(a),shape:true}};
+  const nd=a=>{const v=+a;if(!isFinite(v)||/\//.test(a))return[];const dec=(String(a).split('.')[1]||'').length,f=x=>String(+x.toFixed(dec));
+    return shuffle([v+1,v-1,v+2,v-2,v+10,v-10,-v,v*2,v+3,v-3].filter(x=>x!==v&&(dec||Number.isInteger(x)))).map(f)};
+  const V9Q={7:[],8:[],9:[]};
+
+  /* ---------------- پایهٔ هفتم ---------------- */
+  V9Q[7][0]=[ /* راهبردهای حل مسئله */
+    ()=>{const a=rn(2,9),d=rn(2,7),s=[0,1,2,3].map(i=>a+i*d);return NUM(`الگو را ادامه بده: ${E(s.map(fa).join(' ، ')+' ، ؟')}`,a+4*d,`هر عدد ${fa(d)} تا از قبلی بیشتر است: ${fa(s[3])} + ${fa(d)} = ${fa(a+4*d)}.`)},
+    ()=>{const a=rn(1,4),r=pk([2,3]),s=[a,a*r,a*r*r,a*r**3];return NUM(`الگو را ادامه بده: ${E(s.map(fa).join(' ، ')+' ، ؟')}`,a*r**4,`هر عدد ${fa(r)} برابر عدد قبلی است: ${fa(s[3])} × ${fa(r)} = ${fa(a*r**4)}.`)},
+    ()=>{const n=rn(4,9),a=n*(n-1)/2;return NUM(`${fa(n)} نفر هستند و هر دو نفر فقط یک‌بار با هم دست می‌دهند. چند دست‌دادن انجام می‌شود؟`,a,`هر نفر با ${fa(n-1)} نفر دیگر دست می‌دهد، ولی هر دست‌دادن دو بار شمرده شد: ${fa(n)}×${fa(n-1)} ÷ ۲ = ${fa(a)}.`,[n*(n-1),n*n,a+n])},
+    ()=>{const x=rn(2,12),m=rn(2,5),b=rn(3,15),r=m*x+b;return NUM(`عددی را در ${fa(m)} ضرب کردم و ${fa(b)} تا به آن اضافه کردم؛ حاصل ${fa(r)} شد. عدد اول چند بود؟`,x,`راهبرد «از آخر به اول»: ${fa(r)} − ${fa(b)} = ${fa(r-b)} و بعد ${fa(r-b)} ÷ ${fa(m)} = ${fa(x)}.`,[r-b,r+b,(r+b)/m|0])},
+    ()=>{const big=rn(6,25),sm=rn(2,big-1),s=big+sm,d=big-sm;return NUM(`مجموع دو عدد ${fa(s)} و تفاضل آن‌ها ${fa(d)} است. عدد بزرگ‌تر کدام است؟`,big,`(مجموع + تفاضل) ÷ ۲ = (${fa(s)} + ${fa(d)}) ÷ ۲ = ${fa(big)}.`,[sm,big+1,big-1])},
+    ()=>{const a=rn(2,6),b=rn(2,7);return NUM(`با ${fa(a)} پیراهن و ${fa(b)} شلوار مختلف، چند لباس کامل (یک پیراهن و یک شلوار) می‌توان ساخت؟`,a*b,`برای هر پیراهن ${fa(b)} انتخاب شلوار داریم: ${fa(a)} × ${fa(b)} = ${fa(a*b)}.`,[a+b,a*b+a,a*b-b])},
+    ()=>{const a=rn(2,9),d=rn(2,6),n=rn(8,15);return NUM(`در الگوی ${E([0,1,2].map(i=>fa(a+i*d)).join(' ، ')+' ، …')} جملهٔ ${fa(n)}ام چند است؟`,a+(n-1)*d,`جملهٔ n‌ام = اولین جمله + (n−۱) × قدر نسبت = ${fa(a)} + ${fa(n-1)}×${fa(d)} = ${fa(a+(n-1)*d)}.`,[a+n*d,a+(n-2)*d,n*d])}
+  ];
+  V9Q[7][1]=[ /* عددهای صحیح */
+    ()=>{const a=rint(-12,12),b=rint(-12,12,1);return NUM(`${E(sg(a)+' + '+P(b)+' = ؟')}`,a+b,`اگر هم‌علامت‌اند جمع می‌کنیم؛ اگر نه، تفریق می‌کنیم و علامت عددِ بزرگ‌تر (از نظر قدر مطلق) را می‌گذاریم. جواب: ${D(a+b)}.`)},
+    ()=>{const a=rint(-12,12),b=rint(-12,12,1);return NUM(`${E(sg(a)+' − '+P(b)+' = ؟')}`,a-b,`تفریق یعنی جمع با قرینه: ${sg(a)} + ${P(-b)} = ${D(a-b)}.`)},
+    ()=>{const a=rint(-9,9,1),b=rint(-9,9,1);return NUM(`${E(P(a)+' × '+P(b)+' = ؟')}`,a*b,`ضرب هم‌علامت‌ها مثبت و ناهم‌علامت‌ها منفی است: ${D(a*b)}.`)},
+    ()=>{const b=rint(-9,9,1),k=rint(-9,9,1),a=b*k;return NUM(`${E(sg(a)+' ÷ '+P(b)+' = ؟')}`,k,`قاعدهٔ علامت در تقسیم مثل ضرب است؛ ${fa(Math.abs(a))} ÷ ${fa(Math.abs(b))} = ${fa(Math.abs(k))} و علامتش ${k<0?'منفی':'مثبت'} است.`)},
+    ()=>{const s=new Set();while(s.size<4)s.add(rn(-15,15));const L=[...s],mx=Math.random()<.5,a=mx?Math.max(...L):Math.min(...L);return TXT(`کدام عدد از همه ${mx?'بزرگ‌تر':'کوچک‌تر'} است؟`,sg(a),L.filter(x=>x!==a).map(sg),`روی محور اعداد، هر چه به راست‌تر باشیم عدد بزرگ‌تر است. ${mx?'بزرگ‌ترین':'کوچک‌ترین'} عدد ${sg(a)} است.`)},
+    ()=>{const a=rint(-20,20,1),m=Math.abs(a);return NUM(`قدر مطلق ${sg(a)} چند است؟`,m,`قدر مطلق یعنی فاصلهٔ عدد از صفر؛ همیشه نامنفی است: ${fa(m)}.`,[-m,m+1,m+2])},
+    ()=>{const t=rn(-10,5),up=rn(3,15);return NUM(`دمای هوا صبح ${sg(t)} درجه بود و ${fa(up)} درجه بالا رفت. دمای جدید چند درجه است؟`,t+up,`${sg(t)} + ${fa(up)} = ${D(t+up)}.`)},
+    ()=>{const a=rn(-9,9),b=rint(-5,5,1),c=rn(2,6);return NUM(`${E(sg(a)+' + '+P(b)+' × '+fa(c)+' = ؟')}`,a+b*c,`اول ضرب انجام می‌شود: ${P(b)}×${fa(c)} = ${D(b*c)} و بعد جمع: ${D(a+b*c)}.`)}
+  ];
+  V9Q[7][2]=[ /* جبر و معادله */
+    ()=>{const x=rn(2,15),a=rn(2,12);return NUM(`در معادلهٔ ${E('x + '+fa(a)+' = '+fa(x+a))} مقدار x چند است؟`,x,`از دو طرف ${fa(a)} کم می‌کنیم: x = ${fa(x+a)} − ${fa(a)} = ${fa(x)}.`)},
+    ()=>{const x=rn(5,20),a=rn(2,9);return NUM(`در معادلهٔ ${E('x − '+fa(a)+' = '+fa(x-a))} مقدار x چند است؟`,x,`به دو طرف ${fa(a)} اضافه می‌کنیم: x = ${fa(x-a)} + ${fa(a)} = ${fa(x)}.`)},
+    ()=>{const a=rn(2,9),x=rn(2,12);return NUM(`در معادلهٔ ${E(fa(a)+'x = '+fa(a*x))} مقدار x چند است؟`,x,`دو طرف را بر ${fa(a)} تقسیم می‌کنیم: x = ${fa(a*x)} ÷ ${fa(a)} = ${fa(x)}.`)},
+    ()=>{const a=rn(2,6),x=rn(1,9),b=rn(1,12),c=a*x+b;return NUM(`معادلهٔ ${E(fa(a)+'x + '+fa(b)+' = '+fa(c))} را حل کن: x = ؟`,x,`اول ${fa(b)} را کم می‌کنیم: ${fa(a)}x = ${fa(c-b)}؛ بعد تقسیم بر ${fa(a)}: x = ${fa(x)}.`,[c-b,c+b,(c+b)/a|0])},
+    ()=>{const a=rn(2,6),b=rn(1,9),x=rn(2,9);return NUM(`مقدار عبارت ${E(lin(a,b))} به ازای x = ${fa(x)} چقدر است؟`,a*x+b,`به‌جای x عدد ${fa(x)} را می‌گذاریم: ${fa(a)}×${fa(x)} + ${fa(b)} = ${fa(a*x+b)}.`)},
+    ()=>{const a=rn(2,5),b=rn(2,9),x=rn(2,9),c=a*x+b;return NUM(`${fa(a)} برابر یک عدد، به‌علاوهٔ ${fa(b)} می‌شود ${fa(c)}. آن عدد چند است؟`,x,`معادله: ${E(fa(a)+'x + '+fa(b)+' = '+fa(c))}؛ جواب x = ${fa(x)}.`,[c-b,c-a,x+1])},
+    ()=>{const a=rn(2,8),b=rn(2,8);return TXT(`ساده‌شدهٔ ${E(fa(a)+'x + '+fa(b)+'x')} کدام است؟`,E(fa(a+b)+'x'),[E(fa(a*b)+'x'),E(fa(a+b)+'x²'),E(fa(a+b))],`جمله‌های هم‌نوع را جمع می‌کنیم: ضریب‌ها ${fa(a)}+${fa(b)} = ${fa(a+b)} و x همان می‌ماند.`)}
+  ];
+  V9Q[7][3]=[ /* هندسه و استدلال */
+    ()=>{const a=rn(30,80),b=rn(30,80);return NUM(`دو زاویهٔ مثلثی ${fa(a)} و ${fa(b)} درجه است. زاویهٔ سوم چند درجه است؟`,180-a-b,`مجموع زاویه‌های هر مثلث ۱۸۰ درجه است: ۱۸۰ − ${fa(a)} − ${fa(b)} = ${fa(180-a-b)}.`)},
+    ()=>{const a=pk([20,35,40,55,65,70,110,125,140,150]);return NUM(`مکمل زاویهٔ ${fa(a)} درجه چند درجه است؟`,180-a,`دو زاویهٔ مکمل مجموعشان ۱۸۰ است: ۱۸۰ − ${fa(a)} = ${fa(180-a)}.`,[90-a>0?90-a:a+10,a,360-a])},
+    ()=>{const a=rn(10,80);return NUM(`متمم زاویهٔ ${fa(a)} درجه چند درجه است؟`,90-a,`دو زاویهٔ متمم مجموعشان ۹۰ است: ۹۰ − ${fa(a)} = ${fa(90-a)}.`,[180-a,a,90+a])},
+    ()=>{const a=rn(30,150,1);const adj=Math.random()<.5;return NUM(`دو خط یکدیگر را قطع کرده‌اند و یکی از زاویه‌ها ${fa(a)} درجه است. زاویهٔ ${adj?'مجاورِ آن':'روبه‌رو (متقابل به رأس) به آن'} چند درجه است؟`,adj?180-a:a,adj?`زاویه‌های مجاور مکمل‌اند: ۱۸۰ − ${fa(a)} = ${fa(180-a)}.`:`زاویه‌های متقابل به رأس با هم برابرند: ${fa(a)}.`)},
+    ()=>{const a=rn(60,120),b=rn(60,120),c=rn(60,120);return NUM(`سه زاویهٔ یک چهارضلعی ${fa(a)}، ${fa(b)} و ${fa(c)} درجه است. زاویهٔ چهارم چند درجه است؟`,360-a-b-c,`مجموع زاویه‌های هر چهارضلعی ۳۶۰ درجه است: ۳۶۰ − ${fa(a+b+c)} = ${fa(360-a-b-c)}.`)},
+    ()=>{if(Math.random()<.5){const b=rn(30,80);return NUM(`در مثلث متساوی‌الساقین، زاویه‌های مجاور قاعده ${fa(b)} درجه‌اند. زاویهٔ رأس چند درجه است؟`,180-2*b,`۱۸۰ − ${fa(b)} − ${fa(b)} = ${fa(180-2*b)}.`)}const r=rn(5,17)*4;return NUM(`در مثلث متساوی‌الساقین، زاویهٔ رأس ${fa(r)} درجه است. هر زاویهٔ مجاور قاعده چند درجه است؟`,(180-r)/2,`دو زاویهٔ قاعده برابرند: (۱۸۰ − ${fa(r)}) ÷ ۲ = ${fa((180-r)/2)}.`)},
+    ()=>SHP('کدام شکل «مرکز تقارن» دارد؟',SH.filter(s=>s.a.center),SH.filter(s=>!s.a.center),s=>reason(s)+'.'),
+    ()=>SHP('کدام شکل «هیچ محور تقارنی» ندارد؟',SH.filter(s=>s.a.nAx===0),SH.filter(s=>s.a.nAx>0),s=>reason(s)+'.')
+  ];
+  V9Q[7][4]=[ /* شمارنده‌ها و اعداد اول */
+    ()=>{const pr=pk([11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97]),co=shuffle([21,27,33,39,49,51,55,57,63,65,69,77,81,85,87,91,93,95]).slice(0,3);return TXT('کدام عدد اول است؟',fa(pr),co.map(fa),`عدد اول فقط دو شمارنده دارد (۱ و خودش). ${fa(pr)} اول است؛ بقیه شمارندهٔ دیگری دارند.`)},
+    ()=>{const n=pk([12,18,20,24,28,30,36,40,42,45,48,50,60]);let c=0;for(let i=1;i<=n;i++)if(n%i===0)c++;return NUM(`عدد ${fa(n)} چند شمارنده (مقسوم‌علیه) دارد؟`,c,`شمارنده‌ها را جفت‌جفت پیدا می‌کنیم؛ در کل ${fa(c)} شمارنده دارد.`,[c+1,c-1,c+2])},
+    ()=>{const g=rn(2,9),x=pk([2,3,4,5,7]),y=pk([2,3,4,5,7].filter(v=>v!==x)),a=g*x,b=g*y;return NUM(`ب.م.م دو عدد ${fa(a)} و ${fa(b)} چند است؟`,g,`بزرگ‌ترین عددی که هر دو را می‌شمارد ${fa(g)} است (${fa(a)} = ${fa(g)}×${fa(x)} و ${fa(b)} = ${fa(g)}×${fa(y)}).`,[a*b/g,x*y,g*2])},
+    ()=>{const a=pk([4,6,8,9,10,12,14,15]),b=pk([3,4,5,6,8,9,10,12].filter(v=>v!==a)),l=lcm2(a,b);return NUM(`ک.م.م دو عدد ${fa(a)} و ${fa(b)} چند است؟`,l,`کوچک‌ترین مضرب مشترک ${fa(a)} و ${fa(b)} برابر ${fa(l)} است.`,[a*b===l?l+a:a*b,gd(a,b),l*2])},
+    ()=>{const n=rn(10,90);let m=n+1;while(!isPrime(m))m++;return NUM(`کوچک‌ترین عدد اول بزرگ‌تر از ${fa(n)} کدام است؟`,m,`از ${fa(n+1)} شروع می‌کنیم و اولین عددی را که اول باشد پیدا می‌کنیم: ${fa(m)}.`,[n+1,n+2,m+2])},
+    ()=>{const k=pk([3,9,4]),pool=[];for(let n=102;n<990;n++)pool.push(n);const ok=n=>k===3?String(n).split('').reduce((s,d)=>s+ +d,0)%3===0:k===9?String(n).split('').reduce((s,d)=>s+ +d,0)%9===0:n%100%4===0;const good=shuffle(pool.filter(ok))[0],bad=shuffle(pool.filter(n=>!ok(n))).slice(0,3);return TXT(`کدام عدد بر ${fa(k)} بخش‌پذیر است؟`,fa(good),bad.map(fa),k===4?'عددی بر ۴ بخش‌پذیر است که دو رقم آخرش بر ۴ بخش‌پذیر باشد.':`عددی بر ${fa(k)} بخش‌پذیر است که مجموع رقم‌هایش بر ${fa(k)} بخش‌پذیر باشد.`)},
+    ()=>{const p=pk([3,5,7,11,13]),q=pk([3,5,7,11,13].filter(v=>v!==p)),n=p*q;return NUM(`کوچک‌ترین مقسوم‌علیه اول عدد ${fa(n)} چند است؟`,Math.min(p,q),`${fa(n)} = ${fa(p)} × ${fa(q)}؛ کوچک‌ترین عامل اول ${fa(Math.min(p,q))} است.`,[1,n,Math.max(p,q)])}
+  ];
+  V9Q[7][5]=[ /* سطح و حجم */
+    ()=>{const a=rn(3,15),b=rn(3,15);return NUM(`مساحت مستطیلی به طول ${fa(a)} و عرض ${fa(b)} چند است؟`,a*b,`مساحت = طول × عرض = ${fa(a)} × ${fa(b)} = ${fa(a*b)}.`,[2*(a+b),a+b,a*b+a])},
+    ()=>{const a=rn(3,15),b=rn(3,15);return NUM(`محیط مستطیلی به طول ${fa(a)} و عرض ${fa(b)} چند است؟`,2*(a+b),`محیط = ۲ × (طول + عرض) = ۲ × ${fa(a+b)} = ${fa(2*(a+b))}.`,[a*b,a+b,2*a+b])},
+    ()=>{const b=rn(2,10)*2,h=rn(3,12);return NUM(`مساحت مثلثی با قاعدهٔ ${fa(b)} و ارتفاع ${fa(h)} چند است؟`,b*h/2,`مساحت مثلث = (قاعده × ارتفاع) ÷ ۲ = ${fa(b*h)} ÷ ۲ = ${fa(b*h/2)}.`,[b*h,b+h,b*h/4])},
+    ()=>{const b=rn(3,12),h=rn(3,12);return NUM(`مساحت متوازی‌الاضلاعی با قاعدهٔ ${fa(b)} و ارتفاع ${fa(h)} چند است؟`,b*h,`مساحت متوازی‌الاضلاع = قاعده × ارتفاع = ${fa(b*h)}.`,[b*h/2,2*(b+h),b+h])},
+    ()=>{let a,b,h;do{a=rn(3,12);b=rn(3,12);h=rn(2,10)}while((a+b)*h%2);return NUM(`مساحت ذوزنقه‌ای با قاعده‌های ${fa(a)} و ${fa(b)} و ارتفاع ${fa(h)} چند است؟`,(a+b)*h/2,`مساحت ذوزنقه = (مجموع قاعده‌ها × ارتفاع) ÷ ۲ = ${fa(a+b)}×${fa(h)} ÷ ۲ = ${fa((a+b)*h/2)}.`,[(a+b)*h,a*b*h/2,a*h+b])},
+    ()=>{const a=rn(2,9);return NUM(`حجم مکعبی به ضلع ${fa(a)} سانتی‌متر چند سانتی‌متر مکعب است؟`,a**3,`حجم مکعب = ${fa(a)} × ${fa(a)} × ${fa(a)} = ${fa(a**3)}.`,[a*a,3*a,6*a*a])},
+    ()=>{const a=rn(2,9),b=rn(2,9),c=rn(2,9);return NUM(`حجم مکعب‌مستطیلی با ابعاد ${fa(a)}، ${fa(b)} و ${fa(c)} چند است؟`,a*b*c,`حجم = طول × عرض × ارتفاع = ${fa(a*b*c)}.`,[a+b+c,2*(a*b+b*c+a*c),a*b*c+a])},
+    ()=>{const a=rn(2,9);return NUM(`مساحت کل (همهٔ وجه‌ها) مکعبی به ضلع ${fa(a)} چند است؟`,6*a*a,`مکعب ۶ وجه مربعی دارد: ۶ × ${fa(a*a)} = ${fa(6*a*a)}.`,[a**3,4*a*a,a*a])}
+  ];
+  V9Q[7][6]=[ /* کسر */
+    ()=>{const d=rn(4,12),a=rn(1,d-2),b=rn(1,d-1-a);return NUM(`${E(q2(a,d)+' + '+q2(b,d)+' = ؟')} (ساده‌شده)`,frs(a+b,d),`مخرج‌ها برابرند؛ صورت‌ها را جمع می‌کنیم: ${q2(a+b,d)}${gd(a+b,d)>1?' = '+D(frs(a+b,d)):''}.`,[frs(a+b,2*d),frs(a+b+1,d),frs(a*b,d)])},
+    ()=>{const d1=pk([2,3,4,6]),d2=pk([2,3,4,6].filter(v=>v!==d1)),n1=rn(1,d1-1),n2=rn(1,d2-1),n=n1*d2+n2*d1,d=d1*d2;return NUM(`${E(q2(n1,d1)+' + '+q2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n,d),`مخرج مشترک می‌گیریم: ${q2(n1*d2,d)} + ${q2(n2*d1,d)} = ${q2(n,d)} = ${D(frs(n,d))}.`,[frs(n1+n2,d1+d2),frs(n1+n2,d),frs(n+1,d)])},
+    ()=>{const d1=rn(2,7),d2=rn(2,7),n1=rn(1,d1-1),n2=rn(1,d2-1);return NUM(`${E(q2(n1,d1)+' × '+q2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n1*n2,d1*d2),`در ضرب کسرها صورت در صورت و مخرج در مخرج: ${q2(n1*n2,d1*d2)} = ${D(frs(n1*n2,d1*d2))}.`,[frs(n1*d2+n2*d1,d1*d2),frs(n1*n2,d1+d2),frs(n1*d2,d1*n2)])},
+    ()=>{const pool=[[1,2],[1,3],[2,3],[3,4],[1,4],[3,5],[2,5],[5,6],[4,5],[3,8],[5,8],[7,8],[7,10],[1,6],[4,7]],L=shuffle(pool).slice(0,4),v=L.map(([a,b])=>a/b),mx=Math.max(...v);if(new Set(v).size<4)return null;const i=v.indexOf(mx);return TXT('کدام کسر از همه بزرگ‌تر است؟',q2(...L[i]),L.filter((_,k)=>k!==i).map(x=>q2(...x)),`کسرها را به‌صورت اعشاری یا با مخرج مشترک مقایسه می‌کنیم؛ بزرگ‌ترین ${q2(...L[i])} است.`)},
+    ()=>{const d=rn(2,8),n=rn(1,d-1),k=rn(2,9);return NUM(`${q2(n,d)} از ${fa(d*k)} چقدر است؟`,n*k,`${fa(d*k)} ÷ ${fa(d)} = ${fa(k)} و بعد ×${fa(n)} = ${fa(n*k)}.`,[d*k-n,n*d,k])},
+    ()=>{const n=rn(1,6),d=rn(2,9);if(gd(n,d)!==1)return null;const g=rn(2,6);return NUM(`ساده‌شدهٔ ${E(q2(n*g,d*g))} را بنویس.`,frs(n,d),`صورت و مخرج را بر ${fa(g)} تقسیم می‌کنیم: ${q2(n,d)}.`,[frs(n,d+1),frs(n+1,d),frs(n*g,d)])},
+    ()=>{const d1=pk([2,3,4,6]),d2=pk([2,3,4,6]),n1=rn(1,d1*2),n2=rn(1,d2-1);const n=n1*d2-n2*d1;if(n<=0)return null;return NUM(`${E(q2(n1,d1)+' − '+q2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n,d1*d2),`مخرج مشترک ${fa(d1*d2)}: ${q2(n1*d2,d1*d2)} − ${q2(n2*d1,d1*d2)} = ${q2(n,d1*d2)} = ${D(frs(n,d1*d2))}.`,[frs(n1-n2,Math.abs(d1-d2)||d1),frs(n1-n2,d1*d2),frs(n+1,d1*d2)])},
+    ()=>{const d1=rn(2,7),d2=rn(2,7),n1=rn(1,d1+2),n2=rn(1,d2+1);return NUM(`${E(q2(n1,d1)+' ÷ '+q2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n1*d2,d1*n2),`تقسیم یعنی ضرب در وارونه: ${q2(n1,d1)} × ${q2(d2,n2)} = ${D(frs(n1*d2,d1*n2))}.`,[frs(n1*n2,d1*d2),frs(n1*d1,n2*d2),frs(d1*n2,n1*d2)])}
+  ];
+  V9Q[7][7]=[ /* توان و جذر */
+    ()=>{const a=rn(2,5),b=rn(2,4);return NUM(`${fa(a)} به توان ${fa(b)} چند است؟`,a**b,`${fa(a)} را ${fa(b)} بار در خودش ضرب می‌کنیم: ${fa(a**b)}.`,[a*b,a**(b-1),a**(b+1)])},
+    ()=>{const r=rn(2,15);return NUM(`${E('√'+fa(r*r)+' = ؟')}`,r,`${fa(r)} × ${fa(r)} = ${fa(r*r)}؛ پس جذر ${fa(r*r)} برابر ${fa(r)} است.`,[r*r/2,r+1,r-1])},
+    ()=>{const a=rn(2,7),m=rn(2,6),n=rn(2,6);return NUM(`${E(fa(a)+'^'+fa(m)+' × '+fa(a)+'^'+fa(n)+' = '+fa(a)+'^؟')}`,m+n,`در ضرب توان‌های هم‌پایه، توان‌ها جمع می‌شوند: ${fa(m)} + ${fa(n)} = ${fa(m+n)}.`,[m*n,m+n+1,Math.abs(m-n)||m+n+2])},
+    ()=>{const n=rn(2,6);return NUM(`${E(fa(10)+'^'+fa(n)+' = ؟')}`,10**n,`${fa(10)} به توان ${fa(n)} یعنی عدد ۱ و بعد ${fa(n)} صفر: ${fa(10**n)}.`,[10**(n-1),10**(n+1),n*10])},
+    ()=>{const a=rn(2,9);return NUM(`${E('('+sg(-a)+')^۲ = ؟')}`,a*a,`توان زوج جواب را مثبت می‌کند: (−${fa(a)})×(−${fa(a)}) = ${fa(a*a)}.`,[-a*a,2*a,-2*a])},
+    ()=>{let n;do n=rn(5,150);while(Math.sqrt(n)%1===0);const k=Math.floor(Math.sqrt(n));return TXT(`${E('√'+fa(n))} بین کدام دو عدد صحیح متوالی است؟`,`${fa(k)} و ${fa(k+1)}`,[`${fa(k-1)} و ${fa(k)}`,`${fa(k+1)} و ${fa(k+2)}`,`${fa(k+2)} و ${fa(k+3)}`],`${fa(k*k)} < ${fa(n)} < ${fa((k+1)**2)}؛ پس جذرش بین ${fa(k)} و ${fa(k+1)} است.`)},
+    ()=>{const a=rn(2,9),b=rn(2,9);return NUM(`${E(fa(a)+'² + '+fa(b)+'² = ؟')}`,a*a+b*b,`${fa(a*a)} + ${fa(b*b)} = ${fa(a*a+b*b)}.`,[(a+b)**2,a*b*2,a*a+b*b+2*a*b])}
+  ];
+  V9Q[7][8]=[ /* آمار و احتمال */
+    ()=>{for(let t=0;t<50;t++){const m=rn(5,20),L=[rn(1,30),rn(1,30),rn(1,30),rn(1,30)],l=5*m-L.reduce((s,v)=>s+v,0);if(l>=1&&l<=30){const all=shuffle(L.concat(l));return NUM(`میانگین داده‌های ${E(all.map(fa).join(' ، '))} چند است؟`,m,`مجموع داده‌ها ${fa(5*m)} است؛ ÷ ۵ = ${fa(m)}.`,[m+1,m-1,5*m])}}return null},
+    ()=>{const k=pk([5,7]),s=new Set();while(s.size<k)s.add(rn(1,40));const L=shuffle([...s]),so=[...L].sort((a,b)=>a-b),md=so[(k-1)/2];return NUM(`میانهٔ داده‌های ${E(L.map(fa).join(' ، '))} چند است؟`,md,`داده‌ها را مرتب می‌کنیم: ${E(so.map(fa).join(' ، '))}؛ وسطی ${fa(md)} است.`,[so[(k-1)/2-1],so[(k-1)/2+1],so.reduce((s,v)=>s+v,0)/k|0].filter(v=>v!==md))},
+    ()=>{const m=rn(1,20),L=[m,m,m];while(L.length<8){const v=rn(1,20);if(v!==m&&L.filter(x=>x===v).length<2)L.push(v)}return NUM(`نما (مد) داده‌های ${E(shuffle(L).map(fa).join(' ، '))} چند است؟`,m,`نما عددی است که بیشترین تکرار را دارد: ${fa(m)} (سه بار).`,L.filter(v=>v!==m).slice(0,3))},
+    ()=>{const s=new Set();while(s.size<6)s.add(rn(1,50));const L=[...s],r=Math.max(...L)-Math.min(...L);return NUM(`دامنهٔ تغییرات داده‌های ${E(L.map(fa).join(' ، '))} چند است؟`,r,`دامنه = بزرگ‌ترین − کوچک‌ترین = ${fa(Math.max(...L))} − ${fa(Math.min(...L))} = ${fa(r)}.`,[Math.max(...L),r+1,r-1])},
+    ()=>{const ev=pk([['زوج',[2,4,6]],['اول',[2,3,5]],['مضرب ۳',[3,6]],['بزرگ‌تر از ۴',[5,6]],['کوچک‌تر از ۳',[1,2]],['فرد',[1,3,5]]]),c=ev[1].length;return NUM(`یک تاس سالم می‌اندازیم. احتمال آمدن عدد «${ev[0]}» چه کسری است؟ (ساده‌شده)`,frs(c,6),`${fa(c)} حالت مطلوب از ۶ حالت: ${q2(c,6)}${gd(c,6)>1?' = '+D(frs(c,6)):''}.`,[frs(c+1,6),frs(c,5),frs(1,6)])},
+    ()=>{if(Math.random()<.5){const n=rn(2,5);return NUM(`یک سکه را ${fa(n)} بار می‌اندازیم. چند حالت مختلف ممکن است رخ دهد؟`,2**n,`هر پرتاب ۲ حالت دارد: ۲ به توان ${fa(n)} = ${fa(2**n)}.`,[2*n,n*n,2**n-1])}return NUM('دو سکه را هم‌زمان می‌اندازیم. احتمال آمدن «هر دو شیر» چه کسری است؟',frs(1,4),'۴ حالت (شش، شخ، خش، خخ) داریم و فقط یکی مطلوب است: ۱/۴.',[frs(1,2),frs(1,3),frs(3,4)])},
+    ()=>{const r=rn(2,8),b=rn(2,8),g=rn(1,6),T=r+b+g,c=pk([['قرمز',r],['آبی',b],['سبز',g]]);return NUM(`در کیسه‌ای ${fa(r)} مهرهٔ قرمز، ${fa(b)} مهرهٔ آبی و ${fa(g)} مهرهٔ سبز است. احتمال بیرون آوردن مهرهٔ ${c[0]} چه کسری است؟ (ساده‌شده)`,frs(c[1],T),`${fa(c[1])} حالت مطلوب از ${fa(T)} مهره: ${D(frs(c[1],T))}.`,[frs(c[1],T-c[1]),frs(c[1]+1,T),frs(T-c[1],T)])}
+  ];
+
+  /* ---------------- پایهٔ هشتم ---------------- */
+  const QF=[[1,2],[1,3],[2,3],[1,4],[3,4],[1,5],[2,5],[3,5],[4,5],[1,6],[5,6],[3,8],[5,8],[7,8]];
+  V9Q[8][0]=[ /* عددهای صحیح و گویا */
+    ()=>{const a=rint(-10,10),b=rint(-10,10,1),c=rint(-10,10);return NUM(`${E(sg(a)+' − '+P(b)+' + '+P(c)+' = ؟')}`,a-b+c,`از چپ به راست: ${sg(a)} − ${P(b)} = ${D(a-b)}؛ سپس + ${P(c)} = ${D(a-b+c)}.`)},
+    ()=>{const d1=pk([2,3,4,5,6,8]),d2=pk([2,3,4,5,6,8]),n1=rint(-d1+1,d1-1,1),n2=rint(-d2+1,d2-1,1),n=n1*d2+n2*d1;return NUM(`${E(fq(n1,d1)+' + '+P2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n,d1*d2),`مخرج مشترک ${fa(d1*d2)}: ${sg(n1*d2)}/${fa(d1*d2)} + ${P2(n2*d1,d1*d2)} = ${D(frs(n,d1*d2))}.`,[frs(n1+n2,d1+d2),frs(n1*d2-n2*d1,d1*d2),frs(n+1,d1*d2)])},
+    ()=>{const d1=rn(2,7),d2=rn(2,7),n1=rint(-6,6,1),n2=rint(-6,6,1);return NUM(`${E(P2(n1,d1)+' × '+P2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n1*n2,d1*d2),`ابتدا علامت (${n1*n2<0?'ناهم‌علامت ← منفی':'هم‌علامت ← مثبت'})، سپس صورت×صورت و مخرج×مخرج: ${D(frs(n1*n2,d1*d2))}.`,[frs(-n1*n2,d1*d2),frs(n1*d2+n2*d1,d1*d2),frs(n1*n2,d1+d2)])},
+    ()=>{const [dec,fr]=pk([[0.5,'1/2'],[0.25,'1/4'],[0.75,'3/4'],[0.2,'1/5'],[0.4,'2/5'],[0.6,'3/5'],[0.8,'4/5'],[0.125,'1/8'],[0.375,'3/8'],[0.05,'1/20'],[0.35,'7/20'],[1.5,'3/2'],[2.25,'9/4'],[0.04,'1/25']]);return NUM(`عدد ${D(dec)} را به‌صورت کسر ساده بنویس.`,fr,`${D(dec)} را به‌صورت کسر می‌نویسیم و ساده می‌کنیم: ${D(fr)}.`,['1/10','1/3','2/3','5/2','1/2','3/4'].filter(x=>x!==fr))},
+    ()=>{const pool=[['−۳/۴',-.75],['−۰٫۶',-.6],['−۲/۳',-2/3],['−۱/۲',-.5],['۰٫۳',.3],['۱/۴',.25],['۰',0],['−۰٫۹',-.9],['−۱٫۵',-1.5],['۲/۵',.4],['−۵/۸',-.625]],L=shuffle(pool).slice(0,4),mn=Math.random()<.5,t=mn?Math.min(...L.map(x=>x[1])):Math.max(...L.map(x=>x[1])),a=L.find(x=>x[1]===t);return TXT(`کدام عدد از همه ${mn?'کوچک‌تر':'بزرگ‌تر'} است؟`,E(a[0]),L.filter(x=>x!==a).map(x=>E(x[0])),`همه را روی محور یا به‌صورت اعشاری مقایسه می‌کنیم: ${mn?'کوچک‌ترین':'بزرگ‌ترین'} ${a[0]} است.`)},
+    ()=>{const n=rint(-9,9,1),d=rn(2,9);return NUM(`قدر مطلق ${E(fq(n,d))} چند است؟ (کسر)`,frs(Math.abs(n),d),`قدر مطلق، فاصله از صفر است و علامت منفی حذف می‌شود: ${D(frs(Math.abs(n),d))}.`,[frs(-Math.abs(n),d),frs(Math.abs(n)+1,d),frs(d,Math.abs(n))])},
+    ()=>{const d1=rn(2,7),d2=rn(2,7),n1=rint(-6,6,1),n2=rint(-6,6,1);return NUM(`${E(P2(n1,d1)+' ÷ '+P2(n2,d2)+' = ؟')} (ساده‌شده)`,frs(n1*d2,d1*n2),`تقسیم یعنی ضرب در وارونهٔ کسر دوم: ${D(frs(n1*d2,d1*n2))}.`,[frs(-n1*d2,d1*n2),frs(n1*n2,d1*d2),frs(d1*n2,n1*d2)])}
+  ];
+  const P2=(n,d)=>n<0?'('+sg(n)+'/'+fa(d)+')':fa(n)+'/'+fa(d);
+  V9Q[8][1]=[ /* عددهای اول */
+    ()=>{const ps=[2,3,5,7],f=[pk(ps),pk(ps),pk(ps),pk(ps)].sort((a,b)=>a-b),n=f.reduce((s,v)=>s*v,1),str=a=>E(a.map(fa).join(' × '));const opts=new Set();const w=[];for(let t=0;t<60&&w.length<3;t++){const g=f.slice();g[rn(0,3)]=pk([2,3,5,7,11]);g.sort((a,b)=>a-b);if(g.reduce((s,v)=>s*v,1)!==n&&!w.includes(str(g))&&str(g)!==str(f))w.push(str(g))}return TXT(`تجزیهٔ ${fa(n)} به عامل‌های اول کدام است؟`,str(f),w,`${fa(n)} را پشت‌سرهم بر اعداد اول تقسیم می‌کنیم تا به ${str(f).replace(/[⁦⁩]/g,'')} برسیم.`)},
+    ()=>{const g=rn(3,12),x=pk([2,3,5,7]),y=pk([2,3,4,5,7,8].filter(v=>v!==x&&gd(v,x)===1)),a=g*x,b=g*y;return NUM(`ب.م.م دو عدد ${fa(a)} و ${fa(b)} چند است؟`,gd(a,b),`بزرگ‌ترین شمارندهٔ مشترک ${fa(a)} و ${fa(b)} برابر ${fa(gd(a,b))} است.`,[lcm2(a,b),gd(a,b)*2,x*y])},
+    ()=>{const a=rn(6,30),b=rn(6,30);if(a===b)return null;return NUM(`ک.م.م دو عدد ${fa(a)} و ${fa(b)} چند است؟`,lcm2(a,b),`ک.م.م = (حاصل‌ضرب) ÷ (ب.م.م) = ${fa(a*b)} ÷ ${fa(gd(a,b))} = ${fa(lcm2(a,b))}.`,[a*b===lcm2(a,b)?a*b+a:a*b,gd(a,b),lcm2(a,b)*2])},
+    ()=>{const n=rn(15,50);let c=0;for(let i=2;i<n;i++)if(isPrime(i))c++;return NUM(`چند عدد اول کوچک‌تر از ${fa(n)} وجود دارد؟`,c,`با غربال اراتستن عددهای اول را می‌شماریم: ${fa(c)} عدد.`,[c+1,c-1,c+2])},
+    ()=>{const ok=[],bad=[];for(let a=4;a<40;a++)for(let b=a+1;b<40;b++)(gd(a,b)===1?ok:bad).push([a,b]);const c=pk(ok),w=shuffle(bad).slice(0,3);const s=p=>`${fa(p[0])} و ${fa(p[1])}`;return TXT('کدام دو عدد نسبت به هم اول‌اند (ب.م.م آن‌ها ۱ است)؟',s(c),w.map(s),`دو عدد وقتی نسبت به هم اول‌اند که شمارندهٔ مشترکی جز ۱ نداشته باشند؛ ${s(c)} این‌طور است.`)},
+    ()=>{const ps=[2,3,5,7,11,13],f=shuffle(ps).slice(0,3),n=f.reduce((s,v)=>s*v,1);return NUM(`بزرگ‌ترین عامل اول عدد ${fa(n)} چند است؟`,Math.max(...f),`${fa(n)} = ${f.sort((a,b)=>a-b).map(fa).join(' × ')}؛ بزرگ‌ترین عامل ${fa(Math.max(...f))} است.`,[Math.min(...f),f.reduce((s,v)=>s+v,0),n])},
+    ()=>{const p=pk([2,3,5]),q=pk([3,5,7].filter(v=>v!==p)),a=rn(1,3),b=rn(1,2),n=p**a*q**b;let c=0;for(let i=1;i<=n;i++)if(n%i===0)c++;return NUM(`عدد ${fa(n)} چند شمارنده دارد؟`,c,`${fa(n)} = ${fa(p)}^${fa(a)} × ${fa(q)}^${fa(b)}؛ تعداد شمارنده‌ها (${fa(a+1)})×(${fa(b+1)}) = ${fa(c)}.`,[a+b,c+2,c-1])},
+    ()=>{const a=rn(1,20),b=a+rn(10,22);let c=0;for(let i=a+1;i<b;i++)if(isPrime(i))c++;return NUM(`بین ${fa(a)} و ${fa(b)} چند عدد اول وجود دارد؟`,c,`عددهای بین ${fa(a)} و ${fa(b)} را یکی‌یکی بررسی می‌کنیم: ${fa(c)} عدد اول.`,[c+1,c+2,Math.max(0,c-1)])}
+  ];
+  const lbl=n=>`${fa(n)}‌ضلعی`;
+  V9Q[8][2]=[ /* چندضلعی‌ها */
+    ()=>{const n=rn(3,12);return NUM(`مجموع زاویه‌های داخلی یک ${lbl(n)} چند درجه است؟`,180*(n-2),`فرمول: (n − ۲) × ۱۸۰ = ${fa(n-2)} × ۱۸۰ = ${fa(180*(n-2))}.`,[180*n,180*(n-1),360*(n-2)].filter(v=>v!==180*(n-2)))},
+    ()=>{const n=pk([3,4,5,6,8,9,10,12]);return NUM(`هر زاویهٔ داخلی یک ${lbl(n)} منتظم چند درجه است؟`,180*(n-2)/n,`(n−۲)×۱۸۰ ÷ n = ${fa(180*(n-2))} ÷ ${fa(n)} = ${fa(180*(n-2)/n)}.`,[360/n,180*(n-2),180-360/n+10])},
+    ()=>{const n=rn(4,12);return NUM(`یک ${lbl(n)} چند قطر دارد؟`,n*(n-3)/2,`فرمول تعداد قطرها: n(n−۳)÷۲ = ${fa(n)}×${fa(n-3)}÷۲ = ${fa(n*(n-3)/2)}.`,[n*(n-3),n*(n-1)/2,n-3])},
+    ()=>{const n=pk([3,4,5,6,8,9,10,12]);return NUM(`اندازهٔ هر زاویهٔ خارجی یک ${lbl(n)} منتظم چند درجه است؟`,360/n,`مجموع زاویه‌های خارجی هر چندضلعی محدب ۳۶۰ است؛ ۳۶۰ ÷ ${fa(n)} = ${fa(360/n)}.`,[180*(n-2)/n,360-360/n,180/n])},
+    ()=>{const n=rn(4,14);return NUM(`مجموع زاویه‌های داخلی یک چندضلعی ${fa(180*(n-2))} درجه است. این چندضلعی چند ضلع دارد؟`,n,`${fa(180*(n-2))} ÷ ۱۸۰ = ${fa(n-2)} و ${fa(n-2)} + ۲ = ${fa(n)}.`,[n-1,n+1,n-2])},
+    ()=>{const a=rn(80,130),b=rn(80,130),c=rn(80,130),d=rn(80,130);return NUM(`چهار زاویهٔ یک پنج‌ضلعی ${fa(a)}، ${fa(b)}، ${fa(c)} و ${fa(d)} درجه است. زاویهٔ پنجم چند درجه است؟`,540-a-b-c-d,`مجموع زاویه‌های پنج‌ضلعی ۵۴۰ است: ۵۴۰ − ${fa(a+b+c+d)} = ${fa(540-a-b-c-d)}.`)},
+    ()=>{const n=pk([3,4,5,6,8,9,10,12]),a=180*(n-2)/n;return NUM(`هر زاویهٔ داخلی یک چندضلعی منتظم ${fa(a)} درجه است. چند ضلع دارد؟`,n,`زاویهٔ خارجی = ۱۸۰ − ${fa(a)} = ${fa(180-a)} و ۳۶۰ ÷ ${fa(180-a)} = ${fa(n)} ضلع.`,[n+1,n-1,n*2])},
+    ()=>{const n=rn(4,12);return NUM(`از یک رأس یک ${lbl(n)}، چند قطر می‌توان رسم کرد؟`,n-3,`از هر رأس به ${fa(n-3)} رأس غیرمجاور می‌توان قطر زد (نه خودش و نه دو رأس کناری).`,[n-2,n-1,n])},
+    ()=>SHP('کدام شکل «مقعر» است؟',SH.filter(s=>!s.a.convex),SH.filter(s=>s.a.convex),s=>reason(s)+'.'),
+    ()=>SHP('کدام شکل «منتظم» است؟',SH.filter(s=>s.a.regular),SH.filter(s=>!s.a.regular&&s.a.convex),s=>reason(s)+'.'),
+    ()=>{const k=pk([0,1,2,3,4]);return SHP(k?`کدام شکل دقیقاً ${fa(k)} محور تقارن دارد؟`:'کدام شکل هیچ محور تقارنی ندارد؟',SH.filter(s=>s.a.nAx===k),SH.filter(s=>s.a.nAx!==k),s=>reason(s)+'.')},
+    ()=>{const y=Math.random()<.5;return SHP(`کدام شکل ${y?'مرکز تقارن دارد':'مرکز تقارن ندارد'}؟`,SH.filter(s=>!!s.a.center===y),SH.filter(s=>!!s.a.center!==y),s=>reason(s)+'.')}
+  ];
+  V9Q[8][3]=[ /* جبر و معادله */
+    ()=>{const a=rn(2,7),x=rint(-8,9,1),b=rint(-9,9,1),c=a*x+b;return NUM(`معادلهٔ ${E(lin(a,b)+' = '+sg(c))} را حل کن: x = ؟`,x,`جمله‌های عددی را به طرف دیگر می‌بریم و بر ${fa(a)} تقسیم می‌کنیم: x = ${D(x)}.`,[x+1,x-1,-x,c-b])},
+    ()=>{const a=rn(2,5),b=rn(1,6),x=rn(-5,8);return NUM(`معادلهٔ ${E(fa(a)+'(x + '+fa(b)+') = '+sg(a*(x+b)))} را حل کن: x = ؟`,x,`اول پرانتز را باز می‌کنیم یا دو طرف را بر ${fa(a)} تقسیم می‌کنیم: x + ${fa(b)} = ${D(x+b)} پس x = ${D(x)}.`,[x+b,x-b,a*x])},
+    ()=>{const x=rn(1,9),a=rn(3,8),c=rn(1,a-1),b=rint(-6,6,1),d=b+(a-c)*x;return NUM(`معادلهٔ ${E(lin(a,b)+' = '+lin(c,d))} را حل کن: x = ؟`,x,`x‌ها را به یک طرف می‌بریم: ${fa(a-c)}x = ${D(d-b)}؛ پس x = ${fa(x)}.`,[x+1,x-1,d-b])},
+    ()=>{const a=rint(-6,6,1),b=rint(-6,6,1);return NUM(`ضریب x در بسط ${E('('+xp(a)+')('+xp(b)+')')} چند است؟`,a+b,`(x+a)(x+b) = x² + (a+b)x + ab؛ ضریب x برابر ${D(a+b)} است.`,[a*b,a+b+1,a-b].filter(v=>v!==a+b))},
+    ()=>{const a=rn(2,6),b=rn(1,9),x=rint(-6,-1);return NUM(`مقدار ${E(lin(a,b))} به ازای x = ${sg(x)} چند است؟`,a*x+b,`به‌جای x مقدار ${sg(x)} را می‌گذاریم: ${fa(a)}×${P(x)} + ${fa(b)} = ${D(a*x+b)}.`)},
+    ()=>{const a=rn(2,9),k=rn(2,9),b=rn(1,9);return NUM(`معادلهٔ ${E('x/'+fa(a)+' + '+fa(b)+' = '+fa(k+b))} را حل کن: x = ؟`,a*k,`اول ${fa(b)} را کم می‌کنیم: x/${fa(a)} = ${fa(k)}؛ سپس در ${fa(a)} ضرب می‌کنیم: x = ${fa(a*k)}.`,[k,k+b,a+k])},
+    ()=>{const w=rn(3,12),l=rn(w+1,20);return NUM(`محیط یک مستطیل ${fa(2*(l+w))} و عرض آن ${fa(w)} است. طول مستطیل چند است؟`,l,`نصف محیط ${fa(l+w)} است؛ طول = ${fa(l+w)} − ${fa(w)} = ${fa(l)}.`,[2*l,l+w,l-1])},
+    ()=>{const a=rn(2,5),b=rn(1,5),c=rn(1,a-1);return TXT(`ساده‌شدهٔ ${E(fa(a)+'(x + '+fa(b)+') − '+(c===1?'':fa(c))+'x')} کدام است؟`,E(lin(a-c,a*b)),[E(lin(a+c,a*b)),E(lin(a-c,b)),E(lin(a-c,-a*b))],`پرانتز را باز می‌کنیم: ${fa(a)}x + ${fa(a*b)} − ${fa(c)}x و جمله‌های هم‌نوع را ساده می‌کنیم.`)}
+  ];
+  V9Q[8][4]=[ /* بردار و مختصات */
+    ()=>{const x=rint(-8,8,1),y=rint(-8,8,1),r=x>0?(y>0?'ناحیهٔ اول':'ناحیهٔ چهارم'):(y>0?'ناحیهٔ دوم':'ناحیهٔ سوم');return TXT(`نقطهٔ ${pt(x,y)} در کدام ناحیهٔ صفحهٔ مختصات است؟`,r,['ناحیهٔ اول','ناحیهٔ دوم','ناحیهٔ سوم','ناحیهٔ چهارم'].filter(v=>v!==r),`طول ${x>0?'مثبت':'منفی'} و عرض ${y>0?'مثبت':'منفی'} است، پس ${r}.`)},
+    ()=>{const x=rint(-8,8,1),y=rint(-8,8,1);return TXT(`قرینهٔ نقطهٔ ${pt(x,y)} نسبت به محور x‌ها کدام است؟`,pt(x,-y),[pt(-x,y),pt(-x,-y),pt(y,x)],'نسبت به محور x‌ها، طول ثابت می‌ماند و عرض قرینه می‌شود.')},
+    ()=>{const x=rint(-8,8,1),y=rint(-8,8,1);return TXT(`قرینهٔ نقطهٔ ${pt(x,y)} نسبت به محور y‌ها کدام است؟`,pt(-x,y),[pt(x,-y),pt(-x,-y),pt(y,x)],'نسبت به محور y‌ها، عرض ثابت می‌ماند و طول قرینه می‌شود.')},
+    ()=>{const x1=rn(-5,5),y1=rn(-5,5),x2=rn(-5,5),y2=rn(-5,5);if(x1===x2&&y1===y2)return null;return TXT(`بردار ${E('AB')} را از نقطهٔ ${E('A'+'('+sg(x1)+' , '+sg(y1)+')')} به نقطهٔ ${E('B'+'('+sg(x2)+' , '+sg(y2)+')')} بنویس.`,pt(x2-x1,y2-y1),[pt(x1-x2,y1-y2),pt(x1+x2,y1+y2),pt(x2-x1,y1-y2)],'بردار AB = مختصات B − مختصات A.')},
+    ()=>{const a=rn(-6,6),b=rn(-6,6),c=rn(-6,6),d=rn(-6,6);return TXT(`اگر ${E('u = '+'('+sg(a)+' , '+sg(b)+')')} و ${E('v = '+'('+sg(c)+' , '+sg(d)+')')} باشد، ${E('u + v')} کدام است؟`,pt(a+c,b+d),[pt(a-c,b-d),pt(a*c,b*d),pt(a+d,b+c)],'بردارها مؤلفه‌به‌مؤلفه جمع می‌شوند.')},
+    ()=>{const a=rint(-5,5,1),b=rint(-5,5,1),k=rn(2,4);return TXT(`اگر ${E('u = '+'('+sg(a)+' , '+sg(b)+')')} باشد، ${E(fa(k)+'u')} کدام است؟`,pt(k*a,k*b),[pt(a+k,b+k),pt(k*a,b),pt(a,k*b)],`هر مؤلفه را در ${fa(k)} ضرب می‌کنیم.`)},
+    ()=>{const t=pk([[3,4,5],[6,8,10],[5,12,13],[8,6,10],[12,5,13],[9,12,15],[8,15,17]]);return NUM(`طول بردار ${pt(t[0],t[1])} چند است؟`,t[2],`طول = √(${fa(t[0])}² + ${fa(t[1])}²) = √${fa(t[0]**2+t[1]**2)} = ${fa(t[2])}.`,[t[0]+t[1],t[2]+1,t[2]-1])},
+    ()=>{const x1=rn(-6,6),x2=x1+2*rn(1,5),y1=rn(-6,6),y2=y1+2*rn(1,5),h=Math.random()<.5;return NUM(`نقطهٔ وسط پاره‌خط به دو سر ${pt(x1,y1)} و ${pt(x2,y2)}: مقدار ${h?'طول (x)':'عرض (y)'} آن چند است؟`,h?(x1+x2)/2:(y1+y2)/2,`میانگین ${h?'طول‌ها':'عرض‌ها'}: ${h?`(${sg(x1)} + ${sg(x2)})`:`(${sg(y1)} + ${sg(y2)})`} ÷ ۲ = ${D(h?(x1+x2)/2:(y1+y2)/2)}.`)},
+    ()=>{const x=rn(-6,6),y=rn(-6,6),a=rn(-4,4),b=rn(-4,4);return TXT(`نقطهٔ ${pt(x,y)} را با بردار ${pt(a,b)} انتقال می‌دهیم. نقطهٔ جدید کدام است؟`,pt(x+a,y+b),[pt(x-a,y-b),pt(x+b,y+a),pt(x*a,y*b)],'نقطه + بردار انتقال = نقطهٔ جدید (مؤلفه‌به‌مؤلفه).')},
+    ()=>{const x1=rn(-7,0),x2=x1+rn(2,9),y=rn(-5,5);return NUM(`فاصلهٔ دو نقطهٔ ${pt(x1,y)} و ${pt(x2,y)} چند است؟`,x2-x1,`عرض‌ها برابرند؛ فاصله = تفاضل طول‌ها = ${D(x2-x1)}.`)}
+  ];
+  V9Q[8][5]=[ /* مثلث */
+    ()=>{const a=rn(30,90),b=rn(30,80);return NUM(`دو زاویهٔ یک مثلث ${fa(a)} و ${fa(b)} درجه‌اند. زاویهٔ سوم چند درجه است؟`,180-a-b,`۱۸۰ − ${fa(a+b)} = ${fa(180-a-b)}.`)},
+    ()=>{const a=rn(30,80),b=rn(30,80);return NUM(`دو زاویهٔ داخلی یک مثلث ${fa(a)} و ${fa(b)} درجه‌اند. زاویهٔ خارجی مقابل آن‌ها (در رأس سوم) چند درجه است؟`,a+b,`زاویهٔ خارجی برابر مجموع دو زاویهٔ داخلی غیرمجاور است: ${fa(a)} + ${fa(b)} = ${fa(a+b)}.`)},
+    ()=>{const ok=[],bad=[];for(let a=2;a<16;a++)for(let b=a;b<16;b++)for(let c=b;c<20;c++)(a+b>c?ok:bad).push([a,b,c]);const c=pk(ok),w=shuffle(bad.filter(t=>t[2]-t[0]-t[1]<=3)).slice(0,3),s=t=>E(t.map(fa).join(' ، '));return TXT('کدام سه عدد می‌تواند طول ضلع‌های یک مثلث باشد؟',s(c),w.map(s),'در هر مثلث، مجموع دو ضلع باید از ضلع سوم بزرگ‌تر باشد.')},
+    ()=>{const a=rn(3,10),b=rn(a+1,14),mn=Math.random()<.5;return NUM(`دو ضلع مثلثی ${fa(a)} و ${fa(b)} است. ${mn?'کوچک‌ترین':'بزرگ‌ترین'} مقدار صحیح ممکن برای ضلع سوم چند است؟`,mn?b-a+1:a+b-1,`ضلع سوم باید بین ${fa(b-a)} و ${fa(a+b)} باشد؛ ${mn?'کوچک‌ترین':'بزرگ‌ترین'} عدد صحیح ${fa(mn?b-a+1:a+b-1)} است.`)},
+    ()=>{const r=rn(5,17)*4;return NUM(`در یک مثلث متساوی‌الساقین، زاویهٔ رأس ${fa(r)} درجه است. هر زاویهٔ قاعده چند درجه است؟`,(180-r)/2,`(۱۸۰ − ${fa(r)}) ÷ ۲ = ${fa((180-r)/2)}.`)},
+    ()=>{const t=pk([[3,4,5],[6,8,10],[5,12,13],[8,15,17],[9,12,15],[7,24,25]]);return NUM(`در مثلث قائم‌الزاویه‌ای ضلع‌های قائم ${fa(t[0])} و ${fa(t[1])} است. وتر چند است؟`,t[2],`وتر² = ${fa(t[0]**2)} + ${fa(t[1]**2)} = ${fa(t[2]**2)}؛ وتر = ${fa(t[2])}.`,[t[0]+t[1],t[2]+1,t[2]-1])},
+    ()=>{const t=pk([[3,4,5],[6,8,10],[5,12,13],[8,15,17],[9,12,15]]);return NUM(`در مثلث قائم‌الزاویه‌ای وتر ${fa(t[2])} و یک ضلع قائم ${fa(t[0])} است. ضلع قائم دیگر چند است؟`,t[1],`ضلع² = ${fa(t[2]**2)} − ${fa(t[0]**2)} = ${fa(t[1]**2)}؛ ضلع = ${fa(t[1])}.`,[t[2]-t[0],t[1]+1,t[1]-1])},
+    ()=>{const a=pk([[50,60,70],[30,60,90],[40,40,100],[35,55,90],[25,65,90],[45,45,90],[20,30,130],[70,80,30]]),r=a.includes(90)?'قائم‌الزاویه':Math.max(...a)>90?'منفرجه (باز‌زاویه)':'حاده (تیزه‌زاویه)';return TXT(`مثلثی با زاویه‌های ${E(a.map(fa).join(' ، '))} درجه از چه نوعی است؟`,r,['قائم‌الزاویه','منفرجه (باز‌زاویه)','حاده (تیزه‌زاویه)','متساوی‌الاضلاع'].filter(v=>v!==r),`${a.includes(90)?'یک زاویه ۹۰ درجه است':Math.max(...a)>90?'یک زاویه از ۹۰ درجه بزرگ‌تر است':'همهٔ زاویه‌ها از ۹۰ درجه کمترند'}؛ پس ${r}.`)},
+    ()=>{const k=rn(3,15);return NUM(`در مثلثی با قاعدهٔ ${fa(2*k)}، پاره‌خطی که وسط دو ضلع دیگر را به هم وصل می‌کند با قاعده موازی است. طول آن چند است؟`,k,`پاره‌خط واصل وسط دو ضلع مثلث، نصف ضلع سوم است: ${fa(2*k)} ÷ ۲ = ${fa(k)}.`,[2*k,k+1,4*k])}
+  ];
+  V9Q[8][6]=[ /* توان و جذر */
+    ()=>{const a=rn(2,7),m=rn(2,8),n=rn(2,8);return NUM(`${E(fa(a)+'^'+fa(m)+' × '+fa(a)+'^'+fa(n)+' = '+fa(a)+'^؟')}`,m+n,`توان‌ها در ضرب هم‌پایه‌ها جمع می‌شوند: ${fa(m+n)}.`,[m*n,m+n+1,Math.abs(m-n)||m+n+2])},
+    ()=>{const a=rn(2,7),n=rn(2,5),m=n+rn(1,5);return NUM(`${E(fa(a)+'^'+fa(m)+' ÷ '+fa(a)+'^'+fa(n)+' = '+fa(a)+'^؟')}`,m-n,`در تقسیم هم‌پایه‌ها توان‌ها کم می‌شوند: ${fa(m)} − ${fa(n)} = ${fa(m-n)}.`,[m+n,m*n,m-n+1])},
+    ()=>{const a=rn(2,7),m=rn(2,5),n=rn(2,5);return NUM(`${E('('+fa(a)+'^'+fa(m)+')^'+fa(n)+' = '+fa(a)+'^؟')}`,m*n,`توان توان: توان‌ها ضرب می‌شوند: ${fa(m)}×${fa(n)} = ${fa(m*n)}.`,[m+n,m**n,m*n+1])},
+    ()=>{const a=rn(2,9),b=rn(2,5),c=rn(2,5);return NUM(`${E(fa(a)+'^۰ + '+fa(b)+'^۱ + '+fa(c)+'^۲ = ؟')}`,1+b+c*c,`هر عدد به توان صفر برابر ۱ است: ۱ + ${fa(b)} + ${fa(c*c)} = ${fa(1+b+c*c)}.`,[a+b+c*c,b+c*c,1+b*c])},
+    ()=>{const a=pk([2,3,5]),n=rn(2,3);return NUM(`${E(fa(a)+'^('+sg(-n)+') = ؟')} (به‌صورت کسر)`,frs(1,a**n),`توان منفی یعنی وارونه: ۱/${fa(a)}^${fa(n)} = ${D(frs(1,a**n))}.`,[frs(-1,a**n),frs(a,n),frs(1,a*n)])},
+    ()=>{const r=rn(2,15),s=rn(2,12);return NUM(`${E('√'+fa(r*r)+' + √'+fa(s*s)+' = ؟')}`,r+s,`${fa(r)} + ${fa(s)} = ${fa(r+s)}.`,[Math.sqrt(r*r+s*s)%1?r*r+s*s:r+s+1,r*s,r+s+2])},
+    ()=>{let n;do n=rn(10,200);while(Math.sqrt(n)%1===0);const k=Math.floor(Math.sqrt(n));return TXT(`${E('√'+fa(n))} بین کدام دو عدد صحیح متوالی است؟`,`${fa(k)} و ${fa(k+1)}`,[`${fa(k-1)} و ${fa(k)}`,`${fa(k+1)} و ${fa(k+2)}`,`${fa(k+2)} و ${fa(k+3)}`],`${fa(k*k)} < ${fa(n)} < ${fa((k+1)**2)}.`)},
+    ()=>{const m=rn(11,99),e=rn(3,7);return NUM(`عدد ${fa(m*10**(e-1))} را به نماد علمی ${E('a × ۱۰^n')} می‌نویسیم (۱ ≤ a < ۱۰). n چند است؟`,e,`عدد را به ${E(D((m/10).toString())+' × ۱۰^'+fa(e))} تبدیل می‌کنیم؛ پس n = ${fa(e)}.`,[e-1,e+1,e+2])}
+  ];
+  V9Q[8][7]=[ /* آمار و احتمال */
+    ()=>{for(let t=0;t<50;t++){const m=rn(5,20),L=[rn(1,30),rn(1,30),rn(1,30),rn(1,30),rn(1,30)],l=6*m-L.reduce((s,v)=>s+v,0);if(l>=1&&l<=30){return NUM(`میانگین داده‌های ${E(shuffle(L.concat(l)).map(fa).join(' ، '))} چند است؟`,m,`مجموع ${fa(6*m)} ÷ ۶ = ${fa(m)}.`,[m+1,m-1,6*m])}}return null},
+    ()=>{const k=pk([6,8]),s=new Set();while(s.size<k)s.add(rn(1,40));const L=shuffle([...s]),so=[...L].sort((a,b)=>a-b),md=(so[k/2-1]+so[k/2])/2;return NUM(`میانهٔ داده‌های ${E(L.map(fa).join(' ، '))} چند است؟`,md,`مرتب: ${E(so.map(fa).join(' ، '))}؛ میانگین دو عدد وسط = ${D(md)}.`,[so[k/2-1],so[k/2],md+1])},
+    ()=>{const m=rn(1,20),L=[m,m,m,m];while(L.length<9){const v=rn(1,20);if(v!==m&&L.filter(x=>x===v).length<2)L.push(v)}return NUM(`نمای (مد) داده‌های ${E(shuffle(L).map(fa).join(' ، '))} چند است؟`,m,`${fa(m)} بیشترین تکرار را دارد.`,L.filter(v=>v!==m).slice(0,3))},
+    ()=>{const r=rn(2,8),b=rn(2,8),g=rn(1,6),T=r+b+g,c=pk([['قرمز',r],['آبی',b],['سبز',g]]);return NUM(`در کیسه‌ای ${fa(r)} مهرهٔ قرمز، ${fa(b)} آبی و ${fa(g)} سبز است. احتمال اینکه مهره «${c[0]}» نباشد چه کسری است؟ (ساده‌شده)`,frs(T-c[1],T),`احتمال «نبودن» = ۱ − احتمال بودن = ${D(frs(T-c[1],T))}.`,[frs(c[1],T),frs(T-c[1],T-1),frs(c[1],T-c[1])])},
+    ()=>{const a=rn(2,5),b=rn(2,4),c=rn(2,4);return NUM(`با ${fa(a)} پیراهن، ${fa(b)} شلوار و ${fa(c)} کفش چند ست کامل می‌توان ساخت؟`,a*b*c,`اصل ضرب: ${fa(a)}×${fa(b)}×${fa(c)} = ${fa(a*b*c)}.`,[a+b+c,a*b+c,a*b*c+a])},
+    ()=>{const s=rn(2,12),w=6-Math.abs(s-7);return NUM(`دو تاس سالم را می‌اندازیم. احتمال اینکه مجموع دو عدد برابر ${fa(s)} باشد چه کسری است؟ (ساده‌شده)`,frs(w,36),`${fa(w)} حالت از ۳۶ حالت: ${D(frs(w,36))}.`,[frs(w+1,36),frs(w,12),frs(1,36)])},
+    ()=>{const m=rn(4,12),L=[rn(1,15),rn(1,15),rn(1,15)],l=4*m-L.reduce((s,v)=>s+v,0);if(l<1)return null;return NUM(`میانگین چهار عدد ${fa(m)} است. سه عدد ${E(L.map(fa).join(' ، '))} هستند. عدد چهارم چند است؟`,l,`مجموع چهار عدد ${fa(4*m)} است: ${fa(4*m)} − ${fa(L.reduce((s,v)=>s+v,0))} = ${fa(l)}.`,[m,l+1,l-1])},
+    ()=>{const n=rn(2,5);return NUM(`یک تاس و یک سکه را با هم می‌اندازیم. چند حالت ممکن است؟`,12,'۶ حالت تاس × ۲ حالت سکه = ۱۲.',[8,6,36])}
+  ];
+
+  /* ---------------- پایهٔ نهم ---------------- */
+  const subset=(U,k)=>shuffle(U).slice(0,k).sort((a,b)=>a-b);
+  const U9=[1,2,3,4,5,6,7,8,9];
+  V9Q[9][0]=[ /* مجموعه‌ها */
+    ()=>{const a=rn(5,12),b=rn(5,12),c=rn(1,Math.min(a,b)-1);return NUM(`اگر ${E('n(A) = '+fa(a))}، ${E('n(B) = '+fa(b))} و ${E('n(A∩B) = '+fa(c))} باشد، ${E('n(A∪B)')} چند است؟`,a+b-c,`n(A∪B) = n(A) + n(B) − n(A∩B) = ${fa(a)} + ${fa(b)} − ${fa(c)} = ${fa(a+b-c)}.`,[a+b,a+b+c,Math.abs(a-b)])},
+    ()=>{const n=rn(2,6);return NUM(`یک مجموعهٔ ${fa(n)}عضوی چند زیرمجموعه دارد؟`,2**n,`تعداد زیرمجموعه‌ها ۲ به توان تعداد عضوهاست: ۲^${fa(n)} = ${fa(2**n)}.`,[2*n,n*n,2**n-1])},
+    ()=>{const n=rn(2,5);return NUM(`یک مجموعهٔ ${fa(n)}عضوی چند زیرمجموعهٔ سره (غیر از خودش) دارد؟`,2**n-1,`کل زیرمجموعه‌ها ۲^${fa(n)} = ${fa(2**n)} است و خود مجموعه سره نیست: ${fa(2**n-1)}.`,[2**n,2**n-2,2*n-1])},
+    ()=>{const A=subset(U9,rn(4,6)),B=subset(U9,rn(4,6)),I=A.filter(x=>B.includes(x));if(!I.length||I.length===A.length||I.length===B.length)return null;const Uu=[...new Set(A.concat(B))].sort((a,b)=>a-b),d1=A.filter(x=>!B.includes(x)),d2=B.filter(x=>!A.includes(x));return TXT(`اگر ${E('A = '+setS(A))} و ${E('B = '+setS(B))} باشد، ${E('A ∩ B')} کدام است؟`,setS(I),[setS(Uu),setS(d1),setS(d2)],'اشتراک شامل عضوهایی است که هم در A و هم در B باشند.')},
+    ()=>{const A=subset(U9,rn(4,6)),B=subset(U9,rn(4,6)),u=new Set(A.concat(B));return NUM(`اگر ${E('A = '+setS(A))} و ${E('B = '+setS(B))}، ${E('n(A ∪ B)')} چند است؟`,u.size,`عضوهای مشترک را یک‌بار می‌شماریم: ${fa(u.size)}.`,[A.length+B.length===u.size?u.size+1:A.length+B.length,u.size-1,u.size+2])},
+    ()=>{const A=subset(U9,rn(4,6)),B=subset(U9,rn(4,6)),d=A.filter(x=>!B.includes(x)),I=A.filter(x=>B.includes(x));if(!d.length||!I.length)return null;const Uu=[...new Set(A.concat(B))].sort((a,b)=>a-b);return TXT(`اگر ${E('A = '+setS(A))} و ${E('B = '+setS(B))} باشد، ${E('A − B')} کدام است؟`,setS(d),[setS(B.filter(x=>!A.includes(x)).length?B.filter(x=>!A.includes(x)):[0]),setS(I),setS(Uu)],'A − B عضوهایی از A است که در B نیستند.')},
+    ()=>{const A=subset(U9,rn(4,6)),good=subset(A,rn(1,3)),out=U9.filter(x=>!A.includes(x));const bad=[0,1,2].map(()=>{const s=subset(A,rn(1,2));s.push(pk(out));return s.sort((a,b)=>a-b)});const strs=new Set(bad.map(setS));if(strs.size<3)return null;return TXT(`اگر ${E('A = '+setS(A))} باشد، کدام مجموعه زیرمجموعهٔ A است؟`,setS(good),[...strs],'زیرمجموعه فقط عضوهایی دارد که در A هستند.')},
+    ()=>{const n=rn(8,12),a=rn(2,n-2);return NUM(`مجموعهٔ مرجع ${E('U = {۱ , ۲ , … , '+fa(n)+'}')} و ${E('n(A) = '+fa(a))} است. ${E('n(A′)')} (مکمل A) چند است؟`,n-a,`مکمل شامل عضوهای U است که در A نیستند: ${fa(n)} − ${fa(a)} = ${fa(n-a)}.`,[a,n,n+a])},
+    ()=>{const a=rn(1,8),b=a+rn(3,9);return NUM(`مجموعهٔ اعداد طبیعی بین ${fa(a)} و ${fa(b)} چند عضو دارد؟`,b-a-1,`عددهای ${fa(a+1)} تا ${fa(b-1)}: ${fa(b-a-1)} عدد.`,[b-a,b-a+1,b-a-2])}
+  ];
+  V9Q[9][1]=[ /* عددهای حقیقی */
+    ()=>{const irr=pk([2,3,5,6,7,10,11,12,13]),rat=shuffle([4,9,16,25,36,49]).slice(0,2).map(v=>E('√'+fa(v))).concat([E('۰٫۲۵')]);return TXT('کدام عدد گنگ (غیرگویا) است؟',E('√'+fa(irr)),rat,`جذر عددی که مربع کامل نیست گنگ است: ${E('√'+fa(irr))}؛ بقیه گویا هستند.`)},
+    ()=>{const r=pk([4,9,16,25,36,49,64,81]),irr=shuffle([2,3,5,6,7,10,11,12]).slice(0,3).map(v=>E('√'+fa(v)));return TXT('کدام عدد گویا است؟',E('√'+fa(r)),irr,`${E('√'+fa(r))} = ${fa(Math.sqrt(r))} یک عدد صحیح و در نتیجه گویاست.`)},
+    ()=>{const a=rn(2,5),b=pk([2,3,5,6,7]);if(a===b)return null;return TXT(`${E('√'+fa(a*a*b))} را ساده کن.`,E(fa(a)+'√'+fa(b)),[E(fa(b)+'√'+fa(a)),E(fa(a*a)+'√'+fa(b)),E(fa(a)+'√'+fa(a*b))],`${fa(a*a*b)} = ${fa(a*a)} × ${fa(b)} و جذر ${fa(a*a)} برابر ${fa(a)} است.`)},
+    ()=>{let n;do n=rn(5,90);while(Math.sqrt(n)%1===0);const k=Math.floor(Math.sqrt(n));return TXT(`${E('√'+fa(n))} بین کدام دو عدد صحیح متوالی است؟`,`${fa(k)} و ${fa(k+1)}`,[`${fa(k-1)} و ${fa(k)}`,`${fa(k+1)} و ${fa(k+2)}`,`${fa(k+2)} و ${fa(k+3)}`],`${fa(k*k)} < ${fa(n)} < ${fa((k+1)**2)}.`)},
+    ()=>{const d=rn(1,8);return NUM(`عدد ${E('۰٫'+fa(d)+'…')} (رقم ${fa(d)} تا بی‌نهایت تکرار می‌شود) برابر کدام کسر است؟`,frs(d,9),`هر رقم تکراری بعد از ممیز: رقم ÷ ۹ → ${D(frs(d,9))}.`,[frs(d,10),frs(d,99),frs(1,d)])},
+    ()=>{const pool=[['√۲',1.414],['√۳',1.732],['√۵',2.236],['۱٫۴',1.4],['۳/۲',1.5],['۲٫۲',2.2],['√۶',2.449],['۷/۳',2.333],['π',3.1416],['۳٫۱',3.1],['√۱۰',3.162],['۱٫۶',1.6]],L=shuffle(pool).slice(0,4);const mx=Math.random()<.5,t=mx?Math.max(...L.map(x=>x[1])):Math.min(...L.map(x=>x[1])),a=L.find(x=>x[1]===t);return TXT(`کدام عدد از همه ${mx?'بزرگ‌تر':'کوچک‌تر'} است؟`,E(a[0]),L.filter(x=>x!==a).map(x=>E(x[0])),`مقدار تقریبی را حساب می‌کنیم؛ ${a[0]} برابر حدود ${D(String(a[1]))} است.`)},
+    ()=>{const k=pk([2,3,5,6]),m=rn(2,4);return NUM(`${E('√'+fa(k)+' × √'+fa(k*m*m)+' = ؟')}`,k*m,`${E('√'+fa(k)+' × √'+fa(k*m*m)+' = √'+fa(k*k*m*m))} = ${fa(k*m)}.`,[k*m*m,k+m,k*m+1])},
+    ()=>{const a=rn(2,9),b=rn(2,9),c=rn(2,9);return TXT(`کدام برابر ${E(fa(a)+'√'+fa(c)+' + '+fa(b)+'√'+fa(c))} است؟`,E(fa(a+b)+'√'+fa(c)),[E(fa(a*b)+'√'+fa(c)),E(fa(a+b)+'√'+fa(c*c)),E('√'+fa((a+b)*c))],`ضریب‌های √${fa(c)} را جمع می‌کنیم: ${fa(a)} + ${fa(b)} = ${fa(a+b)}.`)}
+  ];
+  V9Q[9][2]=[ /* استدلال و اثبات در هندسه */
+    ()=>{const a=rn(30,80),b=rn(30,80);return NUM(`در مثلثی دو زاویهٔ داخلی ${fa(a)} و ${fa(b)} درجه است. زاویهٔ خارجی در رأس سوم چند درجه است؟`,a+b,`قضیهٔ زاویهٔ خارجی: برابر مجموع دو زاویهٔ داخلی غیرمجاور = ${fa(a+b)}.`)},
+    ()=>{const a=rn(40,140,1);return NUM(`دو خط موازی را خط موربی قطع کرده است. یک زاویه ${fa(a)} درجه است. زاویهٔ هم‌ردیف داخلی آن (در همان سمت مورب، بین دو خط) چند درجه است؟`,180-a,`زاویه‌های داخلی هم‌ردیف مکمل‌اند: ۱۸۰ − ${fa(a)} = ${fa(180-a)}.`,[a,90-a>0?90-a:a+20,360-a])},
+    ()=>{const a=rn(40,140,1);return NUM(`دو خط موازی را خط موربی قطع کرده است. زاویه‌ای ${fa(a)} درجه است. زاویهٔ متبادل داخلی آن چند درجه است؟`,a,`زاویه‌های متبادل داخلی با هم برابرند: ${fa(a)}.`,[180-a,90-a>0?90-a:a+20,a+10])},
+    ()=>{const a=rn(50,130);const opp=Math.random()<.5;return NUM(`در یک متوازی‌الاضلاع یک زاویه ${fa(a)} درجه است. زاویهٔ ${opp?'روبه‌رو':'مجاور'} به آن چند درجه است؟`,opp?a:180-a,opp?`زاویه‌های روبه‌رو در متوازی‌الاضلاع برابرند: ${fa(a)}.`:`زاویه‌های مجاور مکمل‌اند: ۱۸۰ − ${fa(a)} = ${fa(180-a)}.`)},
+    ()=>{const c=pk([['سه ضلع دو مثلث با هم برابرند','ض ض ض'],['دو ضلع و زاویهٔ بین آن‌ها در دو مثلث برابرند','ض ز ض'],['دو زاویه و ضلع بین آن‌ها در دو مثلث برابرند','ز ض ز']]);return TXT(`${c[0]}. این دو مثلث طبق کدام حالت همنهشت‌اند؟`,c[1],['ض ض ض','ض ز ض','ز ض ز','ض ض ز (ضلع ضلع زاویهٔ غیر بین)'].filter(v=>v!==c[1]),'حالت‌های همنهشتی مثلث‌ها: ض‌ض‌ض، ض‌ز‌ض و ز‌ض‌ز.')},
+    ()=>{if(Math.random()<.5){const b=rn(35,80);return NUM(`در یک مثلث متساوی‌الساقین زاویه‌های قاعده ${fa(b)} درجه‌اند. زاویهٔ رأس چند درجه است؟`,180-2*b,`۱۸۰ − ${fa(2*b)} = ${fa(180-2*b)}.`)}const r=rn(6,16)*4;return NUM(`در مثلث متساوی‌الساقین زاویهٔ رأس ${fa(r)} درجه است. هر زاویهٔ قاعده چند درجه است؟`,(180-r)/2,`زاویه‌های قاعده برابرند: (۱۸۰ − ${fa(r)}) ÷ ۲ = ${fa((180-r)/2)}.`)},
+    ()=>{const ts=[[3,4,5],[5,12,13],[8,15,17],[6,8,10],[7,24,25],[9,12,15],[20,21,29]],t=pk(ts).map(v=>v*pk([1,1,2])),ok=t.slice(),w=[0,1,2].map(()=>{const x=pk(ts),k=pk([1,2]);return[x[0]*k,x[1]*k,x[2]*k+rn(1,2)]}),s=a=>E(a.map(fa).join(' ، '));const strs=[...new Set(w.map(s))].filter(v=>v!==s(ok));if(strs.length<3)return null;return TXT('کدام سه عدد می‌تواند ضلع‌های یک مثلث قائم‌الزاویه باشد؟',s(ok),strs,'باید مربع بزرگ‌ترین عدد برابر مجموع مربع‌های دو عدد دیگر باشد (عکس قضیهٔ فیثاغورس).')},
+    ()=>{let a,b,c,x;do{a=rn(1,4);b=rn(1,4);c=rn(1,4);x=180/(a+b+c)}while(180%(a+b+c));const m=Math.max(a,b,c);return NUM(`زاویه‌های یک مثلث ${E(fa(a)+'x ، '+fa(b)+'x ، '+fa(c)+'x')} هستند. بزرگ‌ترین زاویه چند درجه است؟`,m*x,`مجموع: ${fa(a+b+c)}x = ۱۸۰ پس x = ${fa(x)}؛ بزرگ‌ترین زاویه ${fa(m)}×${fa(x)} = ${fa(m*x)}.`,[x,180-m*x,m*x+10])}
+  ];
+  V9Q[9][3]=[ /* توان و ریشه */
+    ()=>{const a=rn(2,5),n=rn(2,3);return NUM(`${E(fa(a)+'^('+sg(-n)+') = ؟')} (به‌صورت کسر)`,frs(1,a**n),`${fa(a)}^${sg(-n)} = ۱ ÷ ${fa(a)}^${fa(n)} = ${D(frs(1,a**n))}.`,[frs(-1,a**n),frs(1,a*n),frs(a,n)])},
+    ()=>{const a=rn(2,6),m=rn(-3,6),n=rn(-3,6);return NUM(`${E(fa(a)+'^'+ex(m)+' × '+fa(a)+'^'+ex(n)+' = '+fa(a)+'^؟')}`,m+n,`توان‌ها جمع می‌شوند: ${sg(m)} + ${P(n)} = ${D(m+n)}.`,[m*n,m-n,m+n+1].filter(v=>v!==m+n))},
+    ()=>{const a=rn(2,6),m=rn(2,5),n=rint(-3,4,1);return NUM(`${E('('+fa(a)+'^'+fa(m)+')^'+ex(n)+' = '+fa(a)+'^؟')}`,m*n,`توان‌ها ضرب می‌شوند: ${fa(m)}×${P(n)} = ${D(m*n)}.`,[m+n,-m*n,m*n+1].filter(v=>v!==m*n))},
+    ()=>{const k=rn(2,6);return NUM(`ریشهٔ سوم ${fa(k**3)} چند است؟`,k,`${fa(k)}×${fa(k)}×${fa(k)} = ${fa(k**3)}.`,[k*k,k+1,k**3/3|0])},
+    ()=>{const k=rn(2,6),r=rn(2,9);return NUM(`${E('∛'+fa(k**3)+' + √'+fa(r*r)+' = ؟')}`,k+r,`${fa(k)} + ${fa(r)} = ${fa(k+r)}.`,[k*r,k+r+1,k**3+r*r])},
+    ()=>{const a=rn(2,9),e=rn(2,5);return NUM(`${E(fa(a)+' × ۱۰^'+fa(e)+' = ؟')}`,a*10**e,`عدد ${fa(a)} را با ${fa(e)} صفر می‌نویسیم: ${fa(a*10**e)}.`,[a*10**(e-1),a*10**(e+1),a*e])},
+    ()=>{const a=rn(2,9),e=rn(2,4);return NUM(`${E(fa(a)+' × ۱۰^('+sg(-e)+') = ؟')} (به‌صورت عدد اعشاری)`,(a/10**e).toFixed(e),`ممیز را ${fa(e)} رقم به چپ می‌بریم: ${D((a/10**e).toFixed(e))}.`,[(a/10**(e-1)).toFixed(e-1),(a/10**(e+1)).toFixed(e+1),a*10**e])},
+    ()=>{const a=pk([2,3,5]),k=rn(2,6);return NUM(`اگر ${E(fa(a)+'^x = '+fa(a**k))} باشد، x چند است؟`,k,`${fa(a**k)} = ${fa(a)}^${fa(k)}؛ پس x = ${fa(k)}.`,[k+1,k-1,a**k/a|0])}
+  ];
+  V9Q[9][4]=[ /* عبارت‌های جبری */
+    ()=>{const a=rn(2,9);return TXT(`بسط ${E('(x + '+fa(a)+')²')} کدام است؟`,E('x² + '+fa(2*a)+'x + '+fa(a*a)),[E('x² + '+fa(a*a)),E('x² + '+fa(a)+'x + '+fa(a*a)),E('x² + '+fa(2*a)+'x + '+fa(2*a))],'اتحاد مربع دوجمله‌ای: (a+b)² = a² + 2ab + b².')},
+    ()=>{const a=rn(2,9);return TXT(`بسط ${E('(x − '+fa(a)+')(x + '+fa(a)+')')} کدام است؟`,E('x² − '+fa(a*a)),[E('x² + '+fa(a*a)),E('x² − '+fa(2*a)+'x + '+fa(a*a)),E('x² − '+fa(a))],'اتحاد مزدوج: (a−b)(a+b) = a² − b².')},
+    ()=>{const a=rn(1,6),b=rn(a+1,9);return TXT(`تجزیهٔ ${E('x² + '+fa(a+b)+'x + '+fa(a*b))} کدام است؟`,E('(x + '+fa(a)+')(x + '+fa(b)+')'),[E('(x − '+fa(a)+')(x + '+fa(b)+')'),E('(x − '+fa(a)+')(x − '+fa(b)+')'),E('(x + '+fa(a*b)+')(x + ۱)')],`دو عدد پیدا می‌کنیم که حاصل‌ضربشان ${fa(a*b)} و مجموعشان ${fa(a+b)} باشد: ${fa(a)} و ${fa(b)}.`)},
+    ()=>{const k=rn(2,6),p=rn(2,5),q=rn(1,6);if(p===q||k===p)return null;return TXT(`با فاکتورگیری از ${E(fa(k*p)+'x + '+fa(k*q))} کدام به دست می‌آید؟`,E(fa(k)+'('+fa(p)+'x + '+fa(q)+')'),[E(fa(p)+'('+fa(k)+'x + '+fa(q)+')'),E(fa(k)+'('+fa(p)+'x + '+fa(k*q)+')'),E(fa(k)+'('+fa(q)+'x + '+fa(p)+')')],`از هر دو جمله ${fa(k)} را بیرون می‌آوریم.`)},
+    ()=>{const a=rn(1,6),b=rn(1,6);return NUM(`مقدار ${E('(x + '+fa(a)+')²')} به ازای x = ${fa(b)} چند است؟`,(a+b)**2,`${fa(b)} + ${fa(a)} = ${fa(a+b)} و مربعش ${fa((a+b)**2)}.`,[a*a+b*b,(a+b)*2,a*a+b])},
+    ()=>{const m=rn(41,49),n=100-m;return NUM(`حاصل ${E(fa(n)+'² − '+fa(m)+'²')} را با اتحاد مزدوج حساب کن.`,(n+m)*(n-m),`(${fa(n)}+${fa(m)})(${fa(n)}−${fa(m)}) = ۱۰۰ × ${fa(n-m)} = ${fa(100*(n-m))}.`,[(n-m)**2,n*n-m,100*(n+m)])},
+    ()=>{const a=rint(-6,6,1),b=rint(-6,6,1);return NUM(`ضریب x در بسط ${E('('+xp(a)+')('+xp(b)+')')} چند است؟`,a+b,`ضریب x برابر مجموع دو عدد است: ${D(a+b)}.`,[a*b,a+b+1,a-b].filter(v=>v!==a+b))},
+    ()=>{const a=rn(2,6),b=rn(2,6);return TXT(`حاصل ${E('('+fa(a)+'x)('+fa(b)+'x²)')} کدام است؟`,E(fa(a*b)+'x³'),[E(fa(a+b)+'x³'),E(fa(a*b)+'x²'),E(fa(a+b)+'x²')],'ضریب‌ها ضرب و توان‌های x جمع می‌شوند.')}
+  ];
+  V9Q[9][5]=[ /* خط و معادله‌های خطی */
+    ()=>{const x1=rn(-4,3),y1=rn(-5,5),dx=rn(1,4),dy=rint(-8,8,1),x2=x1+dx,y2=y1+dy;return NUM(`شیب خطی که از دو نقطهٔ ${pt(x1,y1)} و ${pt(x2,y2)} می‌گذرد چند است؟`,frs(dy,dx),`شیب = تغییر y ÷ تغییر x = ${sg(dy)} ÷ ${fa(dx)} = ${D(frs(dy,dx))}.`,[frs(dx,dy),frs(-dy,dx),frs(dy+1,dx)])},
+    ()=>{const m=rint(-5,5,1),b=rint(-7,7,1),sl=Math.random()<.5;return NUM(`در خط ${E('y = '+lin(m,b).replace('x','x'))} ${sl?'شیب':'عرض از مبدأ'} چند است؟`,sl?m:b,sl?`ضریب x شیب است: ${D(m)}.`:`عدد ثابت، عرض از مبدأ است: ${D(b)}.`)},
+    ()=>{const m=rint(-4,4,1),b=rint(-6,6,1),x=rn(-4,4),y=m*x+b,w=[pt(x,y+1),pt(x,y-1),pt(x+1,y+m+(m===1?1:0))];const strs=[...new Set(w)].filter(v=>v!==pt(x,y));if(strs.length<3)strs.push(pt(x+2,y));return TXT(`کدام نقطه روی خط ${E('y = '+lin(m,b))} قرار دارد؟`,pt(x,y),strs.slice(0,3),`x = ${sg(x)} را در معادله می‌گذاریم: y = ${D(y)}.`)},
+    ()=>{const m=rint(-5,5,1),b=rint(-6,6,1),x=rn(-5,5);return NUM(`اگر ${E('y = '+lin(m,b))} باشد، به ازای x = ${sg(x)} مقدار y چند است؟`,m*x+b,`${P(m)}×${P(x)} + ${P(b)} = ${D(m*x+b)}.`)},
+    ()=>{const x0=rint(-6,6,1),m=rn(1,4),b=-m*x0;return NUM(`خط ${E('y = '+lin(m,b))} محور x‌ها را در چه طولی قطع می‌کند؟`,x0,`y = ۰ قرار می‌دهیم: ${D(m)}x ${b<0?'−':'+'} ${fa(Math.abs(b))} = ۰ پس x = ${D(x0)}.`,[b,-x0,x0+1])},
+    ()=>{const x=rn(1,9),y=rn(1,9),s=x+y,d=x-y,v=Math.random()<.5;return NUM(`دستگاه ${E('x + y = '+fa(s))} و ${E('x − y = '+sg(d))} را حل کن. ${v?'x':'y'} چند است؟`,v?x:y,`جمع دو معادله: ۲x = ${fa(s+d)} پس x = ${fa(x)} و y = ${fa(y)}.`)},
+    ()=>{const m=rint(-4,4,1),b=rint(-5,5,1),b2=b+rn(1,4),ms=[...new Set([m+1,m-1,-m,m+2])].filter(v=>v!==m&&v!==0).slice(0,3);if(ms.length<3)return null;return TXT(`کدام خط با خط ${E('y = '+lin(m,b))} موازی است؟`,E('y = '+lin(m,b2)),ms.map(v=>E('y = '+lin(v,b))),'خط‌های موازی شیب برابر دارند.')},
+    ()=>{const k=rint(-6,6,1),x=rn(2,7);return NUM(`خط ${E('y = kx')} از نقطهٔ ${pt(x,k*x)} می‌گذرد. k چند است؟`,k,`k = y ÷ x = ${sg(k*x)} ÷ ${fa(x)} = ${D(k)}.`,[x,k*x,-k])}
+  ];
+  V9Q[9][6]=[ /* عبارت‌های گویا */
+    ()=>{const p=rn(1,7),q=rn(2,9);if(gd(p,q)!==1||p===q)return null;const g=rn(2,5);return NUM(`عبارت ${E('('+fa(p*g)+'x)/('+fa(q*g)+'x)')} را ساده کن (x ≠ ۰). حاصل چه کسری است؟`,frs(p,q),`x را حذف و بعد بر ${fa(g)} ساده می‌کنیم: ${D(frs(p,q))}.`,[frs(q,p),frs(p*g,q),frs(p,q+1)])},
+    ()=>{const a=rn(1,9),pl=Math.random()<.5;return NUM(`عبارت ${E('۱/(x '+(pl?'+':'−')+' '+fa(a)+')')} به ازای چه x تعریف نشده است؟`,pl?-a:a,`مخرج صفر می‌شود وقتی x ${pl?'+':'−'} ${fa(a)} = ۰ یعنی x = ${D(pl?-a:a)}.`,[pl?a:-a,0,a+1])},
+    ()=>{const a=rn(1,6),b=rn(1,6),k=rn(b+1,b+8);return NUM(`مقدار ${E('(x + '+fa(a)+')/(x − '+fa(b)+')')} به ازای x = ${fa(k)} چه کسری است؟ (ساده‌شده)`,frs(k+a,k-b),`به‌جای x عدد ${fa(k)} را می‌گذاریم: (${fa(k)}+${fa(a)})/(${fa(k)}−${fa(b)}) = ${D(frs(k+a,k-b))}.`,[frs(k-a,k+b),frs(k+a,k+b),frs(k+a+1,k-b)])},
+    ()=>{const a=rn(1,6),k=rn(a+1,a+7);return NUM(`مقدار ${E('(x² − '+fa(a*a)+')/(x − '+fa(a)+')')} به ازای x = ${fa(k)} چند است؟`,k+a,`صورت را تجزیه می‌کنیم: (x−${fa(a)})(x+${fa(a)}) و ساده می‌کنیم: x + ${fa(a)} = ${fa(k+a)}.`,[k-a,k*k-a*a,k])},
+    ()=>{const a=rn(2,9),b=rn(2,9);if(a===b)return null;return NUM(`${E('۱/'+fa(a)+' + ۱/'+fa(b)+' = ؟')} (ساده‌شده)`,frs(a+b,a*b),`مخرج مشترک ${fa(a*b)}: ${q2(b,a*b)} + ${q2(a,a*b)} = ${D(frs(a+b,a*b))}.`,[frs(2,a+b),frs(1,a+b),frs(a*b,a+b)])},
+    ()=>{const a=rn(1,6),b=rn(2,8),c=rn(2,9);if(a===c)return null;return NUM(`${E(q2(a,b)+' × '+q2(b,c)+' = ؟')} (ساده‌شده)`,frs(a,c),`${fa(b)} در صورت و مخرج ساده می‌شود: ${D(frs(a,c))}.`,[frs(a*b,b*c)===frs(a,c)?frs(a+1,c):frs(a*b,b*c),frs(a,b),frs(c,a)])},
+    ()=>{const a=rn(2,9),b=rn(2,9);return TXT(`حاصل ${E(fa(a)+'/x + '+fa(b)+'/x')} کدام است؟`,E(fa(a+b)+'/x'),[E(fa(a+b)+'/'+fa(2)+'x'),E(fa(a*b)+'/x'),E(fa(a+b)+'/x²')],'مخرج‌ها برابرند؛ صورت‌ها را جمع می‌کنیم و مخرج را نگه می‌داریم.')},
+    ()=>{for(let t=0;t<100;t++){const m=rn(2,9),n=rn(1,5),p=rn(2,6);if((m*p)%n===0){const x=m*p/n;return NUM(`معادلهٔ ${E(fa(m)+'/x = '+fa(n)+'/'+fa(p))} را حل کن: x = ؟`,x,`ضرب طرفین به وسطین: ${fa(n)}x = ${fa(m*p)} پس x = ${fa(x)}.`,[m*n,x+1,m+p])}}return null}
+  ];
+  V9Q[9][7]=[ /* حجم و مساحت (با π = ۳) */
+    ()=>{const r=rn(1,6),h=rn(2,9);return NUM(`حجم استوانه‌ای به شعاع ${fa(r)} و ارتفاع ${fa(h)} چند است؟ (π را ۳ بگیر)`,3*r*r*h,`حجم = π r² h = ۳ × ${fa(r*r)} × ${fa(h)} = ${fa(3*r*r*h)}.`,[6*r*h,3*r*h,r*r*h])},
+    ()=>{const r=rn(1,6),h=rn(2,9);return NUM(`مساحت جانبی استوانه‌ای به شعاع ${fa(r)} و ارتفاع ${fa(h)} چند است؟ (π را ۳ بگیر)`,6*r*h,`مساحت جانبی = ۲πrh = ۲×۳×${fa(r)}×${fa(h)} = ${fa(6*r*h)}.`,[3*r*r*h,3*r*h,6*r*r])},
+    ()=>{const r=rn(1,6),h=rn(2,9);return NUM(`حجم مخروطی به شعاع قاعدهٔ ${fa(r)} و ارتفاع ${fa(h)} چند است؟ (π را ۳ بگیر)`,r*r*h,`حجم = ⅓ π r² h = ⅓ × ۳ × ${fa(r*r)} × ${fa(h)} = ${fa(r*r*h)}.`,[3*r*r*h,r*h,r*r*h*3/2])},
+    ()=>{const r=rn(1,5),v=Math.random()<.5;return NUM(`${v?'حجم':'مساحت'} کره‌ای به شعاع ${fa(r)} چند است؟ (π را ۳ بگیر)`,v?4*r**3:12*r*r,v?`حجم کره = ۴/۳ π r³ = ۴/۳×۳×${fa(r**3)} = ${fa(4*r**3)}.`:`مساحت کره = ۴π r² = ۴×۳×${fa(r*r)} = ${fa(12*r*r)}.`,v?[12*r*r,4*r*r,3*r**3]:[4*r**3,6*r*r,3*r*r])},
+    ()=>{const a=rn(2,8),h=rn(1,5)*3;return NUM(`حجم هرمی با قاعدهٔ مربع به ضلع ${fa(a)} و ارتفاع ${fa(h)} چند است؟`,a*a*h/3,`حجم = ⅓ × مساحت قاعده × ارتفاع = ⅓ × ${fa(a*a)} × ${fa(h)} = ${fa(a*a*h/3)}.`,[a*a*h,a*h/3,a*a*h/2])},
+    ()=>{const b=rn(2,5)*2,h=rn(2,9),H=rn(3,9);return NUM(`قاعدهٔ منشوری مثلثی با قاعده ${fa(b)} و ارتفاع ${fa(h)} است و ارتفاع منشور ${fa(H)}. حجم چند است؟`,b*h/2*H,`مساحت قاعده ${fa(b*h/2)}؛ حجم = ${fa(b*h/2)} × ${fa(H)} = ${fa(b*h/2*H)}.`,[b*h*H,b*h/2+H,b*h*H/3])},
+    ()=>{const t=pk([[1,2,2,3],[2,3,6,7],[2,6,9,11],[1,4,8,9],[4,4,7,9]]);return NUM(`قطر مکعب‌مستطیلی با ابعاد ${fa(t[0])}، ${fa(t[1])} و ${fa(t[2])} چند است؟`,t[3],`قطر = √(${fa(t[0]**2)} + ${fa(t[1]**2)} + ${fa(t[2]**2)}) = √${fa(t[3]**2)} = ${fa(t[3])}.`,[t[0]+t[1]+t[2],t[3]+1,t[3]-1])},
+    ()=>{const a=rn(2,7),b=rn(2,7),c=rn(2,7);return NUM(`مساحت کل مکعب‌مستطیلی با ابعاد ${fa(a)}، ${fa(b)} و ${fa(c)} چند است؟`,2*(a*b+b*c+a*c),`۲(ab + bc + ac) = ۲ × ${fa(a*b+b*c+a*c)} = ${fa(2*(a*b+b*c+a*c))}.`,[a*b*c,a*b+b*c+a*c,2*a*b*c])},
+    ()=>{const k=rn(2,4);return NUM(`اگر شعاع یک استوانه ${fa(k)} برابر شود و ارتفاعش ثابت بماند، حجم چند برابر می‌شود؟`,k*k,`حجم با مربع شعاع متناسب است: ${fa(k)}² = ${fa(k*k)}.`,[k,2*k,k**3])}
+  ];
+
+  /* ===================== ساخت کارت و موتور درس (Lesson) ===================== */
+  const norm=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[−–—‑]/g,'-').replace(/[٫,،]/g,'.').replace(/[÷⁄∕]/g,'/').replace(/\s+/g,'');
+  const val=s=>{s=norm(s);let m;if(/^-?\d+(\.\d+)?$/.test(s))return +s;if(m=s.match(/^(-?\d+)\/(\d+)$/))return +m[2]?(+m[1])/(+m[2]):NaN;return NaN};
+  const same=(u,a)=>{const x=norm(u),y=norm(a);if(!x)return false;if(x===y)return true;const p=val(x),q=val(y);return isFinite(p)&&isFinite(q)&&Math.abs(p-q)<1e-9};
+  function mkCard(t,o){
+    o=o||{};if(!t)return null;
+    if(t.shape){if(o.noShape)return null;const ids=[t.a].concat(t.w);if(new Set(ids).size<4)return null;
+      return{type:'shape',q:t.q,opts:shuffle(ids).map(id=>({id,ok:id===t.a})),hint:t.hint}}
+    const txt=x=>t.num?D(x):x,seen=new Set([txt(t.a)]);
+    let w=(t.w||[]).map(String);if(t.num)w=w.concat(nd(t.a));
+    w=w.filter(x=>{if(x==='NaN'||(t.num&&same(x,t.a)))return false;const k=txt(x);if(seen.has(k))return false;seen.add(k);return true});
+    if(w.length<3)return null;
+    if(t.num&&!o.mcq&&Math.random()<.45)return{type:'num',q:t.q,a:t.a,hint:t.hint};
+    return{type:'mcq',q:t.q,opts:shuffle([t.a].concat(shuffle(w).slice(0,3))).map(x=>({t:txt(x),ok:x===t.a})),hint:t.hint};
   }
-  function pqShow(){
-    const q=PQ.q[PQ.k],n=PQ.q.length,me=PQ;
-    $('#pqBox').innerHTML=`<div class="lgh"><b>📘 درس ${fa(PQ.j+1)} • فصل ${fa(PQ.i+1)}</b><button type="button" class="btn sm gh" id="pqX" aria-label="خروج از درس" style="min-height:44px">✕ خروج</button></div>
-    <div class="bar" style="margin:8px 0"><i style="width:${PQ.k/n*100}%"></i></div><p class="muted" style="font-size:14px">سؤال ${fa(PQ.k+1)} از ${fa(n)}</p>
-    <h3 style="font-size:20px;margin:8px 0;line-height:1.9">${esc(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}">${esc(o.t)}</button>`).join('')}</div><div class="msg" id="pqM" style="min-height:44px"></div>`;
-    $('#pqX').onclick=()=>{PQ=null;go('path')};
-    $$('#pqBox .opt').forEach(b=>b.onclick=()=>{
-      if(PQ!==me||me.lock)return;me.lock=true;const ok=!!q.opts[+b.dataset.k].ok;recW(me.g,q,ok);
-      $$('#pqBox .opt').forEach(x=>{x.disabled=true;if(q.opts[+x.dataset.k].ok)x.classList.add('ok')});
-      if(ok){me.ok++;SFX.ok();$('#pqM').textContent='✅ درست!'}else{SFX.err();b.classList.add('no');$('#pqM').textContent='جواب درست مشخص شد؛ مهم این است که یاد می‌گیری 💪'}
-      setTimeout(()=>{if(PQ!==me||cur!=='pq')return;me.k++;me.lock=false;me.k>=me.q.length?pqEnd():pqShow()},900);
-    });
+  /* n کارت با متن یکتا؛ قالب‌ها نوبتی می‌آیند تا تنوع حفظ شود */
+  function pickCards(g,ch,n,o){
+    const L=V9Q[g][ch],out=[],seen=new Set();let order=[],tries=0;
+    while(out.length<n&&tries<600){tries++;if(!order.length)order=shuffle(L.slice());const c=mkCard(order.pop()(),o);if(c&&!seen.has(c.q)){seen.add(c.q);out.push(c)}}
+    return out;
   }
-  function pqEnd(){
-    const{g,i,j,ok,q}=PQ,acc=ok/q.length,s=acc>=.9?3:acc>=.6?2:1,r=rec(g,i),old=r.L[j];
-    r.L[j]={s:Math.max(s,old?old.s:0),a:Math.max(Math.round(acc*100),old?old.a:0)};
-    const P=pd();if(P.xp.d!==dayN())P.xp={d:dayN(),b:xpOf(),v:0};P.xp.v+=ok*10;P.lc=(P.lc||0)+1;
-    /* مهمان: بار اول بعد از اولین درس؛ بعد فقط هر ۳ درس یا اولین درس هر روز */
-    const nag=isGuest()&&(!P.nag||P.lc-P.nag.at>=3||(P.lc>P.nag.at&&P.nag.d!==dayN()));
-    if(nag)P.nag={at:P.lc,d:dayN()};
-    persist();PQ=null;SFX.win();if(s===3)confetti(30);v9Hdr();
-    $('#pqBox').innerHTML=`<div class="center"><div style="font-size:64px">${'⭐'.repeat(s)}</div><h2 class="neon" style="font-size:26px">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p>${fa(ok)} پاسخ درست از ${fa(q.length)}</p>${nag?'':'<button type="button" class="btn mg" id="pqGo" style="min-height:44px">ادامهٔ مسیر</button>'}</div>${nag?'<div class="card" id="suBox" style="margin-top:12px">'+signupHtml()+'</div>':''}`;
-    if(nag)bindSignup($('#suBox'),()=>go('path'));else $('#pqGo').onclick=()=>go('path');
-  }
+  window.V9Q=V9Q;window.v9Cards=(g,ch,n,o)=>pickCards(g,ch,n,o); /* دسترسی آزمون‌ها */
+
+  /* عبارت‌های ریاضی داخل توضیح (مثل «۱۲ ÷ ۶ = ۲») چپ‌به‌راست نمایش داده شوند */
+  const mathLtr=t=>t.replace(/[x۰-۹√(][x۰-۹√²()٫.\s+−×÷=\/^]*[x۰-۹√²)]/g,m=>/[+−×÷=\/^]/.test(m)?'\u2066'+m+'\u2069':m);
+  const addXp=n=>{const P=pd();if(P.xp.d!==dayN())P.xp={d:dayN(),b:xpOf(),v:0};P.xp.v+=n};
+  const KEYS=[['7','۷'],['8','۸'],['9','۹'],['bs','⌫'],['4','۴'],['5','۵'],['6','۶'],['-','−'],['1','۱'],['2','۲'],['3','۳'],['/','/'],['0','۰'],['.','٫']];
+  const Lesson={
+    st:null,
+    /* قلاب برای فاز ۴ (XP/کمبو/سکه): بعد از هر «بررسی» صدا زده می‌شود */
+    onAnswer(ok,card,firstTry){if(ok&&firstTry)addXp(10);v9Hdr()},
+    start(g,i,j){
+      const cards=pickCards(g,i,8);
+      this.st={g,i,j,cards,queue:cards.map(c=>({c,first:true})),done:0,total:cards.length,firstOk:0,sel:null,val:'',checked:false,ok:null};
+      go('pq');this.show();
+    },
+    cur(){const s=this.st;return s&&s.queue[0]},
+    show(){
+      const s=this.st,c=s.queue[0].c;s.sel=null;s.val='';s.checked=false;s.ok=null;
+      let body='';
+      if(c.type==='mcq'){const o=shuffle(c.opts);c.view=o;body=`<div class="opts" role="group" aria-label="گزینه‌ها">${o.map((x,k)=>`<button type="button" class="opt" data-k="${k}" aria-pressed="false">${esc(x.t)}</button>`).join('')}</div>`}
+      else if(c.type==='shape'){const o=shuffle(c.opts);c.view=o;body=`<div class="opts img" role="group" aria-label="شکل‌ها">${o.map((x,k)=>{const sh=byId(x.id);return`<button type="button" class="opt img" data-k="${k}" aria-pressed="false" aria-label="${esc(sh.name)}">${shapeSVG(sh)}</button>`}).join('')}</div>`}
+      else body=`<div class="kpv" id="lsVal" role="textbox" aria-readonly="true" aria-label="پاسخ تو">؟</div><div class="kp" role="group" aria-label="کیبورد عددی">${KEYS.map(([k,t])=>`<button type="button" class="kpk${k==='0'?' w2':''}" data-k="${k}" aria-label="${k==='bs'?'پاک کردن':k==='-'?'منفی':k==='.'?'ممیز':k==='/'?'خط کسری':t}">${t}</button>`).join('')}</div>`;
+      $('#pqBox').innerHTML=`<div class="lsn-top"><button type="button" class="lsx" id="lsX" aria-label="خروج از درس">✕</button><div class="lsn-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${s.total}" aria-valuenow="${s.done}"><i style="width:${s.done/s.total*100}%"></i></div><span class="lsn-cnt">${fa(s.done)}/${fa(s.total)}</span></div>
+      <h3 class="lsn-q">${esc(c.q)}</h3>${body}
+      <div class="lsn-bar" id="lsBar"><div class="lsfb" id="lsFb" role="status" aria-live="polite"></div><button type="button" class="btn mg" id="lsGo" disabled style="min-height:48px;width:100%">بررسی</button></div>`;
+      $('#lsX').onclick=()=>this.exit();
+      $('#lsGo').onclick=()=>s.checked?this.next():this.check();
+      $$('#pqBox .opt').forEach(b=>b.onclick=()=>this.pick(+b.dataset.k));
+      $$('#pqBox .kpk').forEach(b=>b.onclick=()=>this.key(b.dataset.k));
+    },
+    pick(k){const s=this.st;if(!s||s.checked)return;SFX.init();s.sel=k;$$('#pqBox .opt').forEach((b,i)=>{b.classList.toggle('sel',i===k);b.setAttribute('aria-pressed',i===k?'true':'false')});$('#lsGo').disabled=false},
+    key(k){const s=this.st;if(!s||s.checked)return;SFX.init();let v=s.val;
+      if(k==='bs')v=v.slice(0,-1);
+      else if(k==='-'){v=v[0]==='-'?v.slice(1):'-'+v}
+      else if(k==='/'){if(v&&v.indexOf('/')<0&&/\d$/.test(v))v+='/'}
+      else if(k==='.'){const seg=v.split('/').pop();if(seg.indexOf('.')<0&&/\d$/.test(seg)||seg==='')v+=seg===''?'0.':'.'}
+      else if(v.length<9)v+=k;
+      s.val=v;const e=$('#lsVal');e.textContent=v?Dp(v):'؟';e.classList.toggle('has',!!v);$('#lsGo').disabled=!v||/[\/.\-]$/.test(v)&&v.length<1;
+      $('#lsGo').disabled=!v||/[\/.-]$/.test(v)},
+    check(){
+      const s=this.st,it=s.queue[0],c=it.c;let ok,right;
+      if(c.type==='num'){ok=same(s.val,c.a);right=D(c.a)}
+      else{ok=!!c.view[s.sel].ok;const r=c.view.find(x=>x.ok);right=c.type==='shape'?byId(r.id).name:r.t}
+      s.checked=true;s.ok=ok;
+      $$('#pqBox .opt').forEach((b,i)=>{b.disabled=true;if(c.view[i].ok)b.classList.add('ok');else if(i===s.sel)b.classList.add('no')});
+      $$('#pqBox .kpk').forEach(b=>b.disabled=true);
+      const fb=$('#lsFb'),bar=$('#lsBar');bar.classList.add(ok?'ok':'bad');
+      fb.innerHTML=`<b>${ok?pk(['✅ آفرین!','✅ درسته!','✅ عالی!']):'اشکالی نداره 💪'}</b>${ok?'':`<div>جواب درست: <b>${esc(right)}</b></div>`}<div class="lsh">${esc(mathLtr(c.hint||''))}</div>`;
+      $('#lsGo').textContent='ادامه';$('#lsGo').disabled=false;$('#lsGo').focus();
+      ok?SFX.ok():SFX.err();
+      this.onAnswer(ok,c,it.first);
+    },
+    next(){
+      const s=this.st,it=s.queue.shift();
+      if(s.ok){s.done++;if(it.first)s.firstOk++}else s.queue.push({c:it.c,first:false}); /* غلط: آخر درس دوباره می‌آید تا درست شود */
+      if(!s.queue.length)return this.end();
+      this.show();
+    },
+    exit(){modal(`<h3 class="neon" style="font-size:21px">خروج از درس؟</h3><p style="line-height:2">پیشرفت این درس از دست می‌رود. خارج می‌شوی؟</p><div class="row" style="justify-content:center"><button type="button" class="btn mg" id="lxYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn gh" id="lxNo" style="min-height:44px">ادامهٔ درس</button></div>`);
+      $('#lxNo').onclick=()=>$('#modal').classList.remove('on');
+      $('#lxYes').onclick=()=>{$('#modal').classList.remove('on');this.st=null;go('path')}},
+    end(){
+      const{g,i,j,firstOk,total}=this.st,acc=firstOk/total,s=acc>=.9?3:acc>=.6?2:1,r=rec(g,i),old=r.L[j];
+      r.L[j]={s:Math.max(s,old?old.s:0),a:Math.max(Math.round(acc*100),old?old.a:0)};
+      const P=pd();P.lc=(P.lc||0)+1;
+      /* مهمان: بار اول بعد از اولین درس؛ بعد فقط هر ۳ درس یا اولین درس هر روز */
+      const nag=isGuest()&&(!P.nag||P.lc-P.nag.at>=3||(P.lc>P.nag.at&&P.nag.d!==dayN()));
+      if(nag)P.nag={at:P.lc,d:dayN()};
+      persist();this.st=null;SFX.win();if(s===3)confetti(30);v9Hdr();
+      $('#pqBox').innerHTML=`<div class="center" style="margin-top:8px"><span style="font-size:${nag?34:64}px">${'⭐'.repeat(s)}</span><h2 class="neon" style="font-size:${nag?21:26}px;margin:2px 0">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p style="margin:0 0 6px">${fa(firstOk)} پاسخ درستِ بار اول از ${fa(total)}${firstOk===total?' — همه درست! 🎉':''}</p>${nag?'':'<button type="button" class="btn mg" id="pqGo" style="min-height:48px;width:100%;margin-top:10px">ادامهٔ مسیر</button>'}</div>${nag?'<div class="card" id="suBox" style="margin-top:10px;padding:12px">'+signupHtml()+'</div>':''}`;
+      if(nag)bindSignup($('#suBox'),()=>go('path'));else $('#pqGo').onclick=()=>go('path');
+    }
+  };
+  Lesson.same=same;window.Lesson=Lesson;
+  window.v9Lesson=()=>{const s=Lesson.st;if(!s||!s.queue.length)return null;const c=s.queue[0].c;return{type:c.type,q:c.q,ans:c.type==='num'?c.a:c.view.findIndex(o=>o.ok),done:s.done,total:s.total,left:s.queue.length,checked:s.checked,cards:s.cards.map(x=>x.q)}};
+  function pqStart(g,i,j){Lesson.start(g,i,j)}
+  document.addEventListener('keydown',e=>{
+    const s=Lesson.st;if(cur!=='pq'||!s||!s.queue.length||e.ctrlKey||e.metaKey||e.altKey)return;
+    const c=s.queue[0].c,btn=e.target&&e.target.tagName==='BUTTON';
+    if(e.key==='Enter'){if(btn&&!e.target.classList.contains('kpk'))return;e.preventDefault();const g=$('#lsGo');if(g&&!g.disabled)g.click();return}
+    if(s.checked)return;
+    if(c.type==='num'){const k=norm(e.key);if(/^[0-9]$/.test(k))Lesson.key(k);else if(e.key==='Backspace')Lesson.key('bs');else if(k==='-'||k==='/'||k==='.')Lesson.key(k)}
+    else if(/^[1-4]$/.test(e.key)&&c.view[+e.key-1])Lesson.pick(+e.key-1);
+  });
 
   /* ---------- مهمان و ذخیرهٔ پیشرفت ---------- */
   const isGuest=()=>!!USER&&USER.indexOf('guest_')===0;
@@ -2845,12 +3237,11 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
     $$('#obBox .gcard').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();obPlace(+b.dataset.g)});
     $('#gdBack').onclick=()=>{SFX.click();obWelcome()};
   }
-  /* سختی رو به بالا = ترتیب فصل‌ها؛ فصل‌های بدون سؤال رد می‌شوند */
+  /* سختی رو به بالا = ترتیب فصل‌ها: ۵ فصل با فاصلهٔ مساوی؛ فقط چندگزینه‌ای متنی از V9Q */
   function placeBuild(g){
-    const pools=[];CH[g].forEach((c,i)=>{const p=exBuild(g,[chTopic(c)]);if(p.length)pools.push({i,p})});
-    if(!pools.length)pools.push({i:0,p:exBuild(g)});
-    const used=new Set(),Q=[];
-    for(let k=0;k<5;k++){const e=pools[Math.round(k*(pools.length-1)/4)],c=shuffle(e.p).find(q=>!used.has(q.q))||e.p[0];used.add(c.q);Q.push(Object.assign({ch:e.i},c))}
+    const n=CH[g].length,used=new Set(),Q=[];
+    for(let k=0;k<5;k++){const ch=Math.round(k*(n-1)/4);let c=null;for(let t=0;t<40&&!c;t++){const x=mkCard(pk(V9Q[g][ch])(),{mcq:true,noShape:true});if(x&&x.type==='mcq'&&!used.has(x.q))c=x}
+      if(!c)c=mkCard(pk(V9Q[g][ch])(),{mcq:true,noShape:true});used.add(c.q);Q.push(Object.assign({ch,tp:chTopic(CH[g][ch])},c))}
     return Q;
   }
   function obPlace(g){OB={g,q:placeBuild(g),k:0,ans:[],lock:false};setView('place');obAsk()}
@@ -2865,7 +3256,7 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
     });
   }
   function obResult(){
-    const{g,q,ans}=OB,okN=ans.filter(a=>a.ok).length,w=ans.find(a=>!a.ok),X=w?w.ch:q[q.length-1].ch;OB.X=X;OB.okN=okN;
+    const{g,q,ans}=OB,okN=ans.filter(a=>a.ok).length,w=ans.find(a=>!a.ok),X0=w?w.ch:q[q.length-1].ch,X=Math.min(X0,3,CH[g].length-1);OB.X=X;OB.okN=okN;
     setView('result');
     ob.innerHTML=`<div class="center"><div style="font-size:56px">🎯</div><p class="muted" style="margin:0">${fa(okN)} پاسخ درست از ${fa(q.length)}</p><h2 class="neon" style="font-size:25px;margin:6px 0">تو از فصل ${fa(X+1)} شروع می‌کنی!</h2><p style="font-size:18px;margin:0 0 8px"><b>${esc(CH[g][X])}</b></p>${X>0?`<p class="muted" style="font-size:14px;line-height:1.9">فصل‌های ${fa(1)} تا ${fa(X)} «رد شده» علامت می‌خورند؛ قفل نیستند و هر وقت خواستی برمی‌گردی.</p>`:''}<button type="button" class="btn mg" id="obStart" style="min-height:56px;font-size:19px;width:100%;white-space:nowrap;display:flex">شروع درس اول</button></div>`;
     $('#obStart').onclick=()=>{SFX.init();SFX.click();obStart()};

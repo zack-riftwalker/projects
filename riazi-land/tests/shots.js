@@ -13,6 +13,13 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const go = (id) => (page) => page.evaluate((id) => go(id), id);
 /* name, options, setup */
+const lessonShot = (g, ch, type, act) => async (page) => {
+  await page.evaluate(([g, ch]) => Lesson.start(g, ch, 0), [g, ch]);
+  for (let t = 0; t < 80; t++) { const i = await page.evaluate(() => v9Lesson()); if (i && i.type === type) break; await page.evaluate(([g, ch]) => Lesson.start(g, ch, 0), [g, ch]); }
+  if (act) await act(page);
+};
+const clickRight = async (page) => { const i = await page.evaluate(() => v9Lesson()); await page.click(`#pqBox .opt[data-k="${i.ans}"]`); await page.click('#lsGo'); };
+const clickWrong = async (page) => { const i = await page.evaluate(() => v9Lesson()); await page.click(`#pqBox .opt[data-k="${i.ans === 0 ? 1 : 0}"]`); await page.click('#lsGo'); };
 const SCREENS = [
   ['welcome', { fresh: true, noLogin: true }, async () => {}],
   ['login-form', { fresh: true, noLogin: true }, (page) => openForm(page, 'login')],
@@ -20,7 +27,7 @@ const SCREENS = [
   ['placement-question', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); }],
   ['placement-result', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } }],
   ['path-after-placement', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq'); await page.evaluate(() => go('path')); }],
-  ['signup-card', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#pqBox .opt:not([disabled])'); await page.evaluate(() => { const P = v9Pq(); document.querySelectorAll('#pqBox .opt')[P.q[P.k].opts.findIndex((o) => o.ok)].click(); }); await page.waitForTimeout(1000); } await page.waitForSelector('#suBox'); }],
+  ['signup-card', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq'); for (let g = 0; g < 40; g++) { const i = await page.evaluate(() => v9Lesson()); if (!i) break; if (i.type === 'num') { for (const ch of String(i.ans)) await page.click(`#pqBox .kpk[data-k="${ch}"]`); } else await page.click(`#pqBox .opt[data-k="${i.ans}"]`); await page.click('#lsGo'); await page.click('#lsGo'); } await page.waitForSelector('#suBox'); }],
   ['path-new-user', { fresh: true }, async () => {}],
   ['path-legacy-user', {}, async () => {}],
   ['path-legacy-chapter-top', {}, (page) => page.evaluate(() => window.scrollTo(0, 0))],
@@ -33,7 +40,14 @@ const SCREENS = [
   ['more-exam', {}, async (page) => { await page.click('#btnProf'); await page.click('#pMore [data-more="exam"]'); }],
   ['more-hub', {}, async (page) => { await page.click('#btnProf'); await page.click('#pMore [data-more="hub"]'); }],
   ['move-rhythm', {}, go('move')],
-  /* PHASE 2+ : append new screens here */
+  ['lesson-mcq', { fresh: true }, lessonShot(8, 3, 'mcq')],
+  ['lesson-mcq-selected', { fresh: true }, lessonShot(7, 6, 'mcq', (p) => p.click('#pqBox .opt[data-k="1"]'))],
+  ['lesson-feedback-correct', { fresh: true }, lessonShot(8, 3, 'mcq', clickRight)],
+  ['lesson-feedback-wrong', { fresh: true }, lessonShot(9, 0, 'mcq', clickWrong)],
+  ['lesson-numeric-keypad', { fresh: true }, lessonShot(8, 3, 'num', async (p) => { await p.click('#pqBox .kpk[data-k="-"]'); await p.click('#pqBox .kpk[data-k="5"]'); })],
+  ['lesson-shape-card', { fresh: true }, lessonShot(8, 2, 'shape')],
+  ['lesson-end', { fresh: true }, async (page) => { await page.evaluate(() => Lesson.start(8, 3, 0)); for (let g = 0; g < 40; g++) { const i = await page.evaluate(() => v9Lesson()); if (!i) break; if (i.type === 'num') { for (const ch of String(i.ans)) await page.click(`#pqBox .kpk[data-k="${/\d/.test(ch) ? ch : ch}"]`); } else await page.click(`#pqBox .opt[data-k="${i.ans}"]`); await page.click('#lsGo'); await page.click('#lsGo'); } }],
+  /* PHASE 4+ : append new screens here */
 ];
 
 (async () => {

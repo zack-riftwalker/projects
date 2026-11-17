@@ -268,17 +268,12 @@ T('PHASE1: legacy auto-login lands on path; adv progress => completed chapters, 
   await context.close();
 });
 
-T('PHASE1: lesson node quick quiz records stars, unlocks next node, persists in us[USER].d.path; boss state follows S.adv', async ({ browser }) => {
+T('PHASE1: lesson node completes via the Lesson engine, records stars, unlocks next node, persists in us[USER].d.path', async ({ browser }) => {
   const { page, context } = await open(browser);
   await register(page, { user: 'path2', grade: 8 });
   await page.click('#pathBox .pgo');
   eq(await curScreen(page), 'pq');
-  for (let k = 0; k < 5; k++) {
-    await page.waitForSelector('#pqBox .opt:not([disabled])');
-    await page.evaluate(() => { const P = v9Pq(), q = P.q[P.k]; document.querySelectorAll('#pqBox .opt')[q.opts.findIndex((o) => o.ok)].click(); });
-    await page.waitForTimeout(1000);
-  }
-  await page.waitForSelector('#pqGo');
+  await finishLesson(page);
   await page.click('#pqGo');
   eq(await curScreen(page), 'path');
   const r = await page.evaluate(() => ({ stars: document.querySelector('.pch .pn.done .pst')?.getAttribute('aria-label'), curJ: [...document.querySelectorAll('.pch[data-ch="0"] .pn')].findIndex((n) => n.id === 'pcur') }));
@@ -387,11 +382,26 @@ const startGuest = async (page, grade = 8, wrongAt = -1) => { /* wrongAt: index 
   }
   await page.waitForSelector('#obStart');
 };
-const finishLesson = async (page) => {
-  for (let k = 0; k < 5; k++) {
-    await page.waitForSelector('#pqBox .opt:not([disabled])');
-    await page.evaluate(() => { const P = v9Pq(), q = P.q[P.k]; document.querySelectorAll('#pqBox .opt')[q.opts.findIndex((o) => o.ok)].click(); });
-    await page.waitForTimeout(1000);
+/* answers one lesson card with REAL clicks (keypad for numeric cards). wrong=true answers the card wrongly */
+const KEYMAP = { '-': '-', '/': '/', '.': '.' };
+const answerCard = async (page, info, wrong = false) => {
+  if (info.type === 'num') {
+    const s = wrong ? '99999' : String(info.ans);
+    for (const ch of s) await page.click(`#pqBox .kpk[data-k="${/\d/.test(ch) ? ch : KEYMAP[ch]}"]`);
+  } else {
+    const n = await page.evaluate(() => document.querySelectorAll('#pqBox .opt').length);
+    const k = wrong ? (info.ans === 0 ? 1 : 0) : info.ans;
+    await page.click(`#pqBox .opt[data-k="${k}"]`);
+  }
+  await page.click('#lsGo'); /* بررسی */
+};
+const finishLesson = async (page, opts = {}) => {
+  let guard = 0, first = true;
+  while (guard++ < 60) {
+    const info = await page.evaluate(() => v9Lesson());
+    if (!info) break;
+    await answerCard(page, info, first && opts.wrongFirst); first = false;
+    await page.click('#lsGo'); /* ادامه */
   }
   await page.waitForSelector('#suBox, #pqGo');
 };
@@ -550,7 +560,173 @@ T('PHASE2: legacy fixture: auto-login still lands on path with data intact (no g
   await context.close();
 });
 
-/* ============================== PHASE 3+ : append below ============================== */
+
+/* ============================== PHASE 3 ============================== */
+const startLesson = async (page, g, ch, j = 0) => { await page.evaluate(([g, ch, j]) => Lesson.start(g, ch, j), [g, ch, j]); await page.waitForSelector('#lsGo'); };
+const lessonUntil = async (page, g, ch, pred) => { for (let t = 0; t < 60; t++) { await startLesson(page, g, ch); const i = await page.evaluate(() => v9Lesson()); if (pred(i)) return i; } throw new Error('no card of the wanted type'); };
+
+T('PHASE3: content — every chapter of every grade yields >= 20 distinct questions; MCQ = 4 unique options incl. answer; numeric answers parse; shapes valid', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  const r = await page.evaluate(() => {
+    const out = { bad: [], perCh: [], cnt: 0 };
+    const numRe = /^-?\d+(\.\d+)?$|^-?\d+\/\d+$/;
+    for (const g of [7, 8, 9]) { eq9 = V9Q[g].length === CH[g].length; if (!eq9) out.bad.push(`grade ${g}: ${V9Q[g].length} chapter lists vs ${CH[g].length}`);
+      V9Q[g].forEach((L, ch) => {
+        const keys = new Set();
+        if (L.length < 4) out.bad.push(`${g}.${ch}: only ${L.length} templates`);
+        for (let k = 0; k < 400; k++) {
+          const c = v9Cards(g, ch, 1)[0]; if (!c) { out.bad.push(`${g}.${ch}: no card`); continue; } out.cnt++;
+          keys.add(c.q + (c.type === 'shape' ? '|' + c.opts.map((o) => o.id).sort().join() : ''));
+          if (c.type === 'mcq') {
+            const t = c.opts.map((o) => o.t);
+            if (c.opts.length !== 4 || new Set(t).size !== 4 || c.opts.filter((o) => o.ok).length !== 1) out.bad.push(`${g}.${ch} mcq options: ${t.join('|')}`);
+          } else if (c.type === 'shape') {
+            if (c.opts.length !== 4 || new Set(c.opts.map((o) => o.id)).size !== 4 || c.opts.filter((o) => o.ok).length !== 1 || c.opts.some((o) => !byId(o.id))) out.bad.push(`${g}.${ch} shape options`);
+          } else if (c.type === 'num') {
+            if (!numRe.test(c.a)) out.bad.push(`${g}.${ch} numeric answer not parseable: ${c.a} in ${c.q}`);
+          } else out.bad.push(`${g}.${ch} unknown type ${c.type}`);
+          if (!c.hint || c.hint.length < 5) out.bad.push(`${g}.${ch} missing hint: ${c.q}`);
+          if (/[0-9]/.test(c.q.replace(/[⁦⁩]/g, ''))) out.bad.push(`${g}.${ch} Latin digit in question: ${c.q}`);
+        }
+        out.perCh.push([g, ch, L.length, keys.size]);
+      });
+    }
+    return out;
+  });
+  eq(r.bad.slice(0, 5), [], 'content problems (' + r.bad.length + ')');
+  assert(r.perCh.length === 25, 'expected 25 chapters, got ' + r.perCh.length);
+  const low = r.perCh.filter((x) => x[3] < 20);
+  eq(low, [], 'chapters with < 20 distinct questions');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE3: answer normalisation (Persian/Arabic digits, minus, decimal point, fractions, spaces)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  const r = await page.evaluate(() => [Lesson.same('۳/۴', '3/4'), Lesson.same('−۵', '-5'), Lesson.same('٣', '3'), Lesson.same('۲٫۵', '2.5'), Lesson.same(' ۱ / ۲ ', '2/4'), Lesson.same('3', '4'), Lesson.same('', '0'), Lesson.same('-3', '3'), Lesson.same('abc', '3')]);
+  eq(r, [true, true, true, true, true, false, false, false, false]);
+  await context.close();
+});
+
+T('PHASE3: no duplicate question text within a lesson (20 runs x every chapter)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  const bad = await page.evaluate(() => {
+    const bad = [];
+    for (const g of [7, 8, 9]) CH[g].forEach((_, ch) => { for (let k = 0; k < 20; k++) { const L = v9Cards(g, ch, 8); if (L.length !== 8) bad.push(`${g}.${ch}: only ${L.length} cards`); if (new Set(L.map((c) => c.q)).size !== L.length) bad.push(`${g}.${ch}: duplicate text`); } });
+    return bad;
+  });
+  eq(bad, []);
+  await context.close();
+});
+
+T('PHASE3: full lesson with real clicks completes in < 4 min, bar/aria/feedback behave, no pageerror', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'les1', grade: 8 });
+  const t0 = Date.now();
+  await page.click('#pathBox .pgo');
+  await page.waitForSelector('#lsBar');
+  assert((await page.evaluate(() => v9Lesson().total)) === 8, 'lesson should have 8 cards');
+  assert(await page.evaluate(() => document.querySelector('#lsGo').disabled), 'بررسی must be disabled until an answer is chosen');
+  assert(await page.evaluate(() => !document.querySelector('#bnav') || getComputedStyle(document.querySelector('#bnav')).display === 'none'), 'bottom nav should be hidden during a lesson');
+  let n = 0;
+  while (true) {
+    const info = await page.evaluate(() => v9Lesson()); if (!info) break;
+    eq(await page.evaluate(() => document.querySelector('#pqBox [role=progressbar]').getAttribute('aria-valuenow')), String(info.done), 'progress aria');
+    await answerCard(page, info);
+    assert(await page.evaluate(() => document.querySelector('#lsBar').classList.contains('ok')), 'green bar after a correct answer');
+    assert(await page.evaluate(() => document.querySelector('#lsFb').getAttribute('aria-live') === 'polite' && document.querySelector('#lsFb').textContent.length > 8), 'feedback region');
+    await page.click('#lsGo'); n++;
+  }
+  eq(n, 8, 'cards answered');
+  assert(Date.now() - t0 < 240000, 'lesson took too long: ' + (Date.now() - t0));
+  const txt = await page.textContent('#pqBox'); assert(txt.includes('همه درست'), 'end text: ' + txt);
+  await page.click('#pqGo'); eq(await curScreen(page), 'path');
+  const d = (await lsGet(page, 'mh_users')).les1.d;
+  eq(d.path.l[8][0].L[0].s, 3); eq(d.path.l[8][0].L[0].a, 100);
+  assert(d.path.xp.v >= 80, 'today XP via hook: ' + JSON.stringify(d.path.xp));
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE3: wrong answer shows red bar + correct answer, re-queues once at the end; lesson ends only all-correct; stars from first-try accuracy', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'les2', grade: 7 });
+  await startLesson(page, 7, 1);
+  const first = await page.evaluate(() => v9Lesson());
+  await answerCard(page, first, true);
+  assert(await page.evaluate(() => document.querySelector('#lsBar').classList.contains('bad')), 'red bar expected');
+  assert((await page.textContent('#lsFb')).includes('جواب درست'), 'correct answer must be shown');
+  await page.click('#lsGo');
+  const after = await page.evaluate(() => v9Lesson());
+  eq([after.done, after.left], [0, 8], 'wrong card stays in the queue (7 others + itself again)');
+  await finishLesson(page); /* answers everything correctly, including the re-queued card */
+  assert(await page.evaluate(() => v9Lesson()) === null, 'lesson should be over');
+  const txt = await page.textContent('#pqBox'); assert(!txt.includes('همه درست'), 'not all first-try');
+  await page.click('#pqGo');
+  const d = (await lsGet(page, 'mh_users')).les2.d;
+  eq(d.path.l[7][1].L[0].s, 2, '7/8 first-try -> 2 stars'); eq(d.path.l[7][1].L[0].a, 88);
+  await context.close();
+});
+
+T('PHASE3: ✕ asks for confirmation and discards progress only on «بله»', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'les3', grade: 9 });
+  await startLesson(page, 9, 0);
+  await page.click('#lsX');
+  assert((await page.textContent('#modal')).includes('پیشرفت این درس از دست می‌رود'), 'confirm text');
+  await page.click('#lxNo'); eq(await curScreen(page), 'pq'); assert(await page.evaluate(() => !!v9Lesson()), 'lesson must continue');
+  await page.click('#lsX'); await page.click('#lxYes');
+  eq(await curScreen(page), 'path'); assert(await page.evaluate(() => v9Lesson()) === null);
+  eq(await page.evaluate(() => Object.values(S.path.l[9]).every((r) => r.L.length === 0 && !r.c)), true, 'nothing recorded after exit');
+  await context.close();
+});
+
+T('PHASE3: numeric keypad — on-screen Persian keys, no native input, >=44px, edit/check works (also physical keys)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'les4', grade: 8 });
+  const info = await lessonUntil(page, 8, 3, (i) => i.type === 'num');
+  eq(await page.evaluate(() => document.querySelectorAll('#pqBox input, #pqBox textarea').length), 0, 'no native inputs');
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#pqBox .kpk')].map((b) => ({ k: b.dataset.k, t: b.textContent, h: b.getBoundingClientRect().height, w: b.getBoundingClientRect().width, a: !!b.getAttribute('aria-label') })));
+  eq(keys.map((k) => k.k).sort(), ['-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'bs'].sort());
+  assert(keys.every((k) => k.h >= 44 && k.w >= 44 && k.a), 'keys < 44px or unlabelled');
+  assert(keys.filter((k) => /[0-9]/.test(k.k)).every((k) => /[۰-۹]/.test(k.t)), 'digits must be Persian');
+  await page.click('#pqBox .kpk[data-k="-"]'); await page.click('#pqBox .kpk[data-k="5"]'); await page.click('#pqBox .kpk[data-k="/"]'); await page.click('#pqBox .kpk[data-k="3"]');
+  eq(await page.textContent('#lsVal'), '−۵/۳');
+  await page.click('#pqBox .kpk[data-k="bs"]');
+  eq(await page.textContent('#lsVal'), '−۵/');
+  assert(await page.evaluate(() => document.querySelector('#lsGo').disabled), 'incomplete fraction must not be checkable');
+  await page.click('#pqBox .kpk[data-k="bs"]'); await page.click('#pqBox .kpk[data-k="bs"]'); await page.click('#pqBox .kpk[data-k="bs"]');
+  eq(await page.textContent('#lsVal'), '؟');
+  for (const ch of String(info.ans)) await page.keyboard.press(ch); /* physical keyboard path */
+  await page.keyboard.press('Enter'); /* check */
+  assert(await page.evaluate(() => document.querySelector('#lsBar').classList.contains('ok')), 'typed correct answer must be accepted: ' + info.ans);
+  await context.close();
+});
+
+T('PHASE3: shape card (SVG options) works; MCQ keyboard: press 1 then Enter checks', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { user: 'les5', grade: 8 });
+  const i = await lessonUntil(page, 8, 2, (x) => x.type === 'shape');
+  eq(await page.evaluate(() => document.querySelectorAll('#pqBox .opt svg').length), 4, 'four svg options');
+  assert(await page.evaluate(() => [...document.querySelectorAll('#pqBox .opt')].every((b) => b.getAttribute('aria-label'))), 'shape buttons need aria-label');
+  await page.click(`#pqBox .opt[data-k="${i.ans}"]`); await page.click('#lsGo');
+  assert(await page.evaluate(() => document.querySelector('#lsBar').classList.contains('ok')), 'correct shape accepted');
+  const m = await lessonUntil(page, 7, 6, (x) => x.type === 'mcq');
+  await page.keyboard.press(String(m.ans + 1)); await page.keyboard.press('Enter');
+  assert(await page.evaluate(() => document.querySelector('#lsBar').classList.contains('ok')), 'keyboard selection + Enter');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE3: placement uses V9 questions (5 MCQ, start chapter capped at 4)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await startGuest(page, 9, -1);
+  const X = await page.evaluate(() => v9Ob().X); assert(X <= 3, 'start chapter must be capped at chapter 4, got index ' + X);
+  eq(X, 3, 'all-correct starts at chapter 4');
+  await context.close();
+});
+
+/* ============================== PHASE 4+ : append below ============================== */
 
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {
