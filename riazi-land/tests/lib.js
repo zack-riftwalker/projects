@@ -42,7 +42,13 @@ async function open(browser, opts = {}) {
 }
 
 /* Registers a brand-new player through the real form and waits for the home screen. */
+async function openForm(page, mode = 'reg') {
+  await page.click('#wlHave'); /* welcome -> «حساب دارم» opens the classic form */
+  await page.click(`.tabs button[data-m="${mode}"]`);
+}
+
 async function register(page, { name = 'تست', user = 'tester1', pass = '1234', grade = 8 } = {}) {
+  await openForm(page, 'reg');
   await page.click(`.gc[data-g="${grade}"]`);
   await page.fill('#inName', name);
   await page.fill('#inUser', user);
@@ -54,4 +60,4 @@ async function register(page, { name = 'تست', user = 'tester1', pass = '1234'
 const lsGet = (page, k) => page.evaluate((k) => { const r = localStorage.getItem(k); return r === null ? null : JSON.parse(r); }, k);
 const curScreen = (page) => page.evaluate(() => cur);
 
-module.exports = { chromium, ROOT, URL_APP, VIEWPORT, FIXTURE, open, register, lsGet, curScreen };
+module.exports = { openForm, chromium, ROOT, URL_APP, VIEWPORT, FIXTURE, open, register, lsGet, curScreen };

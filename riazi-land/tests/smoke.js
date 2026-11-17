@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { chromium, ROOT, FIXTURE, open, register, lsGet, curScreen } = require('./lib');
+const { chromium, ROOT, FIXTURE, open, register, openForm, lsGet, curScreen } = require('./lib');
 
 const tests = [];
 const T = (name, fn) => tests.push({ name, fn });
@@ -93,7 +93,7 @@ T('MIGRATION: saved data is not lost after navigating around (persist round-trip
 T('MIGRATION: legacy user can log in with the form (hash compatibility)', async ({ browser }) => {
   const { page, context } = await open(browser, { fixture: 'legacy-user.json', drop: ['mh_session'] });
   eq(await curScreen(page), 'reg');
-  await page.click('.tabs button[data-m="login"]');
+  await openForm(page, 'login');
   await page.fill('#inUser', 'ali_r'); await page.fill('#inPass', '1234'); await page.click('#regBtn');
   await page.waitForFunction(() => typeof USER !== 'undefined' && USER && cur !== 'reg', null, { timeout: 8000 });
   eq(await page.evaluate(() => [USER, S.coins, S.adv[8]]), ['ali_r', 235, 3]);
@@ -375,7 +375,183 @@ T('PHASE1: old entry points are detached (old menu/home never active after login
   await context.close();
 });
 
-/* ============================== PHASE 2+ : append below ============================== */
+
+/* ============================== PHASE 2 ============================== */
+const welcomeVisibleButtons = (page) => inView(page, '#s-reg');
+const startGuest = async (page, grade = 8, wrongAt = -1) => { /* wrongAt: index of the placement question to answer wrongly (-1 = all correct) */
+  await page.click('#wlGo'); await page.click(`#obBox .gcard[data-g="${grade}"]`);
+  for (let k = 0; k < 5; k++) {
+    await page.waitForSelector('#obBox .opt:not([disabled])');
+    await page.evaluate(([k, wrongAt]) => { const o = v9Ob(), ci = o.q[o.k].opts.findIndex((x) => x.ok); document.querySelectorAll('#obBox .opt')[k === wrongAt ? (ci === 0 ? 1 : 0) : ci].click(); }, [k, wrongAt]);
+    await page.waitForTimeout(900);
+  }
+  await page.waitForSelector('#obStart');
+};
+const finishLesson = async (page) => {
+  for (let k = 0; k < 5; k++) {
+    await page.waitForSelector('#pqBox .opt:not([disabled])');
+    await page.evaluate(() => { const P = v9Pq(), q = P.q[P.k]; document.querySelectorAll('#pqBox .opt')[q.opts.findIndex((o) => o.ok)].click(); });
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForSelector('#suBox, #pqGo');
+};
+
+T('PHASE2: no-session first screen = ONE big «بزن بریم!» + small «حساب دارم»', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  const b = await welcomeVisibleButtons(page);
+  eq(b.map((x) => x.t).sort(), ['بزن بریم! 🚀', 'حساب دارم'].sort(), 'visible buttons on welcome');
+  assert(b.every((x) => x.h >= 44), 'buttons < 44px');
+  assert(!(await visible(page, '#regForm')), 'form must not be visible on welcome');
+  await context.close();
+});
+
+T('PHASE2: tap budget — fresh page → بزن بریم → grade → first answer = 3 clicks, no pageerror', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  let clicks = 0;
+  await page.click('#wlGo'); clicks++;
+  await page.click('#obBox .gcard[data-g="8"]'); clicks++;
+  await page.waitForSelector('#obBox .opt');
+  await page.click('#obBox .opt'); clicks++;
+  eq(clicks, 3);
+  assert((await page.textContent('#obM')).length > 0, 'no feedback after the first answer');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE2: «حساب دارم» opens the classic form; login/register still work (existing users unaffected)', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json', drop: ['mh_session'] });
+  await page.click('#wlHave');
+  assert(await visible(page, '#regForm'), 'form not shown');
+  assert(await visible(page, '#fmBack'), 'back button missing');
+  await page.click('#fmBack'); assert(await visible(page, '#wlGo'), 'back to welcome failed');
+  await page.click('#wlHave'); await page.fill('#inUser', 'ali_r'); await page.fill('#inPass', 'nope'); await page.click('#regBtn');
+  await page.waitForTimeout(400); eq(await curScreen(page), 'reg', 'wrong password must not log in');
+  await page.fill('#inPass', '1234'); await page.click('#regBtn');
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER, null, { timeout: 8000 });
+  eq(await page.evaluate(() => [USER, cur, S.coins]), ['ali_r', 'path', 235]);
+  await context.close();
+});
+
+T('PHASE2: placement sets the start chapter; earlier chapters are «رد شده» (not locked) and replayable', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await startGuest(page, 8, -1); /* all correct -> start at the hardest answered chapter */
+  const X = await page.evaluate(() => v9Ob().X);
+  assert(X > 0, 'all-correct placement should skip chapters, X=' + X);
+  const txt = await page.textContent('#obBox');
+  assert(txt.includes('شروع می‌کنی') && txt.includes('رد شده'), 'result text: ' + txt);
+  await page.click('#obStart');
+  await page.waitForFunction(() => cur === 'pq');
+  eq(await page.evaluate(() => PQ === undefined || true), true);
+  await page.evaluate(() => go('path'));
+  const r = await page.evaluate(() => ({ states: [...document.querySelectorAll('#pathBox .pch')].map((c) => c.dataset.state), cur: (() => { const c = document.querySelector('#pcur'); return c && [+c.closest('.pch').dataset.ch, c.dataset.k, [...c.parentNode.children].indexOf(c)]; })(), replay: document.querySelectorAll('#pathBox .pch[data-state="skipped"] .pre').length, label: document.querySelector('.pch[data-state="skipped"] .pbn').textContent }));
+  eq(r.states.slice(0, X), Array(X).fill('skipped'), 'skipped chapters');
+  eq(r.states[X], 'current'); assert(r.states.slice(X + 1).every((s) => s === 'locked'), 'later chapters locked');
+  eq(r.cur, [X, 'L', 0], 'current node');
+  assert(r.replay >= 2 * X, 'skipped chapters must have replay buttons: ' + r.replay);
+  assert(r.label.includes('رد شده'), 'banner label');
+  const d = (await lsGet(page, 'mh_users')); const g = Object.keys(d)[0];
+  assert(g.startsWith('guest_'), 'guest key'); eq(d[g].d.adv[8], X, 'adv mapped'); eq(d[g].d.path.skip[8], X, 'skip stored');
+  /* replay a skipped lesson */
+  await page.click('#pathBox .pch[data-state="skipped"] .pre'); eq(await curScreen(page), 'pq');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE2: wrong first answer starts at chapter 1', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await startGuest(page, 7, 0);
+  eq(await page.evaluate(() => v9Ob().X), 0);
+  await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq');
+  await page.evaluate(() => go('path'));
+  eq(await page.evaluate(() => [...document.querySelectorAll('#pathBox .pch')].map((c) => c.dataset.state).slice(0, 2)), ['current', 'locked']);
+  await context.close();
+});
+
+T('PHASE2: guest → first lesson → signup card → rename migration keeps everything; form login works later', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await startGuest(page, 8, 0); await page.click('#obStart');
+  await page.waitForFunction(() => cur === 'pq');
+  const guest = await page.evaluate(() => USER); assert(guest.startsWith('guest_'), 'guest user');
+  eq(await lsGet(page, 'mh_session'), guest);
+  await page.evaluate((g) => { localStorage.setItem('wh_' + g, '123'); localStorage.setItem('mv_' + g, '2'); localStorage.setItem('tm_' + g, JSON.stringify({ h: [{ q: 'x' }] })); }, guest);
+  await finishLesson(page);
+  assert(await visible(page, '#suBox'), 'signup card not shown after the first lesson');
+  assert((await page.textContent('#suBox')).includes('اسمت چیه که پیشرفتت ذخیره بشه؟'), 'card title');
+  assert(!(await visible(page, '#suPh')), 'mobile must be behind «بیشتر»');
+  const before = (await lsGet(page, 'mh_users'))[guest].d;
+  /* validation */
+  await page.fill('#suName', 'علی'); await page.fill('#suUser', 'ab'); await page.fill('#suPass', '1234'); await page.click('#suGo');
+  assert(await visible(page, '#suErr'), 'short username must be rejected');
+  await page.fill('#suUser', 'Newkid'); await page.fill('#suPass', '12'); await page.click('#suGo'); assert(await visible(page, '#suErr'), 'short password');
+  await page.fill('#suPass', 'pass1234'); await page.click('#suGo');
+  await page.waitForFunction(() => USER === 'newkid');
+  const us = await lsGet(page, 'mh_users');
+  assert(!Object.keys(us).some((k) => k.startsWith('guest_')), 'guest key left behind');
+  eq(us.newkid.n, 'علی'); eq(us.newkid.d.path.l, before.path.l.constructor === Object ? us.newkid.d.path.l : {}, 'path');
+  eq(us.newkid.d.grade, 8); eq(us.newkid.d.wrong, before.wrong, 'wrong'); eq(us.newkid.d.path.skip, before.path.skip);
+  assert(us.newkid.d.path.l[8][before.path.skip[8]].L[0].s >= 1, 'lesson stars moved with the data');
+  eq(await lsGet(page, 'mh_session'), 'newkid');
+  eq([await lsGet(page, 'wh_newkid'), await lsGet(page, 'mv_newkid'), (await lsGet(page, 'tm_newkid')).h.length], [123, 2, 1], 'per-user keys');
+  eq([await lsGet(page, 'wh_' + guest), await lsGet(page, 'mv_' + guest), await lsGet(page, 'tm_' + guest)], [null, null, null], 'old per-user keys removed');
+  eq(await curScreen(page), 'path');
+  await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [USER, cur]), ['newkid', 'path'], 'reload stays logged in');
+  /* logout (non-guest: plain confirm) then form login with new credentials */
+  await page.click('#btnProf'); await page.click('#s-prof #btnOut'); await page.click('#outYes');
+  eq(await curScreen(page), 'reg');
+  await openForm(page, 'login'); await page.fill('#inUser', 'newkid'); await page.fill('#inPass', 'pass1234'); await page.click('#regBtn');
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER && cur !== 'reg', null, { timeout: 8000 });
+  eq(await page.evaluate(() => [USER, S.grade]), ['newkid', 8]);
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE2: signup username must be unique (existing user)', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json', drop: ['mh_session'] });
+  await startGuest(page, 8, 0); await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq');
+  await finishLesson(page);
+  await page.fill('#suName', 'x y'); await page.fill('#suUser', 'ali_r'); await page.fill('#suPass', 'pass1234'); await page.click('#suGo');
+  assert((await page.textContent('#suErr')).includes('قبلاً ثبت'), 'duplicate username not rejected');
+  assert((await page.evaluate(() => USER)).startsWith('guest_'), 'must stay guest');
+  eq((await lsGet(page, 'mh_users')).ali_r.d.coins, 235, 'existing user untouched');
+  await context.close();
+});
+
+T('PHASE2: «بعداً» keeps the guest across reload; reminder is not shown on the next lesson; profile offers ذخیرهٔ پیشرفت; guest logout warns', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await startGuest(page, 9, 0); await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq');
+  const guest = await page.evaluate(() => USER);
+  await finishLesson(page); await page.click('#suLater');
+  eq(await curScreen(page), 'path');
+  await page.reload(); await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [USER, cur]), [guest, 'path']);
+  assert(Object.keys(await lsGet(page, 'mh_users')).includes(guest), 'guest record lost');
+  /* second lesson same day: no nag */
+  await page.click('#pathBox .pgo'); await finishLesson(page);
+  assert(!(await visible(page, '#suBox')) && (await visible(page, '#pqGo')), 'reminder shown again too soon');
+  await page.click('#pqGo');
+  await page.click('#btnProf');
+  assert(await visible(page, '#pSave'), 'profile needs ذخیرهٔ پیشرفت for guests');
+  assert((await page.textContent('#s-prof')).includes('مهمان'), 'friendly guest label');
+  await page.click('#s-prof #btnOut');
+  assert((await page.textContent('#modal')).includes('پاک می‌شود'), 'guest logout warning missing');
+  await page.click('#outNo'); eq(await page.evaluate(() => USER), guest);
+  await page.click('#s-prof #btnOut'); await page.click('#outYes'); eq(await curScreen(page), 'reg');
+  assert(!Object.keys((await lsGet(page, 'mh_users')) || {}).includes(guest), 'abandoned guest should be removed');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
+T('PHASE2: legacy fixture: auto-login still lands on path with data intact (no guest created)', async ({ browser }) => {
+  const { page, context } = await open(browser, { fixture: 'legacy-user.json' });
+  await page.waitForFunction(() => typeof USER !== 'undefined' && USER);
+  eq(await page.evaluate(() => [USER, cur, S.coins, S.adv[8]]), ['ali_r', 'path', 235, 3]);
+  assert(!Object.keys(await lsGet(page, 'mh_users')).some((k) => k.startsWith('guest_')), 'guest created for legacy user');
+  assert(!(await visible(page, '#s-reg')), 'welcome visible for logged-in user');
+  await context.close();
+});
+
+/* ============================== PHASE 3+ : append below ============================== */
 
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {

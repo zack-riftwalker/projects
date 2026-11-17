@@ -325,7 +325,7 @@ body.th-sunset{background:linear-gradient(160deg,#2b1055,#7a2e5e 55%,#ff7a59) fi
 
   <main>
   <!-- ============ ثبت‌نام ============ -->
-  <section id="s-reg" class="screen active">
+  <section id="s-reg" class="screen active" data-v="welcome">
     <div class="hero">
       <svg class="logo" viewBox="0 0 512 512"><use href="#ic"/></svg>
       <h1>ریاضی‌لند</h1>
@@ -1483,7 +1483,7 @@ const lgBase=()=>LG.url.replace(/\/+$/,'')+'/leagues/'+encodeURIComponent((LG.co
 const lgKey=u=>encodeURIComponent(String(u).replace(/[.#$\[\]\/]/g,'_'));
 async function lgReq(path,opt){const c=new AbortController(),t=setTimeout(()=>c.abort(),7000);try{const r=await fetch(lgBase()+path+'.json',Object.assign({signal:c.signal},opt||{}));if(!r.ok)throw 0;return await r.json()}finally{clearTimeout(t)}}
 function myRec(){const a=S.arc||{};return{n:S.name,g:S.grade||8,x:xpOf(),r:S.run?S.run.best:0,w:S.duel?S.duel.wins:0,a:Object.values(a).reduce((p,q)=>p+q,0),t:Date.now()}}
-async function lgSync(force){if(!lgOn()||!USER)return;const r=myRec(),sig=[r.x,r.r,r.w,r.a].join('|'),now=Date.now();if(!force&&(sig===lgSig||now-lgT<8000))return;lgT=now;lgSig=sig;try{await lgReq('/'+lgKey(USER),{method:'PUT',body:JSON.stringify(r)});lgFetch()}catch(e){ONL=null}}
+async function lgSync(force){if(!lgOn()||!USER||USER.indexOf('guest_')===0)return;const r=myRec(),sig=[r.x,r.r,r.w,r.a].join('|'),now=Date.now();if(!force&&(sig===lgSig||now-lgT<8000))return;lgT=now;lgSig=sig;try{await lgReq('/'+lgKey(USER),{method:'PUT',body:JSON.stringify(r)});lgFetch()}catch(e){ONL=null}}
 async function lgFetch(){if(!lgOn())return;try{ONL=(await lgReq(''))||{};ONL._ok=1}catch(e){ONL=null}if(cur==='menu'||cur==='league')renderLeague()}
 function renderLeague(){
   const on=lgOn()&&ONL&&ONL._ok,me=myRec();let rows;
@@ -2682,6 +2682,17 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
 .pmore button{min-height:56px;padding:8px 10px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.05);display:flex;align-items:center;gap:8px;text-align:right;font-size:14px;line-height:1.5}
 .pmore button i{font-style:normal;font-size:24px}
 #pqBox .opt{min-height:48px;width:100%}
+#s-reg[data-v] .regbox{display:none}
+#s-reg[data-v="form"] .regbox:not(#obBox){display:block}
+#s-reg:not([data-v="form"]) #obBox{display:block}
+#s-reg[data-v="grade"] .hero,#s-reg[data-v="place"] .hero,#s-reg[data-v="result"] .hero{display:none}
+.gcards{display:grid;gap:12px;margin:14px 0}
+.gcard{display:flex;align-items:center;gap:14px;min-height:76px;padding:10px 18px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(135deg,rgba(52,224,192,.14),rgba(124,140,255,.14));text-align:right}
+.gcard b{font-family:var(--fh);font-weight:400;font-size:40px;color:var(--ye);min-width:48px;text-align:center}.gcard span{font-size:20px;font-weight:700}
+.v9in{width:100%;padding:12px 16px;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--tx);font-family:inherit;font-size:17px;outline:none}
+.pn.skip .pcir{background:rgba(124,140,255,.16);border:3px solid rgba(124,140,255,.55)}
+.pn.skip button.pcir{cursor:pointer;color:inherit}
+.pch[data-state="skipped"] .pbn{background:linear-gradient(120deg,hsl(var(--h) 25% 28%),hsl(var(--h) 20% 20%))}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 <script>
@@ -2709,18 +2720,19 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
   /* ---------- نقشهٔ مسیر ---------- */
   /* S.adv[grade] = تعداد فصل‌هایی که غولشان شکست خورده؛ فصل i کامل است اگر i < S.adv[grade] */
   function plan(g){
-    const adv=(S.adv||{})[g]||0;let cur=null;
+    const adv=(S.adv||{})[g]||0,sk=((pd().skip||{})[g])||0;let cur=null;
     const chs=CH[g].map((name,i)=>{
-      const r=rec(g,i),complete=i<adv,nodes=[];
+      const r=rec(g,i),skipped=i<sk,complete=i<adv,nodes=[];
       for(let j=0;j<6;j++){
         const kind=j<4?'L':j===4?'C':'B';let st,stars=0;
-        if(complete){st='done';if(kind==='L')stars=(r.L[j]&&r.L[j].s)||1}
+        if(skipped){st='skip';if(kind==='L')stars=(r.L[j]&&r.L[j].s)||0}
+        else if(complete){st='done';if(kind==='L')stars=(r.L[j]&&r.L[j].s)||1}
         else if(i>adv)st='locked';
         else{const dn=kind==='L'?!!r.L[j]:kind==='C'?!!r.c:false;
           if(dn){st='done';if(kind==='L')stars=r.L[j].s}else if(!cur){st='cur';cur={i,j}}else st='locked'}
         nodes.push({kind,j,st,stars});
       }
-      return{i,name,nodes,state:complete?'done':i===adv?'current':'locked'};
+      return{i,name,nodes,state:skipped?'skipped':complete?'done':i===adv?'current':'locked'};
     });
     return{chs,cur};
   }
@@ -2728,15 +2740,16 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
     const x=Math.round(Math.sin((c.i*6+n.j)*1.15)*54),emoji=['📘','📘','📘','📘','🎁','👹'][n.j];
     const nm=n.kind==='L'?'درس '+fa(n.j+1):n.kind==='C'?'صندوقچه':'غول فصل',lab=nm+' فصل '+fa(c.i+1);
     const stt=n.st==='locked'?' (قفل)':n.st==='done'?' (انجام شد)':'';
-    let h=`<span class="pcir" role="img" aria-label="${lab+stt}">${n.st==='locked'?'🔒':emoji}</span>`;
-    if(n.st==='done'&&n.kind==='L')h+=`<span class="pst" role="img" aria-label="${fa(n.stars)} ستاره از ۳">${'⭐'.repeat(n.stars)}${'☆'.repeat(3-n.stars)}</span>`;
+    const rp=n.st==='skip'&&n.kind!=='C';
+    let h=rp?`<button type="button" class="pcir pre" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='B'?'نبرد دوباره ':'تمرین ')+lab} (رد شده)">${emoji}</button>`:`<span class="pcir" role="img" aria-label="${lab+(n.st==='skip'?' (رد شده)':stt)}">${n.st==='locked'?'🔒':emoji}</span>`;
+    if((n.st==='done'||n.st==='skip')&&n.kind==='L'&&n.stars>0)h+=`<span class="pst" role="img" aria-label="${fa(n.stars)} ستاره از ۳">${'⭐'.repeat(n.stars)}${'☆'.repeat(3-n.stars)}</span>`;
     if(n.st==='cur')h+=`<button type="button" class="btn mg pgo" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='C'?'باز کردن ':'شروع ')+lab}">${n.kind==='C'?'باز کردن':'شروع'}</button>`;
     return`<div class="pn ${n.st} k${n.kind}" data-st="${n.st}" data-k="${n.kind}" style="--x:${x}px"${n.st==='cur'?' id="pcur"':''}>${h}</div>`;
   }
   function pathShow(){
     const g=S.grade||8,P=plan(g),hues=[172,215,265,330,28,95,190,300,45];
-    $('#pathBox').innerHTML=P.chs.map(c=>`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--h:${hues[c.i%9]}"><div class="pbn"><b>فصل ${fa(c.i+1)}</b><span>${esc(c.name)}</span>${c.state==='done'?'<i aria-label="کامل شد">✅</i>':''}</div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`).join('');
-    $$('#pathBox .pgo').forEach(b=>b.onclick=()=>act(+b.dataset.ch,+b.dataset.j));
+    $('#pathBox').innerHTML=P.chs.map(c=>`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--h:${hues[c.i%9]}"><div class="pbn"><b>فصل ${fa(c.i+1)}</b><span>${esc(c.name)}</span>${c.state==='done'?'<i aria-label="کامل شد">✅</i>':c.state==='skipped'?'<i>⏭ رد شده</i>':''}</div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`).join('');
+    $$('#pathBox .pgo,#pathBox .pre').forEach(b=>b.onclick=()=>act(+b.dataset.ch,+b.dataset.j));
     const el=$('#pcur');if(el)el.scrollIntoView({block:'center'});
   }
   function act(i,j){SFX.init();SFX.click();const g=S.grade||8;
@@ -2772,30 +2785,125 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
   function pqEnd(){
     const{g,i,j,ok,q}=PQ,acc=ok/q.length,s=acc>=.9?3:acc>=.6?2:1,r=rec(g,i),old=r.L[j];
     r.L[j]={s:Math.max(s,old?old.s:0),a:Math.max(Math.round(acc*100),old?old.a:0)};
-    const P=pd();if(P.xp.d!==dayN())P.xp={d:dayN(),b:xpOf(),v:0};P.xp.v+=ok*10;
+    const P=pd();if(P.xp.d!==dayN())P.xp={d:dayN(),b:xpOf(),v:0};P.xp.v+=ok*10;P.lc=(P.lc||0)+1;
+    /* مهمان: بار اول بعد از اولین درس؛ بعد فقط هر ۳ درس یا اولین درس هر روز */
+    const nag=isGuest()&&(!P.nag||P.lc-P.nag.at>=3||(P.lc>P.nag.at&&P.nag.d!==dayN()));
+    if(nag)P.nag={at:P.lc,d:dayN()};
     persist();PQ=null;SFX.win();if(s===3)confetti(30);v9Hdr();
-    $('#pqBox').innerHTML=`<div class="center"><div style="font-size:64px">${'⭐'.repeat(s)}</div><h2 class="neon" style="font-size:26px">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p>${fa(ok)} پاسخ درست از ${fa(q.length)}</p><button type="button" class="btn mg" id="pqGo" style="min-height:44px">ادامهٔ مسیر</button></div>`;
-    $('#pqGo').onclick=()=>go('path');
+    $('#pqBox').innerHTML=`<div class="center"><div style="font-size:64px">${'⭐'.repeat(s)}</div><h2 class="neon" style="font-size:26px">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p>${fa(ok)} پاسخ درست از ${fa(q.length)}</p>${nag?'':'<button type="button" class="btn mg" id="pqGo" style="min-height:44px">ادامهٔ مسیر</button>'}</div>${nag?'<div class="card" id="suBox" style="margin-top:12px">'+signupHtml()+'</div>':''}`;
+    if(nag)bindSignup($('#suBox'),()=>go('path'));else $('#pqGo').onclick=()=>go('path');
   }
+
+  /* ---------- مهمان و ذخیرهٔ پیشرفت ---------- */
+  const isGuest=()=>!!USER&&USER.indexOf('guest_')===0;
+  function signupHtml(){return`<h3 class="neon" style="font-size:21px;text-align:center">اسمت چیه که پیشرفتت ذخیره بشه؟</h3>
+    <label class="f" for="suName">اسم</label><input class="v9in" id="suName" maxlength="40" autocomplete="off" placeholder="مثلاً: علی رضایی">
+    <label class="f" for="suUser">نام کاربری (انگلیسی)</label><input class="v9in" id="suUser" dir="ltr" maxlength="24" autocapitalize="none" autocomplete="off" placeholder="username">
+    <label class="f" for="suPass">رمز عبور</label><input class="v9in" id="suPass" type="password" dir="ltr" maxlength="40" autocomplete="off" placeholder="••••••">
+    <details style="margin:8px 0"><summary style="min-height:44px;display:flex;align-items:center;cursor:pointer">بیشتر</summary><label class="f" for="suPh">شمارهٔ موبایل (اختیاری)</label><input class="v9in" id="suPh" dir="ltr" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="09123456789"></details>
+    <div class="msg bad" id="suErr" role="alert" style="display:none;min-height:0;margin:8px 0"></div>
+    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn mg" id="suGo" style="min-height:44px">ذخیرهٔ پیشرفت</button><button type="button" class="btn gh" id="suLater" style="min-height:44px">بعداً</button></div>`}
+  /* نام کاربری مهمان → نام کاربری واقعی؛ همهٔ داده‌ها (d و کلیدهای wh_/tm_/mv_) منتقل می‌شود و رمز با همان sha() ثبت‌نام عادی هش می‌شود */
+  async function guestSignup(name,u,pass,phone){
+    if(!isGuest())return'حساب مهمان نیست';
+    if(name.length<2)return'اسمت را بنویس';
+    if(u.length<3||/\s/.test(u))return'نام کاربری حداقل ۳ حرف و بدون فاصله باشد';
+    if(pass.length<4)return'رمز عبور حداقل ۴ کاراکتر باشد';
+    const ph=phone.replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d));if(ph&&!/^09\d{9}$/.test(ph))return'شمارهٔ موبایل درست نیست (مثل ۰۹۱۲۳۴۵۶۷۸۹) یا خالی بگذار';
+    persist();const us=users(),old=USER;if(us[u])return'این نام کاربری قبلاً ثبت شده؛ یکی دیگر بنویس';
+    const h=await sha(u+'|'+pass);
+    us[u]={n:name,h,m:ph,d:us[old].d};delete us[old];store(UK,us);
+    ['wh_','tm_','mv_'].forEach(k=>{const v=store(k+old);if(v!==null&&v!==undefined){store(k+u,v);try{localStorage.removeItem(k+old)}catch(e){}}});
+    store(SK,u);USER=u;S.name=name;S.phone=ph;$('#who').innerHTML='🎮 <b>'+esc(name)+'</b>';persist();return null;
+  }
+  function bindSignup(box,done){
+    const err=m=>{const e=box.querySelector('#suErr');e.style.display=m?'block':'none';e.textContent=m?'⚠️ '+m:''};
+    ['#suUser','#suPass'].forEach(sel=>box.querySelector(sel).addEventListener('input',e=>{e.target.value=e.target.value.replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}));
+    box.querySelector('#suLater').onclick=()=>{SFX.click();if(document.querySelector('#modal.on'))$('#modal').classList.remove('on');done()};
+    box.querySelector('#suGo').onclick=async()=>{SFX.init();
+      const m=await guestSignup(box.querySelector('#suName').value.trim(),box.querySelector('#suUser').value.trim().toLowerCase(),box.querySelector('#suPass').value,box.querySelector('#suPh').value.trim());
+      if(m){SFX.err();err(m);return}
+      err('');SFX.win();if(document.querySelector('#modal.on'))$('#modal').classList.remove('on');toast('✅ پیشرفتت ذخیره شد');done();
+    };
+  }
+
+  /* ---------- اول بازی، بعد ثبت‌نام: خوش‌آمد ← پایه ← تعیین سطح ۵ سؤالی ← نتیجه ← درس اول ---------- */
+  const reg=$('#s-reg'),ob=document.createElement('div');ob.id='obBox';ob.className='card regbox';reg.appendChild(ob);
+  reg.querySelector('.regbox:not(#obBox)').insertAdjacentHTML('beforeend','<div class="center" style="margin-top:8px"><button type="button" class="btn sm gh" id="fmBack" style="min-height:44px">→ بازگشت</button></div>');
+  const setView=v=>{reg.dataset.v=v;window.scrollTo(0,0)};
+  let OB=null;
+  function obWelcome(){
+    setView('welcome');OB=null;
+    ob.innerHTML=`<div class="center"><p class="muted" style="margin:0 0 12px">در ۳ دقیقه ریاضی را بازی‌وار یاد بگیر ✨</p><button type="button" class="btn mg" id="wlGo" style="min-height:64px;font-size:22px;width:100%">بزن بریم! 🚀</button><div style="margin-top:14px"><button type="button" class="btn sm gh" id="wlHave" style="min-height:44px">حساب دارم</button></div></div>`;
+    $('#wlGo').onclick=()=>{SFX.init();SFX.click();obGrade()};
+    $('#wlHave').onclick=()=>{SFX.init();SFX.click();setView('form');$('.tabs button[data-m="login"]').click()};
+  }
+  $('#fmBack').onclick=()=>{SFX.click();obWelcome()};
+  function obGrade(){
+    setView('grade');
+    ob.innerHTML=`<h2 class="neon center" style="font-size:26px">کدام پایه‌ای؟</h2><div class="gcards">${[7,8,9].map(g=>`<button type="button" class="gcard" data-g="${g}"><b>${fa(g)}</b><span>پایهٔ ${GN[g]}</span></button>`).join('')}</div><div class="center"><button type="button" class="btn sm gh" id="gdBack" style="min-height:44px">→ بازگشت</button></div>`;
+    $$('#obBox .gcard').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();obPlace(+b.dataset.g)});
+    $('#gdBack').onclick=()=>{SFX.click();obWelcome()};
+  }
+  /* سختی رو به بالا = ترتیب فصل‌ها؛ فصل‌های بدون سؤال رد می‌شوند */
+  function placeBuild(g){
+    const pools=[];CH[g].forEach((c,i)=>{const p=exBuild(g,[chTopic(c)]);if(p.length)pools.push({i,p})});
+    if(!pools.length)pools.push({i:0,p:exBuild(g)});
+    const used=new Set(),Q=[];
+    for(let k=0;k<5;k++){const e=pools[Math.round(k*(pools.length-1)/4)],c=shuffle(e.p).find(q=>!used.has(q.q))||e.p[0];used.add(c.q);Q.push(Object.assign({ch:e.i},c))}
+    return Q;
+  }
+  function obPlace(g){OB={g,q:placeBuild(g),k:0,ans:[],lock:false};setView('place');obAsk()}
+  function obAsk(){
+    const me=OB,q=me.q[me.k],n=me.q.length;
+    ob.innerHTML=`<p class="muted" style="font-size:14px;margin:0">سؤال ${fa(me.k+1)} از ${fa(n)} • فقط برای پیدا کردن جای شروع تو</p><div class="bar" style="margin:8px 0"><i style="width:${me.k/n*100}%"></i></div><h3 style="font-size:20px;margin:8px 0;line-height:1.9">${esc(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}" style="min-height:48px;width:100%">${esc(o.t)}</button>`).join('')}</div><div class="msg" id="obM" style="min-height:44px"></div>`;
+    $$('#obBox .opt').forEach(b=>b.onclick=()=>{
+      if(OB!==me||me.lock)return;me.lock=true;SFX.init();const ok=!!q.opts[+b.dataset.k].ok;me.ans.push({ok,ch:q.ch,tp:q.tp});
+      $$('#obBox .opt').forEach(x=>{x.disabled=true;if(q.opts[+x.dataset.k].ok)x.classList.add('ok')});
+      if(ok){SFX.ok();$('#obM').textContent='✅ درست!'}else{SFX.err();b.classList.add('no');$('#obM').textContent='اشکالی ندارد؛ جواب درست مشخص شد 💪'}
+      setTimeout(()=>{if(OB!==me)return;me.k++;me.lock=false;me.k>=me.q.length?obResult():obAsk()},800);
+    });
+  }
+  function obResult(){
+    const{g,q,ans}=OB,okN=ans.filter(a=>a.ok).length,w=ans.find(a=>!a.ok),X=w?w.ch:q[q.length-1].ch;OB.X=X;OB.okN=okN;
+    setView('result');
+    ob.innerHTML=`<div class="center"><div style="font-size:56px">🎯</div><p class="muted" style="margin:0">${fa(okN)} پاسخ درست از ${fa(q.length)}</p><h2 class="neon" style="font-size:25px;margin:6px 0">تو از فصل ${fa(X+1)} شروع می‌کنی!</h2><p style="font-size:18px;margin:0 0 8px"><b>${esc(CH[g][X])}</b></p>${X>0?`<p class="muted" style="font-size:14px;line-height:1.9">فصل‌های ${fa(1)} تا ${fa(X)} «رد شده» علامت می‌خورند؛ قفل نیستند و هر وقت خواستی برمی‌گردی.</p>`:''}<button type="button" class="btn mg" id="obStart" style="min-height:56px;font-size:19px;width:100%">شروع درس اول</button></div>`;
+    $('#obStart').onclick=()=>{SFX.init();SFX.click();obStart()};
+  }
+  function obStart(){
+    const{g,X,okN,ans}=OB,u='guest_'+Math.random().toString(36).slice(2,8),wrong={};
+    ans.forEach(a=>{if(!a.ok)wrong[g+'|'+(a.tp||'محاسبات')]=1});
+    const d={grade:g,wrong,path:{l:{},xp:{d:0,b:0,v:0},skip:{[g]:X},placed:{g,ch:X,ok:okN}}};if(X>0)d.adv={[g]:X};
+    const us=users();us[u]={n:'مهمان',h:'',m:'',d};store(UK,us);OB=null;
+    enter(u,us[u]);pqStart(g,X,0);
+  }
+  window.v9Ob=()=>OB; /* فقط برای تست */
+  obWelcome();
 
   /* ---------- لیگ ---------- */
   function leagueShow(){renderLeague();lgFetch()}
 
   /* ---------- پروفایل ← بیشتر ---------- */
   const MORE=[['tch','🧑‍🏫','معلم هوشمند'],['subj','📚','کتاب‌ها: فارسی، علوم، اجتماعی'],['vid','🎬','ویدیو و حل تمرین'],['exam','📝','آزمون آنلاین'],['quiz','📋','خودآزمایی'],['expo','🏛️','موزهٔ ریاضی'],['lab','🔬','آزمایشگاه تقارن'],['learn','📘','درسنامه'],['weak','🧠','مرور هوشمند'],['move','🕺','ورزش و حرکات موزون'],['adv','🗺️','ماجراجویی و مأموریت‌های ویژه'],['live','📡','مسابقهٔ زنده'],['hub','🎮','باشگاه بازی‌ها'],['wheel','🎡','گردونهٔ شانس'],['report','📊','گزارش برای دبیر']];
-  function logout(){persist();USER=null;try{localStorage.removeItem(SK)}catch(e){}$('#who').textContent='';go('reg')}
+  function logout(){if(isGuest()){const u=USER,us=users();delete us[u];store(UK,us);['wh_','tm_','mv_'].forEach(k=>{try{localStorage.removeItem(k+u)}catch(e){}})}else persist();USER=null;try{localStorage.removeItem(SK)}catch(e){}$('#who').textContent='';go('reg')}
   function profShow(){
     const e=S.eq||{},xp=xpOf(),lv=Math.floor(xp/200)+1;
     secProf.innerHTML=`<div class="card center"><h2 class="neon" style="font-size:28px">👤 پروفایل</h2>
     <div style="font-size:64px;line-height:1.3">${e.ch||e.av||'🦸'}</div><h3 style="font-size:24px">${esc(S.name||'')}</h3>
-    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div></div>
+    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div>${isGuest()?'<p class="muted" style="font-size:14px;line-height:1.9">حساب مهمان: پیشرفتت هنوز ذخیره نشده.</p><button type="button" class="btn mg" id="pSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button>':''}</div>
     <div class="card" style="margin-top:12px"><h3 style="font-size:20px;color:var(--ye)">بیشتر</h3><div class="pmore" id="pMore">${MORE.map(([id,i,t])=>`<button type="button" data-more="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')}</div>
     <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
     $$('#pMore [data-more]').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();const id=b.dataset.more;
       if(id==='report'&&!S.quiz){toast('اول خودآزمایی و پرسشنامه را تمام کن 📝');return}go(id)});
+    const ps=$('#pSave');if(ps)ps.onclick=()=>{SFX.click();modal(signupHtml());bindSignup($('#modal'),()=>{profShow();v9Hdr()})};
     $('#btnSound').onclick=()=>{SFX.init();const m=SFX.toggle();$('#btnSound').textContent=m?'🔇 صدا: خاموش':'🔊 صدا: روشن';if(!m)SFX.ok()};
     $('#btnSup2').onclick=()=>{SFX.init();SFX.click();supportOpen()};
     $('#btnOut').onclick=()=>{SFX.click();
+      if(isGuest()){modal(`<h3 class="neon" style="font-size:22px">🚪 خروج از حساب مهمان</h3><p style="line-height:2">اگر الان خارج شوی، پیشرفت مهمان <b>پاک می‌شود</b>. بهتر است اول پیشرفتت را ذخیره کنی.</p>
+        <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="outSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button><button type="button" class="btn gh" id="outYes" style="min-height:44px">خروج بدون ذخیره</button><button type="button" class="btn gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
+        $('#outNo').onclick=()=>$('#modal').classList.remove('on');
+        $('#outSave').onclick=()=>{modal(signupHtml());bindSignup($('#modal'),()=>{profShow();v9Hdr()})};
+        $('#outYes').onclick=()=>{$('#modal').classList.remove('on');logout()};return}
       modal(`<h3 class="neon" style="font-size:22px">🚪 خروج از حساب</h3><p style="line-height:2">می‌خواهی از حساب خارج شوی؟ پیشرفتت ذخیره می‌ماند و بعداً با نام کاربری و رمز دوباره وارد می‌شوی.</p>
       <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="outYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
       $('#outNo').onclick=()=>$('#modal').classList.remove('on');
@@ -2816,6 +2924,7 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
   const TABOF={path:'path',pq:'path',adv:'path',league:'league',shop:'shop',prof:'prof'};
   window.v9Go=function(id){
     $$('#bnav button').forEach(b=>{if(b.dataset.go===TABOF[id])b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+    if(id==='reg')obWelcome();
     if(!USER)return;
     if(id==='path'){touchStreak();try{applyTheme()}catch(e){}pathShow()}
     else if(id==='league')leagueShow();
