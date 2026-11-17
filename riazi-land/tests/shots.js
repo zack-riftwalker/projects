@@ -4,7 +4,7 @@
    Later phases: add entries to SCREENS (name + async fn(page)); everything runs against a seeded legacy user unless `fresh:true`. */
 const fs = require('fs');
 const path = require('path');
-const { chromium, ROOT, open, register } = require('./lib');
+const { chromium, ROOT, open, register, openForm } = require('./lib');
 
 const phase = process.argv[2];
 if (!phase || !/^[\w.-]+$/.test(phase)) { console.error('usage: node shots.js <phase-name>   e.g. phase-0'); process.exit(2); }
@@ -14,7 +14,13 @@ fs.mkdirSync(OUT, { recursive: true });
 const go = (id) => (page) => page.evaluate((id) => go(id), id);
 /* name, options, setup */
 const SCREENS = [
-  ['register', { fresh: true, noLogin: true }, async () => {}],
+  ['welcome', { fresh: true, noLogin: true }, async () => {}],
+  ['login-form', { fresh: true, noLogin: true }, (page) => openForm(page, 'login')],
+  ['grade-pick', { fresh: true, noLogin: true }, (page) => page.click('#wlGo')],
+  ['placement-question', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); }],
+  ['placement-result', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } }],
+  ['path-after-placement', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq'); await page.evaluate(() => go('path')); }],
+  ['signup-card', { fresh: true, noLogin: true }, async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#obBox .opt:not([disabled])'); await page.evaluate(() => { const o = v9Ob(); document.querySelectorAll('#obBox .opt')[o.q[o.k].opts.findIndex((x) => x.ok)].click(); }); await page.waitForTimeout(900); } await page.click('#obStart'); await page.waitForFunction(() => cur === 'pq'); for (let k = 0; k < 5; k++) { await page.waitForSelector('#pqBox .opt:not([disabled])'); await page.evaluate(() => { const P = v9Pq(); document.querySelectorAll('#pqBox .opt')[P.q[P.k].opts.findIndex((o) => o.ok)].click(); }); await page.waitForTimeout(1000); } await page.waitForSelector('#suBox'); }],
   ['path-new-user', { fresh: true }, async () => {}],
   ['path-legacy-user', {}, async () => {}],
   ['path-legacy-chapter-top', {}, (page) => page.evaluate(() => window.scrollTo(0, 0))],

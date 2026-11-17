@@ -2834,7 +2834,7 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
   let OB=null;
   function obWelcome(){
     setView('welcome');OB=null;
-    ob.innerHTML=`<div class="center"><p class="muted" style="margin:0 0 12px">در ۳ دقیقه ریاضی را بازی‌وار یاد بگیر ✨</p><button type="button" class="btn mg" id="wlGo" style="min-height:64px;font-size:22px;width:100%">بزن بریم! 🚀</button><div style="margin-top:14px"><button type="button" class="btn sm gh" id="wlHave" style="min-height:44px">حساب دارم</button></div></div>`;
+    ob.innerHTML=`<div class="center"><p class="muted" style="margin:0 0 12px">در ۳ دقیقه ریاضی را بازی‌وار یاد بگیر ✨</p><button type="button" class="btn mg" id="wlGo" style="min-height:64px;font-size:22px;width:100%;white-space:nowrap;display:flex">بزن بریم! 🚀</button><div style="margin-top:14px"><button type="button" class="btn sm gh" id="wlHave" style="min-height:44px">حساب دارم</button></div></div>`;
     $('#wlGo').onclick=()=>{SFX.init();SFX.click();obGrade()};
     $('#wlHave').onclick=()=>{SFX.init();SFX.click();setView('form');$('.tabs button[data-m="login"]').click()};
   }
@@ -2867,7 +2867,7 @@ body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bna
   function obResult(){
     const{g,q,ans}=OB,okN=ans.filter(a=>a.ok).length,w=ans.find(a=>!a.ok),X=w?w.ch:q[q.length-1].ch;OB.X=X;OB.okN=okN;
     setView('result');
-    ob.innerHTML=`<div class="center"><div style="font-size:56px">🎯</div><p class="muted" style="margin:0">${fa(okN)} پاسخ درست از ${fa(q.length)}</p><h2 class="neon" style="font-size:25px;margin:6px 0">تو از فصل ${fa(X+1)} شروع می‌کنی!</h2><p style="font-size:18px;margin:0 0 8px"><b>${esc(CH[g][X])}</b></p>${X>0?`<p class="muted" style="font-size:14px;line-height:1.9">فصل‌های ${fa(1)} تا ${fa(X)} «رد شده» علامت می‌خورند؛ قفل نیستند و هر وقت خواستی برمی‌گردی.</p>`:''}<button type="button" class="btn mg" id="obStart" style="min-height:56px;font-size:19px;width:100%">شروع درس اول</button></div>`;
+    ob.innerHTML=`<div class="center"><div style="font-size:56px">🎯</div><p class="muted" style="margin:0">${fa(okN)} پاسخ درست از ${fa(q.length)}</p><h2 class="neon" style="font-size:25px;margin:6px 0">تو از فصل ${fa(X+1)} شروع می‌کنی!</h2><p style="font-size:18px;margin:0 0 8px"><b>${esc(CH[g][X])}</b></p>${X>0?`<p class="muted" style="font-size:14px;line-height:1.9">فصل‌های ${fa(1)} تا ${fa(X)} «رد شده» علامت می‌خورند؛ قفل نیستند و هر وقت خواستی برمی‌گردی.</p>`:''}<button type="button" class="btn mg" id="obStart" style="min-height:56px;font-size:19px;width:100%;white-space:nowrap;display:flex">شروع درس اول</button></div>`;
     $('#obStart').onclick=()=>{SFX.init();SFX.click();obStart()};
   }
   function obStart(){

@@ -441,7 +441,6 @@ T('PHASE2: placement sets the start chapter; earlier chapters are «رد شده�
   assert(txt.includes('شروع می‌کنی') && txt.includes('رد شده'), 'result text: ' + txt);
   await page.click('#obStart');
   await page.waitForFunction(() => cur === 'pq');
-  eq(await page.evaluate(() => PQ === undefined || true), true);
   await page.evaluate(() => go('path'));
   const r = await page.evaluate(() => ({ states: [...document.querySelectorAll('#pathBox .pch')].map((c) => c.dataset.state), cur: (() => { const c = document.querySelector('#pcur'); return c && [+c.closest('.pch').dataset.ch, c.dataset.k, [...c.parentNode.children].indexOf(c)]; })(), replay: document.querySelectorAll('#pathBox .pch[data-state="skipped"] .pre').length, label: document.querySelector('.pch[data-state="skipped"] .pbn').textContent }));
   eq(r.states.slice(0, X), Array(X).fill('skipped'), 'skipped chapters');
@@ -477,7 +476,7 @@ T('PHASE2: guest → first lesson → signup card → rename migration keeps eve
   await finishLesson(page);
   assert(await visible(page, '#suBox'), 'signup card not shown after the first lesson');
   assert((await page.textContent('#suBox')).includes('اسمت چیه که پیشرفتت ذخیره بشه؟'), 'card title');
-  assert(!(await visible(page, '#suPh')), 'mobile must be behind «بیشتر»');
+  eq(await page.evaluate(() => document.querySelector('#suPh').closest('details').open), false, 'mobile must be behind «بیشتر»');
   const before = (await lsGet(page, 'mh_users'))[guest].d;
   /* validation */
   await page.fill('#suName', 'علی'); await page.fill('#suUser', 'ab'); await page.fill('#suPass', '1234'); await page.click('#suGo');
