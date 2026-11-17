@@ -320,7 +320,7 @@ body.th-sunset{background:linear-gradient(160deg,#2b1055,#7a2e5e 55%,#ff7a59) fi
   <header id="topbar">
     <button type="button" class="brand" id="btnBrand" aria-label="مسیر (صفحهٔ اصلی)"><span id="hAv" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 512 512"><use href="#ic"/></svg></span><span>ریاضی‌لند</span></button>
     <span id="who" hidden></span>
-    <span class="hst" id="hStk" title="روزهای پشت‌سرهم">🔥 ۰</span><span class="hst" id="hCoin" title="سکه">🪙 ۰</span><span class="hst" id="hXp" title="امتیاز امروز / هدف روزانه">⚡ ۰/۵۰</span>
+    <span class="hst" id="hStk" title="استریک: روزهای پشت‌سرهم با رسیدن به هدف">🔥 ۰</span><span class="hst" id="hCoin" title="سکه">🪙 ۰</span><span class="hst" id="hXp" title="درس‌های امروز / هدف روزانه">⚡ ۰/۱</span>
   </header>
 
   <main>
@@ -2746,6 +2746,13 @@ body[data-scr="pq"] #bnav,body[data-scr="pq"] #topbar{display:none!important}
 body.th-galaxy{background:linear-gradient(160deg,#0b0620,#2a1466 55%,#6a3fd1) fixed!important}
 body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fixed!important}
 .sw.th-galaxy{background:linear-gradient(160deg,#0b0620,#6a3fd1)}.sw.th-candy{background:linear-gradient(160deg,#3a1030,#ff8ac4)}
+.streakup{display:inline-block;margin:8px auto;padding:6px 16px;border-radius:99px;font-weight:800;font-size:18px;color:#fff;background:linear-gradient(135deg,#ff9d2e,#ff4d6d);animation:supop .7s ease-out}
+@keyframes supop{0%{transform:scale(.3) translateY(14px);opacity:0}60%{transform:scale(1.2)}100%{transform:none;opacity:1}}
+.goalcard{margin-top:6px;padding:12px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal-h{font-size:13px;color:var(--mut);padding:2px 0}.cal-e{display:block}
+.cal-d{min-height:38px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:14px;background:rgba(255,255,255,.05)}
+.cal-d.cal-on{background:rgba(255,157,46,.25);font-size:18px}.cal-d.cal-t{outline:2px solid var(--cy)}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 <script>
@@ -2760,16 +2767,15 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
   mk('pq','<div class="card" id="pqBox"></div>');
   mk('league','').appendChild($('#lb')); /* کارت لیگ موجود به صفحهٔ خودش منتقل شد */
   const secProf=mk('prof','');
-  const GOAL=50; /* هدف روزانهٔ موقت؛ فاز ۵ تنظیمش می‌کند */
 
   /* ---------- داده ---------- */
   function pd(){if(!S.path||typeof S.path!=='object')S.path={};const P=S.path;P.l=P.l||{};P.xp=P.xp||{d:0,b:0,v:0};return P}
   function rec(g,i){const P=pd();const G=P.l[g]=P.l[g]||{};const r=G[i]=G[i]||{L:[],c:0};r.L=r.L||[];return r}
   function dayXp(){const P=pd(),d=dayN();if(P.xp.d!==d)P.xp={d,b:xpOf(),v:0};return Math.max(0,xpOf()-P.xp.b)}
-  function touchStreak(){const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d)S.stk={n:s.d===d-1?s.n+1:1,d};const k=streakInit();if(S.stk){k.n=S.stk.n;k.last=S.stk.d;k.best=Math.max(k.best||0,k.n)}}
+  function touchStreak(){const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d)S.stk={n:s.d===d-1?s.n+1:1,d};}
   window.v9Hdr=function(){if(!USER)return;
     {const k=rbKey();if(k!==hAvKey){hAvKey=k;$('#hAv').innerHTML=rbSvg(false)}}
-    $('#hStk').textContent='🔥 '+fa((S.stk&&S.stk.n)||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);$('#hXp').textContent='⚡ '+fa(Math.min(dayXp(),999))+'/'+fa(GOAL)};
+    $('#hStk').textContent='🔥 '+fa(streakInit().n||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);$('#hXp').textContent='⚡ '+fa(Math.min(todayLog().n,99))+'/'+fa(goalN())};
 
   /* ---------- نقشهٔ مسیر ---------- */
   /* S.adv[grade] = تعداد فصل‌هایی که غولشان شکست خورده؛ فصل i کامل است اگر i < S.adv[grade] */
@@ -3198,13 +3204,15 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
     end(){
       const st=this.st,{g,i,j,firstOk,total}=st,acc=firstOk/total,s=acc>=.9?3:acc>=.6?2:1,r=rec(g,i),old=r.L[j];
       r.L[j]={s:Math.max(s,old?old.s:0),a:Math.max(Math.round(acc*100),old?old.a:0)};
-      const P=pd();P.lc=(P.lc||0)+1;
+      const P=pd();P.lc=(P.lc||0)+1;const up=goalLesson();
       /* مهمان: بار اول بعد از اولین درس؛ بعد فقط هر ۳ درس یا اولین درس هر روز */
       const nag=isGuest()&&(!P.nag||P.lc-P.nag.at>=3||(P.lc>P.nag.at&&P.nag.d!==dayN()));
       if(nag)P.nag={at:P.lc,d:dayN()};
       const coin=v9Coins(firstOk===total?10:5,'درس'),lv1=lvOf(xpOf()),evo=tierOf(lv1)>tierOf(st.lv0);persist();this.st=null;SFX.win();if(s===3)confetti(30);v9Hdr();if(lv1>st.lv0)toast('🎉 سطح '+fa(lv1)+'!'+(evo?' ربات تو تکامل پیدا کرد 🤖✨':''));
-      $('#pqBox').innerHTML=`<div class="center" style="margin-top:8px"><span style="font-size:${nag?34:64}px">${'⭐'.repeat(s)}</span><h2 class="neon" style="font-size:${nag?21:26}px;margin:2px 0">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p style="margin:0 0 6px">${fa(firstOk)} پاسخ درستِ بار اول از ${fa(total)}${firstOk===total?' — همه درست! 🎉':''}</p><p class="xpl" style="margin:0 0 6px">+${fa(st.xp)} XP${coin?' • 🪙 +'+fa(coin)+' سکه':''}${lv1>st.lv0?' • سطح '+fa(lv1)+'!':''}</p>${nag?'':'<button type="button" class="btn mg" id="pqGo" style="min-height:48px;width:100%;margin-top:10px">ادامهٔ مسیر</button>'}</div>${nag?'<div class="card" id="suBox" style="margin-top:10px;padding:12px">'+signupHtml()+'</div>':''}`;
-      if(nag)bindSignup($('#suBox'),()=>go('path'));else $('#pqGo').onclick=()=>go('path');
+      $('#pqBox').innerHTML=`<div class="center" style="margin-top:8px"><span style="font-size:${nag?34:64}px">${'⭐'.repeat(s)}</span><h2 class="neon" style="font-size:${nag?21:26}px;margin:2px 0">${s===3?'عالی بود!':s===2?'آفرین!':'خوب بود، ادامه بده!'}</h2><p style="margin:0 0 6px">${fa(firstOk)} پاسخ درستِ بار اول از ${fa(total)}${firstOk===total?' — همه درست! 🎉':''}</p><p class="xpl" style="margin:0 0 6px">+${fa(st.xp)} XP${coin?' • 🪙 +'+fa(coin)+' سکه':''}${lv1>st.lv0?' • سطح '+fa(lv1)+'!':''}</p>${nag||up?'':'<button type="button" class="btn mg" id="pqGo" style="min-height:48px;width:100%;margin-top:10px">ادامهٔ مسیر</button>'}${up?goalDoneHtml():''}</div>${nag?'<div class="card" id="suBox" style="margin-top:10px;padding:12px">'+signupHtml()+'</div>':''}`;
+      if(nag)bindSignup($('#suBox'),()=>go('path'));
+      if($('#pqGo'))$('#pqGo').onclick=()=>go('path');
+      if($('#pqMore'))$('#pqMore').onclick=()=>{go('path');const b=$('#pathBox .pgo');if(b)b.click()};
     }
   };
   Lesson.same=same;window.Lesson=Lesson;window.rich0=rich;
@@ -3441,6 +3449,65 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
     b.style.removeProperty('background')}
   window.v9Coll=()=>colList().map(x=>x.id);
 
+  /* ===================== فاز ۵: استریک 🔥 و هدف روزانه (تقویم جلالی، منطقهٔ زمانی تهران) ===================== */
+  ST.push('goal','tl','days'); /* S.goal: ۱/۲/۳ درس • S.tl: {d,n,sd} درس‌های امروز • S.days: روزهای رسیدن به هدف (شمارهٔ روز) */
+  const TZ='Asia/Tehran';
+  const fG=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+  const fJ=new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn',{timeZone:TZ,year:'numeric',month:'numeric',day:'numeric'});
+  const prt=(f,ms)=>{const o={};f.formatToParts(new Date(ms)).forEach(x=>{o[x.type]=+x.value});return o};
+  /* شمارهٔ یکنواخت روز = روزهای از 1970 بر اساس تاریخ محلی تهران (مرز روز = نیمه‌شب تهران) */
+  function tday(ms){const g=prt(fG,ms==null?Date.now():ms);return Math.floor(Date.UTC(g.year,g.month-1,g.day)/864e5)}
+  function jInfo(dayNum){const j=prt(fJ,dayNum*864e5+432e5);return{y:j.year,m:j.month,d:j.day}} /* ظهر UTC همان روز = ۱۵:۳۰ تهران */
+  window.v9Tday=tday;window.v9Jal=jInfo;
+  const JM=['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+  const goalN=()=>[1,2,3].includes(S.goal)?S.goal:1;
+  function todayLog(){const T=tday();if(!S.tl||S.tl.d!==T)S.tl={d:T,n:0,sd:0};return S.tl}
+  /* هنگام باز کردن اپ: اگر روزی جا افتاده، یخ‌استریک مصرف می‌شود یا استریک به ۰ برمی‌گردد (بدون سرزنش) */
+  function streakCheck(){
+    const k=streakInit(),T=tday();if(!(k.n>0)||!k.last)return;
+    const missed=T-k.last-1;if(missed<=0)return;
+    if(k.freezes>=missed){k.freezes-=missed;k.last=T-1;toast('❄️ یخ‌استریک استریکت رو نجات داد!')}
+    else{k.n=0;toast('یه شروع تازه! 🌱')}
+    persist();v9Hdr();
+  }
+  window.v9StreakCheck=streakCheck;
+  /* بعد از تمام شدن هر درس: true اگر همین درس هدف امروز را کامل کرد (استریک +۱، فقط یک بار در روز) */
+  function goalLesson(){
+    const tl=todayLog();tl.n++;let up=false;
+    if(tl.n>=goalN()&&!tl.sd){
+      streakCheck();const k=streakInit(),T=tday();
+      k.n=(k.n||0)+1;k.last=T;k.best=Math.max(k.best||0,k.n);
+      S.days=(S.days||[]).filter(x=>x!==T).concat(T).slice(-400);tl.sd=1;up=true;
+    }
+    return up;
+  }
+  function goalDoneHtml(){
+    const n=streakInit().n;
+    return`<div class="streakup" role="status">🔥 استریک +۱ <b>(${fa(n)} روز)</b></div>
+    <div class="card goalcard" id="goalDone"><h3 class="neon" style="font-size:22px;margin:0">امروز کافیه، آفرین! 🎉</h3><p style="margin:4px 0 10px">فردا ادامه بده.</p>
+    <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="pqGo" style="min-height:48px;min-width:120px">باشه</button><button type="button" class="btn gh" id="pqMore" style="min-height:48px">یکی دیگه</button></div></div>`;
+  }
+
+  /* ---- انتخاب هدف روزانه + تقویم ماهانه (پروفایل) ---- */
+  function goalHtml(){
+    return`<div class="card" style="margin-top:12px"><h3 style="font-size:20px;color:var(--ye)">🎯 هدف روزانه</h3><p class="muted" style="font-size:13.5px;margin:2px 0 8px">هر روز چند درس بخوانی تا استریک 🔥 بماند؟</p>
+    <div class="row" id="goalPick" role="group" aria-label="هدف روزانه" style="justify-content:center">${[1,2,3].map(n=>`<button type="button" class="btn ${goalN()===n?'':'gh'}" data-g="${n}" aria-pressed="${goalN()===n}" style="min-height:48px;min-width:84px">${fa(n)} درس</button>`).join('')}</div>
+    <p class="muted" style="font-size:13px;margin:8px 0 0;text-align:center">🔥 استریک: ${fa(streakInit().n||0)} روز • بهترین: ${fa(streakInit().best||0)} • ❄️ ${fa(streakInit().freezes||0)}</p></div>`;
+  }
+  function bindGoal(){$$('#goalPick [data-g]').forEach(b=>b.onclick=()=>{SFX.click();S.goal=+b.dataset.g;persist();v9Hdr();profShow()})}
+  let calOff=0;
+  const monthLen=first=>{for(const L of [29,30,31])if(jInfo(first+L).d===1)return L;return 31};
+  function monthFirst(off){const jt=jInfo(tday());let first=tday()-(jt.d-1);for(;off<0;off++){const lp=first-1;first=lp-(jInfo(lp).d-1)}for(;off>0;off--)first+=monthLen(first);return first}
+  function calHtml(){
+    const T=tday(),first=monthFirst(calOff),{y,m}=jInfo(first);
+    const len=monthLen(first),wd=(first+5)%7,on=new Set(S.days||[]),cells=[];
+    for(let i=0;i<wd;i++)cells.push('<i class="cal-e"></i>');
+    for(let d=1;d<=len;d++){const dn=first+d-1,a=on.has(dn);cells.push(`<span class="cal-d${a?' cal-on':''}${dn===T?' cal-t':''}"${a?' aria-label="'+fa(d)+' '+JM[m-1]+' — هدف انجام شد"':''}>${a?'🔥':fa(d)}</span>`)}
+    return`<div class="card" id="calBox" style="margin-top:12px"><div class="lgh"><button type="button" class="btn sm gh" id="calPrev" aria-label="ماه قبل" style="min-height:44px;min-width:44px">›</button><h3 style="font-size:18px;color:var(--ye)" id="calTitle">📅 ${JM[m-1]} ${fa(y)}</h3><button type="button" class="btn sm gh" id="calNext" aria-label="ماه بعد" style="min-height:44px;min-width:44px">‹</button></div>
+    <div class="cal" role="grid">${['ش','ی','د','س','چ','پ','ج'].map(w=>`<b class="cal-h">${w}</b>`).join('')}${cells.join('')}</div></div>`;
+  }
+  function bindCal(){const f=d=>()=>{SFX.click();calOff+=d;const e=$('#calBox');if(e){e.outerHTML=calHtml();bindCal()}};$('#calPrev').onclick=f(-1);$('#calNext').onclick=f(1)}
+
   /* ---------- لیگ ---------- */
   function leagueShow(){renderLeague();lgFetch()}
 
@@ -3452,12 +3519,13 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
     secProf.innerHTML=`<div class="card center"><h2 class="neon" style="font-size:28px">👤 پروفایل</h2>
     <div id="profAv" style="width:120px;margin:0 auto">${rbSvg(true)}</div><h3 style="font-size:24px">${esc(S.name||'')}</h3>
     <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">⚡ ${fa(xp)} XP</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div>${isGuest()?'<p class="muted" style="font-size:14px;line-height:1.9">حساب مهمان: پیشرفتت هنوز ذخیره نشده.</p><button type="button" class="btn mg" id="pSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button>':''}</div>
+    ${goalHtml()}${calHtml()}
     ${colHtml()}
     <div class="card" style="margin-top:12px"><h3 style="font-size:20px;color:var(--ye)">بیشتر</h3><div class="pmore" id="pMore">${MORE.map(([id,i,t])=>`<button type="button" data-more="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')}</div>
     <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
     $$('#pMore [data-more]').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();const id=b.dataset.more;
       if(id==='report'&&!S.quiz){toast('اول خودآزمایی و پرسشنامه را تمام کن 📝');return}go(id)});
-    bindCol();
+    bindGoal();bindCal();bindCol();
     const ps=$('#pSave');if(ps)ps.onclick=()=>{SFX.click();modal(signupHtml());bindSignup($('#modal'),()=>{profShow();v9Hdr()})};
     $('#btnSound').onclick=()=>{SFX.init();const m=SFX.toggle();$('#btnSound').textContent=m?'🔇 صدا: خاموش':'🔊 صدا: روشن';if(!m)SFX.ok()};
     $('#btnSup2').onclick=()=>{SFX.init();SFX.click();supportOpen()};
@@ -3489,7 +3557,7 @@ body.th-candy{background:linear-gradient(160deg,#3a1030,#9a2f78 55%,#ff8ac4) fix
     $$('#bnav button').forEach(b=>{if(b.dataset.go===TABOF[id])b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
     if(id==='reg')obWelcome();
     if(!USER)return;
-    if(id==='path'){migrate9();touchStreak();try{applyTheme()}catch(e){}applyCol();pathShow()}
+    if(id==='path'){migrate9();touchStreak();streakCheck();try{applyTheme()}catch(e){}applyCol();pathShow()}
     else if(id==='league')leagueShow();
     else if(id==='prof')profShow();
     v9Hdr();
