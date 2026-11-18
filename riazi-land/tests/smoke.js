@@ -1195,6 +1195,28 @@ T('UI P0-2: at most ONE visible .btn-primary on welcome, path, lesson, end scree
   await context.close();
 });
 
+T('UI P0-3: math renders left-to-right (−۲/۳ + (−۴/۶), negative option, real minus, stacked fractions)', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  await register(page, { name: 'نگار احمدی', user: 'ui2', pass: '1234', grade: 8 });
+  const r = await page.evaluate(() => {
+    const host = document.createElement('div'); host.id = 'mtHost'; host.dir = 'rtl'; host.style.cssText = 'position:fixed;top:0;right:0;left:0;z-index:999;background:#132A55;padding:12px;font-size:20px';
+    host.innerHTML = '<h3 id="mq">' + mathHTML('حاصل -۲/۳ + (-۴/۶) = ؟') + '</h3><button class="opt" id="mo">' + mathHTML('-۲/۳') + '</button>';
+    document.body.appendChild(host);
+    const q = host.querySelector('#mq .m'), fr = [...q.querySelectorAll('.frac')];
+    const tn = [...q.childNodes].filter((n) => n.nodeType === 3);
+    const at = (node, ch) => { const i = node.textContent.indexOf(ch); if (i < 0) return null; const rg = document.createRange(); rg.setStart(node, i); rg.setEnd(node, i + 1); return rg.getBoundingClientRect().left; };
+    let plus = null, minus1 = null; for (const n of tn) { if (plus == null) plus = at(n, '+'); if (minus1 == null) minus1 = at(n, '\u2212'); }
+    const o = host.querySelector('#mo .m'), ofr = o.querySelector('.frac'), omin = at([...o.childNodes].find((n) => n.nodeType === 3), '\u2212');
+    return { n: fr.length, f1: fr[0].getBoundingClientRect().left, f2: fr[1].getBoundingClientRect().left, plus, minus1, hasHyphen: /-/.test(host.textContent), omin, ofr: ofr.getBoundingClientRect().left, top: fr[0].children.length };
+  });
+  assert(r.n === 2 && r.plus != null, 'fractions/plus not found ' + JSON.stringify(r));
+  assert(r.minus1 < r.f1 && r.f1 < r.plus && r.plus < r.f2, 'order in question is not left-to-right: ' + JSON.stringify(r));
+  assert(r.omin != null && r.omin < r.ofr, 'negative sign must be left of the number: ' + JSON.stringify(r));
+  assert(!r.hasHyphen, 'ASCII hyphen left in math');
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {
   const filter = process.argv[2] || '';

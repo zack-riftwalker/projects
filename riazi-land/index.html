@@ -1748,7 +1748,7 @@ function exIntro(g){g=g||EXG||S.grade||8;EXG=g;if(EX)clearInterval(EX.iv);EX=nul
 function exStart(g){EX={g,q:exBuild(g),a:[],i:0,t:1500};EX.iv=setInterval(()=>{EX.t--;const e=$('#exT');if(e)e.textContent=fmt(EX.t);if(EX.t<=0)exFinish(true)},1000);exShow()}
 function exShow(){const q=EX.q[EX.i],n=EX.q.length,an=EX.a.filter(v=>v!==undefined).length;
   $('#exBox2').innerHTML=`<div class="lgh"><span>سؤال <b>${fa(EX.i+1)}</b> از ${fa(n)}</span><span class="chip">⏱ <b id="exT">${fmt(EX.t)}</b></span></div><div class="bar" style="margin:8px 0"><i style="width:${an/n*100}%"></i></div>
-  <h3 style="font-size:20px;margin:8px 0;line-height:1.9">${esc(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button class="opt ${EX.a[EX.i]===k?'sel2':''}" data-k="${k}">${esc(o.t)}</button>`).join('')}</div>
+  <h3 style="font-size:20px;margin:8px 0;line-height:1.9">${mathHTML(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button class="opt ${EX.a[EX.i]===k?'sel2':''}" data-k="${k}">${mathHTML(o.t)}</button>`).join('')}</div>
   <div class="exd">${EX.q.map((_,k)=>`<i class="${k===EX.i?'cur':EX.a[k]!==undefined?'dn':''}" data-j="${k}">${fa(k+1)}</i>`).join('')}</div>
   <div class="nav"><button class="btn gh" id="exP" ${EX.i?'':'style="visibility:hidden"'}>→ قبلی</button>${EX.i<n-1?'<button class="btn" id="exN">بعدی ←</button>':'<button class="btn mg" id="exF">🏁 پایان و ثبت آزمون</button>'}</div>`;
   $$('#exBox2 .opt').forEach(b=>b.onclick=()=>{SFX.click();EX.a[EX.i]=+b.dataset.k;exShow()});$$('#exBox2 .exd i').forEach(i=>i.onclick=()=>{EX.i=+i.dataset.j;exShow()});
@@ -1757,7 +1757,7 @@ function exFinish(force){const left=EX.q.filter((_,k)=>EX.a[k]===undefined).leng
   clearInterval(EX.iv);const sc=EX.q.filter((q,k)=>q.opts[EX.a[k]]&&q.opts[EX.a[k]].ok).length,nb=save('exam',sc*10);nb?(SFX.win(),confetti(50)):SFX.ok();
   const bad=EX.q.map((q,k)=>({q,k})).filter(({q,k})=>!(q.opts[EX.a[k]]&&q.opts[EX.a[k]].ok));
   $('#exBox2').innerHTML=`<div class="center"><div class="medal">${sc>=18?'🏆':sc>=15?'🥇':sc>=12?'🥈':sc>=10?'🥉':'🎖️'}</div><h2 class="neon">نمره: ${fa(sc)} از ۲۰</h2><p class="muted">${nb?'🏅 رکورد جدید! نمره به لیگ ارسال شد.':'پایهٔ '+GN[EX.g]}</p></div>
-  <details ${bad.length?'open':''}><summary>${bad.length?'مرور '+fa(bad.length)+' پاسخ نادرست یا بی‌پاسخ':'همه را درست جواب دادی! 🎉'}</summary>${bad.map(({q})=>`<div class="note" style="margin:8px 0"><div>${esc(q.q)}</div><b style="color:var(--ok)">پاسخ درست: ${esc(q.opts.find(o=>o.ok).t)}</b></div>`).join('')}</details>
+  <details ${bad.length?'open':''}><summary>${bad.length?'مرور '+fa(bad.length)+' پاسخ نادرست یا بی‌پاسخ':'همه را درست جواب دادی! 🎉'}</summary>${bad.map(({q})=>`<div class="note" style="margin:8px 0"><div>${mathHTML(q.q)}</div><b style="color:var(--ok)">پاسخ درست: ${mathHTML(q.opts.find(o=>o.ok).t)}</b></div>`).join('')}</details>
   <div class="row" style="justify-content:center;margin-top:12px"><button class="btn mg" id="exAg">🔁 آزمون تازه</button><button class="btn gh" id="exH2">🏠 منو</button></div>`;
   $('#exAg').onclick=()=>exStart(EX.g);$('#exH2').onclick=()=>go('menu')}
 /* ---- ویدیوهای آموزشی و حل تمرین ---- */
@@ -1972,7 +1972,7 @@ function advShow(){const g=S.grade||8,done=S.adv[g]||0,L=CH[g];
   $('#advBox').innerHTML=hdr('🗺️ ماجراجویی ریاضی')+`<p class="muted" style="font-size:14px">پایهٔ ${GN[g]}: هر فصل یک غول دارد. با ۳ جان باید ۳ پاسخ درست بدهی تا غول شکست بخورد.</p><div class="advmap">${L.map((t,i)=>{const s=i<done?'dn':i===done?'op':'lk';return`<button class="node ${s}" data-i="${i}" ${s==='lk'?'disabled':''}><span>${i<done?'✅':i===done?BOSS[i%9]:'🔒'}</span><div><b>فصل ${fa(i+1)}</b><small>${t}</small></div></button>`}).join('')}</div>${done>=L.length?'<div class="msg ok" style="margin-top:10px">🏆 همهٔ غول‌ها را شکست دادی! قهرمان پایهٔ '+GN[g]+' هستی!</div>':''}`;
   bindBack();$$('#advBox .node').forEach(b=>{b.onclick=()=>advFight(+b.dataset.i)})}
 function advFight(i){const g=S.grade||8;let pool=exBuild(g,[chTopic(CH[g][i])]);if(pool.length<8)pool=pool.concat(exBuild(g));AD={i,g,q:shuffle(pool).slice(0,8),k:0,hp:3,lv:3};advQ()}
-function advQ(){const q=AD.q[AD.k];$('#advBox').innerHTML=hdr('⚔️ فصل '+fa(AD.i+1)+': '+CH[AD.g][AD.i])+`<div class="center"><div style="font-size:70px;display:inline-block;animation:bmb .5s infinite alternate">${BOSS[AD.i%9]}</div><div class="bar"><i style="width:${AD.hp/3*100}%;background:#ff4d6d"></i></div><div style="margin:6px 0">${'❤'.repeat(AD.lv)}</div></div><h3 style="font-size:20px;margin:8px 0;line-height:1.9">${esc(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button class="opt" data-k="${k}">${esc(o.t)}</button>`).join('')}</div>`;
+function advQ(){const q=AD.q[AD.k];$('#advBox').innerHTML=hdr('⚔️ فصل '+fa(AD.i+1)+': '+CH[AD.g][AD.i])+`<div class="center"><div style="font-size:70px;display:inline-block;animation:bmb .5s infinite alternate">${BOSS[AD.i%9]}</div><div class="bar"><i style="width:${AD.hp/3*100}%;background:#ff4d6d"></i></div><div style="margin:6px 0">${'❤'.repeat(AD.lv)}</div></div><h3 style="font-size:20px;margin:8px 0;line-height:1.9">${mathHTML(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button class="opt" data-k="${k}">${mathHTML(o.t)}</button>`).join('')}</div>`;
   bindBack();$$('#advBox .opt').forEach(b=>{b.onclick=()=>{const ok=q.opts[+b.dataset.k].ok;recW(AD.g,q,ok);$$('#advBox .opt').forEach(x=>{x.disabled=true;if(q.opts[+x.dataset.k].ok)x.classList.add('ok')});if(ok){AD.hp--;SFX.ok()}else{AD.lv--;SFX.err();b.classList.add('bad')}
     setTimeout(()=>{if(cur!=='adv')return;if(AD.hp<=0)return advEnd(1);if(AD.lv<=0||AD.k+1>=AD.q.length)return advEnd(0);AD.k++;advQ()},800)}})}
 function advEnd(win){const{i,g}=AD;if(win){if((S.adv[g]||0)===i){S.adv[g]=i+1;earn(15+i*3)}SFX.win();confetti(60)}else SFX.err();persist();lgSync(true);
@@ -2010,7 +2010,7 @@ function liveRender(){const L=LV,r=L&&L.room;if(!r)return;if(r.st==='q'&&L.qi!==
   let h=hdr('📡 کد '+fa(L.code));
   if(r.st==='lobby')h+=`<div class="center"><div style="font-size:54px;letter-spacing:8px;color:var(--gold);direction:ltr">${fa(L.code)}</div><p class="muted">این کد را به بچه‌ها بده تا وارد شوند</p></div><div>${Object.values(pl).map(p=>`<span class="chip" style="margin:3px">${esc((p.av||'')+' '+p.n)}</span>`).join('')||'<span class="muted">هنوز کسی وارد نشده…</span>'}</div>${L.host?(r.hp?'<p class="muted">نبرد با ورود نفر دوم شروع می‌شود…</p>':'<button class="btn mg" id="lvGo" style="margin-top:12px">▶ شروع مسابقه</button>'):'<p class="muted">منتظر شروع توسط میزبان…</p>'}`;
   else if(r.st==='q')h+=`<div class="lgh"><span>سؤال <b>${fa(r.qi+1)}</b> از ${fa(r.n)}</span><span class="chip">⏱ <b id="lvT">${fa(LIVE_T.q)}</b></span></div><h3 style="font-size:21px;margin:10px 0;line-height:1.9">${esc(r.q)}</h3>${L.me?`<div class="opts">${r.o.map((t,k)=>`<button class="opt ${L.ans===k?'sel2':''}" data-k="${k}" ${L.ans!=null?'disabled':''}>${esc(t)}</button>`).join('')}</div>${L.ans!=null?'<div class="msg">✅ پاسخت ثبت شد؛ منتظر بقیه…</div>':''}`:'<div class="msg">دانش‌آموزان در حال پاسخ‌اند…</div>'}`;
-  else if(r.st==='r')h+=`<h3 style="font-size:20px;margin:8px 0">${esc(r.q)}</h3><div class="opts">${r.o.map((t,k)=>`<button class="opt ${k===r.c?'ok':L.ans===k?'bad':''}" disabled>${esc(t)}</button>`).join('')}</div>${L.me?`<div class="msg ${L.ans===r.c?'ok':'bad'}">${L.ans===r.c?'✅ درست بود!':L.ans==null?'⏱ جواب ندادی':'❌ اشتباه بود'}</div>`:''}<h4 style="margin:10px 0 4px">🏅 جدول</h4>${board(5)}`;
+  else if(r.st==='r')h+=`<h3 style="font-size:20px;margin:8px 0">${mathHTML(r.q)}</h3><div class="opts">${r.o.map((t,k)=>`<button class="opt ${k===r.c?'ok':L.ans===k?'bad':''}" disabled>${mathHTML(t)}</button>`).join('')}</div>${L.me?`<div class="msg ${L.ans===r.c?'ok':'bad'}">${L.ans===r.c?'✅ درست بود!':L.ans==null?'⏱ جواب ندادی':'❌ اشتباه بود'}</div>`:''}<h4 style="margin:10px 0 4px">🏅 جدول</h4>${board(5)}`;
   else{const my=rank.findIndex(([k])=>k===me),ms=my>=0?rank[my][1]:0;h+=`<div class="center"><div style="font-size:64px">${my===0?'🏆':my>0&&my<3?'🥈':'🎉'}</div><h2 class="neon">پایان مسابقه</h2></div>${board(8)}`;
     if(L.me&&!L.paid){L.paid=1;earn(my===0?30:my===1?20:my===2?10:5);S.arc=S.arc||{};const v=Math.round(ms/10);if(v>(S.arc.live||0)){S.arc.live=v;persist();lgSync(true)}}}
   $('#liveBox').innerHTML=h;bindBack();$$('#liveBox .opt:not([disabled])').forEach(b=>{b.onclick=()=>liveAnswer(+b.dataset.k)});const g=$('#lvGo');if(g)g.onclick=liveRun}
@@ -2590,7 +2590,7 @@ r.insertAdjacentHTML('afterbegin','<div class="stk"><span>🧮</span><span>🚀<
   }
   function sideQuestion(){
     const q=SIDE.q[SIDE.i],c=SIDE.cfg,box=document.querySelector('#advBox');
-    box.innerHTML=hdr('🧭 '+c.title)+`<div class="adv-hero"><div class="row" style="justify-content:space-between"><b style="color:#fff">مرحلهٔ ${fa(SIDE.i+1)} از ${fa(c.n)}</b><span>⭐ ${fa(SIDE.correct)} درست</span></div><div class="adv-progress"><i style="width:${SIDE.i/c.n*100}%"></i></div><div style="margin-top:9px;color:#d5def6">${SIDE.type==='cave'?'چراغ‌های غار را روشن کن!':SIDE.type==='tower'?'از پله‌های برج بالا برو!':SIDE.type==='daily'?'چالش امروزت را کامل کن!':'ستاره‌ها را جمع کن!'}</div></div><div class="side-q"><div class="muted">${SIDE.type==='star'?'برای برد باید همه را درست جواب بدهی.':'با دقت پاسخ بده تا به جایزه برسی.'}</div><h3 style="font-size:20px;line-height:1.9;margin:10px 0">${esc(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button class="opt" data-k="${k}">${esc(o.t)}</button>`).join('')}</div></div><button class="btn gh" id="sideExit" style="margin-top:10px">بازگشت به نقشه</button>`;
+    box.innerHTML=hdr('🧭 '+c.title)+`<div class="adv-hero"><div class="row" style="justify-content:space-between"><b style="color:#fff">مرحلهٔ ${fa(SIDE.i+1)} از ${fa(c.n)}</b><span>⭐ ${fa(SIDE.correct)} درست</span></div><div class="adv-progress"><i style="width:${SIDE.i/c.n*100}%"></i></div><div style="margin-top:9px;color:#d5def6">${SIDE.type==='cave'?'چراغ‌های غار را روشن کن!':SIDE.type==='tower'?'از پله‌های برج بالا برو!':SIDE.type==='daily'?'چالش امروزت را کامل کن!':'ستاره‌ها را جمع کن!'}</div></div><div class="side-q"><div class="muted">${SIDE.type==='star'?'برای برد باید همه را درست جواب بدهی.':'با دقت پاسخ بده تا به جایزه برسی.'}</div><h3 style="font-size:20px;line-height:1.9;margin:10px 0">${mathHTML(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button class="opt" data-k="${k}">${mathHTML(o.t)}</button>`).join('')}</div></div><button class="btn gh" id="sideExit" style="margin-top:10px">بازگشت به نقشه</button>`;
     bindBack();box.querySelector('#sideExit').onclick=advShow;
     box.querySelectorAll('.side-q [data-k]').forEach(b=>b.onclick=()=>{
       const ok=!!q.opts[+b.dataset.k].ok;box.querySelectorAll('.side-q [data-k]').forEach(z=>{z.disabled=true;if(q.opts[+z.dataset.k].ok)z.classList.add('ok')});
@@ -2816,6 +2816,13 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .btn[disabled],.btn:disabled,.btn.mg[disabled],.btn-primary[disabled]{background:var(--c-surface)!important;color:var(--c-muted)!important;border:1px solid var(--c-line)!important;box-shadow:none!important;opacity:1!important;transform:none!important;pointer-events:none;filter:none!important;animation:none!important}
 .kpk:active{background:var(--c-surface-2)}
 #s-reg .btn.mg{min-width:0}
+/* ===== UI P0-3: نمایش ریاضی ===== */
+.m{display:inline-block;direction:ltr;unicode-bidi:isolate;white-space:nowrap;max-width:100%;overflow-x:auto;overflow-y:hidden;vertical-align:middle;margin:0 .25em;line-height:1.5;text-align:left}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1.2;margin:0 .12em;text-align:center}
+.frac>span:first-child{border-bottom:.08em solid currentColor;padding:0 .2em .05em}
+.frac>span:last-child{padding:.05em .2em 0}
+.frac-s{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.opt .m{margin:0}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -3206,7 +3213,19 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   const addXp=n=>{dayXp();S.xp=(S.xp||0)+n}; /* XP درس‌ها: S.xp (جمع‌شونده با xpOf قدیمی) */
   const KEYS=[['7','۷'],['8','۸'],['9','۹'],['bs','⌫'],['4','۴'],['5','۵'],['6','۶'],['-','−'],['1','۱'],['2','۲'],['3','۳'],['/','/','کسر'],['0','۰'],['.','٫','ممیز']];
   /* متن امن: HTML + ایزولهٔ چپ‌به‌راست بدون شکستن خط برای هر عبارت ریاضی (E) */
-  const rich=t=>{t=esc(t);let d=0,o='';for(const ch of t){if(ch==='\u2066'){if(!d++)o+='<span class="mth">'}else if(ch==='\u2069'){if(d>0&&!--d)o+='</span>'}else o+=ch}return o+(d>0?'</span>':'')};
+  /* mathHTML(text): تنها تابع نمایش ریاضی (متن امن + جزیرهٔ چپ‌به‌راست + منفی واقعی + کسر طبقاتی). بقیهٔ صفحه‌ها هم از window.mathHTML استفاده می‌کنند */
+  const FR='[۰-۹0-9]+|[A-Za-z]',fracRe=new RegExp('('+FR+')\\/('+FR+')(?![۰-۹0-9A-Za-z٫])','g');
+  const mathRun=m=>{m=m.replace(/-/g,'\u2212');return m.replace(fracRe,(_,a,b)=>'\u2060F'+a+'\u2060|'+b+'\u2060E')};
+  const autoRe=/[A-Za-zx۰-۹0-9√({\-\u2212][A-Za-z۰-۹0-9√²()\[\]{}٫.,،\s+\-\u2212×÷=<>≤≥≠∪∩∈⊂\/^|]*[A-Za-z۰-۹0-9√²)}\]]|[\-\u2212][۰-۹0-9]/g,mathTrig=/[+\-\u2212×÷=<>≤≥≠∪∩∈⊂\/^|,،{}]/;
+  const mathHTML=t=>{
+    t=String(t==null?'':t).replace(/[\u2066\u2069]/g,'');
+    t=t.replace(autoRe,m=>mathTrig.test(m)?'\u2066'+mathRun(m.trim())+'\u2069'+(/\s$/.test(m)?' ':''):m);
+    t=esc(t);let d=0,o='';
+    for(const ch of t){if(ch==='\u2066'){if(!d++)o+='<span class="m mth" dir="ltr">'}else if(ch==='\u2069'){if(d>0&&!--d)o+='</span>'}else o+=ch}
+    o+=d>0?'</span>':'';
+    return o.replace(/\u2060F([^\u2060]*)\u2060\|([^\u2060]*)\u2060E/g,(_,a,b)=>'<span class="frac" role="img" aria-label="'+a+' بر '+b+'"><span aria-hidden="true">'+a+'</span><span class="frac-s">/</span><span aria-hidden="true">'+b+'</span></span>');
+  };
+  window.mathHTML=mathHTML;const rich=mathHTML;
   const Lesson={
     st:null,
     /* قلاب برای فاز ۴ (XP/کمبو/سکه): بعد از هر «بررسی» صدا زده می‌شود */
@@ -3351,7 +3370,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   function obPlace(g){OB={g,q:placeBuild(g),k:0,ans:[],lock:false};setView('place');obAsk()}
   function obAsk(){
     const me=OB,q=me.q[me.k],n=me.q.length;
-    ob.innerHTML=`<p class="muted" style="font-size:14px;margin:0">سؤال ${fa(me.k+1)} از ${fa(n)} • فقط برای پیدا کردن جای شروع تو</p><div class="bar" style="margin:8px 0"><i style="width:${me.k/n*100}%"></i></div><h3 style="font-size:20px;margin:8px 0;line-height:1.9">${rich(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}" style="min-height:48px;width:100%">${rich(o.t)}</button>`).join('')}</div><div class="msg" id="obM" style="min-height:44px"></div>`;
+    ob.innerHTML=`<p class="muted" style="font-size:14px;margin:0">سؤال ${fa(me.k+1)} از ${fa(n)} • فقط برای پیدا کردن جای شروع تو</p><div class="bar" style="margin:8px 0"><i style="width:${me.k/n*100}%"></i></div><h3 style="font-size:20px;margin:8px 0;line-height:1.9">${mathHTML(q.q)}</h3><div class="opts">${q.opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}" style="min-height:48px;width:100%">${rich(o.t)}</button>`).join('')}</div><div class="msg" id="obM" style="min-height:44px"></div>`;
     $$('#obBox .opt').forEach(b=>b.onclick=()=>{
       if(OB!==me||me.lock)return;me.lock=true;SFX.init();const ok=!!q.opts[+b.dataset.k].ok;me.ans.push({ok,ch:q.ch,tp:q.tp});
       $$('#obBox .opt').forEach(x=>{x.disabled=true;if(q.opts[+x.dataset.k].ok)x.classList.add('ok')});
