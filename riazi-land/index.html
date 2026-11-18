@@ -2873,6 +2873,31 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 #pqBox .opt .mk .ic{width:22px;height:22px;stroke-width:3}
 .pbn i .ic{color:var(--c-ok)}
 .ecard i .ic{width:24px;height:24px;color:var(--c-info)}
+/* ===== UI P1-7: مسیر بازطراحی‌شده ===== */
+#pathBox{position:relative}
+.ptrail{position:absolute;left:0;top:0;z-index:0;pointer-events:none;overflow:visible}
+.ptrail path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.pt-bg{stroke:var(--c-line);stroke-width:4;stroke-dasharray:1 11}
+.pt-gold{stroke:var(--c-gold);stroke-width:6}
+.pnodes:before{content:none;display:none}
+.pnodes{gap:18px;padding:20px 0 14px}
+.pch,.pbn,.pn{position:relative;z-index:1}
+.pcir{width:72px;height:72px;box-shadow:0 6px 0 rgba(0,0,0,.35)}
+.pn.cur .pcir{width:72px;height:72px;box-shadow:0 6px 0 var(--c-gold-lo)}
+.pn.cur .pcir .ic{width:36px;height:36px}
+.pn.done .pcir{box-shadow:0 6px 0 var(--c-gold-lo)}
+.pn.locked .pcir{box-shadow:0 6px 0 rgba(0,0,0,.22)}
+.pn.kC .pcir,.pn.kB .pcir{border-color:var(--c-gold-lo)}
+.pn.locked.kC .pcir,.pn.locked.kB .pcir{border-color:var(--c-line)}
+@keyframes ppulseG{0%,100%{box-shadow:0 6px 0 var(--c-gold-lo),0 0 0 0 rgba(232,181,74,.55)}50%{box-shadow:0 6px 0 var(--c-gold-lo),0 0 0 14px rgba(232,181,74,0)}}
+@media (prefers-reduced-motion:reduce){.pn.cur .pcir{animation:none;box-shadow:0 6px 0 var(--c-gold-lo),0 0 0 6px rgba(232,181,74,.28)}}
+.pbn{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:var(--r-lg);background:var(--c-surface);border:1px solid var(--c-line);border-right:7px solid var(--cc,var(--c-info));color:var(--c-text)}
+.pbn span.pbn-n{flex:none;font-size:14px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--cc,var(--c-info));color:var(--c-on-gold);font-weight:800;font-size:14px}
+.pbn b{flex:1;font-family:var(--fb);font-weight:800;font-size:17px;line-height:1.4;white-space:normal}
+.pbn-p{flex:none;font-style:normal;font-size:13px;color:var(--c-text-2);font-variant-numeric:tabular-nums}.pbn-p .ic{color:var(--c-ok);width:16px;height:16px}
+.pbn-s{font-style:normal;font-size:12px;color:var(--c-info)}
+.pch[data-state="locked"] .pbn{filter:none;opacity:.6}
+.pch[data-state="skipped"] .pbn{background:var(--c-surface)}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -2941,9 +2966,27 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     if(n.st==='cur')h+=`<button type="button" class="btn btn-primary mg pgo" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='C'?'باز کردن ':'شروع ')+lab}">${n.kind==='C'?'باز کردن':'شروع'}</button>`;
     return`<div class="pn ${n.st} k${n.kind}" data-st="${n.st}" data-k="${n.kind}" style="--x:${x}px"${n.st==='cur'?' id="pcur"':''}>${h}</div>`;
   }
+  /* خط مسیر: یک <path> منحنی (Catmull-Rom) از مرکز گره‌ها؛ بخش طی‌شده طلایی، بقیه نقطه‌چین */
+  function drawTrail(){
+    const box=$('#pathBox'),sv=box&&box.querySelector('svg.ptrail');if(!sv)return;
+    const br=box.getBoundingClientRect();if(!br.width||!br.height)return;
+    const nodes=[...box.querySelectorAll('.pn')],P=nodes.map(n=>{const r=n.querySelector('.pcir').getBoundingClientRect();return[r.left+r.width/2-br.left,r.top+r.height/2-br.top,n.dataset.st]});
+    if(P.length<2)return;
+    let last=0;P.forEach((q,i)=>{if(q[2]==='done'||q[2]==='skip'||q[2]==='cur')last=i});
+    const d=(pts)=>{let o='M'+pts[0][0].toFixed(1)+' '+pts[0][1].toFixed(1);
+      for(let i=0;i<pts.length-1;i++){const a=pts[i-1]||pts[i],b=pts[i],c=pts[i+1],e=pts[i+2]||c;
+        o+=' C'+(b[0]+(c[0]-a[0])/6).toFixed(1)+' '+(b[1]+(c[1]-a[1])/6).toFixed(1)+','+(c[0]-(e[0]-b[0])/6).toFixed(1)+' '+(c[1]-(e[1]-b[1])/6).toFixed(1)+','+c[0].toFixed(1)+' '+c[1].toFixed(1)}
+      return o};
+    sv.setAttribute('width',br.width);sv.setAttribute('height',br.height);sv.setAttribute('viewBox','0 0 '+br.width+' '+br.height);
+    sv.innerHTML='<path class="pt-bg" d="'+d(P)+'"/>'+(last>0?'<path class="pt-gold" d="'+d(P.slice(0,last+1))+'"/>':'');
+  }
+  try{const pb=document.getElementById('pathBox');if(pb&&window.ResizeObserver)new ResizeObserver(()=>drawTrail()).observe(pb);addEventListener('resize',()=>drawTrail())}catch(e){}
   function pathShow(){
     const g=S.grade||8,P=plan(g),hues=[172,215,265,330,28,95,190,300,45];
-    $('#pathBox').innerHTML=P.chs.map(c=>`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--h:${hues[c.i%9]}"><div class="pbn"><b>فصل ${fa(c.i+1)}</b><span>${esc(c.name)}</span>${c.state==='done'?'<i role="img" aria-label="کامل شد">'+ic('check')+'</i>':c.state==='skipped'?'<i>⏭ رد شده</i>':''}</div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`).join('');
+    const CC=['#5BB8FF','#3DDC97','#B79CFF','#FF8FB1','#7FE0D6','#FFA45B','#A7D86B','#E58BFF']; /* ۸ رنگ خوانا روی سرمه‌ای؛ فصل فعلی طلایی */
+    $('#pathBox').innerHTML='<svg class="ptrail" aria-hidden="true" focusable="false"></svg>'+P.chs.map(c=>{const dn=c.nodes.filter(n=>n.st==='done'||n.st==='skip').length;
+      return`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--cc:${c.state==='current'?'var(--c-gold)':CC[c.i%8]}"><div class="pbn"><span class="pbn-n" aria-hidden="true">${fa(c.i+1)}</span><b><span class="srt">فصل ${fa(c.i+1)}: </span>${esc(c.name)}</b>${c.state==='skipped'?'<i class="pbn-s">رد شده</i>':''}<em class="pbn-p" aria-label="${fa(dn)} از ${fa(c.nodes.length)} مرحله">${c.state==='done'?ic('check')+' ':''}${fa(dn)} از ${fa(c.nodes.length)}</em></div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`}).join('');
+    drawTrail();
     $$('#pathBox .pgo,#pathBox .pre').forEach(b=>b.onclick=()=>act(+b.dataset.ch,+b.dataset.j));
     const el=$('#pcur');if(el)el.scrollIntoView({block:'center'});
   }
