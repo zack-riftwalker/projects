@@ -2912,6 +2912,19 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .ecard b,.kpv{font-variant-numeric:normal;letter-spacing:0}
 .ecard b,.gcard b,.kpv{font-family:var(--fb);font-weight:800}
 #topbar .brand{font-family:var(--fb);font-weight:800;font-size:18px}
+/* ===== UI P1-9: برگهٔ بازخورد درس ===== */
+.lsn-bar{border-top:4px solid var(--c-line)}
+.lsn-bar.ok,.lsn-bar.bad{animation:sheetUp var(--t-med) var(--ease-spring) both}
+.lsn-bar.ok{background:linear-gradient(rgba(61,220,151,.15),rgba(61,220,151,.15)),var(--c-bg-2);border-top-color:var(--c-ok)}
+.lsn-bar.bad{background:linear-gradient(rgba(255,122,107,.15),rgba(255,122,107,.15)),var(--c-bg-2);border-top-color:var(--c-bad)}
+@keyframes sheetUp{from{transform:translateY(70px);opacity:.4}to{transform:none;opacity:1}}
+.fbh{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.fbi{width:34px;height:34px;border-radius:50%;display:inline-grid;place-items:center;flex:none;background:var(--c-ok);color:var(--c-on-gold)}
+.fbi .ic{width:20px;height:20px;stroke-width:3}
+.lsn-bar.bad .fbi{background:var(--c-bad)}
+.fbt{font-size:var(--fs-title);font-weight:800;color:var(--c-ok)}.lsn-bar.bad .fbt{color:var(--c-bad)}
+.fbr{font-size:var(--fs-body);margin:2px 0 4px}.fbr b{color:var(--c-text)}
+#pqBox .opt.dim{opacity:.5}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -3392,9 +3405,10 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       $$('#pqBox .opt').forEach((b,i)=>{b.disabled=true;b.classList.remove('sel');if(c.view[i].ok){b.classList.add('ok');b.insertAdjacentHTML('beforeend','<i class="mk" aria-hidden="true">'+ic('check')+'<span class="srt">✓</span></i>');b.setAttribute('aria-label',(b.getAttribute('aria-label')||b.textContent)+' — پاسخ درست')}else if(i===s.sel){b.classList.add('no');b.insertAdjacentHTML('beforeend','<i class="mk" aria-hidden="true">'+ic('x')+'<span class="srt">✗</span></i>');b.setAttribute('aria-label',(b.getAttribute('aria-label')||b.textContent)+' — پاسخ تو (نادرست)')}else b.classList.add('dim')});
       $$('#pqBox .kpk').forEach(b=>b.disabled=true);
       const fb=$('#lsFb'),bar=$('#lsBar');bar.classList.add(ok?'ok':'bad');
-      fb.innerHTML=`<b>${ok?pk(['✅ آفرین!','✅ درسته!','✅ عالی!']):'اشکالی نداره 💪'}</b>${s.gain?` <span class="xpg">+${fa(s.gain)} XP${s.gain>10?' • 🔥 کمبو ×۲':''}</span>`:''}${ok?'':`<div>جواب درست: <b>${rich(right)}</b></div>`}<div class="lsh">${rich(mathLtr(c.hint||''))}</div>`;
+      fb.innerHTML=`<div class="fbh"><span class="fbi" aria-hidden="true">${ic(ok?'check':'x')}</span><b class="fbt">${ok?pk(['آفرین!','درسته!','عالی!']):'اشکالی نداره 💪'}</b>${s.gain?` <span class="xpg">+${fa(s.gain)} XP${s.gain>10?' • 🔥 کمبو ×۲':''}</span>`:''}</div>${ok?'':`<div class="fbr">جواب درست: <b>${mathHTML(right)}</b></div>`}<div class="lsh">${mathHTML(mathLtr(c.hint||''))}</div>`;
       $('#lsGo').textContent='ادامه';$('#lsGo').disabled=false;$('#lsGo').focus();
       ok?SFX.ok():SFX.err();
+      if(!ok&&!SFX.muted){try{navigator.vibrate&&navigator.vibrate(30)}catch(e){}}
     },
     next(){
       const s=this.st,it=s.queue.shift();
