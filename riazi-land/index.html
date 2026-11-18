@@ -2856,6 +2856,23 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .pmore button,.stile,.ctile,.ecard{background:var(--c-surface-2);border-color:var(--c-line)}
 #pqBox .opt.sel{border-color:var(--c-gold);background:rgba(232,181,74,.14)}
 .lsn-prog i{background:linear-gradient(90deg,var(--c-gold),var(--c-gold-hi))}
+/* ===== UI P1-6: آیکون‌های SVG ===== */
+.ic{width:1.15em;height:1.15em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.2em;flex:none}
+.ic.fill{fill:currentColor}
+.srt{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#bnav button i .ic{width:24px;height:24px;vertical-align:middle}
+.hst .ic{width:18px;height:18px;vertical-align:-.28em}
+#hStk .ic{color:var(--c-gold-hi)}#hCoin .ic{color:var(--c-gold)}#hXp .ic{color:var(--c-info)}
+.pcir{color:var(--c-gold-hi)}.pcir .ic{width:32px;height:32px;stroke-width:2.2}
+.pn.cur .pcir .ic{width:40px;height:40px}
+.pn.locked .pcir{color:var(--c-muted);filter:none}
+.pn.done .pcir{color:var(--c-on-gold);font-size:inherit}.pn.done .pcir:after{content:none}.pn.done .pcir .ic{stroke-width:3}
+.pst .ic,.estars .ic{width:22px;height:22px;color:var(--c-gold)}.estars .ic{width:34px;height:34px;margin:0 2px}
+.pst{display:inline-flex;gap:2px;align-items:center}
+.lsx .ic{width:20px;height:20px}
+#pqBox .opt .mk .ic{width:22px;height:22px;stroke-width:3}
+.pbn i .ic{color:var(--c-ok)}
+.ecard i .ic{width:24px;height:24px;color:var(--c-info)}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -2877,11 +2894,23 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   function rec(g,i){const P=pd();const G=P.l[g]=P.l[g]||{};const r=G[i]=G[i]||{L:[],c:0};r.L=r.L||[];return r}
   function dayXp(){const P=pd(),d=dayN();if(P.xp.d!==d)P.xp={d,b:xpOf(),v:0};return Math.max(0,xpOf()-P.xp.b)}
   function touchStreak(){const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d)S.stk={n:s.d===d-1?s.n+1:1,d};}
+  /* ---- مجموعهٔ آیکون SVG (خطی، stroke 2، currentColor) ---- */
+  const SYM={map:'<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/>',trophy:'<path d="M8 4h8v6a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 14v4M8 20h8"/>',
+    bag:'<path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+    lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/>',book:'<path d="M12 6c-2-1.5-5-2-8.5-2v14c3.5 0 6.500.5 8.500 2 2-1.5 5-2 8.500-2V4C17 4 14 4.500 12 6zM12 6v14"/>',
+    chest:'<path d="M3 11h18v9H3zM4 11V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v3M12 11v4M10.5 15h3"/>',crown:'<path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/>',
+    skull:'<path d="M12 3a8 8 0 0 0-5 14v3h10v-3a8 8 0 0 0-5-14zM9 12h.01M15 12h.01M10 20v-2M14 20v-2"/>',coin:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/>',
+    flame:'<path d="M12 3c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4-1-6 1-10z"/>',bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+    check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',x:'<path d="M6 6l12 12M18 6 6 18"/>',back:'<path d="M4 12h16M14 6l6 6-6 6"/>',
+    snow:'<path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9 4l3 2 3-2M9 20l3-2 3 2"/>',star:'<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'};
+  document.body.insertAdjacentHTML('afterbegin','<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">'+Object.keys(SYM).map(k=>'<symbol id="i-'+k+'" viewBox="0 0 24 24">'+SYM[k]+'</symbol>').join('')+'</svg>');
+  /* ic(نام, کلاس?, ایموجی‌پنهان?) — emoji پنهان فقط برای حفظ متن (تست‌ها/کپی) است */
+  window.ic=(n,c,e)=>'<svg class="ic'+(c?' '+c:'')+'" aria-hidden="true" focusable="false"><use href="#i-'+n+'"/></svg>'+(e?'<span class="srt" aria-hidden="true">'+e+'</span>':'');
   /* ارتفاع واقعی نوار پایین → --nav-h (برای toast و فاصلهٔ پایین صفحه) */
   try{const nb=document.getElementById('bnav'),setH=()=>document.documentElement.style.setProperty('--nav-h',(nb.offsetHeight||0)+'px');if(nb){setH();if(window.ResizeObserver)new ResizeObserver(setH).observe(nb);addEventListener('resize',setH)}}catch(e){}
   window.v9Hdr=function(){if(!USER)return;
     {const k=rbKey();if(k!==hAvKey){hAvKey=k;$('#hAv').innerHTML=rbSvg(false)}}
-    $('#hStk').textContent='🔥 '+fa(streakInit().n||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);{const n=todayLog().n,g=goalN();$('#hXp').textContent=n>=g?'✓ '+fa(g)+'/'+fa(g):'⚡ '+fa(n)+'/'+fa(g)}};
+    $('#hStk').innerHTML=ic('flame','','🔥')+' '+fa(streakInit().n||0);$('#hCoin').innerHTML=ic('coin','','🪙')+' '+fa(S.coins||0);{const n=todayLog().n,g=goalN();$('#hXp').innerHTML=n>=g?ic('check','','✓')+' '+fa(g)+'/'+fa(g):ic('bolt','','⚡')+' '+fa(n)+'/'+fa(g)}};
 
   /* ---------- نقشهٔ مسیر ---------- */
   /* S.adv[grade] = تعداد فصل‌هایی که غولشان شکست خورده؛ فصل i کامل است اگر i < S.adv[grade] */
@@ -2903,18 +2932,18 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     return{chs,cur};
   }
   function nodeHtml(c,n){
-    const x=Math.round(Math.sin((c.i*6+n.j)*1.15)*54),emoji=['📘','📘','📘','📘','🎁','👹'][n.j];
+    const x=Math.round(Math.sin((c.i*6+n.j)*1.15)*54),emoji=ic(['book','book','book','book','chest','crown'][n.j]);
     const nm=n.kind==='L'?'درس '+fa(n.j+1):n.kind==='C'?'صندوقچه':'غول فصل',lab=nm+' فصل '+fa(c.i+1);
     const stt=n.st==='locked'?' (قفل)':n.st==='done'?' (انجام شد)':'';
     const rp=n.st==='skip'&&n.kind!=='C';
-    let h=rp?`<button type="button" class="pcir pre" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='B'?'نبرد دوباره ':'تمرین ')+lab} (رد شده)">${emoji}</button>`:`<span class="pcir" role="img" aria-label="${lab+(n.st==='skip'?' (رد شده)':stt)}">${n.st==='locked'?'🔒':emoji}</span>`;
-    if((n.st==='done'||n.st==='skip')&&n.kind==='L'&&n.stars>0)h+=`<span class="pst" role="img" aria-label="${fa(n.stars)} ستاره از ۳">${'⭐'.repeat(n.stars)}${'☆'.repeat(3-n.stars)}</span>`;
+    let h=rp?`<button type="button" class="pcir pre" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='B'?'نبرد دوباره ':'تمرین ')+lab} (رد شده)">${emoji}</button>`:`<span class="pcir" role="img" aria-label="${lab+(n.st==='skip'?' (رد شده)':stt)}">${n.st==='locked'?ic('lock'):n.st==='done'?ic('check'):emoji}</span>`;
+    if((n.st==='done'||n.st==='skip')&&n.kind==='L'&&n.stars>0)h+=`<span class="pst" role="img" aria-label="${fa(n.stars)} ستاره از ۳">${ic('star','fill').repeat(n.stars)}${ic('star').repeat(3-n.stars)}</span>`;
     if(n.st==='cur')h+=`<button type="button" class="btn btn-primary mg pgo" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='C'?'باز کردن ':'شروع ')+lab}">${n.kind==='C'?'باز کردن':'شروع'}</button>`;
     return`<div class="pn ${n.st} k${n.kind}" data-st="${n.st}" data-k="${n.kind}" style="--x:${x}px"${n.st==='cur'?' id="pcur"':''}>${h}</div>`;
   }
   function pathShow(){
     const g=S.grade||8,P=plan(g),hues=[172,215,265,330,28,95,190,300,45];
-    $('#pathBox').innerHTML=P.chs.map(c=>`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--h:${hues[c.i%9]}"><div class="pbn"><b>فصل ${fa(c.i+1)}</b><span>${esc(c.name)}</span>${c.state==='done'?'<i aria-label="کامل شد">✅</i>':c.state==='skipped'?'<i>⏭ رد شده</i>':''}</div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`).join('');
+    $('#pathBox').innerHTML=P.chs.map(c=>`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--h:${hues[c.i%9]}"><div class="pbn"><b>فصل ${fa(c.i+1)}</b><span>${esc(c.name)}</span>${c.state==='done'?'<i role="img" aria-label="کامل شد">'+ic('check')+'</i>':c.state==='skipped'?'<i>⏭ رد شده</i>':''}</div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`).join('');
     $$('#pathBox .pgo,#pathBox .pre').forEach(b=>b.onclick=()=>act(+b.dataset.ch,+b.dataset.j));
     const el=$('#pcur');if(el)el.scrollIntoView({block:'center'});
   }
@@ -3280,7 +3309,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       if(c.type==='mcq'){const o=shuffle(c.opts);c.view=o;body=`<div class="opts" role="group" aria-label="گزینه‌ها">${o.map((x,k)=>`<button type="button" class="opt" data-k="${k}" aria-pressed="false">${rich(x.t)}</button>`).join('')}</div>`}
       else if(c.type==='shape'){const o=shuffle(c.opts);c.view=o;body=`<div class="opts img" role="group" aria-label="شکل‌ها">${o.map((x,k)=>{const sh=byId(x.id);return`<button type="button" class="opt img" data-k="${k}" aria-pressed="false" aria-label="${esc(sh.name)}">${shapeSVG(sh)}</button>`}).join('')}</div>`}
       else body=`<div class="kpv" id="lsVal" role="textbox" aria-readonly="true" aria-label="پاسخ تو">؟</div><div class="kp" role="group" aria-label="کیبورد عددی">${KEYS.map(([k,t,cap])=>`<button type="button" class="kpk${k==='0'?' w2':''}" data-k="${k}" aria-label="${k==='bs'?'پاک کردن':k==='-'?'منفی':k==='.'?'ممیز اعشاری':k==='/'?'خط کسری':t}">${cap?`<b>${t}</b><small>${cap}</small>`:t}</button>`).join('')}</div>`;
-      $('#pqBox').innerHTML=`<div class="lsn-top"><button type="button" class="lsx" id="lsX" aria-label="خروج از درس">✕</button><div class="lsn-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${s.total}" aria-valuenow="${s.done}"><i style="width:${s.done/s.total*100}%"></i></div><span class="lsn-cnt">${fa(s.done)}/${fa(s.total)}</span><span class="combo" id="lsCombo" ${s.combo>=5?'':'hidden'}>🔥 کمبو ×۲</span></div>
+      $('#pqBox').innerHTML=`<div class="lsn-top"><button type="button" class="lsx" id="lsX" aria-label="خروج از درس">${ic('x')}</button><div class="lsn-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${s.total}" aria-valuenow="${s.done}"><i style="width:${s.done/s.total*100}%"></i></div><span class="lsn-cnt">${fa(s.done)}/${fa(s.total)}</span><span class="combo" id="lsCombo" ${s.combo>=5?'':'hidden'}>🔥 کمبو ×۲</span></div>
       <h3 class="lsn-q">${rich(c.q)}</h3>${body}
       <div class="lsn-bar" id="lsBar"><div class="lsfb" id="lsFb" role="status" aria-live="polite"></div><button type="button" class="btn btn-primary mg" id="lsGo" disabled style="min-height:48px;width:100%">بررسی</button></div>`;
       $('#lsX').onclick=()=>this.exit();
@@ -3303,7 +3332,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       else{ok=!!c.view[s.sel].ok;const r=c.view.find(x=>x.ok);right=c.type==='shape'?byId(r.id).name:r.t}
       s.checked=true;s.ok=ok;this.onAnswer(ok,c,it.first);
       {const cb=$('#lsCombo');if(cb){cb.hidden=s.combo<5;if(s.combo>=5){cb.classList.remove('pop');void cb.offsetWidth;cb.classList.add('pop')}}}
-      $$('#pqBox .opt').forEach((b,i)=>{b.disabled=true;b.classList.remove('sel');if(c.view[i].ok){b.classList.add('ok');b.insertAdjacentHTML('beforeend','<i class="mk" aria-hidden="true">✓</i>');b.setAttribute('aria-label',(b.getAttribute('aria-label')||b.textContent)+' — پاسخ درست')}else if(i===s.sel){b.classList.add('no');b.insertAdjacentHTML('beforeend','<i class="mk" aria-hidden="true">✗</i>');b.setAttribute('aria-label',(b.getAttribute('aria-label')||b.textContent)+' — پاسخ تو (نادرست)')}else b.classList.add('dim')});
+      $$('#pqBox .opt').forEach((b,i)=>{b.disabled=true;b.classList.remove('sel');if(c.view[i].ok){b.classList.add('ok');b.insertAdjacentHTML('beforeend','<i class="mk" aria-hidden="true">'+ic('check')+'<span class="srt">✓</span></i>');b.setAttribute('aria-label',(b.getAttribute('aria-label')||b.textContent)+' — پاسخ درست')}else if(i===s.sel){b.classList.add('no');b.insertAdjacentHTML('beforeend','<i class="mk" aria-hidden="true">'+ic('x')+'<span class="srt">✗</span></i>');b.setAttribute('aria-label',(b.getAttribute('aria-label')||b.textContent)+' — پاسخ تو (نادرست)')}else b.classList.add('dim')});
       $$('#pqBox .kpk').forEach(b=>b.disabled=true);
       const fb=$('#lsFb'),bar=$('#lsBar');bar.classList.add(ok?'ok':'bad');
       fb.innerHTML=`<b>${ok?pk(['✅ آفرین!','✅ درسته!','✅ عالی!']):'اشکالی نداره 💪'}</b>${s.gain?` <span class="xpg">+${fa(s.gain)} XP${s.gain>10?' • 🔥 کمبو ×۲':''}</span>`:''}${ok?'':`<div>جواب درست: <b>${rich(right)}</b></div>`}<div class="lsh">${rich(mathLtr(c.hint||''))}</div>`;
@@ -3670,9 +3699,9 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     $('#pqBox').innerHTML=`<div class="endx center">
       <div class="erobot${lost?'':' cheer'}">${robotSVG(Object.assign(rbOpt(),{pose:lost?'':'cheer'}))}</div>
       <h2 class="neon" style="font-size:24px;margin:2px 0">${o.title}</h2>
-      ${o.stars?`<div class="estars" role="img" aria-label="${fa(o.stars)} ستاره از ۳">${'⭐'.repeat(o.stars)}${'☆'.repeat(3-o.stars)}</div>`:''}
+      ${o.stars?`<div class="estars" role="img" aria-label="${fa(o.stars)} ستاره از ۳">${ic('star','fill').repeat(o.stars)}${ic('star').repeat(3-o.stars)}</div>`:''}
       <div class="ecards">
-        <div class="ecard"><i aria-hidden="true">⚡</i><b class="cnt" data-k="xp" data-v="${o.xp}">${fa(o.xp)}</b><span>XP</span></div>
+        <div class="ecard"><i aria-hidden="true">${ic('bolt')}</i><b class="cnt" data-k="xp" data-v="${o.xp}">${fa(o.xp)}</b><span>XP</span></div>
         <div class="ecard"><i aria-hidden="true">🎯</i><b class="cnt" data-k="acc" data-v="${o.acc}">${fa(o.acc)}٪</b><span>دقت</span></div>
         <div class="ecard"><i aria-hidden="true">⏱</i><b class="cnt" data-k="time" data-v="${o.time==null?'':o.time}">${o.time==null?'—':fmtT(o.time)}</b><span>زمان</span></div>
       </div>
@@ -3736,8 +3765,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   }
 
   /* ---------- نوار پایین + هدر ---------- */
-  const TABS=[['path','🗺️','مسیر','nav-path'],['league','🏆','لیگ','nav-league'],['shop','🛒','فروشگاه','nav-shop'],['prof','👤','پروفایل','btnProf']];
-  document.body.insertAdjacentHTML('beforeend','<nav id="bnav" aria-label="ناوبری اصلی">'+TABS.map(([id,i,t,aid])=>`<button type="button" id="${aid}" data-go="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')+'</nav>');
+  const TABS=[['path','map','مسیر','nav-path'],['league','trophy','لیگ','nav-league'],['shop','bag','فروشگاه','nav-shop'],['prof','user','پروفایل','btnProf']];
+  document.body.insertAdjacentHTML('beforeend','<nav id="bnav" aria-label="ناوبری اصلی">'+TABS.map(([id,i,t,aid])=>`<button type="button" id="${aid}" data-go="${id}" aria-label="${t}"><i aria-hidden="true">${ic(i)}</i><span>${t}</span></button>`).join('')+'</nav>');
   $$('#bnav button').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();go(b.dataset.go)});
   $('#btnBrand').onclick=()=>{SFX.init();SFX.click();go('path')};
 
