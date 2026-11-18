@@ -2925,6 +2925,29 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .fbt{font-size:var(--fs-title);font-weight:800;color:var(--c-ok)}.lsn-bar.bad .fbt{color:var(--c-bad)}
 .fbr{font-size:var(--fs-body);margin:2px 0 4px}.fbr b{color:var(--c-text)}
 #pqBox .opt.dim{opacity:.5}
+/* ===== UI P2-10: حرکت ===== */
+@keyframes v9in{from{opacity:0;transform:translateX(-24px)}to{opacity:1;transform:none}}
+@keyframes v9back{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+#s-pq.active{animation:v9in var(--t-med) ease both}
+#s-path.active{animation:v9back var(--t-med) ease both}
+@keyframes unlockPop{0%{transform:scale(.8);opacity:.5}100%{transform:none;opacity:1}}
+.pn.unlocked .pcir{animation:unlockPop var(--t-slow) var(--ease-spring) both}
+.pn.unlocked.cur .pcir{animation:unlockPop var(--t-slow) var(--ease-spring) both,ppulseG 1.6s ease-in-out .4s infinite}
+/* ===== UI P2-11: صفحه‌های جشن (نوارهای مورب طلایی، بدون تصویر) ===== */
+.celeb{position:relative;overflow:hidden;isolation:isolate;border-radius:var(--r-lg);padding-top:20px;min-height:calc(100vh - 64px);min-height:calc(100dvh - 64px)}
+.cbands{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.cbands i{position:absolute;display:block;height:26px;width:62%;border-radius:4px;opacity:.5;
+  background:linear-gradient(90deg,var(--c-gold-lo),var(--c-gold-hi) 35%,var(--c-gold) 65%,var(--c-gold-lo));animation:bandR var(--t-slow) var(--ease-spring) both}
+.cbands i:nth-child(1){top:22px;right:-12%;transform:skewY(-20deg)}
+.cbands i:nth-child(2){top:66px;right:-24%;width:50%;opacity:.32;transform:skewY(-20deg);animation-delay:80ms}
+.cbands i:nth-child(3){bottom:70px;left:-12%;transform:skewY(-20deg);animation-name:bandL;animation-delay:40ms}
+.cbands i:nth-child(4){bottom:26px;left:-24%;width:50%;opacity:.32;transform:skewY(-20deg);animation-name:bandL;animation-delay:120ms}
+.celeb:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.2;
+  background-image:radial-gradient(circle,var(--c-gold-hi) 1.5px,transparent 2px),radial-gradient(circle,var(--c-info) 1.3px,transparent 1.8px);background-size:16px 16px;background-position:0 0,8px 8px;
+  -webkit-mask-image:radial-gradient(circle at 100% 0,#000,transparent 34%),radial-gradient(circle at 0 100%,#000,transparent 34%);mask-image:radial-gradient(circle at 100% 0,#000,transparent 34%),radial-gradient(circle at 0 100%,#000,transparent 34%)}
+@keyframes bandR{from{opacity:0;translate:140% 0}to{translate:0 0}}
+@keyframes bandL{from{opacity:0;translate:-140% 0}to{translate:0 0}}
+@media (prefers-reduced-motion:reduce){#s-pq.active,#s-path.active,.pn.unlocked .pcir,.cbands i{animation:none!important}}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -3015,7 +3038,13 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       return`<section class="pch" data-ch="${c.i}" data-state="${c.state}" style="--cc:${c.state==='current'?'var(--c-gold)':CC[c.i%8]}"><div class="pbn"><span class="pbn-n" aria-hidden="true">${fa(c.i+1)}</span><b><span class="srt">فصل ${fa(c.i+1)}: </span>${esc(c.name)}</b>${c.state==='skipped'?'<i class="pbn-s">رد شده</i>':''}<em class="pbn-p" aria-label="${fa(dn)} از ${fa(c.nodes.length)} مرحله">${c.state==='done'?ic('check')+' ':''}${fa(dn)} از ${fa(c.nodes.length)}</em></div><div class="pnodes">${c.nodes.map(n=>nodeHtml(c,n)).join('')}</div></section>`}).join('');
     drawTrail();
     $$('#pathBox .pgo,#pathBox .pre').forEach(b=>b.onclick=()=>act(+b.dataset.ch,+b.dataset.j));
-    const el=$('#pcur');if(el)el.scrollIntoView({block:'center'});
+    /* انیمیشن «باز شدن قفل» برای گره‌ای که بعد از برگشت از درس تازه باز شده (فقط ظاهر؛ حالت قبلی فقط در حافظهٔ صفحه است) */
+    const prev=window.__pathPrev,now={};let opened=false;
+    $$('#pathBox .pn').forEach(n=>{const key=n.closest('.pch').dataset.ch+'-'+[...n.parentNode.children].indexOf(n);now[key]=n.dataset.st;
+      if(prev&&prev[key]==='locked'&&n.dataset.st!=='locked'){n.classList.add('unlocked');opened=true}});
+    window.__pathPrev=now;
+    const el=$('#pcur'),rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(el)el.scrollIntoView({block:'center',behavior:opened&&!rm?'smooth':'auto'});
   }
   function act(i,j){SFX.init();SFX.click();const g=S.grade||8;
     if(j<4)return pqStart(g,i,j);
@@ -3767,7 +3796,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   function showEnd(o){
     if(cur!=='pq')go('pq');
     const k=streakInit(),n=todayLog().n,gl=goalN(),tg=nearTarget(),lost=o.kind==='boss'&&!o.win;
-    $('#pqBox').innerHTML=`<div class="endx center">
+    const celeb=(o.stars===3)||(o.kind==='boss'&&!!o.win)||(!!o.up&&[7,30,100].includes(k.n));
+    $('#pqBox').innerHTML=`<div class="endx center${celeb?' celeb':''}">${celeb?'<span class="cbands" aria-hidden="true"><i></i><i></i><i></i><i></i></span>':''}
       <div class="erobot${lost?'':' cheer'}">${robotSVG(Object.assign(rbOpt(),{pose:lost?'':'cheer'}))}</div>
       <h2 class="neon" style="font-size:24px;margin:2px 0">${o.title}</h2>
       ${o.stars?`<div class="estars" role="img" aria-label="${fa(o.stars)} ستاره از ۳">${ic('star','fill').repeat(o.stars)}${ic('star').repeat(3-o.stars)}</div>`:''}
