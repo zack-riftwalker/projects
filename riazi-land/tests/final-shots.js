@@ -4,7 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium, ROOT, open, register, openForm } = require('./lib');
-const VPS = [['390x844', { width: 390, height: 844 }], ['1280x800', { width: 1280, height: 800 }]];
+const VPS = [['390x844', { width: 390, height: 844 }], ['1280x800', { width: 1280, height: 800 }]].filter(v => !process.env.VP || v[0] === process.env.VP);
+const SHOTDIR = process.env.SHOTDIR || 'final';
 const CLOCK = Date.UTC(2026, 0, 10, 9);
 const fastLesson = (page, wrongFirst) => page.evaluate((w) => { Lesson.start(8, 3, 0); let first = true; for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(first && w ? '99999' : i.ans)) Lesson.key(c); } else Lesson.pick(first && w ? (i.ans === 0 ? 1 : 0) : i.ans); first = false; Lesson.check(); Lesson.next(); } }, !!wrongFirst);
 const placement = async (page) => { await page.click('#wlGo'); await page.click('#obBox .gcard[data-g="8"]'); };
@@ -38,7 +39,7 @@ const SHOTS = [
 (async () => {
   const browser = await chromium.launch();
   for (const [vp, size] of VPS) {
-    const out = path.join(ROOT, 'docs', 'shots', 'final', vp);
+    const out = path.join(ROOT, 'docs', 'shots', SHOTDIR, vp);
     fs.rmSync(out, { recursive: true, force: true }); fs.mkdirSync(out, { recursive: true });
     let n = 0;
     for (const [name, o, setup] of SHOTS) {
