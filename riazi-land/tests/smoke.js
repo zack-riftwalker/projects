@@ -1174,6 +1174,27 @@ T('PHASE8: no «به‌زودی» / coming-soon text in the source or main scree
 
 /* ============================== PHASE 9+ : append below ============================== */
 
+/* ---- UI redesign (UI-PLAN) ---- */
+const primaries = (page) => page.evaluate(() => [...document.querySelectorAll('.btn-primary')].filter((e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('[hidden]') && !e.closest('.screen:not(.active)'); }).map((e) => e.id || e.textContent.trim()));
+
+T('UI P0-2: at most ONE visible .btn-primary on welcome, path, lesson, end screen and shop; disabled buttons are never gold/red', async ({ browser }) => {
+  const { page, context } = await open(browser);
+  assert((await primaries(page)).length <= 1, 'welcome: ' + (await primaries(page)));
+  await register(page, { name: 'نگار احمدی', user: 'ui1', pass: '1234', grade: 8 });
+  assert((await primaries(page)).length <= 1, 'path: ' + (await primaries(page)));
+  await page.evaluate(() => Lesson.start(8, 3, 0)); await page.waitForSelector('#lsGo');
+  assert((await primaries(page)).length <= 1, 'lesson: ' + (await primaries(page)));
+  const dis = await page.evaluate(() => { const b = $('#lsGo'); const cs = getComputedStyle(b); return { d: b.disabled, bg: cs.backgroundColor, bs: cs.boxShadow }; });
+  assert(dis.d && dis.bg === 'rgb(19, 42, 85)' && dis.bs === 'none', 'disabled look: ' + JSON.stringify(dis));
+  await page.evaluate(() => { Lesson.start(8, 3, 0); for (let k = 0; k < 80 && Lesson.st; k++) { const i = v9Lesson(); if (!i) break; if (i.type === 'num') { for (const c of String(i.ans)) Lesson.key(c); } else Lesson.pick(i.ans); Lesson.check(); Lesson.next(); } });
+  await page.waitForSelector('#pqMore');
+  assert((await primaries(page)).length <= 1, 'end: ' + (await primaries(page)));
+  await page.evaluate(() => go('shop'));
+  assert((await primaries(page)).length <= 1, 'shop: ' + (await primaries(page)));
+  assert(page.errors.length === 0, 'pageerror: ' + page.errors.join(' | '));
+  await context.close();
+});
+
 /* ---------------------------------- runner ---------------------------------- */
 (async () => {
   const filter = process.argv[2] || '';

@@ -2800,6 +2800,22 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .lsn-bar.ok{background:#0F3A44;border-top-color:var(--c-ok)}
 .lsn-bar.bad{background:#3A2440;border-top-color:var(--c-bad)}
 .card,.mission{background:var(--c-surface);border:1px solid var(--c-line);border-top:1px solid var(--c-line);border-radius:var(--r-lg);clip-path:none;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+/* ===== UI P0-2: سیستم دکمه ===== */
+.btn{min-height:44px;font-weight:800;border-radius:var(--r-sm)!important;text-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  background:var(--c-surface)!important;color:var(--c-text)!important;border:1px solid var(--c-line)!important;box-shadow:0 4px 0 var(--c-line)!important;
+  transition:transform var(--t-fast),box-shadow var(--t-fast),background var(--t-fast)}
+.btn:hover{transform:none;background:var(--c-surface-2)!important;box-shadow:0 4px 0 var(--c-line)!important}
+.btn:active{transform:translateY(4px);box-shadow:0 0 0 var(--c-line)!important}
+.btn.ye{color:var(--c-gold-hi)!important;border-color:var(--c-gold-lo)!important;box-shadow:0 4px 0 var(--c-gold-lo)!important}
+.btn.ye:hover{box-shadow:0 4px 0 var(--c-gold-lo)!important}
+.btn.ye:active{box-shadow:0 0 0 var(--c-gold-lo)!important}
+.btn.on,.btn[aria-pressed=true]{border-color:var(--c-gold)!important;color:var(--c-gold-hi)!important;outline:0;box-shadow:0 4px 0 var(--c-gold-lo)!important}
+.btn.mg,.btn-primary{background:linear-gradient(180deg,var(--c-gold-hi),var(--c-gold))!important;color:var(--c-on-gold)!important;border:0!important;box-shadow:0 4px 0 var(--c-gold-lo)!important;font-weight:800}
+.btn.mg:hover,.btn-primary:hover{background:linear-gradient(180deg,var(--c-gold-hi),var(--c-gold))!important;box-shadow:0 4px 0 var(--c-gold-lo)!important}
+.btn.mg:active,.btn-primary:active{transform:translateY(4px);box-shadow:0 0 0 var(--c-gold-lo)!important}
+.btn[disabled],.btn:disabled,.btn.mg[disabled],.btn-primary[disabled]{background:var(--c-surface)!important;color:var(--c-muted)!important;border:1px solid var(--c-line)!important;box-shadow:none!important;opacity:1!important;transform:none!important;pointer-events:none;filter:none!important;animation:none!important}
+.kpk:active{background:var(--c-surface-2)}
+#s-reg .btn.mg{min-width:0}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -2851,7 +2867,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     const rp=n.st==='skip'&&n.kind!=='C';
     let h=rp?`<button type="button" class="pcir pre" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='B'?'نبرد دوباره ':'تمرین ')+lab} (رد شده)">${emoji}</button>`:`<span class="pcir" role="img" aria-label="${lab+(n.st==='skip'?' (رد شده)':stt)}">${n.st==='locked'?'🔒':emoji}</span>`;
     if((n.st==='done'||n.st==='skip')&&n.kind==='L'&&n.stars>0)h+=`<span class="pst" role="img" aria-label="${fa(n.stars)} ستاره از ۳">${'⭐'.repeat(n.stars)}${'☆'.repeat(3-n.stars)}</span>`;
-    if(n.st==='cur')h+=`<button type="button" class="btn mg pgo" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='C'?'باز کردن ':'شروع ')+lab}">${n.kind==='C'?'باز کردن':'شروع'}</button>`;
+    if(n.st==='cur')h+=`<button type="button" class="btn btn-primary mg pgo" data-ch="${c.i}" data-j="${n.j}" aria-label="${(n.kind==='C'?'باز کردن ':'شروع ')+lab}">${n.kind==='C'?'باز کردن':'شروع'}</button>`;
     return`<div class="pn ${n.st} k${n.kind}" data-st="${n.st}" data-k="${n.kind}" style="--x:${x}px"${n.st==='cur'?' id="pcur"':''}>${h}</div>`;
   }
   function pathShow(){
@@ -2866,7 +2882,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     bossT0=Date.now();bossPrev=(S.adv||{})[g]||0;go('adv');advFight(i); /* غول فصل = همان نبرد موجود */
   }
   function chestOpen(g,i){const cr=rec(g,i),first=!cr.c;cr.c=1;const gc=first?v9Coins(10,'صندوقچه'):0;persist();pathShow();v9Hdr();SFX.win();
-    modal(`<div class="center"><div style="font-size:64px">🎁</div><h3 class="neon" style="font-size:22px">صندوقچه باز شد!</h3><p style="line-height:2">آفرین! ${gc?'۱۰ سکه گرفتی 🪙. ':''}حالا نوبت غول فصل است.</p><button type="button" class="btn mg" id="chOk" style="min-height:44px">ادامه</button></div>`);
+    modal(`<div class="center"><div style="font-size:64px">🎁</div><h3 class="neon" style="font-size:22px">صندوقچه باز شد!</h3><p style="line-height:2">آفرین! ${gc?'۱۰ سکه گرفتی 🪙. ':''}حالا نوبت غول فصل است.</p><button type="button" class="btn btn-primary mg" id="chOk" style="min-height:44px">ادامه</button></div>`);
     $('#chOk').onclick=()=>$('#modal').classList.remove('on');
   }
 
@@ -3212,7 +3228,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       else body=`<div class="kpv" id="lsVal" role="textbox" aria-readonly="true" aria-label="پاسخ تو">؟</div><div class="kp" role="group" aria-label="کیبورد عددی">${KEYS.map(([k,t,cap])=>`<button type="button" class="kpk${k==='0'?' w2':''}" data-k="${k}" aria-label="${k==='bs'?'پاک کردن':k==='-'?'منفی':k==='.'?'ممیز اعشاری':k==='/'?'خط کسری':t}">${cap?`<b>${t}</b><small>${cap}</small>`:t}</button>`).join('')}</div>`;
       $('#pqBox').innerHTML=`<div class="lsn-top"><button type="button" class="lsx" id="lsX" aria-label="خروج از درس">✕</button><div class="lsn-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${s.total}" aria-valuenow="${s.done}"><i style="width:${s.done/s.total*100}%"></i></div><span class="lsn-cnt">${fa(s.done)}/${fa(s.total)}</span><span class="combo" id="lsCombo" ${s.combo>=5?'':'hidden'}>🔥 کمبو ×۲</span></div>
       <h3 class="lsn-q">${rich(c.q)}</h3>${body}
-      <div class="lsn-bar" id="lsBar"><div class="lsfb" id="lsFb" role="status" aria-live="polite"></div><button type="button" class="btn mg" id="lsGo" disabled style="min-height:48px;width:100%">بررسی</button></div>`;
+      <div class="lsn-bar" id="lsBar"><div class="lsfb" id="lsFb" role="status" aria-live="polite"></div><button type="button" class="btn btn-primary mg" id="lsGo" disabled style="min-height:48px;width:100%">بررسی</button></div>`;
       $('#lsX').onclick=()=>this.exit();
       $('#lsGo').onclick=()=>s.checked?this.next():this.check();
       $$('#pqBox .opt').forEach(b=>b.onclick=()=>this.pick(+b.dataset.k));
@@ -3246,7 +3262,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       if(!s.queue.length)return this.end();
       this.show();
     },
-    exit(){modal(`<h3 class="neon" style="font-size:21px">خروج از درس؟</h3><p style="line-height:2">پیشرفت این درس از دست می‌رود. خارج می‌شوی؟</p><div class="row" style="justify-content:center"><button type="button" class="btn mg" id="lxYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn gh" id="lxNo" style="min-height:44px">ادامهٔ درس</button></div>`);
+    exit(){modal(`<h3 class="neon" style="font-size:21px">خروج از درس؟</h3><p style="line-height:2">پیشرفت این درس از دست می‌رود. خارج می‌شوی؟</p><div class="row" style="justify-content:center"><button type="button" class="btn btn-primary mg" id="lxYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn btn-secondary gh" id="lxNo" style="min-height:44px">ادامهٔ درس</button></div>`);
       $('#lxNo').onclick=()=>$('#modal').classList.remove('on');
       $('#lxYes').onclick=()=>{$('#modal').classList.remove('on');this.st=null;go('path')}},
     end(){
@@ -3282,7 +3298,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     <label class="f" for="suPass">رمز عبور</label><input class="v9in" id="suPass" type="password" dir="ltr" maxlength="40" autocomplete="off" placeholder="••••••">
     <details style="margin:8px 0"><summary style="min-height:44px;display:flex;align-items:center;cursor:pointer">بیشتر</summary><label class="f" for="suPh">شمارهٔ موبایل (اختیاری)</label><input class="v9in" id="suPh" dir="ltr" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="09123456789"></details>
     <div class="msg bad" id="suErr" role="alert" style="display:none;min-height:0;margin:8px 0"></div>
-    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn mg" id="suGo" style="min-height:44px">ذخیرهٔ پیشرفت</button><button type="button" class="btn gh" id="suLater" style="min-height:44px">بعداً</button></div>`}
+    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn btn-primary mg" id="suGo" style="min-height:44px">ذخیرهٔ پیشرفت</button><button type="button" class="btn btn-secondary gh" id="suLater" style="min-height:44px">بعداً</button></div>`}
   /* نام کاربری مهمان → نام کاربری واقعی؛ همهٔ داده‌ها (d و کلیدهای wh_/tm_/mv_) منتقل می‌شود و رمز با همان sha() ثبت‌نام عادی هش می‌شود */
   async function guestSignup(name,u,pass,phone){
     if(!isGuest())return'حساب مهمان نیست';
@@ -3309,19 +3325,19 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 
   /* ---------- اول بازی، بعد ثبت‌نام: خوش‌آمد ← پایه ← تعیین سطح ۵ سؤالی ← نتیجه ← درس اول ---------- */
   const reg=$('#s-reg'),ob=document.createElement('div');ob.id='obBox';ob.className='card regbox';reg.appendChild(ob);
-  reg.querySelector('.regbox:not(#obBox)').insertAdjacentHTML('beforeend','<div class="center" style="margin-top:8px"><button type="button" class="btn sm gh" id="fmBack" style="min-height:44px">→ بازگشت</button></div>');
+  reg.querySelector('.regbox:not(#obBox)').insertAdjacentHTML('beforeend','<div class="center" style="margin-top:8px"><button type="button" class="btn btn-secondary sm gh" id="fmBack" style="min-height:44px">→ بازگشت</button></div>');
   const setView=v=>{reg.dataset.v=v;window.scrollTo(0,0)};
   let OB=null;
   function obWelcome(){
     setView('welcome');OB=null;
-    ob.innerHTML=`<div class="center"><p class="muted" style="margin:0 0 12px">در ۳ دقیقه ریاضی را بازی‌وار یاد بگیر ✨</p><button type="button" class="btn mg" id="wlGo" style="min-height:64px;font-size:22px;width:100%;white-space:nowrap;display:flex">بزن بریم! 🚀</button><div style="margin-top:14px"><button type="button" class="btn sm gh" id="wlHave" style="min-height:44px">حساب دارم</button></div></div>`;
+    ob.innerHTML=`<div class="center"><p class="muted" style="margin:0 0 12px">در ۳ دقیقه ریاضی را بازی‌وار یاد بگیر ✨</p><button type="button" class="btn btn-primary mg" id="wlGo" style="min-height:64px;font-size:22px;width:100%;white-space:nowrap;display:flex">بزن بریم! 🚀</button><div style="margin-top:14px"><button type="button" class="btn btn-secondary sm gh" id="wlHave" style="min-height:44px">حساب دارم</button></div></div>`;
     $('#wlGo').onclick=()=>{SFX.init();SFX.click();obGrade()};
     $('#wlHave').onclick=()=>{SFX.init();SFX.click();setView('form');$('.tabs button[data-m="login"]').click()};
   }
   $('#fmBack').onclick=()=>{SFX.click();obWelcome()};
   function obGrade(){
     setView('grade');
-    ob.innerHTML=`<h2 class="neon center" style="font-size:26px">کدام پایه‌ای؟</h2><div class="gcards">${[7,8,9].map(g=>`<button type="button" class="gcard" data-g="${g}"><b>${fa(g)}</b><span>پایهٔ ${GN[g]}</span></button>`).join('')}</div><div class="center"><button type="button" class="btn sm gh" id="gdBack" style="min-height:44px">→ بازگشت</button></div>`;
+    ob.innerHTML=`<h2 class="neon center" style="font-size:26px">کدام پایه‌ای؟</h2><div class="gcards">${[7,8,9].map(g=>`<button type="button" class="gcard" data-g="${g}"><b>${fa(g)}</b><span>پایهٔ ${GN[g]}</span></button>`).join('')}</div><div class="center"><button type="button" class="btn btn-secondary sm gh" id="gdBack" style="min-height:44px">→ بازگشت</button></div>`;
     $$('#obBox .gcard').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();obPlace(+b.dataset.g)});
     $('#gdBack').onclick=()=>{SFX.click();obWelcome()};
   }
@@ -3346,7 +3362,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   function obResult(){
     const{g,q,ans}=OB,okN=ans.filter(a=>a.ok).length,w=ans.find(a=>!a.ok),X0=w?w.ch:q[q.length-1].ch,X=Math.min(X0,3,CH[g].length-1);OB.X=X;OB.okN=okN;
     setView('result');
-    ob.innerHTML=`<div class="center"><div style="font-size:56px">🎯</div><p class="muted" style="margin:0">${fa(okN)} پاسخ درست از ${fa(q.length)}</p><h2 class="neon" style="font-size:25px;margin:6px 0">تو از فصل ${fa(X+1)} شروع می‌کنی!</h2><p style="font-size:18px;margin:0 0 8px"><b>${esc(CH[g][X])}</b></p>${X>0?`<p class="muted" style="font-size:14px;line-height:1.9">فصل‌های ${fa(1)} تا ${fa(X)} «رد شده» علامت می‌خورند؛ قفل نیستند و هر وقت خواستی برمی‌گردی.</p>`:''}<button type="button" class="btn mg" id="obStart" style="min-height:56px;font-size:19px;width:100%;white-space:nowrap;display:flex">شروع درس اول</button></div>`;
+    ob.innerHTML=`<div class="center"><div style="font-size:56px">🎯</div><p class="muted" style="margin:0">${fa(okN)} پاسخ درست از ${fa(q.length)}</p><h2 class="neon" style="font-size:25px;margin:6px 0">تو از فصل ${fa(X+1)} شروع می‌کنی!</h2><p style="font-size:18px;margin:0 0 8px"><b>${esc(CH[g][X])}</b></p>${X>0?`<p class="muted" style="font-size:14px;line-height:1.9">فصل‌های ${fa(1)} تا ${fa(X)} «رد شده» علامت می‌خورند؛ قفل نیستند و هر وقت خواستی برمی‌گردی.</p>`:''}<button type="button" class="btn btn-primary mg" id="obStart" style="min-height:56px;font-size:19px;width:100%;white-space:nowrap;display:flex">شروع درس اول</button></div>`;
     $('#obStart').onclick=()=>{SFX.init();SFX.click();obStart()};
   }
   function obStart(){
@@ -3455,7 +3471,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   function buyItem(it){
     SFX.init();
     if((S.coins||0)<it.p){SFX.err();toast('سکهٔ کافی نداری؛ درس بخوان و سکه جمع کن 💪');return}
-    modal(`<h3 class="neon" style="font-size:21px">خرید «${esc(it.n)}»</h3><p style="line-height:2">با ${fa(it.p)} سکه می‌خری؟ بعد از خرید ${fa((S.coins||0)-it.p)} سکه برایت می‌ماند.</p><div class="row" style="justify-content:center"><button type="button" class="btn mg" id="bYes" style="min-height:44px">بله، بخر</button><button type="button" class="btn gh" id="bNo" style="min-height:44px">نه</button></div>`);
+    modal(`<h3 class="neon" style="font-size:21px">خرید «${esc(it.n)}»</h3><p style="line-height:2">با ${fa(it.p)} سکه می‌خری؟ بعد از خرید ${fa((S.coins||0)-it.p)} سکه برایت می‌ماند.</p><div class="row" style="justify-content:center"><button type="button" class="btn btn-primary mg" id="bYes" style="min-height:44px">بله، بخر</button><button type="button" class="btn btn-secondary gh" id="bNo" style="min-height:44px">نه</button></div>`);
     $('#bNo').onclick=()=>$('#modal').classList.remove('on');
     $('#bYes').onclick=()=>{$('#modal').classList.remove('on');
       if((S.coins||0)<it.p){toast('سکهٔ کافی نداری');return}
@@ -3541,7 +3557,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     const n=streakInit().n;
     return`<div class="streakup" role="status">🔥 استریک +۱ <b>(${fa(n)} روز)</b></div>
     <div class="card goalcard" id="goalDone"><h3 class="neon" style="font-size:22px;margin:0">امروز کافیه، آفرین! 🎉</h3><p style="margin:4px 0 10px">فردا ادامه بده.</p>
-    <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="pqGo" style="min-height:48px;min-width:120px">باشه</button><button type="button" class="btn gh" id="pqMore" style="min-height:48px">یکی دیگه</button></div></div>`;
+    <div class="row" style="justify-content:center"><button type="button" class="btn btn-primary mg" id="pqGo" style="min-height:48px;min-width:120px">باشه</button><button type="button" class="btn btn-secondary gh" id="pqMore" style="min-height:48px">یکی دیگه</button></div></div>`;
   }
 
   /* ---- انتخاب هدف روزانه + تقویم ماهانه (پروفایل) ---- */
@@ -3559,7 +3575,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     const len=monthLen(first),wd=(first+5)%7,on=new Set(S.days||[]),cells=[];
     for(let i=0;i<wd;i++)cells.push('<i class="cal-e"></i>');
     for(let d=1;d<=len;d++){const dn=first+d-1,a=on.has(dn);cells.push(`<span class="cal-d${a?' cal-on':''}${dn===T?' cal-t':''}"${a?' aria-label="'+fa(d)+' '+JM[m-1]+' — هدف انجام شد"':''}>${a?'🔥':fa(d)}</span>`)}
-    return`<div class="card" id="calBox" style="margin-top:12px"><div class="lgh"><button type="button" class="btn sm gh" id="calPrev" aria-label="ماه قبل" style="min-height:44px;min-width:44px">›</button><h3 style="font-size:18px;color:var(--ye)" id="calTitle">📅 ${JM[m-1]} ${fa(y)}</h3><button type="button" class="btn sm gh" id="calNext" aria-label="ماه بعد" style="min-height:44px;min-width:44px">‹</button></div>
+    return`<div class="card" id="calBox" style="margin-top:12px"><div class="lgh"><button type="button" class="btn btn-secondary sm gh" id="calPrev" aria-label="ماه قبل" style="min-height:44px;min-width:44px">›</button><h3 style="font-size:18px;color:var(--ye)" id="calTitle">📅 ${JM[m-1]} ${fa(y)}</h3><button type="button" class="btn btn-secondary sm gh" id="calNext" aria-label="ماه بعد" style="min-height:44px;min-width:44px">‹</button></div>
     <div class="cal" role="grid">${['ش','ی','د','س','چ','پ','ج'].map(w=>`<b class="cal-h">${w}</b>`).join('')}${cells.join('')}</div></div>`;
   }
   function bindCal(){const f=d=>()=>{SFX.click();calOff+=d;const e=$('#calBox');if(e){e.outerHTML=calHtml();bindCal()}};$('#calPrev').onclick=f(-1);$('#calNext').onclick=f(1)}
@@ -3609,8 +3625,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
       <div class="egoal" id="eGoal">🎯 هدف امروز: ${fa(Math.min(n,gl))}/${fa(gl)} • 🔥 استریک: ${fa(k.n||0)} روز</div>
       ${o.up?`<div class="streakup" role="status">🔥 استریک +۱ <b>(${fa(k.n)} روز)</b></div><div class="card goalcard" id="goalDone"><h3 class="neon" style="font-size:20px;margin:0">امروز کافیه، آفرین! 🎉</h3><p style="margin:2px 0 0">فردا ادامه بده.</p></div>`:''}
       ${tg?`<p class="etg" id="eTarget">✨ تقریباً رسیدی: ${tg}</p>`:''}
-      <button type="button" class="btn mg endnext" id="pqMore" style="min-height:56px;width:100%;font-size:19px">${lost?'دوباره امتحان کن':'ادامه'}</button>
-      <button type="button" class="btn sm gh" id="pqGo" style="min-height:44px;margin-top:8px">بازگشت به مسیر</button>
+      <button type="button" class="btn btn-primary mg endnext" id="pqMore" style="min-height:56px;width:100%;font-size:19px">${lost?'دوباره امتحان کن':'ادامه'}</button>
+      <button type="button" class="btn btn-secondary sm gh" id="pqGo" style="min-height:44px;margin-top:8px">بازگشت به مسیر</button>
       ${o.nag?'<div class="card" id="suBox" style="margin-top:10px;padding:12px">'+signupHtml()+'</div>':''}</div>`;
     countUp();
     if(o.nag)bindSignup($('#suBox'),()=>go('path'));
@@ -3639,11 +3655,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     const e=S.eq||{},xp=xpOf(),lv=Math.floor(xp/200)+1;
     secProf.innerHTML=`<div class="card center"><h2 class="neon" style="font-size:28px">👤 پروفایل</h2>
     <div id="profAv" style="width:120px;margin:0 auto">${rbSvg(true)}</div><h3 style="font-size:24px">${esc(S.name||'')}</h3>
-    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">⚡ ${fa(xp)} XP</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div>${isGuest()?'<p class="muted" style="font-size:14px;line-height:1.9">حساب مهمان: پیشرفتت هنوز ذخیره نشده.</p><button type="button" class="btn mg" id="pSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button>':''}</div>
+    <div class="row" style="justify-content:center;margin:8px 0"><span class="chip">پایهٔ ${GN[S.grade||8]}</span><span class="chip">سطح ${fa(lv)}</span><span class="chip">⚡ ${fa(xp)} XP</span><span class="chip">🪙 ${fa(S.coins||0)}</span></div>${isGuest()?'<p class="muted" style="font-size:14px;line-height:1.9">حساب مهمان: پیشرفتت هنوز ذخیره نشده.</p><button type="button" class="btn btn-primary mg" id="pSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button>':''}</div>
     ${goalHtml()}${calHtml()}
     ${colHtml()}
     <div class="card" style="margin-top:12px"><h3 style="font-size:20px;color:var(--ye)">بیشتر</h3><div class="pmore" id="pMore">${MORE.map(([id,i,t])=>`<button type="button" data-more="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')}</div>
-    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
+    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn btn-secondary gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn btn-secondary gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn btn-secondary gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
     $$('#pMore [data-more]').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();const id=b.dataset.more;
       if(id==='report'&&!S.quiz){toast('اول خودآزمایی و پرسشنامه را تمام کن 📝');return}go(id)});
     bindGoal();bindCal();bindCol();
@@ -3652,12 +3668,12 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     $('#btnSup2').onclick=()=>{SFX.init();SFX.click();supportOpen()};
     $('#btnOut').onclick=()=>{SFX.click();
       if(isGuest()){modal(`<h3 class="neon" style="font-size:22px">🚪 خروج از حساب مهمان</h3><p style="line-height:2">اگر الان خارج شوی، پیشرفت مهمان <b>پاک می‌شود</b>. بهتر است اول پیشرفتت را ذخیره کنی.</p>
-        <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="outSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button><button type="button" class="btn gh" id="outYes" style="min-height:44px">خروج بدون ذخیره</button><button type="button" class="btn gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
+        <div class="row" style="justify-content:center"><button type="button" class="btn btn-primary mg" id="outSave" style="min-height:44px">💾 ذخیرهٔ پیشرفت</button><button type="button" class="btn btn-secondary gh" id="outYes" style="min-height:44px">خروج بدون ذخیره</button><button type="button" class="btn btn-secondary gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
         $('#outNo').onclick=()=>$('#modal').classList.remove('on');
         $('#outSave').onclick=()=>{modal(signupHtml());bindSignup($('#modal'),()=>{profShow();v9Hdr()})};
         $('#outYes').onclick=()=>{$('#modal').classList.remove('on');logout()};return}
       modal(`<h3 class="neon" style="font-size:22px">🚪 خروج از حساب</h3><p style="line-height:2">می‌خواهی از حساب خارج شوی؟ پیشرفتت ذخیره می‌ماند و بعداً با نام کاربری و رمز دوباره وارد می‌شوی.</p>
-      <div class="row" style="justify-content:center"><button type="button" class="btn mg" id="outYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
+      <div class="row" style="justify-content:center"><button type="button" class="btn btn-primary mg" id="outYes" style="min-height:44px">بله، خارج شو</button><button type="button" class="btn btn-secondary gh" id="outNo" style="min-height:44px">نه، می‌مانم</button></div>`);
       $('#outNo').onclick=()=>$('#modal').classList.remove('on');
       $('#outYes').onclick=()=>{$('#modal').classList.remove('on');logout()};
     };
