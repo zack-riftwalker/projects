@@ -2661,12 +2661,12 @@ r.insertAdjacentHTML('afterbegin','<div class="stk"><span>🧮</span><span>🚀<
 #bnav button i{font-style:normal;font-size:22px;line-height:1.2}
 #bnav button[aria-current=page]{color:var(--cy);background:rgba(52,224,192,.12);box-shadow:inset 0 -3px 0 var(--cy)}
 body[data-scr="reg"] #bnav,body[data-scr="game"] #bnav,body[data-scr="run"] #bnav,body[data-scr="gm"] #bnav,body[data-scr="sg"] #bnav{display:none}
-#app{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-#toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+#app{padding-bottom:calc(var(--nav-h,64px) + 24px)}
+#toast{bottom:calc(var(--nav-h,64px) + 12px)}
 body[data-scr="pq"] #toast{bottom:auto;top:calc(12px + env(safe-area-inset-top));transform:translate(-50%,-40px)}
 body[data-scr="pq"] #toast.on{transform:translate(-50%,0)}
 #btnSup,#btnTch,#hubShop{display:none!important}
-#dev{display:none}body[data-scr="reg"] #dev,body[data-scr="prof"] #dev{display:block}
+#dev{display:none!important}
 #pathBox{padding-bottom:24px}
 .pbn{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:16px;color:#fff;background:linear-gradient(120deg,hsl(var(--h) 60% 32%),hsl(calc(var(--h) + 40) 55% 22%));border:1px solid hsl(var(--h) 70% 55%/.6)}
 .pbn b{font-family:var(--fh);font-weight:400;font-size:18px;white-space:nowrap}.pbn span{flex:1;font-size:15px}.pbn i{font-style:normal}
@@ -2823,6 +2823,16 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .frac>span:last-child{padding:.05em .2em 0}
 .frac-s{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .opt .m{margin:0}
+/* ===== UI P0-4: باگ‌های ظاهری ===== */
+#bnav{padding:6px 4px max(6px,env(safe-area-inset-bottom))}
+#bnav button{border-radius:var(--r-sm)}
+#obBox .msg{min-height:44px;background:none;border:0;padding:6px 0;margin-top:6px}
+#pqBox{min-height:calc(100vh - 28px);min-height:calc(100dvh - 28px)}
+#s-reg[data-v="place"] #obBox,#s-reg[data-v="result"] #obBox{min-height:calc(100vh - 28px);min-height:calc(100dvh - 28px)}
+.opt,#pqBox .opt{border-radius:var(--r-sm)}
+.mission{border-radius:var(--r-lg)}
+.about{margin-top:12px;text-align:center}.about summary{min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-text-2);font-weight:700}
+.about p{margin:4px 0 8px;font-size:var(--fs-small,13px);color:var(--c-text-2);line-height:1.9}.about b{color:var(--c-gold)}
 @media(min-width:900px){#app{max-width:760px}.lsn-bar{max-width:760px}#bnav button{max-width:170px}}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
@@ -2844,6 +2854,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   function rec(g,i){const P=pd();const G=P.l[g]=P.l[g]||{};const r=G[i]=G[i]||{L:[],c:0};r.L=r.L||[];return r}
   function dayXp(){const P=pd(),d=dayN();if(P.xp.d!==d)P.xp={d,b:xpOf(),v:0};return Math.max(0,xpOf()-P.xp.b)}
   function touchStreak(){const d=dayN(),s=S.stk||{n:0,d:0};if(s.d!==d)S.stk={n:s.d===d-1?s.n+1:1,d};}
+  /* ارتفاع واقعی نوار پایین → --nav-h (برای toast و فاصلهٔ پایین صفحه) */
+  try{const nb=document.getElementById('bnav'),setH=()=>document.documentElement.style.setProperty('--nav-h',(nb.offsetHeight||0)+'px');if(nb){setH();if(window.ResizeObserver)new ResizeObserver(setH).observe(nb);addEventListener('resize',setH)}}catch(e){}
   window.v9Hdr=function(){if(!USER)return;
     {const k=rbKey();if(k!==hAvKey){hAvKey=k;$('#hAv').innerHTML=rbSvg(false)}}
     $('#hStk').textContent='🔥 '+fa(streakInit().n||0);$('#hCoin').textContent='🪙 '+fa(S.coins||0);{const n=todayLog().n,g=goalN();$('#hXp').textContent=n>=g?'✓ '+fa(g)+'/'+fa(g):'⚡ '+fa(n)+'/'+fa(g)}};
@@ -3503,7 +3515,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
   /* ---- کلکسیون من: آیتم‌های خریداری‌شده از هر دو سیستم قدیمی + فروشگاه تازه ---- */
   const V1T=[['اقیانوس','🌊','#0A1630','#E8B54A'],['غروب','🌇','#38203c','#ff8b62'],['جنگل','🌿','#12372d','#63d297'],['کهکشانی','🌌','#171435','#b18cff'],['آبنبات','🍬','#472344','#ff83ca'],['طلایی','👑','#382e18','#ffd166'],['یخی','❄️','#193344','#8ee5ff'],['آتش','🔥','#421e20','#ff7058'],['مینیمال','☁️','#253044','#d2d9e8'],['شفق','🌈','#20254c','#60e1cb']];
   const V1C=[['🐉','اژدهای آتشین','افسانه‌ای'],['🛡️','شوالیهٔ طلایی','افسانه‌ای'],['🐼','پاندای جنگجو','کمیاب'],['🧙','جادوگر بنفش','کمیاب'],['🥷','نینجا','کمیاب'],['🚀','فضانورد','معمولی'],['🦁','شیر طلایی','افسانه‌ای'],['🦊','روباه جادویی','کمیاب'],['🦄','تک‌شاخ ستاره‌ای','افسانه‌ای'],['🤖','ربات نابغه','معمولی'],['🐢','لاک‌پشت تیزهوش','معمولی'],['🦉','جغد دانا','معمولی']];
-  const V1G=[['avatar','آواتار','😀🐸🐱🐯🐻🦋🐙🐳🦖🐨🦝🐰🦊🐼🦁🐲👾🧙🦄🤖🐢'.split(''),25],['frame','قاب','🟣🔵🟢🟠🔴🟡💠💎🌟✨🌈🪙🎀🌸🌙⚡🔥❄️🍀👑'.split(''),20],['theme','تم','',10],['crosshair','نشانه‌گیر','🎯✳️❇️🔆🔱💫☄️✴️🌀🔮🌟⚡💠🪄🎲🧿🌈❄️🔥🍀'.split(''),20],['decor','تزئین','🎈🎉🎊🎁🏅🏆⭐🌻🌺🍀🪴🎨🎵🎼📚🧩🪁🪄🧸🪙'.split(''),25]];
+  const GS=t=>{try{return[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(t)].map(x=>x.segment)}catch(e){return Array.from(t)}}; /* ایموجی را درست تکه می‌کند (جلوگیری از ❓ نیمهٔ جفت جایگزین) */
+  const V1G=[['avatar','آواتار',GS('😀🐸🐱🐯🐻🦋🐙🐳🦖🐨🦝🐰🦊🐼🦁🐲👾🧙🦄🤖🐢'),25],['frame','قاب',GS('🟣🔵🟢🟠🔴🟡💠💎🌟✨🌈🪙🎀🌸🌙⚡🔥❄️🍀👑'),20],['theme','تم','',10],['crosshair','نشانه‌گیر',GS('🎯✳️❇️🔆🔱💫☄️✴️🌀🔮🌟⚡💠🪄🎲🧿🌈❄️🔥🍀'),20],['decor','تزئین',GS('🎈🎉🎊🎁🏅🏆⭐🌻🌺🍀🪴🎨🎵🎼📚🧩🪁🪄🧸🪙'),25]];
   /* ایموجی‌ای که در این دستگاه رندر نمی‌شود (توفو) با آیکون دستهٔ خودش جایگزین می‌شود */
   const V1ICON={avatar:'🙂',frame:'🖼️',theme:'🎨',crosshair:'🎯',decor:'🎀'},GL={};
   function glyph(ch,fb){
@@ -3678,7 +3691,8 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opac
     ${goalHtml()}${calHtml()}
     ${colHtml()}
     <div class="card" style="margin-top:12px"><h3 style="font-size:20px;color:var(--ye)">بیشتر</h3><div class="pmore" id="pMore">${MORE.map(([id,i,t])=>`<button type="button" data-more="${id}" aria-label="${t}"><i aria-hidden="true">${i}</i><span>${t}</span></button>`).join('')}</div>
-    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn btn-secondary gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn btn-secondary gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn btn-secondary gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div></div>`;
+    <div class="row" style="justify-content:center;margin-top:8px"><button type="button" class="btn btn-secondary gh" id="btnSound" style="min-height:44px">${SFX.muted?'🔇 صدا: خاموش':'🔊 صدا: روشن'}</button><button type="button" class="btn btn-secondary gh" id="btnSup2" style="min-height:44px">🛟 پشتیبانی</button><button type="button" class="btn btn-secondary gh" id="btnOut" style="min-height:44px">🚪 خروج از حساب</button></div>
+    <details class="about" id="pAbout"><summary>درباره</summary><p>${$('#dev').innerHTML}</p></details></div>`;
     $$('#pMore [data-more]').forEach(b=>b.onclick=()=>{SFX.init();SFX.click();const id=b.dataset.more;
       if(id==='report'&&!S.quiz){toast('اول خودآزمایی و پرسشنامه را تمام کن 📝');return}go(id)});
     bindGoal();bindCal();bindCol();

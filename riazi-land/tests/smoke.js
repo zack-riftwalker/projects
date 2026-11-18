@@ -131,11 +131,11 @@ T('floating 🧑‍🏫/🛟 buttons never cover the UI (hidden; reachable from 
 T('developer credit text appears once', async ({ browser }) => {
   const { page, context } = await open(browser);
   const reg = await page.evaluate(() => document.body.innerText);
-  assert(count(reg, 'توسعه‌دهنده') <= 1, 'dup credit on register: ' + count(reg, 'توسعه‌دهنده'));
+  eq(count(reg, 'توسعه‌دهنده'), 0, 'credit must not be on the welcome screen');
   await register(page);
   await page.evaluate(() => go('prof'));
   const home = await page.evaluate(() => document.body.innerText);
-  eq(count(home, 'توسعه‌دهنده'), 1, 'credit count on profile');
+  assert(count(home, 'توسعه‌دهنده') === 0, 'credit must be hidden until «درباره» is opened'); await page.click('#pAbout summary'); eq(count(await page.evaluate(() => document.body.innerText), 'توسعه‌دهنده'), 1, 'credit count on profile (درباره)');
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   eq(count(html, '<footer'), 1, '<footer> tags in source');
   await context.close();
