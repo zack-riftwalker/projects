@@ -26,7 +26,7 @@ The old boss (`godot/src/enemies/loop_boss.gd`, kit-era, MV5A-07) is replaced. K
 | M3 | the condition plate: breakpoint freeze (links become platforms), half hits, the yellow ring catch, the break window, `i++` escalation | **done** (2026-11-15) |
 | M4 | phase 2 (transition, nested ring layer, recursion, escalate, gantry swing, gear reversal) and phase 3 (transition, pit + ceiling seam, wrap dive, combos, feints, HP = length) | **done** (2026-11-15) |
 | M5 | death + compact scene (looping progress bar, echo `stop`), voices and subtitles, sounds, music (phase-3 stutter), logs lines | **done** (2026-11-15/19) |
-| M6 | loss menu with the counter, the diff sign, after-state, T09 decor only if the world dept approved it, full tests, web export | code **done** (2026-11-19); full `test-all.sh` and the web export: see the M6 note |
+| M6 | loss menu with the counter, the diff sign, after-state, T09 decor only if the world dept approved it, full tests, web export | **done** (2026-11-19) |
 
 ---
 
@@ -91,6 +91,7 @@ Each one is also in the producer's inbox (`docs/studio/PRODUCER.md`), so he can 
 - **Retry:** `Boss`'s generalized menu (`has_retry`, spot x 24 feet on the floor, verdigris colours, `loop_click`); `Main._loss_choose` calls the boss's `on_retry` first: `Game.loop_tries` +1 (this session), and the hall's counter on load is 4096 + tries (+ the breaks of the fight). Not saved: a new session starts at 4096 again.
 - **After:** `boss:LOOP` -> the hall draws the open snake on the floor once, in the back-wall node (no collision, no per-frame cost), plate `false`, eye crossed; the counter shows `loop:final:<n>` (set at the kill). The diff sign is drawn since M1.
 - **T09's chain (the world department said yes, its inbox 2026-11-01):** a `window` decor 12 x 1 tiles at (16, 1) with `shadow: loop` and `if: !boss:LOOP`; in passes 2 and 3 (`iter` 1 and 2) a verdigris chain slides west behind it in a 24 s cycle and clatters (a local `loop_chain` three times a second while it passes). T09's map is unchanged.
+- **Full `test-all.sh` (2026-11-19, on `763818d`):** green except `gfxcontrast` (`N15 phase3 cap rows 0.39`: the known old failure, not this boss), `co-race` (the guest made 0 swings once; **passed on its rerun**) and `mv-title` (a different item failed each time: "join by code / host saw guest", then "new game after a failed join"; **passed on the third run, failed on the fourth**: flaky, as in RACE's M6 notes; the export's pck grew 11.21 -> 11.87 MB with LOOP's voices, sounds and music, which may make the page's start a little slower). Every `loop3` part, `co-loopboss`, `bosspresets`, `parity`, `breakpoint`, `logs`, the parity tapes and the room checkers passed. Web export: its own last commit.
 - **`loop3` is fast now** (~10 s with the route checks; `test-all` gives each test 180 s): the route search tries the likeliest jumps first and gives up on a try that landed short; the route room holds its fight off (`fight_hold`).
 
 ---
