@@ -91,13 +91,16 @@ func rebuild() -> void:
 		_y += 4.0
 	var cc: bool = Game.flag("compacted:CRAWLER")
 	var cf: bool = Game.flag("compacted:FIREWALL")
-	if cc or cf:                                          # what a boss said that the compaction took (14-crawler.md, 16-firewall.md); the DLC opens it
+	var cl_: bool = Game.flag("compacted:LOOP")
+	if cc or cf or cl_:                                          # what a boss said that the compaction took (14-crawler.md, 16-firewall.md); the DLC opens it
 		any = true
 		_add_head("compacted", Game.COL.dim)
 		if cc:
 			_add_text("CRAWLER OF THE WEB: [compacted]", "#8a8494")
 		if cf:
 			_add_text("THE FIREWALL: [compacted]", "#8a8494")
+		if cl_:
+			_add_text("INFINITE LOOP: [compacted]", "#8a8494")
 		_add_text("This part of the conversation was summarized.", Game.COL.dim, true)
 		_y += 4.0
 	var pages: Array = []
@@ -111,13 +114,16 @@ func rebuild() -> void:
 			_add_text(String(Game.LOGBOOK[n]), Game.COL.paper)
 		_y += 4.0
 	var fixed_lock: bool = Game.flag("boss:RACE")          # RACE CONDITION: the pin is in, the threads take turns (17-race-condition.md 7.3)
-	if not Game.changelog_lines.is_empty() or fixed_lock:
+	var fixed_loop: bool = Game.flag("boss:LOOP")          # INFINITE LOOP: the retry limit is back (18-loop.md, step 5)
+	if not Game.changelog_lines.is_empty() or fixed_lock or fixed_loop:
 		any = true
 		_add_head("changelog", "#58f0c8")
 		for cl in Game.changelog_lines:
 			_add_text(String(cl), Game.COL.paper)
 		if fixed_lock:
 			_add_text("fix: restore escapement.lock() \u2014 threads take turns again.", Game.COL.paper)
+		if fixed_loop:
+			_add_text("fix: restore the retry limit \u2014 attempt < 3. the loop may stop now.", Game.COL.paper)
 	if not any:
 		_add_text("nothing logged yet. read the signs you find.", Game.COL.dim)
 	content_h = _y

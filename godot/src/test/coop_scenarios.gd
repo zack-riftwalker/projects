@@ -3871,17 +3871,26 @@ func sc_co_loopboss() -> Array:
 		var seen := {}
 		var t0 := Time.get_ticks_msec()
 		var moved := false
+		var killed := false
 		var p2_hits := 0
 		var hp0 := b.hpf
-		while Time.get_ticks_msec() - t0 < 36000.0 * slow:
+		var kill_ms := -1
+		while Time.get_ticks_msec() - t0 < 80000.0 * slow and not (killed and Time.get_ticks_msec() - kill_ms > 25000):
 			p.inv = 999.0
 			p.hp = p.max_hp
 			plan_stats(b, seen)
-			if not moved and Time.get_ticks_msec() - t0 > 28000.0 * slow:
-				moved = true
-				b.hpf = float(b.max_hp) * 0.34                 # (straight to phase 3: its change opens the pit)
+			if not moved and Time.get_ticks_msec() - t0 > 28000.0 * slow and b.mode != "trans" and not b.dying:
+				b.hpf = float(b.max_hp) * 0.33 + 1.0           # (straight to phase 3: its change opens the pit; again if a change was running)
 				b.mode = "swim" if b.mode == "broken" or b.mode == "recoil" else b.mode
+				b.bp_t = 0.0
 				b.hit(2, 1.0, 0.0, "swipe", {"link": b.links.size() - 1})
+				moved = b.ph == 3
+			if moved and not killed and Time.get_ticks_msec() - t0 > 33000.0 * slow and is_instance_valid(b) and not b.dying:
+				killed = true                                  # M5: the kill: both pages see the death scene (~22 s, real time)
+				kill_ms = Time.get_ticks_msec()
+				b.mode = "broken"
+				r.attacker = p
+				b.hit(99999, 1.0, 0.0, "swipe", {"link": 3})
 			await get_tree().physics_frame
 		p2_hits = int(r.stats.hits[1]) if r.stats.has("hits") else 0
 		var broke := b.breaks_total
@@ -3889,7 +3898,7 @@ func sc_co_loopboss() -> Array:
 		for sq in seen:
 			tg[seen[sq]] = int(tg.get(seen[sq], 0)) + 1
 		await wait_secs(1.0)
-		return [started and seen.size() >= 6 and tg.p2 >= 2 and p2_hits >= 1 and broke >= 1, "host: started %s, %d plans (p1 %d, p2 %d), P2 hits %d, boss hp %.0f -> %.0f, breaks %d" % [str(started), seen.size(), tg.p1, tg.p2, p2_hits, hp0, b.hpf, broke]]
+		return [started and seen.size() >= 6 and tg.p2 >= 2 and p2_hits >= 1 and broke >= 1 and killed, "host: started %s, %d plans (p1 %d, p2 %d), P2 hits %d, boss hp %.0f -> %.0f, breaks %d" % [str(started), seen.size(), tg.p1, tg.p2, p2_hits, hp0, b.hpf, broke]]
 	await wait_until(func(): return mgr().room != null and mgr().player != null, 10.0)
 	var r2 := boss_arena("T10", 60.0, 300.0)
 	var found := {"b": null}
@@ -3911,15 +3920,41 @@ func sc_co_loopboss() -> Array:
 	var landed := false
 	var last_hp: int = mgr().player.hp
 	var saw_frozen := false
+	var saw_die := false
+	var saw_lie := false
+	var saw_speak := false
+	var saw_compact := false
 	var saw_broken := false
 	var bp_try := -10.0
 	var t1 := Time.get_ticks_msec()
 	var f := 0
-	while Time.get_ticks_msec() - t1 < 44000.0 * slow:
+	var done_ms := -1
+	while Time.get_ticks_msec() - t1 < 90000.0 * slow and not (done_ms > 0 and Time.get_ticks_msec() - done_ms > 6000):
 		var g = mgr().player
 		var rm: Room = mgr().room
 		f += 1
 		if not is_instance_valid(pup) or rm.shaft == null:
+			if saw_die and done_ms < 0:
+				done_ms = Time.get_ticks_msec()
+			await get_tree().physics_frame
+			continue
+		if pup.dying:                                          # the death scene on this page: it lies open, speaks (this body next to its head), compacts
+			saw_die = true
+			g.inv = 999.0
+			pin(g, pup.hx - 24.0, 454.0)
+			var lowc := 0
+			for c in pup.links:
+				if (c as Vector2).y > 440.0:
+					lowc += 1
+			if lowc >= pup.links.size() - 1:
+				saw_lie = true
+			if pup.speak_clock() >= 0.0:
+				saw_speak = true
+			if pup.speak_clock() >= pup.compact_at():
+				saw_compact = true
+				if done_ms < 0:
+					done_ms = Time.get_ticks_msec()
+			Controls.script_input = {}
 			await get_tree().physics_frame
 			continue
 		plan_stats(pup, seen2)
@@ -3980,8 +4015,9 @@ func sc_co_loopboss() -> Array:
 		if String(seen2[sq]) == "p2":
 			mine += 1
 	await wait_secs(1.0)
-	return [seen2.size() >= 6 and mine >= 2 and pup.kit_violation == "" and swings >= 1 and saw_frozen and saw_broken and saw_crack and saw_pit and wrapped and landed,
-		"guest: saw %d plans (%d on me), hurt %d, %d swings, violation '%s'; froze it %s, broke it %s; pit: cracks %s, open %s, wrapped %s, landed %s" % [seen2.size(), mine, hurt, swings, pup.kit_violation, str(saw_frozen), str(saw_broken), str(saw_crack), str(saw_pit), str(wrapped), str(landed)]]
+	var viol: String = pup.kit_violation if is_instance_valid(pup) else ""
+	return [seen2.size() >= 6 and mine >= 2 and viol == "" and swings >= 1 and saw_frozen and saw_broken and saw_crack and saw_pit and wrapped and landed and saw_die and saw_lie and saw_speak and saw_compact,
+		"guest: saw %d plans (%d on me), hurt %d, %d swings, violation '%s'; froze it %s, broke it %s; pit: cracks %s, open %s, wrapped %s, landed %s; death %s lying %s speaking %s compact %s" % [seen2.size(), mine, hurt, swings, viol, str(saw_frozen), str(saw_broken), str(saw_crack), str(saw_pit), str(wrapped), str(landed), str(saw_die), str(saw_lie), str(saw_speak), str(saw_compact)]]
 
 func sc_co_deadlock() -> Array:
 	if not await wait_joined():

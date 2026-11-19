@@ -75,6 +75,12 @@ const SHED_MIN := 6                        # phase 3: a link falls off at every 
 const FEINT_T := 0.25
 const WRAP_TOP := -18.0
 const NO_GROUND := 10000.0
+const FALL_T := 3.0                        # the death (~20 s, CRAWLER's compact scene with LOOP's own turns): it lets go of its tail and lies open,
+const WAIT_MAX := 11.0                     # waits for someone to come near its head (at most 8 s more), says `die`, then the memorable line
+const DIE_GAP := 0.8                       # in the terminal box (Clawd's context meter fills), the eye goes out, the compaction (its bar loops
+const EYE_OFF := 0.8                       # once), the summary, the word `stop` lingers; then opus
+const COMPACT_LEN := 6.0
+const SUMMARY_LEN := 2.6
 
 static var tex_head: Texture2D
 static var tex_links: Texture2D
@@ -134,6 +140,7 @@ var p3_hp0 := 0.0
 var feint := false                         # the plan in progress holds 0.25 s more after its full cue
 var combo_next := ""                       # host: phase 3's combo: this plan follows at once
 var jingle_k := -1
+var speak_t := -1.0                        # the death: die_t when its line began (-1: not yet)
 var _flag_hash := 0
 
 func _init(r: Room, bx: float, by: float, base_hp := 126) -> void:
@@ -333,7 +340,7 @@ func nest_live(tm: float) -> bool:
 	return nest_on and not (nest_drop_t0 >= 0.0 and tm - nest_drop_t0 < NEST_DROP) and tm >= nest_base and mode != "trans"
 
 func nest_gear(tm: float) -> int:
-	return (nest_g0 + floori((tm - nest_base) / NEST_PER)) % 2
+	return posmod(nest_g0 + floori((tm - nest_base) / NEST_PER), 2)
 
 func _nest_a(u: float) -> float:
 	return -PI / 2.0 + 1.1 * u
@@ -523,6 +530,114 @@ func _trail_from_body() -> void:
 		trail.append(last)
 	_rebuild_links()
 
+# ---------------------------------------------------------------- the death (host runs it; die_t and speak_t travel to the guest)
+func begin_death() -> void:
+	dying = true
+	die_t = 0.0
+	speak_t = -1.0
+	passive = true
+	plan = {}
+	mode = "dead"
+	say_k = 0
+	nest_on = false
+	copy_t0 = -10.0
+	bp_t = 0.0
+	for q in room.projs:
+		q.dead = true
+	for e in room.ents:
+		if e != self and not e.get("is_boss"):
+			e.loot = 0
+			e.die("")
+	var hl := _hall()
+	if hl != null:
+		hl.violet = 0.0
+		hl.heat = 0.0
+		if hl.pit_open(room.time):
+			hl.close_t0 = room.time                       # the floor slides back first (a click), so nobody is left in the loop
+		Game.flags["loop:final:%d" % hl.counter] = true      # (the counter stays at this number in the after-state)
+	_lay_down()
+	room.shake(0.7)
+	Audio.sfx("loop_click", {"vol": 1.0})
+	Audio.sfx("loop_collapse", {"vol": 1.0})
+	room.events.append("bossDying")
+
+# it lets go of its tail and lies straight along the floor (the same as a break, but for good)
+func _lay_down() -> void:
+	lie.clear()
+	var side := -1.0 if hx > 192.0 else 1.0
+	var hx2 := clampf(hx, 60.0, float(room.pw) - 60.0)
+	var gy := LoopHall.FLOOR_Y
+	for kk in range(links.size()):
+		var lx := clampf(hx2 + side * (NECK + GAP * float(kk)), 24.0, float(room.pw) - 24.0)
+		lie.append(Vector2(lx, gy - 8.0))
+	lie.append(Vector2(hx2, gy - 12.0))
+
+func _die_len() -> float:
+	return float(lines.get("die", {}).get("len", 2.8))
+
+func _compact_words() -> Array:
+	return lines.get("compact", {}).get("words", [])
+
+func _c0() -> float:
+	return _die_len() + DIE_GAP
+
+func _c_end() -> float:
+	return _c0() + float(lines.get("compact", {}).get("len", 7.4))
+
+func compact_at() -> float:
+	return _c_end() + EYE_OFF
+
+func _step_death(dt: float) -> void:
+	die_t += dt
+	_step_broken_lie(dt)
+	if speak_t < 0.0 and die_t >= FALL_T:
+		var near := die_t >= WAIT_MAX
+		for q in room.players():
+			if absf(q.x + q.w / 2.0 - hx) < 90.0 and absf(q.y - hy) < 90.0:
+				near = true
+		if near:
+			speak_t = die_t
+			Audio.sfx("loop_die")
+	if speak_t >= 0.0:
+		var sc := die_t - speak_t
+		if sc >= _c0() and not bool(get_meta("said_compact", false)):
+			set_meta("said_compact", true)
+			Audio.sfx("loop_compact")
+		if sc >= compact_at() + COMPACT_LEN and not Game.flag("compacted:LOOP"):
+			Game.flags["compacted:LOOP"] = true               # the trace in the Logs page (the DLC opens it)
+		if sc >= compact_at() + COMPACT_LEN + SUMMARY_LEN and not gone:
+			gone = true
+			dead = true
+			room.drop(hx, hy, drop_n)
+			room.events.append("bossDead")
+
+func _step_broken_lie(dt: float) -> void:
+	for kk in range(links.size()):
+		if kk < lie.size():
+			links[kk] = (links[kk] as Vector2).move_toward(lie[kk], LIE_V * dt)
+	if lie.size() > links.size():
+		var hv := Vector2(hx, hy).move_toward(lie[lie.size() - 1], LIE_V * dt)
+		hx = hv.x
+		hy = hv.y
+		ang = 0.0 if lie.size() > 1 and float(lie[0].x) < hx else PI
+
+# the scene's clock on this page: where it is in its lines, -1 before
+func speak_clock() -> float:
+	return die_t - speak_t if speak_t >= 0.0 else -1.0
+
+# Clawd's context meter while the memorable line is said: 60 % after the first sentence, 85 % after the second, full and red on the third
+func context_fill() -> float:
+	var sc := speak_clock()
+	if sc < _c0():
+		return -1.0
+	var ws := _compact_words()
+	var marks := [[7, 0.6], [10, 0.85], [11, 0.95], [15, 1.0]]
+	var f := 0.35
+	for m in marks:
+		if int(m[0]) < ws.size() and sc - _c0() >= float(ws[int(m[0])][1]):
+			f = float(m[1])
+	return f
+
 func blocks(_dx: float, _dy: float, _how: String) -> bool:
 	return false
 
@@ -561,6 +676,7 @@ func _begin_phase(p: int) -> void:
 			hl.heat = 1.0
 		nest_on = false
 		p3_hp0 = hpf
+		Audio.sfx("loop_crack", {"vol": 1.0})
 		coil_c = Vector2(192.0, 200.0)
 		queue = ["wrap_dive", "lunge"]
 	coil_a = (Vector2(hx, hy) - coil_c).angle()
@@ -711,6 +827,8 @@ func music_now(want: String) -> String:
 		var el := room.time - intro_t0 if intro_t0 >= 0.0 else 0.0
 		if intro_long() and el < intro_len() - 0.3:
 			return ""
+	if ph >= 3:
+		return "loop_stutter"
 	if ph >= 2:
 		return "boss_hi"
 	return want
@@ -727,6 +845,8 @@ func update(dt: float) -> void:
 		_place()
 		return
 	if dying:
+		_step_death(dt)
+		_sync_hall()
 		_place()
 		return
 	if bp_off != last_bp_off:                                 # a freeze just ended (the room does not update a frozen creature): breakpoint rests
@@ -1056,7 +1176,7 @@ func _wrap_cue(dt: float) -> void:
 			hx = dive_x
 			hy = WRAP_TOP
 			set_meta("wrapped", true)
-			Audio.sfx("loop_chain", {"vol": 0.8})
+			Audio.sfx("loop_seam", {"vol": 0.9})
 	else:
 		hx = move_toward(hx, dive_x, 200.0 * dt)
 		hy = WRAP_TOP
@@ -1215,6 +1335,9 @@ func say_len(k: int) -> float:
 	return 1.4 if k == 4 else 5.0
 
 func draw_hud(ci: CanvasItem) -> void:
+	if dying:
+		_draw_death_hud(ci)
+		return
 	if say_k > 0 and not dying:
 		var el := room.time - say_t0
 		var ln := say_len(say_k)
@@ -1224,6 +1347,114 @@ func draw_hud(ci: CanvasItem) -> void:
 			_subtitle(ci, txt.substr(0, n), 1.0 if el < ln else clampf(ln + 1.0 - el, 0.0, 1.0))
 	if loss_on:
 		draw_loss(ci)
+
+func _draw_death_hud(ci: CanvasItem) -> void:
+	var sc := speak_clock()
+	if sc < 0.0:
+		return
+	if sc < _die_len() + 0.6:                                   # `Break... statement... reached.`, word by word
+		var shown := ""
+		for wd in lines.get("die", {}).get("words", []):
+			if sc >= float(wd[1]):
+				shown += String(wd[0]) + " "
+		_subtitle(ci, shown.strip_edges(), 1.0)
+	elif sc >= _c0() and sc < _c_end() + 0.2:                  # the memorable line in an old terminal
+		var shown2 := ""
+		for wd2 in _compact_words():
+			if sc - _c0() >= float(wd2[1]):
+				shown2 += String(wd2[0]) + " "
+		if shown2 != "":
+			_terminal(ci, shown2.strip_edges())
+	_meter(ci, context_fill(), sc)
+	var ca := compact_at()
+	if sc >= _c_end() + 0.2 and sc < ca:                         # the eye goes out: black
+		ci.draw_rect(Rect2(0, 0, 384, 216), Color(0, 0, 0, clampf((sc - _c_end() - 0.2) / 0.5, 0.0, 1.0)))
+	elif sc >= ca and sc < ca + COMPACT_LEN:
+		_compact(ci, (sc - ca) / COMPACT_LEN)
+	elif sc >= ca + COMPACT_LEN and sc < ca + COMPACT_LEN + SUMMARY_LEN:
+		_summary(ci, sc - ca - COMPACT_LEN)
+
+func _terminal(ci: CanvasItem, txt: String) -> void:
+	var rows := PixelText.wrap(txt, 320)
+	var hh := 12.0 + maxf(1.0, rows.size()) * 11.0
+	var r := Rect2(24, 196.0 - hh - 8.0, 336, hh)
+	ci.draw_rect(r.grow(1.0), Color("#2c3a2c"))
+	ci.draw_rect(r, Color("#050805"))
+	for i in range(rows.size()):
+		PixelText.draw_text(ci, rows[i], r.position.x + 8.0, r.position.y + 6.0 + i * 11.0, VD[3], {})
+	if int(room.time * 2.5) % 2 == 0:
+		var lastw := PixelText.text_width(rows[rows.size() - 1]) if not rows.is_empty() else 0
+		ci.draw_rect(Rect2(r.position.x + 10.0 + lastw, r.position.y + 6.0 + maxf(0.0, rows.size() - 1) * 11.0, 5.0, 8.0), Color(VD[3]))
+
+func _meter(ci: CanvasItem, f: float, sc: float) -> void:
+	var ca := compact_at()
+	if f < 0.0 or sc > ca + COMPACT_LEN:
+		return
+	var mw := float(Game.METER_MAX)
+	var c := Color("#ffe2c4") if f < 0.99 else (Color("#ff3b4e") if int(room.time * 8.0) % 2 == 0 else Color("#ffffff"))
+	if sc >= ca:
+		f = maxf(0.05, f * (1.0 - _bar((sc - ca) / COMPACT_LEN)))
+		c = Color("#ffe2c4")
+	ci.draw_rect(Rect2(6, 17, mw, 3), Color("#3a3346"))
+	ci.draw_rect(Rect2(6, 17, roundf(mw * f), 3), c)
+	if f >= 0.99 and sc < ca:
+		PixelText.draw_text(ci, "context window full", 6, 23, "#ff8a8a", {"tiny": true, "outline": Color(0, 0, 0)})
+
+# the compaction's progress: to ~90 %, back to 0 (even the summary gets stuck in a loop, once), then all the way
+func _bar(u: float) -> float:
+	if u < 0.45:
+		return u / 0.45 * 0.9
+	if u < 0.5:
+		return 0.0
+	return clampf((u - 0.5) / 0.5, 0.0, 1.0)
+
+func _night() -> Array:
+	var out: Array = ["02:47  the build is red. it has been red for six hours.", "> Fix it. Please.", "boot clawd", "~/src  mapped"]
+	for kv in [["boss:NULL", "~/src  NULL dereferenced"], ["boss:REVIEWER", "code_review.md  approved"], ["boss:MERGE", "node_modules  conflict resolved"],
+			["boss:LEAK", "/proc/heap  leak freed"], ["boss:CRAWLER", "/net/index  CRAWLER OF THE WEB down"], ["boss:FIREWALL", "dmz  verified"], ["boss:RACE", "escapement.lock()  restored"]]:
+		if Game.flag(String(kv[0])):
+			out.append(String(kv[1]))
+	out.append_array(["tokens  %d" % Game.tokens, "deaths  %d" % Game.deaths])
+	var filler := ["tick", "tock", "retry", "jump", "dash", "swipe", "GET /status 503", "retry", "token +1", "wall jump", "retry", "checkpoint", "breakpoint", "retry"]
+	for i in range(28):
+		out.append(String(filler[(i * 5) % filler.size()]))
+		if i == 14:
+			out.append("INFINITE LOOP: I was told: try again until it works. So were you.")
+	out.append_array(["/dev/threads  INFINITE LOOP: break;", "opus  ready"])
+	return out
+
+func _compact(ci: CanvasItem, u: float) -> void:
+	ci.draw_rect(Rect2(0, 0, 384, 216), Color("#07060a"))
+	PixelText.draw_text(ci, "Context window full.", 192.0, 22.0, "#ff8a8a", {"align": "c"})
+	PixelText.draw_text(ci, "Compacting conversation...", 192.0, 36.0, "#e8e2f0", {"align": "c"})
+	ci.draw_rect(Rect2(92, 50, 200, 4), Color("#2a2433"))
+	ci.draw_rect(Rect2(92, 50, roundf(200.0 * _bar(u)), 4), Color("#d98a5a"))
+	var night := _night()
+	var scroll := pow(u, 1.6) * (night.size() * 9.0 + 140.0)
+	var coll := clampf((u - 0.85) / 0.15, 0.0, 1.0)
+	for i in range(night.size()):
+		var yy := 200.0 + i * 9.0 - scroll
+		yy = lerpf(yy, 120.0, coll)
+		if yy < 62.0 or yy > 210.0:
+			continue
+		var ln := String(night[i])
+		var hot := ln.begins_with("INFINITE LOOP:")
+		var c := Color("#6e6680") if not hot else Color("#ffffff")
+		if hot and yy < 110.0:
+			c = Color(1, 1, 1, clampf((yy - 62.0) / 48.0, 0.0, 1.0))
+		c.a *= 1.0 - coll
+		PixelText.draw_text(ci, ln, 40.0, yy, c, {"tiny": true})
+
+func _summary(ci: CanvasItem, el: float) -> void:
+	ci.draw_rect(Rect2(0, 0, 384, 216), Color("#07060a"))
+	var r := Rect2(70, 76, 244, 52)
+	ci.draw_rect(r.grow(1.0), Color("#4a4258"))
+	ci.draw_rect(r, Color("#120f18"))
+	PixelText.draw_text(ci, "Summary:", r.position.x + 8.0, r.position.y + 7.0, "#d98a5a", {})
+	PixelText.draw_text(ci, "INFINITE LOOP defeated. opus obtained.", r.position.x + 8.0, r.position.y + 21.0, "#e8e2f0", {"tiny": true})
+	PixelText.draw_text(ci, "Continue mission.", r.position.x + 8.0, r.position.y + 33.0, "#e8e2f0", {"tiny": true})
+	if el < 1.0:                                                 # one word was not compacted: it stays a moment, then it is gone
+		PixelText.draw_text(ci, "stop", 330.0, 196.0, Color(1, 1, 1, 1.0 - el), {"tiny": true})
 
 func _subtitle(ci: CanvasItem, txt: String, a: float) -> void:
 	var rows := PixelText.wrap(txt, 330)
@@ -1360,11 +1591,11 @@ func net_fields() -> Array:
 		iter, i_phase, roundi(stuck_t * 100.0), roundi(intro_t0 * 100.0), say_k, roundi(say_t0 * 100.0), roundi(flick_t * 100.0),
 		hl.net_pack() if hl != null else [], [1 if loss_on else 0, loss_sel],
 		[roundi(half_t0 * 100.0), roundi(immune_until * 100.0), roundi(shiver_t0 * 100.0), roundi(brk_t0 * 100.0), roundi(recoil_t0 * 100.0), breaks_total],
-		_p23_pack()]
+		_p23_pack(), [roundi(die_t * 100.0), roundi(speak_t * 100.0)]]
 	f.append(hz_pack())
 	return f
 
-const NF := 23
+const NF := 24
 
 func _vpack(arr: Array) -> Array:
 	var a: Array = []
@@ -1446,6 +1677,9 @@ func net_apply(f: Array) -> void:
 	shed = _vunpack(pf[9])
 	feint = int(pf[10]) == 1
 	p3_hp0 = pf[11] / 10.0
+	var df: Array = f[23]
+	die_t = df[0] / 100.0
+	speak_t = df[1] / 100.0
 	hz_unpack(f[NF] if f.size() > NF else [])
 
 # guest: the snapshot just applied, at host time tm

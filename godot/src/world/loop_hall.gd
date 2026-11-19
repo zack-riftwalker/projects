@@ -249,6 +249,11 @@ func apply() -> void:
 			_set_tile(g, tx, ty, TileGrid.E if pit else TileGrid.SOLID)
 	g.seam_a = PIT_A if pit else -1
 	g.seam_b = PIT_B if pit else -2
+	if not pit:                                       # the floor came back (the death, a retry): this page's own body is not left inside it
+		var p = room.player
+		if p != null and not p.dead and in_pit_cols(p.x + p.w / 2.0) and p.y + p.h > FLOOR_Y:
+			p.y = FLOOR_Y - p.h
+			p.vy = 0.0
 
 func _set_tile(g, tx: int, ty: int, t: int) -> void:
 	var idx: int = ty * g.w + tx

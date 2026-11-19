@@ -393,6 +393,31 @@ func _ready() -> void:
 							ltr.step(Game.STEP)
 				else:
 					ltb._start(lt[1], "p1")
+		elif Game.scene.begins_with("loopdie:"):       # screenshot helper: INFINITE LOOP's death scene that many seconds in (loopdie:<secs>), Clawd next to its head
+			var ldt := float(Game.scene.substr(8))
+			Game.flags["intro:LOOP"] = true
+			Game.flags["intro:LOOP_SEEN"] = true
+			manager.swap_to("T10", Vector2(150.0, 454.0))
+			var ldp = manager.player
+			ldp.x = 150.0
+			ldp.y = 454.0
+			var ldr: Room = manager.room
+			ldr.time = 20.0
+			ldr._start_intro()
+			ldr.fight.t = 0.0
+			ldr._begin_fight()
+			var ldb = ldr.boss
+			ldb.queue = []
+			ldb.gap_t = 999.0
+			ldb.hx = 170.0
+			ldb.hy = 400.0
+			ldr.attacker = ldp
+			ldb.mode = "broken"
+			ldb.hit(99999, 1.0, 0.0, "swipe", {"link": 3})
+			for f in range(int(ldt / Game.STEP)):
+				ldp.inv = 999.0
+				ldp.x = 150.0
+				manager.tick(Game.STEP)
 		elif Game.scene.begins_with("loopfight:"):     # screenshot helper: INFINITE LOOP's shaft in a phase (loopfight:<p1|p2|p3>[:<x>:<y>]), the fight running
 			var la := Game.scene.substr(10).split(":")
 			var lph := clampi(int(la[0].substr(1)), 1, 3)

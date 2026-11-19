@@ -22,10 +22,10 @@ one() { # scenario [env...]
     grep -q "COOP $s .* PASS" "$TMP/$s.log"; return
   fi
   if [ -n "${BADLINE_ALL:-}" ]; then start_srv SIM_LAG=150 SIM_JITTER=60 SIM_STALL_PCT=5 "$@"; export SCN_SLOW=1; else start_srv "$@"; fi     # BADLINE_ALL=1: every scenario on a bad line
-  timeout 150 "$GODOT" --headless --path godot -- --net=host --port=$PORT --code=$CODE --scenario=$s > "$TMP/$s.host.log" 2>&1 &
+  timeout 180 "$GODOT" --headless --path godot -- --net=host --port=$PORT --code=$CODE --scenario=$s > "$TMP/$s.host.log" 2>&1 &
   local h=$!
   sleep 1.5
-  timeout 150 "$GODOT" --headless --path godot -- --net=guest --port=$PORT --code=$CODE --scenario=$s > "$TMP/$s.guest.log" 2>&1 &
+  timeout 180 "$GODOT" --headless --path godot -- --net=guest --port=$PORT --code=$CODE --scenario=$s > "$TMP/$s.guest.log" 2>&1 &
   local g=$!
   wait $h; wait $g
   stop_srv

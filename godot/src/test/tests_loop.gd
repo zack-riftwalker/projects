@@ -572,6 +572,7 @@ func t_loop3() -> bool:
 	rf.queue_free()
 	loop3_m3(res)
 	loop3_m4(res)
+	loop3_m5(res)
 	return report("loop3", res.ok, info + res.info)
 
 func loop_fightsim() -> bool:
@@ -964,4 +965,94 @@ func loop3_m4(res: Dictionary) -> void:
 		fail(res, "the guest's ring / copy / length differ (%d / %d boxes) %s / %s" % [pa.size(), pb.size(), str(pa.slice(0, 2)), str(pb.slice(0, 2))])
 	pup.free()
 	rg.queue_free()
+	r.queue_free()
+
+func loop3_m5(res: Dictionary) -> void:
+	# --- M5 -------------------------------------------------------------------------------------------------------------
+	# 1. the voices: every line's file is there and registered, its words in the order of the subtitle
+	var lj = JSON.parse_string(FileAccess.get_file_as_string("res://assets/voice/loop.json"))
+	for k in ["intro", "p2", "p3", "die", "compact"]:
+		if not Audio.streams.has("loop_" + k):
+			fail(res, "the voice loop_%s is not registered" % k)
+		var ln: Dictionary = lj.get(k, {})
+		var ws: Array = ln.get("words", [])
+		var txt := ""
+		var last := -1.0
+		for w in ws:
+			txt += String(w[0]) + " "
+			if float(w[1]) < last:
+				fail(res, "%s: word times out of order" % k)
+			last = float(w[1])
+		if txt.strip_edges() != String(ln.get("text", "")).replace(" ... ", " ") or float(ln.get("len", 0.0)) < 1.0:
+			fail(res, "%s: the words '%s' are not the line '%s'" % [k, txt.strip_edges(), String(ln.get("text", ""))])
+	for sname in ["loop_chain", "loop_click", "loop_clack", "loop_collapse", "loop_bpclang", "loop_jingle"]:
+		if not Audio.streams.has(sname):
+			fail(res, "the sound %s is not registered" % sname)
+	# 2. the death: it lets go and lies on the floor (the pit's floor slides back first), no harm, silence; when a player comes near its head it
+	# says its line, then the memorable line (the meter 60 / 85 / 100 %), the compaction (the bar runs to 90 %, back to 0, then all the way),
+	# the summary; flags compacted:LOOP and loop:final:<n>; then the reward
+	var r := loop_fight(60.0, 464.0)
+	var b: LoopBoss = r.boss
+	var hl: LoopHall = r.shaft
+	b.queue = []
+	r.time = 30.0
+	b.force_phase(3)
+	loop_run(r, 5)
+	if not hl.pit_open(r.time):
+		fail(res, "M5 setup: the pit is not open in phase 3")
+	r.attacker = r.player
+	b.mode = "broken"
+	b.hit(99999, 1.0, 0.0, "swipe", {"link": 3})
+	if not b.dying or not b.harmboxes().is_empty() or b.music_now("boss") != "":
+		fail(res, "the kill: dying %s, %d harm boxes, music '%s'" % [str(b.dying), b.harmboxes().size(), b.music_now("boss")])
+	loop_run(r, int(0.5 / Game.STEP))
+	if hl.pit_open(r.time) or r.grid.tile(10, 29) != TileGrid.SOLID:
+		fail(res, "the floor did not slide back at the death")
+	var pp = r.player
+	pp.x = 30.0
+	loop_run(r, int(3.5 / Game.STEP))
+	if b.speak_t >= 0.0:
+		fail(res, "it spoke with nobody near")
+	var low := 0
+	for c in b.links:
+		if (c as Vector2).y > 440.0:
+			low += 1
+	if low < b.links.size() - 1:
+		fail(res, "it does not lie on the floor (%d of %d links)" % [low, b.links.size()])
+	pp.x = b.hx - 20.0
+	loop_run(r, 2)
+	if b.speak_t < 0.0:
+		fail(res, "a player next to its head did not start its line")
+	var marks := {}
+	var bar_max_first := 0.0
+	var saw_snap := false
+	var compacted_at := -1.0
+	var t0 := b.speak_t
+	for f in range(int(30.0 / Game.STEP)):
+		pp.x = b.hx - 20.0
+		loop_run(r, 1)
+		if not is_instance_valid(b) or b.gone:
+			break
+		var cf := b.context_fill()
+		if cf >= 0.0:
+			marks[snappedf(cf, 0.01)] = true
+		var sc := b.speak_clock()
+		var ca := b.compact_at()
+		if sc >= ca and sc < ca + LoopBoss.COMPACT_LEN:
+			var bv := b._bar((sc - ca) / LoopBoss.COMPACT_LEN)
+			if (sc - ca) / LoopBoss.COMPACT_LEN < 0.45:
+				bar_max_first = maxf(bar_max_first, bv)
+			elif bv == 0.0:
+				saw_snap = true
+		if compacted_at < 0.0 and Game.flag("compacted:LOOP"):
+			compacted_at = sc
+	for m in [0.6, 0.85, 1.0]:
+		if not marks.has(m):
+			fail(res, "the meter never showed %.0f %% (%s)" % [m * 100.0, str(marks.keys())])
+	if bar_max_first < 0.85 or bar_max_first > 0.91 or not saw_snap:
+		fail(res, "the compaction bar: first run to %.2f, snapped back %s" % [bar_max_first, str(saw_snap)])
+	if compacted_at < 0.0 or not Game.flag("loop:final:%d" % hl.counter):
+		fail(res, "flags: compacted:LOOP at %.1f, loop:final %s" % [compacted_at, str(Game.flag("loop:final:%d" % hl.counter))])
+	if r.fight.state != "reward" and r.fight.state != "done":
+		fail(res, "no reward after the scene (state %s)" % r.fight.state)
 	r.queue_free()

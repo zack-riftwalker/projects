@@ -21,3 +21,8 @@ CC BY-SA 4.0.
 (CC BY-SA 4.0, see above), said twice (TICK higher and faster, TOCK lower and slower). The lines were processed (pitch,
 clockwork filter) by `tools/voice/race_voice.py`; the word times in `race.json` come from the same script (a speech
 recognizer listening to each voice on its own). These audio files are shared under the same license, CC BY-SA 4.0.
+
+`loop_*.ogg` (INFINITE LOOP) are made with the Piper text-to-speech voice `en_GB-northern_english_male-medium`
+(CC BY-SA 4.0, see above), a little lower and slower, the last word of each line echoed once. The lines were processed
+(pitch, a brass shaft's ring, the echo) by `tools/voice/loop_voice.py` (take `a` of three); the word times in `loop.json`
+come from the same script. These audio files are shared under the same license, CC BY-SA 4.0.

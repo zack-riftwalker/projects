@@ -83,5 +83,10 @@
   "len": 33.608,
   "loop_start": 0,
   "once": false
+ },
+ "loop_stutter": {
+  "len": 40.5,
+  "loop_start": 0,
+  "once": false
  }
 }

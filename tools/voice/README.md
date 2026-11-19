@@ -20,3 +20,10 @@ curl -L -O https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/nor
 ```
 
 **مجوز:** LJ Speech دامنه‌ی عمومیه؛ northern_english_male داده‌ی CC BY-SA 4.0 ـه (مثل صدای CRAWLER، توی `godot/assets/voice/CREDITS.md` اسمش میاد).
+
+`loop_voice.py` جمله‌های INFINITE LOOP رو می‌سازه ([`docs/metroidvania/18-loop.md`](../../docs/metroidvania/18-loop.md)، گام ۲): فقط `northern_english_male`، کمی بم‌تر و آروم، کلمه‌ی آخر هر جمله یه بار آروم‌تر تکرار می‌شه. سه take (`a`، `b`، `c`)؛ `--score` همه رو می‌سازه و با تشخیص گفتار می‌سنجه. توی بازی take `a` ـه (۲۰۲۶-۱۱-۱۵).
+
+```
+./venv/bin/pip install piper-tts faster-whisper
+./venv/bin/python loop_voice.py --male en_GB-northern_english_male-medium.onnx --piper ./venv/bin/piper --take a --line intro|p2|p3|die|compact --out loop_<key>.ogg --json <key>.json
+```
