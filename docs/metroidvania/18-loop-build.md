@@ -26,7 +26,7 @@ The old boss (`godot/src/enemies/loop_boss.gd`, kit-era, MV5A-07) is replaced. K
 | M3 | the condition plate: breakpoint freeze (links become platforms), half hits, the yellow ring catch, the break window, `i++` escalation | **done** (2026-11-15) |
 | M4 | phase 2 (transition, nested ring layer, recursion, escalate, gantry swing, gear reversal) and phase 3 (transition, pit + ceiling seam, wrap dive, combos, feints, HP = length) | **done** (2026-11-15) |
 | M5 | death + compact scene (looping progress bar, echo `stop`), voices and subtitles, sounds, music (phase-3 stutter), logs lines | **done** (2026-11-15/19) |
-| M6 | loss menu with the counter, the diff sign, after-state, T09 decor only if the world dept approved it, full tests, web export | not started |
+| M6 | loss menu with the counter, the diff sign, after-state, T09 decor only if the world dept approved it, full tests, web export | code **done** (2026-11-19); full `test-all.sh` and the web export: see the M6 note |
 
 ---
 
@@ -50,7 +50,7 @@ Each one is also in the producer's inbox (`docs/studio/PRODUCER.md`), so he can 
 - **Low ledges:** phase 2 they go one column per 0.2 s from the room side into the wall; phase 3 they come back the same way from the start of the transition.
 - **Pit:** the floor's cracks glow 0.8 s (no damage), then columns 6..17 of rows 29..31 and row 0 open; `TileGrid.seam_a/b` makes the cells above the ceiling open there. A body whose centre passes y 512 inside the pit columns comes back in at y = -h with its fall speed capped (330); each page moves its own body; the camera cuts (moved by the same amount), no pan.
 - **Fake loop:** the hall arms it when `intro:LOOP` is not set; the east door is an open portal (`fightwrap`); a body past x 368 (352 for the partner seen late on the host) or 8 s in the room: everybody back at the west door (x 24, feet on the floor, facing east), a 0.35 s flash, the counter 4095 -> 4096, the flag, the intro. The guest moves itself when `wrap_n` changes. `trigger_x` is ignored while it is armed.
-- **Routes checked (real physics):** floor -> L1 / R1, L1 / R1 -> M, M -> each gear's side tooth, gear -> L2 / R2, L2 / R2 -> TOP, TOP -> gantry (sudo or curl), phase 3 floor sides -> L1 / R1 -> M, a fall through the pit lands on the gantry. **Gear -> L2 / R2 needs sudo** (the player surely has it); nothing needed a ledge moved.
+- **Routes checked (real physics):** floor -> L1 / R1, L1 / R1 -> M, M -> each gear's side tooth, gear -> L2 / R2, L2 / R2 -> TOP, TOP -> gantry (sudo or curl), phase 3 floor sides -> L1 / R1 -> M, a fall through the pit lands on the gantry. **All of them without sudo** (an earlier run said gear -> L2 / R2 needed it: the room's trigger had started the fight in the middle of the check; fixed in M6); nothing needed a ledge moved.
 - **Back wall** drawn once (riveted panels, pipes, the counter, the diff sign in the normal font: the tiny font has no lower case); the phase washes are a `modulate` of that node (no redraw). Speed: `perfrooms` T10 0.67 ms (T06 0.93).
 - **Sprites:** `tools/godot/loop_sprites.py` cuts the snake from `18-loop-data/loop_body.png` (heads in 8 directions, links, plates); used from M2. To use a drawing of Zakaria's: replace the image (or `--src`), fix `HEAD_CUTS` / `LINK_CUTS`, run the script, `--import`.
 
@@ -86,6 +86,12 @@ Each one is also in the producer's inbox (`docs/studio/PRODUCER.md`), so he can 
 - **The death (~23 s):** it lets go and lies straight along the floor (the pit's floor slides back first, 0.4 s, and a body inside it is lifted onto it), plate `false`, eye crossed; from 3.0 s it waits (at most 8 s) for a player within 90 px of its head; `die` (subtitle word by word), 0.8 s, the memorable line in the terminal box word by word (the meter 60 % after "works.", 85 % after "you.", red and full on "Who decides when you stop?"), 0.8 s of black, the compaction (6.0 s; the night scrolls with its line in the middle; the bar runs to 90 %, snaps back to 0 and runs again), the summary (`INFINITE LOOP defeated. opus obtained.` / `Continue mission.`) with `stop` fading in the corner for 1 s, then the opus banner. Flags `compacted:LOOP` and `loop:final:<counter>` (the counter of the after-state).
 - **Logs:** `INFINITE LOOP: [compacted]` (grey) and the changelog line `fix: restore the retry limit — attempt < 3. the loop may stop now.` (after `boss:LOOP`).
 - `coop-test.sh`: the per-process timeout is 180 s (was 150): `co-loopboss` now runs the whole fight and the 22 s death scene on a bad line.
+
+**M6 (code done, 2026-11-19).** The loss menu with the counter, the after-state, T09's chain, the studio docs. `loop3` M6 part (the menu opens instead of the restart, no harm behind it, `retry` raises the counter by one on both pages, the after-state: the snake lying, the counter frozen, no fight, no pit, the east door open, the steady tick; T09's decor), screenshot scene `loopafter`.
+- **Retry:** `Boss`'s generalized menu (`has_retry`, spot x 24 feet on the floor, verdigris colours, `loop_click`); `Main._loss_choose` calls the boss's `on_retry` first: `Game.loop_tries` +1 (this session), and the hall's counter on load is 4096 + tries (+ the breaks of the fight). Not saved: a new session starts at 4096 again.
+- **After:** `boss:LOOP` -> the hall draws the open snake on the floor once, in the back-wall node (no collision, no per-frame cost), plate `false`, eye crossed; the counter shows `loop:final:<n>` (set at the kill). The diff sign is drawn since M1.
+- **T09's chain (the world department said yes, its inbox 2026-11-01):** a `window` decor 12 x 1 tiles at (16, 1) with `shadow: loop` and `if: !boss:LOOP`; in passes 2 and 3 (`iter` 1 and 2) a verdigris chain slides west behind it in a 24 s cycle and clatters (a local `loop_chain` three times a second while it passes). T09's map is unchanged.
+- **`loop3` is fast now** (~10 s with the route checks; `test-all` gives each test 180 s): the route search tries the likeliest jumps first and gives up on a try that landed short; the route room holds its fight off (`fight_hold`).
 
 ---
 

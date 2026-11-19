@@ -27,6 +27,7 @@ func loop_room(fake := false) -> Room:
 		Game.flags["intro:LOOP"] = true
 	var r := new_room("T10")
 	md.boss["trigger_x"] = trig
+	r.fight_hold = 1e9                                        # (the room reads trigger_x every step: hold the fight off for good)
 	return r
 
 func plat_rect(m: Dictionary) -> Rect2:
@@ -57,17 +58,19 @@ func loop_hop(r: Room, from: Vector2, target: Rect2, hold: int, dash_at: int, up
 		p.inv = 99.0
 		if p.on_ground and f > 4 and absf(p.y + p.h - target.position.y) < 2.5 and p.x + p.w * 0.5 >= target.position.x and p.x + p.w * 0.5 <= target.end.x:
 			return true
+		if f > 8 and p.on_ground and p.y + p.h > target.position.y + 2.5 and absf(p.vy) < 1.0 and (f > 60 or p.y + p.h >= from.y - 0.5):
+			return false                                      # (landed short, below the target: this try is over)
 	return false
 
 func loop_reach(r: Room, from: Vector2, target: Rect2, sudo: bool) -> bool:
 	Game.tools.sudo = sudo
 	r.player.tools = Game.tools
-	for hold in [10, 14, 18, 22, 26, 30, 40]:
-		for dash_at in [-1, 6, 12, 18, 24, 30, 36]:
-			for up in [false, true]:
+	for hold in [40, 30, 22, 26, 18, 14, 10]:                  # (the likeliest first: a full jump, then shorter; the search stops at the first that lands)
+		for dash_at in [-1, 24, 18, 30, 12, 36, 6]:
+			for up in [true, false]:
 				if up and dash_at < 0:
 					continue
-				for j2 in ([-1, 16, 22, 28, 34] if sudo else [-1]):
+				for j2 in ([-1, 28, 20, 36] if sudo else [-1]):
 					if loop_hop(r, from, target, hold, dash_at, up, j2):
 						Game.tools.sudo = true
 						return true
@@ -269,6 +272,9 @@ func t_loop3() -> bool:
 	if not fast and not loop_reach(r, Vector2(88.0, 400.0), m_r, true):
 		fail(res, "phase 3: L1 to M")
 	var p = r.player
+	p.zip = -1
+	p.dash_t = 0.0
+	p.frozen = false
 	p.x = 186.0
 	p.y = 470.0
 	p.vx = 0.0
@@ -573,6 +579,7 @@ func t_loop3() -> bool:
 	loop3_m3(res)
 	loop3_m4(res)
 	loop3_m5(res)
+	loop3_m6(res)
 	return report("loop3", res.ok, info + res.info)
 
 func loop_fightsim() -> bool:
@@ -1056,3 +1063,62 @@ func loop3_m5(res: Dictionary) -> void:
 	if r.fight.state != "reward" and r.fight.state != "done":
 		fail(res, "no reward after the scene (state %s)" % r.fight.state)
 	r.queue_free()
+
+func loop3_m6(res: Dictionary) -> void:
+	# --- M6 -------------------------------------------------------------------------------------------------------------
+	# 1. everybody down in the fight: the menu (retry / back to last commit) instead of the restart; `retry` puts the player inside the west door
+	# and the counter is one higher in the new room (even losing is an attempt)
+	loop_setup()
+	Game.loop_tries = 0
+	var r := loop_fight(120.0, 464.0)
+	var b: LoopBoss = r.boss
+	var c0: int = r.shaft.counter
+	if not b.has_retry() or b.retry_spot() != Vector2(24.0, 448.0):
+		fail(res, "no retry menu, or the wrong spot")
+	if not b.open_loss() or not b.loss_on:
+		fail(res, "the loss menu does not open in the fight")
+	if not b.harmboxes().is_empty():
+		fail(res, "the snake still hurts behind the loss menu")
+	b.on_retry()
+	r.queue_free()
+	var r2 := loop_fight(24.0, 464.0)
+	if r2.shaft.counter != c0 + 1 or r2.shaft.fake_on:
+		fail(res, "after retry the counter is %d (was %d)" % [r2.shaft.counter, c0])
+	var rec := NetClasses.record(r2.boss)
+	var rg := new_room("T10")
+	var pup = NetClasses.make(int(rec[1]), rg)
+	NetClasses.apply(pup, JSON.parse_string(JSON.stringify(rec)))
+	if rg.shaft.counter != c0 + 1:
+		fail(res, "the guest's counter is %d" % rg.shaft.counter)
+	pup.free()
+	rg.queue_free()
+	r2.queue_free()
+	Game.loop_tries = 0
+	# 2. after: the snake lies open on the floor (drawn by the hall, no collision), plate false, the counter frozen at the kill's number;
+	# no fight, no pit, the east door open, the tower's steady tick
+	Game.flags["boss:LOOP"] = true
+	Game.flags["boss:RACE"] = true
+	Game.flags["loop:final:4103"] = true
+	var ra := new_room("T10")
+	if not ra.shaft.after or ra.shaft.counter != 4103 or ra.shaft.fake_on or ra.shaft.pit_open(ra.time):
+		fail(res, "after: after %s, counter %d, fake %s" % [str(ra.shaft.after), ra.shaft.counter, str(ra.shaft.fake_on)])
+	ra.player.x = 200.0
+	ra.player.y = 454.0
+	for f in range(60):
+		step_keys(ra, {})
+	if ra.fight.state != "none" and ra.fight.state != "done":
+		fail(res, "after: a fight starts (%s)" % ra.fight.state)
+	ra.update_doors()
+	if not ra.grid.door_at("E", 26).open or absf(ra.tick_len() - 0.8333) > 0.001 or not ra.grid.solid(10, 29):
+		fail(res, "after: east door %s, tick %.4f" % [str(ra.grid.door_at("E", 26).open), ra.tick_len()])
+	ra.queue_free()
+	Game.flags.erase("boss:LOOP")
+	Game.flags.erase("loop:final:4103")
+	# 3. T09's chain behind the slit (the world department said yes): a window decor with the shadow `loop`, until boss:LOOP
+	var dd: Array = Game.rooms_meta.rooms.T09.get("decor", [])
+	var has := false
+	for d in dd:
+		if String(d.get("shadow", "")) == "loop" and String(d.get("if", "")) == "!boss:LOOP":
+			has = true
+	if not has:
+		fail(res, "T09 has no chain behind its wall")

@@ -591,6 +591,7 @@
                  {"id": "T08:N", "side": "N", "a": 20, "b": 23, "to": "T18:S"}
              ] },
     "T09": { "file": "T09.txt", "title": "while_true.js", "size": [64, 20], "origin": [1166, -218], "world": 4, "music": "w4", "zone": "tower",
+             "decor": [{"kind": "window", "x": 16, "y": 1, "w": 12, "h": 1, "shadow": "loop", "if": "!boss:LOOP"}],
              "signs": ["while (true) {", "i++; // the room gets a little worse every time. look for break;"],
              "loop": {"flag": "break:T09", "after": "T10:W", "iters": [{}, {"spawn": [["{", 40, 14], ["{", 52, 14]]}, {"spawn": [["{", 40, 14], ["{", 52, 14], ["(", 24, 14]], "variant": 0}, {"spawn": [["{", 40, 14], ["{", 52, 14], ["(", 24, 14], ["}", 58, 14]], "variant": 0, "key": true}]},
              "variants": [{"if": "iter>=2", "rect": [36, 14, 13, 1], "from": " ", "to": "^"}],

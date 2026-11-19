@@ -734,6 +734,22 @@ func _shed_to(n: int) -> void:
 		links.resize(n_links)
 
 # ---------------------------------------------------------------- the fight flow
+# ---------------------------------------------------------------- the loss menu: `retry` puts both just inside the west door, a fresh phase 1, the short intro, and the counter one higher
+func has_retry() -> bool:
+	return true
+
+func retry_spot() -> Vector2:
+	return Vector2(24.0, 448.0)
+
+func loss_colors() -> Array:
+	return [VD[3], VD[2], "#3a6a5a"]
+
+func loss_sound() -> String:
+	return "loop_click"
+
+func on_retry() -> void:
+	Game.loop_tries += 1
+
 func intro_long() -> bool:
 	return not Game.flag("intro:LOOP_SEEN")
 

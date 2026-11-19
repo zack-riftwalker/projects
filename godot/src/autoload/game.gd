@@ -36,6 +36,7 @@ func load_meta() -> void:
 					m["start_pos"] = [px * 16 + 3, ty * 16 + 6]
 
 var _themes := {}
+var loop_tries := 0                # INFINITE LOOP: how many times `retry` was chosen this session (its counter goes up by one each time: even losing is an attempt)
 var loop_iter := {}               # loop rooms (T09): room id -> the pass this life is on (0..3); a respawn or a travel starts over
 
 # the world whose art a room uses: world 6 (THE NETWORK) falls back to world 3's until its own tiles and theme exist

@@ -93,6 +93,8 @@ func _init(r) -> void:
 	gantry_p = {"x": GANTRY_X, "y": GANTRY_Y, "w": GANTRY_W, "h": 6.0, "dx": 0.0, "dy": 0.0, "lhall": true, "gantry": true}
 	room.plats.append(gantry_p)
 	fake_on = not after and not Game.flag("intro:LOOP")
+	if not after and not fake_on:
+		counter = COUNTER0 + 1 + Game.loop_tries            # (the attempt after the fake loop's 4096, one more for every `retry`)
 	move_parts()
 	apply()
 
@@ -432,9 +434,29 @@ func draw_wall(ci: CanvasItem) -> void:
 	var lines := [["- for (attempt = 0;", "#b0303c"], ["   attempt < 3; attempt++)", "#b0303c"], ["+ while (true)", "#2a7a40"], ["   // retries are cheap", "#6b6b6b"]]
 	for k in range(lines.size()):
 		PixelText.draw_text(ci, String(lines[k][0]), sr.position.x + 4.0, sr.position.y + 4.0 + float(k) * 12.0 + (3.0 if k >= 2 else 0.0), String(lines[k][1]), {})
+	if after:
+		_draw_after(ci)
 	# the gear hubs' brackets (the hubs themselves turn, drawn every frame)
 	for c in GEAR_C:
 		ci.draw_rect(Rect2(c.x - 3.0, c.y, 6.0, 40.0), Color(WALL_LO))
+
+# the after-state: the snake lies open on the floor for good (no collision), its head no longer at its tail, the plate `false`. Drawn once, here
+func _draw_after(ci: CanvasItem) -> void:
+	LoopBoss._load_art()
+	if LoopBoss.tex_links == null:
+		return
+	var y := FLOOR_Y - 8.0
+	var hx := 286.0
+	for k in range(LoopBoss.LINKS):
+		var lx := hx - 24.0 - 14.0 * float(k)
+		ci.draw_line(Vector2(lx, y), Vector2(lx + 14.0, y), Color(INK), 4.0)
+		ci.draw_texture_rect_region(LoopBoss.tex_links, Rect2(Vector2(lx - 8.0, y - 8.0), Vector2(16.0, 16.0)), Rect2(48.0, 0.0, 16.0, 16.0))
+	var fs := float(LoopBoss.lspr.get("frame", 56))
+	var row := maxi(0, (LoopBoss.lspr.get("heads", []) as Array).find("down"))
+	ci.draw_texture_rect_region(LoopBoss.tex_head, Rect2(Vector2(hx - fs / 2.0, FLOOR_Y - 12.0 - fs / 2.0), Vector2(fs, fs)), Rect2(0.0, float(row) * fs, fs, fs))
+	var psz: Array = LoopBoss.lspr.get("plate", [20, 10])
+	var pa: Array = LoopBoss.lspr.get("plate_at", [-6.0, -12.0])
+	ci.draw_texture_rect_region(LoopBoss.tex_plate, Rect2(Vector2(hx + float(pa[0]) - 10.0, FLOOR_Y - 12.0 + float(pa[1]) - 5.0), Vector2(float(psz[0]), float(psz[1]))), Rect2(3.0 * float(psz[0]), 0.0, float(psz[0]), float(psz[1])))
 
 # the gantry (its own node: drawn once, the swing only moves it)
 func draw_gantry(ci: CanvasItem) -> void:

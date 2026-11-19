@@ -11,6 +11,10 @@ static func step(r: Room, dt: float) -> void:
 	for n in r.npcs:
 		_step_tree(r, n, dt)
 	_step_jars(r, dt)
+	if r.id == "T09" and (r.iter == 1 or r.iter == 2) and r.player != null and not Game.flag("boss:LOOP"):
+		var cyc := fposmod(r.time, 24.0)                      # the chain behind the slit clatters while it passes (heard on this page only)
+		if cyc < 16.0 and int(r.time * 3.0) != int((r.time - dt) * 3.0):
+			Audio.local_sfx("loop_chain", 0.12)
 
 static func _near(r: Room, x: float, y: float, tiles: float) -> float:
 	var best := 1e9
@@ -292,6 +296,21 @@ static func draw_decor(ci: CanvasItem, r: Room, d: Dictionary) -> void:
 					ci.draw_line(Vector2(sx, wy + wh - 17.0), Vector2(hx + (4.0 if k == 0 else -4.0), hy + 4.0), sil, 2.0)
 					ci.draw_rect(Rect2(hx + (2.0 if k == 0 else -8.0), hy, 6, 4), sil)               # the hammer head
 				ci.draw_rect(Rect2(wx + ww * 0.5 - 1.0, wy + 2.0, 2, wh - 10.0), Color(0.35, 0.28, 0.12))   # the bell's rope between them
+			if String(d.get("shadow", "")) == "loop" and (r.iter == 1 or r.iter == 2):       # T09's second and third pass: a verdigris chain slides past behind a slit in the wall (INFINITE LOOP, next door)
+				var cyc := fposmod(t, 24.0)
+				var lead: float = wx + ww + 20.0 - cyc * 18.0                  # the head first, the links after it, slowly to the west
+				ci.draw_rect(Rect2(wx + 1.0, wy + 1.0, ww - 2.0, wh - 2.0), Color("#0d1a17"))
+				for k in range(15):
+					var lx: float = lead + float(k) * 11.0
+					if lx < wx - 8.0 or lx > wx + ww:
+						continue
+					var cx0: float = clampf(lx, wx + 1.0, wx + ww - 9.0)
+					var lw: float = minf(8.0, wx + ww - 1.0 - cx0)
+					if lw <= 0.0:
+						continue
+					ci.draw_rect(Rect2(cx0, wy + 4.0, lw, 8.0), Color("#2f7f6a") if k > 0 else Color("#5fc0a0"))
+					if lw > 5.0:
+						ci.draw_rect(Rect2(cx0 + 3.0, wy + 7.0, 2.0, 2.0), Color("#0f2a27"))
 			if String(d.get("shadow", "")) == "firewall":
 				if not Game.flag("boss:FIREWALL"):                       # a small green EXIT sign that flickers behind a red brick pattern (THE FIREWALL is a honeypot: the way out it shows is a lie)
 					if Game.hash3(int(t * 7.0), 3, 5) > 0.3:

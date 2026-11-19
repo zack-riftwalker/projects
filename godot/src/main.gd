@@ -393,6 +393,14 @@ func _ready() -> void:
 							ltr.step(Game.STEP)
 				else:
 					ltb._start(lt[1], "p1")
+		elif Game.scene == "loopafter":                 # screenshot helper: T10 after the fight (the snake open on the floor, the counter frozen)
+			Game.flags["boss:LOOP"] = true
+			Game.flags["boss:RACE"] = true
+			Game.flags["intro:LOOP"] = true
+			Game.flags["loop:final:4103"] = true
+			manager.swap_to("T10", Vector2(150.0, 454.0))
+			manager.player.x = 150.0
+			manager.player.y = 454.0
 		elif Game.scene.begins_with("loopdie:"):       # screenshot helper: INFINITE LOOP's death scene that many seconds in (loopdie:<secs>), Clawd next to its head
 			var ldt := float(Game.scene.substr(8))
 			Game.flags["intro:LOOP"] = true
@@ -1240,6 +1248,8 @@ func _loss_choose(i: int) -> void:
 	var rid: String = manager.room.id
 	var host_coop: bool = coop != null and coop.role == "host" and coop.guest_here and coop.remote != null
 	if i == 0:
+		if manager.room.boss.has_method("on_retry"):
+			manager.room.boss.on_retry()                  # (INFINITE LOOP: the counter goes up)
 		if host_coop:
 			coop.retry_both(rid, manager.room.boss.retry_spot())
 		else:
